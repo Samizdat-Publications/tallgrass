@@ -18,6 +18,9 @@ interface ToolDef {
   group: number;
 }
 
+/** How long the rail shows its labels when the game opens. */
+const INTRO_MS = 9000;
+
 export const TOOL_DEFS: ToolDef[] = [
   { id: 'rain', short: 'Rain', label: 'Call rain', hint: 'Rain falls across the valley', armedHint: '', group: 0 },
   { id: 'drought', short: 'Drought', label: 'Bring drought', hint: 'The rains fail for a time', armedHint: '', group: 0 },
@@ -40,6 +43,9 @@ export class ToolRail {
     this.el = h('nav', { class: 'tg-rail', 'aria-label': 'God tools', role: 'toolbar' });
     this.note = h('p', { class: 'tg-rail-note', role: 'status', hidden: true });
     this.el.append(this.note);
+    // open for a few seconds at the start so the labels are seen once, then settle to icons
+    this.el.classList.add('is-intro');
+    window.setTimeout(() => this.el.classList.remove('is-intro'), INTRO_MS);
     let lastGroup = 0;
     for (const t of TOOL_DEFS) {
       if (t.group !== lastGroup) {

@@ -43,8 +43,8 @@ export class PopGraph {
 
   // view state
   private expanded = false;
-  /** Log scale by default: predators and ravens are a tenth of the bison and vanish on a linear axis. */
-  private log = true;
+  /** Linear by default (L flips to log, which lifts the small species off the axis). */
+  private log = false;
   private on: boolean[] = Array.from({ length: SPECIES_COUNT }, () => true);
   private visible: number[] = [];
   private cells: Cell[] = [];
@@ -76,7 +76,7 @@ export class PopGraph {
       class: 'tg-btn tg-pop-log',
       text: 'Log',
       title: 'Logarithmic scale (L)',
-      'aria-pressed': 'true',
+      'aria-pressed': 'false',
       onclick: () => this.toggleLog(),
     });
     this.expandBtn = button({
@@ -425,7 +425,7 @@ export class PopGraph {
 
   private plotRect(w: number, ht: number) {
     const u = this.unit;
-    return { l: 40 * u, r: w - 38 * u, t: 10 * u, b: ht - 22 * u };
+    return { l: 40 * u, r: w - 40 * u, t: 20 * u, b: ht - 22 * u };
   }
 
   private drawExpanded(): void {
@@ -579,10 +579,14 @@ export class PopGraph {
     g.stroke();
     g.textAlign = 'left';
     g.fillStyle = hexA(GRASS_COLOR, 0.8);
-    g.fillText('0%', P.r + 7 * u, P.b);
-    g.fillText('50%', P.r + 7 * u, P.b - 0.5 * ph);
+    // secondary axis: grass cover as a fraction of full, labelled so the faint green line is never a mystery
+    const gFmt = (v: number) => (gTop === 1 ? String(v) : String(Math.round(v * gTop * 100) / 100));
+    g.fillText(gFmt(0), P.r + 7 * u, P.b);
+    g.fillText(gFmt(0.5), P.r + 7 * u, P.b - 0.5 * ph);
+    g.fillText(gFmt(1), P.r + 7 * u, P.t);
+    g.textAlign = 'right';
     g.font = `italic 400 ${13 * u}px 'Alegreya', Georgia, serif`;
-    g.fillText('grass', P.r + 7 * u, P.t + 2 * u);
+    g.fillText(gTop === 1 ? 'Grass, 0 to 1' : `Grass, 0 to ${Math.round(gTop * 100) / 100}`, w - 4 * u, 8 * u);
     g.font = `500 ${12 * u}px ${SANS}`;
 
     // event markers

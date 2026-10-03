@@ -3,6 +3,8 @@
 // Query: ?state=default|graph|graphhover|inspector|wolf|menu|overlay|tool|cinematic|night|noon|card|hidden
 //        story (live life story)|memorial (the animal dies)|evolution|evohover
 //        challenge (Knife's edge running; &used=5 spends the budget)|challenge-won (Dry years, wins after a second) (the expanded graph on its Evolution tab)
+//        &intro=0 (rail starts as icons)  &hint=1 (show the H and C hint)  &behind=0.13 (sim runs at 13% of the speed asked)
+//        &labels=1 (sample territory labels like the overlay draws)
 //        &speed=10  &species=3|6  &day=0.72  &seed=bluestem-4417  &w=1
 // Page contract: window.__ready = true after the first render (fonts loaded).
 import { GameUI } from '../src/ui/ui';
@@ -243,6 +245,32 @@ const actions: UIActions = {
 
 ui = new GameUI(root, actions);
 window.__ui = ui;
+if (q.get('intro') === '0') document.querySelector('.tg-rail')?.classList.remove('is-intro');
+if (q.has('hint')) ui.showHint();
+if (q.has('labels')) {
+  // the same markup overlay.ts makes: a container under the chrome, labels coloured inline with the pack colour
+  const box = document.createElement('div');
+  box.className = 'tg-map-labels';
+  const pts: [number, number, string, string, string][] = [
+    [560, 250, 'Cottonwood', '3 wolves', '#E8B64C'],
+    [820, 470, 'Ridge', '7 wolves', '#8FD18A'],
+    [330, 560, 'Willow', '4 wolves', '#F08A8A'],
+    [760, 884, 'Switchgrass', '5 wolves', '#E07A6A'],
+  ];
+  for (const [x, y, name, count, col] of pts) {
+    const el = document.createElement('div');
+    el.className = 'tg-map-label';
+    el.style.color = col;
+    el.style.transform = `translate(${x}px, ${y}px) translate(-50%, calc(-100% - 10px))`;
+    const b = document.createElement('b');
+    b.textContent = `${name} pack`;
+    const sp = document.createElement('span');
+    sp.textContent = count;
+    el.append(b, sp);
+    box.append(el);
+  }
+  document.querySelector('.tg-ui')?.prepend(box);
+}
 if (state === 'challenge' || state === 'challenge-won') {
   ui.setChallenge(challengeById(state === 'challenge' ? 'knife' : 'dry'));
   for (let i = 0; i < Number(q.get('used') ?? (state === 'challenge' ? 2 : 1)); i++) ui.tryUseTool();
@@ -306,7 +334,7 @@ function frame(first: boolean): void {
     events,
     selected: sel,
     speed: skipping ? -1 : speed,
-    ticksPerSec: skipping ? 4800 : measured || (speed > 0 ? speed * TICKS_PER_SECOND : 0),
+    ticksPerSec: skipping ? 4800 : (measured || (speed > 0 ? speed * TICKS_PER_SECOND : 0)) * (q.has('behind') ? Number(q.get('behind')) : 1),
     seed,
     scenario,
     following,

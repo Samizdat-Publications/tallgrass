@@ -91,11 +91,11 @@ export class Inspector {
 
     const traits = h('div', { class: 'tg-insp-traits tg-live', role: 'group', 'aria-label': 'Traits against the species average' });
     for (const t of TRAITS) {
-      const dot = h('span', { class: 'tg-gauge-dot' });
+      const dot = h('span', { class: 'tg-gauge-fill' });
       const tick = h('span', { class: 'tg-gauge-tick' });
       const val = h('span', { class: 'tg-gauge-val' });
       const mean = h('span', { class: 'tg-gauge-mean' });
-      const gauge = h('span', { class: 'tg-gauge-track' }, tick, mean, dot);
+      const gauge = h('span', { class: 'tg-gauge-track', role: 'meter', 'aria-label': t.label, 'aria-valuemin': String(t.min), 'aria-valuemax': String(t.max) }, dot, tick, mean);
       traits.append(
         h('div', { class: 'tg-gauge', title: t.title }, h('div', { class: 'tg-gauge-top' }, h('span', { class: 'tg-gauge-label', text: t.label }), val), gauge),
       );
@@ -146,7 +146,7 @@ export class Inspector {
       this.chips,
       bars,
       traits,
-      h('p', { class: 'tg-insp-note tg-live', text: 'Dot: this animal. Grey tick: where the founders started. Bright tick: the species now.' }),
+      h('p', { class: 'tg-insp-note tg-live', text: 'Bar: this animal. Grey tick: where the founders started. Bright tick: the species now.' }),
       this.stats,
       this.storyEl,
       h('div', { class: 'tg-insp-actions' }, this.followBtn, closeBtn),
@@ -298,7 +298,8 @@ export class Inspector {
       const v = d.genes[t.key] ?? t.base(d.sp);
       const f = (x: number) => Math.max(0, Math.min(1, (x - t.min) / (t.max - t.min)));
       const g = this.gauges[i];
-      g.dot.style.left = `${(f(v) * 100).toFixed(1)}%`;
+      g.dot.style.width = `${(f(v) * 100).toFixed(1)}%`;
+      g.dot.parentElement?.setAttribute('aria-valuenow', v.toFixed(2));
       g.tick.style.left = `${(f(t.base(d.sp)) * 100).toFixed(1)}%`;
       setText(g.val, v.toFixed(2));
       const parent = g.dot.parentElement?.parentElement;

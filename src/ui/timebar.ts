@@ -11,6 +11,12 @@ export function paceText(ticksPerSec: number, speed: number): string {
   let tps = ticksPerSec;
   // within a few percent of the nominal rate, show the nominal one so the text does not flicker
   const nominal = speed * TICKS_PER_SECOND;
+  // the machine cannot keep up with what was asked for: say what is really happening, in plain words
+  if (nominal > 0 && tps > 0 && tps < nominal * 0.85) {
+    const actual = tps / TICKS_PER_SECOND;
+    const a = actual >= 10 ? Math.round(actual) : Math.round(actual * 10) / 10;
+    return `${speed}\u00d7 asked, running at ${a}\u00d7`;
+  }
   if (nominal > 0 && Math.abs(tps - nominal) / nominal < 0.06) tps = nominal;
   if (!(tps > 0)) return '';
   const sec = YEAR_TICKS / tps;
@@ -162,6 +168,7 @@ export class TimeBar {
     else {
       text = paceText(ticksPerSec, v);
     }
+    this.rate.classList.toggle('is-behind', text.includes('running at'));
     if (text !== this.lastRateText) {
       this.lastRateText = text;
       setText(this.rate, text);

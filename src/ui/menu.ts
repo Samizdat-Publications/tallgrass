@@ -30,8 +30,8 @@ const KEYS: [string[], string][] = [
   [['G'], 'grow or shrink the graph'],
   [['L'], 'log scale on the graph'],
   [['E'], 'evolution view of the graph'],
-  [['C'], 'cinematic mode'],
-  [['H'], 'hide the interface'],
+  [['C'], 'documentary mode: bars, drifting camera, no panels'],
+  [['H'], 'hide the interface for a clean screen'],
   [['Esc'], 'let go, disarm, close'],
 ];
 

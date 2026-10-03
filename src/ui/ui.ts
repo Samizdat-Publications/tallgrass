@@ -38,6 +38,9 @@ const CARD_COOLDOWN_MS = 8000;
 const CARD_HOLD_MS = 20000;
 /** Events the graph marks with a line (the rest would only add noise). */
 const MARK_KINDS = new Set(['drought', 'droughtEnd', 'outbreak', 'stampede', 'extinct', 'introduced', 'removed', 'culled', 'fire', 'plague']);
+/** A quiet hint about H and C appears once after this long with no input (a second monitor, a lazy afternoon). */
+const HINT_IDLE_MS = 60000;
+const HINT_KEY = 'tallgrass.hint.v1';
 /** Packs that lasted fewer ticks than this are left out of the chronicle altogether. */
 const FLASH_PACK_TICKS = 300;
 /** Events older than this many ticks when they arrive (a backgrounded tab, a bulk fill) never earn a card. */
@@ -65,6 +68,11 @@ export class GameUI {
   private run: ChallengeRun | null = null;
   private resultShown = false;
   private goalRo: ResizeObserver;
+  private hint: HTMLElement;
+  private hintDone = false;
+  private lastInput = performance.now();
+  private hintTimer = 0;
+  private onInput: () => void;
 
   private seed = '';
   private scenario = '';
@@ -99,8 +107,19 @@ export class GameUI {
     const bottom = h('div', { class: 'tg-bottom' }, h('span'), this.time.el, this.time.overlayEl);
     const chrome = h('div', { class: 'tg-chrome' }, this.slate.el, this.goal.el, this.tools.el, right, this.pop.el, bottom);
     const bars = h('div', { class: 'tg-bars', 'aria-hidden': 'true' });
+    this.hint = h(
+      'div',
+      { class: 'tg-hint tg-glass tg-leaf', role: 'status', 'aria-live': 'polite' },
+      h('span', {}, h('kbd', { class: 'tg-kbd', text: 'H' }), 'hides the interface'),
+      h('span', {}, h('kbd', { class: 'tg-kbd', text: 'C' }), 'documentary mode'),
+    );
+    try {
+      this.hintDone = window.localStorage.getItem(HINT_KEY) === '1';
+    } catch {
+      /* storage unavailable: the hint just shows once per page load */
+    }
 
-    this.ui = h('div', { class: 'tg-ui', dataset: { cinematic: 'false' } }, chrome, bars, this.chapterCard.el, this.result.el);
+    this.ui = h('div', { class: 'tg-ui', dataset: { cinematic: 'false' } }, chrome, this.hint, bars, this.chapterCard.el, this.result.el);
     root.append(this.ui);
 
     this.keyDown = (e) => this.onKeyDown(e);
@@ -110,6 +129,11 @@ export class GameUI {
     };
     window.addEventListener('keydown', this.keyDown);
     window.addEventListener('keyup', this.keyUp);
+    this.onInput = () => {
+      this.lastInput = performance.now();
+      if (this.hint.classList.contains('is-on')) this.hideHint();
+    };
+    for (const ev of ['pointermove', 'pointerdown', 'wheel', 'keydown']) window.addEventListener(ev, this.onInput, { passive: true });
   }
 
   // ---- public API --------------------------------------------------------------------------------------------
@@ -134,6 +158,25 @@ export class GameUI {
     this.top.setWorld(f.seed, f.scenario);
     this.flushQueuedCard(now);
     if (this.run) this.stepChallenge(f);
+    if (!this.hintDone && now - this.lastInput > HINT_IDLE_MS && !this.hidden && !this.cinematic && !this.result.isOpen) this.showHint();
+  }
+
+  /** The quiet hint about H and C. Shown once ever (per browser) after a minute of no input; also callable directly. */
+  showHint(): void {
+    this.hintDone = true;
+    try {
+      window.localStorage.setItem(HINT_KEY, '1');
+    } catch {
+      /* ignore */
+    }
+    this.hint.classList.add('is-on');
+    window.clearTimeout(this.hintTimer);
+    this.hintTimer = window.setTimeout(() => this.hideHint(), 11000);
+  }
+
+  private hideHint(): void {
+    window.clearTimeout(this.hintTimer);
+    this.hint.classList.remove('is-on');
   }
 
   // ---- challenges --------------------------------------------------------------------------------------------
@@ -256,6 +299,8 @@ export class GameUI {
   destroy(): void {
     window.removeEventListener('keydown', this.keyDown);
     window.removeEventListener('keyup', this.keyUp);
+    for (const ev of ['pointermove', 'pointerdown', 'wheel', 'keydown']) window.removeEventListener(ev, this.onInput);
+    window.clearTimeout(this.hintTimer);
     this.goalRo.disconnect();
     this.time.destroy();
     this.top.destroy();

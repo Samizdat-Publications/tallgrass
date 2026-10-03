@@ -1,0 +1,86 @@
+{
+ "args": {
+  "seeds": 20,
+  "seedBase": 1,
+  "ticks": 288000,
+  "generations": null,
+  "sampleEvery": 1000,
+  "threads": 15,
+  "scenarios": [
+   "cull70",
+   "drought",
+   "wolfwipe"
+  ],
+  "params": {},
+  "mock": false,
+  "maxMinutes": 0,
+  "progressSec": 15,
+  "out": "C:\\Users\\stewa\\Documents\\Claude\\ecosystem-sim\\review\\stability\\v4-5df7663-shocks",
+  "argv": [
+   "--seeds",
+   "20",
+   "--ticks",
+   "288000",
+   "--sample",
+   "1000",
+   "--threads",
+   "15",
+   "--out",
+   "review/stability/v4-5df7663-shocks",
+   "--scenario",
+   "cull70,drought,wolfwipe"
+  ]
+ },
+ "commit": "0618dc7",
+ "node": "v24.19.0",
+ "platform": "win32 x64",
+ "startedAt": "2026-10-03T15:55:18.983Z",
+ "finishedAt": "2026-10-03T17:01:51.770Z",
+ "wallSeconds": 3992.74,
+ "stopReason": null,
+ "tasks": {
+  "total": 60,
+  "completed": 60,
+  "errors": 0,
+  "aborted": 0,
+  "skipped": 0
+ },
+ "msPerTick": 3.20413,
+ "ticksRun": 17019000,
+ "ticksPerSecWall": 4262,
+ "scenarios": {
+  "cull70": {
+   "seeds": 20,
+   "completed": 20,
+   "persistencePct": {
+    "bison": 95,
+    "wolf": 95,
+    "raven": 95,
+    "pronghorn": 95
+   },
+   "maxGen": 182.0107913669065
+  },
+  "drought": {
+   "seeds": 20,
+   "completed": 20,
+   "persistencePct": {
+    "bison": 95,
+    "wolf": 85,
+    "raven": 95,
+    "pronghorn": 90
+   },
+   "maxGen": 185.38098802395209
+  },
+  "wolfwipe": {
+   "seeds": 20,
+   "completed": 20,
+   "persistencePct": {
+    "bison": 100,
+    "wolf": 85,
+    "raven": 100,
+    "pronghorn": 95
+   },
+   "maxGen": 184.51997649823736
+  }
+ }
+}
