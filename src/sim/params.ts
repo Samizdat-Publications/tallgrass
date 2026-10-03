@@ -84,6 +84,8 @@ export interface Params {
   /** Litter size factor = base + span x (larder fill, 0..1). v4: 0.6 + 0.5. */
   wolfLitterBase: number;
   wolfLitterSpan: number;
+  /** Prey count (bison + 0.4 x pronghorn) at which wolf den spacing and pack size are nominal; 0 = fixed capacity. */
+  wolfPreyRef: number;
   // fear
   fearKill: number;
   fearKillRadius: number;
@@ -194,6 +196,7 @@ export function defaultParams(): Params {
     wolfBreedStore: 0,
     wolfLitterBase: 0.6,
     wolfLitterSpan: 0.5,
+    wolfPreyRef: 0,
     fearKill: 0.7,
     fearKillRadius: 22,
     fearPredatorStamp: 0.0008,

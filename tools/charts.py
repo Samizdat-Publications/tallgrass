@@ -285,8 +285,8 @@ def suffix(log: bool) -> str:
     return "_log" if log else ""
 
 
-def smooth_year(v: np.ndarray, spacing: float) -> np.ndarray:
-    w = max(1, int(round(YEAR / spacing)))
+def smooth_year(v: np.ndarray, spacing: float, min_w: int = 1) -> np.ndarray:
+    w = max(min_w, int(round(YEAR / spacing)))
     if w <= 1 or len(v) < w:
         return v
     k = np.ones(w) / w
@@ -332,8 +332,12 @@ def chart_seeds_grid(sc: Scenario, log: bool, saved: list[Path]):
     for idx, s in enumerate(sc.seeds):
         ax = axes[idx // ncols][idx % ncols]
         t = sc.ticks[s] / YEAR
+        spy = float(np.median(np.diff(sc.ticks[s]))) if len(t) > 1 else 500.0
         for k in sc.species:
-            ax.plot(t, sc.cols[s][f"pop_{k}"], color=COLOR[k], lw=1.0, zorder=3)
+            raw = sc.cols[s][f"pop_{k}"]
+            # faint raw samples (the seasonal birth pulse and winter losses) under a bold 1-year mean (the real cycle)
+            ax.plot(t, raw, color=COLOR[k], lw=0.6, alpha=0.28, zorder=2)
+            ax.plot(t, smooth_year(raw, spy, 3), color=COLOR[k], lw=1.3, zorder=3)
         pop_scale(ax, log)
         ax.set_xlim(0, xmax)
         gcol = sc.cols[s].get("grass_mean")
@@ -360,7 +364,7 @@ def chart_seeds_grid(sc: Scenario, log: bool, saved: list[Path]):
     top = header(
         fig,
         f"{sc.name}: population of every species over time, one panel per seed",
-        f"{sc.summary.get('description', '')}  ({sc.title_extra}){'  [log scale]' if log else ''}",
+        f"{sc.summary.get('description', '')}  ({sc.title_extra})  Bold = running mean over max(1 year, 3 samples), faint = raw samples.{'  [log scale]' if log else ''}",
         legend_handles(sc, grass=True, shock=True),
     )
     fig.tight_layout(rect=(0, 0, 1, top))

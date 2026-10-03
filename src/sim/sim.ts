@@ -289,9 +289,24 @@ export class Sim implements SimLike {
 
   // ------------------------------------------------------------------ packs
 
+  /**
+   * Prey-scaled wolf capacity: when prey is plentiful, dens sit closer and packs grow larger before splitting;
+   * when it is scarce the valley holds fewer, smaller packs. 1 when wolfPreyRef is 0 (off).
+   */
+  private preyScale(): number {
+    if (this.p.wolfPreyRef <= 0) return 1;
+    const pop = this.tick === 0 ? this.populations() : this.pop; // counters fill on the first step
+    const prey = pop[Sp.Bison] + 0.4 * pop[Sp.Deer];
+    return Math.min(1.8, Math.max(0.5, prey / this.p.wolfPreyRef));
+  }
+
+  private packMaxNow(): number {
+    return this.p.wolfPackMax * this.preyScale();
+  }
+
   private findDenSite(nearX?: number, nearY?: number): [number, number] | null {
     const w = this.world;
-    const minD = this.p.wolfDenMinDist;
+    const minD = this.p.wolfDenMinDist / Math.sqrt(this.preyScale());
     for (let k = 0; k < 200; k++) {
       const x = nearX !== undefined ? nearX + this.rng.range(-30, 30) : this.rng.range(50, w.size - 50);
       const y = nearY !== undefined ? nearY + this.rng.range(-30, 30) : this.rng.range(50, w.size - 50);
@@ -432,7 +447,7 @@ export class Sim implements SimLike {
       if ((this.tick + pk) % 20 === 0) {
         const hungry = this.packEnergy[pk] / this.packSize[pk] < 0.55;
         this.sniffPrey(pk, this.p.wolfTerritory * (hungry ? 1.5 : 1.2));
-        if (this.packSize[pk] > this.p.wolfPackMax && this.packStore[pk] > 0.8) this.disperse(pk);
+        if (this.packSize[pk] > this.packMaxNow() && this.packStore[pk] > 0.8) this.disperse(pk);
         else if (this.packSize[pk] <= 2 && (this.packAlphaF[pk] < 0 || this.packAlphaM[pk] < 0)) this.mergeRemnant(pk);
         else if (this.packAlphaF[pk] < 0) this.fillVacancy(pk, 0);
         else if (this.packAlphaM[pk] < 0) this.fillVacancy(pk, 1);
@@ -446,7 +461,7 @@ export class Sim implements SimLike {
         const f = this.packAlphaF[pk], m = this.packAlphaM[pk];
         if (f < 0 || m < 0) continue;
         if (a.energy[f] < 0.3) continue;
-        const crowd = this.packSize[pk] >= this.p.wolfPackMax + 3;
+        const crowd = this.packSize[pk] >= this.packMaxNow() + 3;
         if (crowd) continue;
         // a pack only raises pups on meat from real kills: no larder, no litter
         if (this.packStore[pk] < this.p.wolfBreedStore) continue;
@@ -561,7 +576,7 @@ export class Sim implements SimLike {
     const a = this.a;
     let best = -1, bd = 1e9;
     for (let q = 0; q < MAX_PACKS; q++) {
-      if (q === pk || !this.packAlive[q] || this.packSize[q] >= this.p.wolfPackMax) continue;
+      if (q === pk || !this.packAlive[q] || this.packSize[q] >= this.packMaxNow()) continue;
       const d = Math.hypot(this.packDenX[q] - this.packDenX[pk], this.packDenY[q] - this.packDenY[pk]);
       if (d < bd) { bd = d; best = q; }
     }
@@ -1335,7 +1350,7 @@ export class Sim implements SimLike {
       if (!this.packAlive[pk]) continue;
       if (Math.hypot(this.packDenX[pk] - x, this.packDenY[pk] - y) > this.p.wolfTerritory) continue;
       const lacks = a.male[i] ? this.packAlphaM[pk] < 0 : this.packAlphaF[pk] < 0;
-      if (lacks && this.packSize[pk] < this.p.wolfPackMax) {
+      if (lacks && this.packSize[pk] < this.packMaxNow()) {
         a.pack[i] = pk;
         if (a.male[i]) this.packAlphaM[pk] = i; else this.packAlphaF[pk] = i;
         return;
