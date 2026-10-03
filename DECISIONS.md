@@ -6,6 +6,7 @@ One line each: decision | why | alternative rejected.
 - 2026-10-03 01:00: "Start with Phase 0 right away while I'm still awake. After the sweep, don't ask me anything: decide, log it in DECISIONS.md, and keep going until the stop hook lets you finish."
 
 - 2026-10-03 01:35: "When generating an image during development, save it to a folder so we have a record of where we started and where we ended" (for a future progression video, presentation, or landing page). Implemented as `journey/` + `tools/journey.py` + `journey/INDEX.md`; applies to concept art, review stills, UI captures, and key charts.
+- 2026-10-03 01:55: "That first concept image is almost exactly how I would LOVE this to turn out from a visual standpoint." -> `art/concept/00_prairie_golden_hour.jpg` is the visual north star. Every review round compares the build side by side against it.
 
 ## Log
 - 01:00 Installed `_claude_setup/` into `.claude/` myself | SETUP.cmd had not been run and the contract depends on the hook and agents | waiting for the owner to run it (he is going to sleep).

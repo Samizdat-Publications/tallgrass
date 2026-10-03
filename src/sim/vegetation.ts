@@ -1,0 +1,184 @@
+// Grass, soil, fear and fire on the 256 x 256 cell grid. Updated in strided row passes.
+import { Environment } from './env';
+import { Params } from './params';
+import { Rng } from './rng';
+import { World } from './world';
+
+/** Rows are updated in STRIDE interleaved passes, so each cell advances by dt = STRIDE ticks. */
+export const STRIDE = 8;
+
+export class Vegetation {
+  readonly n: number;
+  readonly cell: number;
+  grass: Float32Array;
+  soil: Float32Array;
+  fear: Float32Array;
+  /** 0 none; (0, 1] ash fading; > 1 burning (value - 1 = remaining burn fraction). */
+  burn: Float32Array;
+  burningCells = 0;
+  private landCells: number;
+
+  constructor(private w: World, private p: Params, private env: Environment, private rng: Rng) {
+    this.n = w.n;
+    this.cell = w.cell;
+    const N2 = w.n * w.n;
+    this.grass = new Float32Array(N2);
+    this.soil = new Float32Array(N2);
+    this.fear = new Float32Array(N2);
+    this.burn = new Float32Array(N2);
+    let land = 0;
+    for (let c = 0; c < N2; c++) {
+      this.soil[c] = w.soilBase[c];
+      this.grass[c] = w.capacity[c] * 0.8;
+      if (!w.water[c]) land++;
+    }
+    this.landCells = land;
+  }
+
+  cellAt(x: number, y: number): number {
+    const n = this.n;
+    let i = (x / this.cell) | 0, j = (y / this.cell) | 0;
+    if (i < 0) i = 0; else if (i >= n) i = n - 1;
+    if (j < 0) j = 0; else if (j >= n) j = n - 1;
+    return j * n + i;
+  }
+
+  /** Effective carrying capacity of a cell right now (before season). */
+  capacityOf(c: number): number {
+    const sb = this.w.soilBase[c];
+    let f = this.soil[c] / (sb > 0.15 ? sb : 0.15);
+    f = f < 0.35 ? 0.35 : f > 1.5 ? 1.5 : f;
+    return this.w.capacity[c] * f;
+  }
+
+  step(tick: number): void {
+    const { n, grass, soil, fear, burn, p, w } = this;
+    const dt = STRIDE;
+    const gf = this.env.growthFactor();
+    const season = this.env.state.season;
+    const dormant = gf < 0.12;
+    const drought = this.env.droughtTicks > 0;
+    const rGrow = p.grassGrowth * gf;
+    const seed = p.grassSeedFloor * gf;
+    const fearKeep = 1 - p.fearDecay * dt;
+    const windDir = this.env.state.windDir, windS = this.env.state.windStrength;
+    const wx = Math.cos(windDir), wy = Math.sin(windDir);
+    // fire is much likelier late summer and autumn, and nearly impossible in the rain
+    const si = Math.floor(season) % 4;
+    const seasonDry = [0.35, 1.0, 0.9, 0.25][si] * (drought ? 1.6 : 1) * (1 - 0.9 * this.env.state.rain);
+    let burning = 0;
+    for (let j = tick % STRIDE; j < n; j += STRIDE) {
+      const row = j * n;
+      for (let i = 0; i < n; i++) {
+        const c = row + i;
+        if (w.water[c]) continue;
+        let g = grass[c];
+        const K = this.capacityOf(c);
+        const b = burn[c];
+        if (b > 1) {
+          // burning: consume grass, spread, then turn to ash
+          burning++;
+          g *= 0.35;
+          soil[c] = Math.min(1.2, soil[c] + 0.004);
+          fear[c] = 1;
+          const nb = b - dt / 48;
+          burn[c] = nb <= 1 ? 1 : nb;
+          if (b > 1.15) this.spreadFire(i, j, seasonDry, wx, wy, windS);
+        } else if (b > 0) {
+          burn[c] = Math.max(0, b - dt / 2400);
+        }
+        const moist = 0.55 + 0.9 * w.moisture[c];
+        g += dt * (rGrow * moist * g * (1 - g / (K + 1e-6)) + seed * K);
+        if (dormant) g -= dt * p.winterDieback * g;
+        if (drought) g -= dt * p.winterDieback * 0.7 * g;
+        if (g > K) g -= (g - K) * 0.004 * dt;
+        if (g < 0) g = 0;
+        grass[c] = g;
+        // overgrazing wears soil down; healthy grass slowly restores it
+        if (g < 0.08 * K + 0.01) soil[c] = Math.max(0.12, soil[c] - p.soilDegrade * dt);
+        else soil[c] += (w.soilBase[c] - soil[c]) * p.soilRecover * dt;
+        fear[c] *= fearKeep;
+      }
+    }
+    this.burningCells = burning * STRIDE; // estimate of burning cells overall
+  }
+
+  private spreadFire(i: number, j: number, seasonDry: number, wx: number, wy: number, windS: number): void {
+    const n = this.n;
+    for (let k = 0; k < 8; k++) {
+      const di = k === 0 ? 1 : k === 1 ? -1 : k === 2 ? 0 : k === 3 ? 0 : k === 4 ? 1 : k === 5 ? 1 : k === 6 ? -1 : -1;
+      const dj = k === 0 ? 0 : k === 1 ? 0 : k === 2 ? 1 : k === 3 ? -1 : k === 4 ? 1 : k === 5 ? -1 : k === 6 ? 1 : -1;
+      const ni = i + di, nj = j + dj;
+      if (ni < 0 || nj < 0 || ni >= n || nj >= n) continue;
+      const c = nj * n + ni;
+      if (this.w.water[c] || this.burn[c] > 0.5) continue;
+      const fuel = this.grass[c];
+      if (fuel < 0.08) continue;
+      const len = k < 4 ? 1 : Math.SQRT2;
+      const align = (di * wx + dj * wy) / len;
+      const dry = 1 - 0.6 * this.w.moisture[c];
+      const pr = 0.22 * seasonDry * dry * Math.min(1, fuel * 1.6) * Math.max(0.15, 1 + 1.8 * windS * align) / len;
+      if (this.rng.next() < pr) this.burn[c] = 2;
+    }
+  }
+
+  ignite(x: number, y: number, r: number): void {
+    const n = this.n, cell = this.cell;
+    const i0 = Math.max(0, Math.floor((x - r) / cell)), i1 = Math.min(n - 1, Math.floor((x + r) / cell));
+    const j0 = Math.max(0, Math.floor((y - r) / cell)), j1 = Math.min(n - 1, Math.floor((y + r) / cell));
+    for (let j = j0; j <= j1; j++) {
+      for (let i = i0; i <= i1; i++) {
+        const c = j * n + i;
+        if (!this.w.water[c] && Math.hypot((i + 0.5) * cell - x, (j + 0.5) * cell - y) <= r) this.burn[c] = 2;
+      }
+    }
+  }
+
+  /** Add to a field in a disc with linear falloff. */
+  stamp(field: Float32Array, x: number, y: number, r: number, amt: number, max = 1): void {
+    const n = this.n, cell = this.cell;
+    const i0 = Math.max(0, Math.floor((x - r) / cell)), i1 = Math.min(n - 1, Math.floor((x + r) / cell));
+    const j0 = Math.max(0, Math.floor((y - r) / cell)), j1 = Math.min(n - 1, Math.floor((y + r) / cell));
+    for (let j = j0; j <= j1; j++) {
+      const dy = (j + 0.5) * cell - y;
+      for (let i = i0; i <= i1; i++) {
+        const dx = (i + 0.5) * cell - x;
+        const d = Math.sqrt(dx * dx + dy * dy);
+        if (d < r) {
+          const c = j * n + i;
+          const v = field[c] + amt * (1 - d / r);
+          field[c] = v > max ? max : v;
+        }
+      }
+    }
+  }
+
+  meanGrass(): number {
+    let s = 0;
+    const g = this.grass, wat = this.w.water;
+    for (let c = 0; c < g.length; c++) if (!wat[c]) s += g[c];
+    return s / this.landCells;
+  }
+
+  meanOf(field: Float32Array): number {
+    let s = 0;
+    const wat = this.w.water;
+    for (let c = 0; c < field.length; c++) if (!wat[c]) s += field[c];
+    return s / this.landCells;
+  }
+
+  /** RGBA8 texture data per types.ts: R grass, G soil, B burn, A fear. */
+  fillTexture(out: Uint8Array): void {
+    const { grass, soil, burn, fear } = this;
+    for (let c = 0, o = 0; c < grass.length; c++, o += 4) {
+      const g = grass[c] * 255;
+      out[o] = g > 255 ? 255 : g;
+      const s = soil[c] * 212;
+      out[o + 1] = s > 255 ? 255 : s;
+      const b = burn[c];
+      out[o + 2] = b > 1 ? 255 : (b * 200) | 0;
+      const f = fear[c] * 255;
+      out[o + 3] = f > 255 ? 255 : f;
+    }
+  }
+}

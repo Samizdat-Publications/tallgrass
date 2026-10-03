@@ -62,7 +62,7 @@ Arms race readout: mean wolf speed vs mean bison speed over time.
 Rain, drought, wildfire (spreads over dry grass, wind-driven), plague, cull (70%), introduce a species, remove a species, plant a grove. Scenarios: Yellowstone reintroduction (no wolves, then 6 wolves), Island (no predators, boom and bust), Keystone removal, Hard winter, Collapse to save.
 
 ## Art direction
-**"Drone documentary, golden hour."** Anchor: `art/concept/` (Nano Banana). Painterly-grounded realism, not low-poly toy.
+**"Drone documentary, golden hour."** **North star (owner ruling): `art/concept/00_prairie_golden_hour.jpg`. The owner said this is almost exactly how he wants the game to look.** Match it: high oblique drone angle, warm low sun from one side, gold grass with green lowlands along the creek, rounded cottonwood groves, a silver creek, dust plumes behind the herd, long shadows, haze toward the horizon. Painterly-grounded realism, not low-poly toy.
 - Palette: cured gold grass, sage and spring green where it's lush, umber earth, cottonwood green, creek silver-blue. Warm sun, cool blue shadows.
 - Readability: bison near-black brown with a hump silhouette; wolves pale grey with light underside; ravens black specks circling. Grazed ground reads as short brown stubble; trampled paths are visible lines.
 - Light: sun on a slow day cycle that spends long stretches near golden hour, a short blue night with moonlight, fog and haze in valleys at dawn.
