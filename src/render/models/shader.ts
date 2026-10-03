@@ -4,7 +4,9 @@
 // Per-instance inputs (InstancedBufferAttribute, vec4):
 //   aGait = (gait phase 0..1, speed m/s [-1 marks a carcass], head-down weight | flap amount | carcass remaining, lie weight)
 //   aLook = (coat 0..1, per-animal seed 0..1, crouch | wing fold, selected + sick: floor() = selected 0/1, fract() = sickness 0..0.98)
+//   aFx   = (feeding tug weight 0..1, altitude above ground in m (birds), hunting weight 0..1, spare)
 import * as THREE from 'three';
+import { STRETCH_CAP, footReach } from './types';
 import type { AnimParams, ModelDef } from './types';
 
 const f = (x: number): string => (Number.isInteger(x) ? x.toFixed(1) : String(+x.toFixed(5)));
@@ -29,8 +31,12 @@ function defines(p: AnimParams): string {
     `#define DEAD_DROP ${f(p.deadDrop)}`, `#define DEAD_HIP_F ${f(p.deadHipF)}`, `#define DEAD_HIP_H ${f(p.deadHipH)}`,
     `#define HOCK_K ${f(p.hockK)}`,
     `#define OFF_W ${v4(p.offW)}`, `#define OFF_T ${v4(p.offT)}`, `#define OFF_G ${v4(p.offG)}`,
+    `#define DUTY_W ${f(p.dutyW)}`, `#define DUTY_T ${f(p.dutyT)}`, `#define DUTY_G ${f(p.dutyG)}`,
+    `#define REACH_W ${f(footReach(p.ampW))}`, `#define REACH_T ${f(footReach(p.ampT))}`, `#define REACH_G ${f(footReach(p.ampG))}`,
+    `#define STRETCH_CAP ${f(STRETCH_CAP)}`, `#define STRETCH_Y ${f(Math.sqrt(STRETCH_CAP * STRETCH_CAP - 1))}`,
     `#define FLAP_HZ ${f(p.flapHz)}`,
     `#define MIN_PX ${f(p.minPx)}`,
+    `#define FAR_NEAR 140.0`, `#define FAR_FAR 400.0`,
     `#define BODY_LEN ${f(p.boostLen)}`,
   ].join('\n');
 }
@@ -43,6 +49,7 @@ attribute vec3 aPivot;
 attribute vec3 aPivot2;
 attribute vec4 aGait;
 attribute vec4 aLook;
+attribute vec4 aFx;
 uniform float uTime;
 uniform vec3 uCamPos;
 uniform float uPxK;
@@ -64,6 +71,29 @@ void tgRotY(inout vec3 p, inout vec3 n, vec3 c, float a) {
   vec3 d = p - c;
   p = c + vec3(cs * d.x + sn * d.z, d.y, -sn * d.x + cs * d.z);
   n = vec3(cs * n.x + sn * n.z, n.y, -sn * n.x + cs * n.z);
+}
+
+// Planted-foot leg cycle for quadrupeds. u = leg phase in cycles. The foot is on the ground for beta of the cycle,
+// starting a quarter cycle in, and sweeps back at a constant rate (so it stays put on the ground while the body moves
+// over it); the rest of the cycle is a swing forward with a small reach and retraction around touchdown, so the foot
+// lands already moving back. Returns (W, arc): W is the foot position along the stride (+1 front .. -1 back), arc is
+// the 0..1 height profile of the lifted foot.
+// Hip angle that puts a planted foot y leg-lengths ahead of the hip, with the leg lengthening by 1 / cos up to STRETCH_CAP.
+float tgHipFor(float y) {
+  float a = abs(y);
+  float h = a <= STRETCH_Y ? atan(a) : asin(min(a / STRETCH_CAP, 1.0));
+  return y < 0.0 ? -h : h;
+}
+
+vec2 tgLegWave(float u, float beta) {
+  float v = fract(u - 0.25);
+  if (v < beta) return vec2(1.0 - 2.0 * v / beta, 0.0);
+  float s = (v - beta) / (1.0 - beta);
+  float k = 1.2 * (1.0 - beta) / beta;
+  float h = s * s * (3.0 - 2.0 * s);
+  float t1 = s * s * s * (1.0 - s);
+  float t0 = s * (1.0 - s) * (1.0 - s) * (1.0 - s);
+  return vec2(-1.0 + 2.0 * h + k * (t1 - t0), sin(3.14159265 * s));
 }
 
 void tgAnimate(inout vec3 p, inout vec3 n) {
@@ -105,15 +135,51 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
   // gentle breathing and walk roll
   float breathe = 0.004 * sin(t * 1.9 + seed * 30.0) * COM_Y;
 
+  // feeding at a carcass. Predators tear: the head hauls up and back slowly with the meat in its teeth, shakes it, then
+  // snaps back down for the next bite, with the whole body heaving back a little. Ravens peck in quick bursts.
+  float tug = dead ? 0.0 : aFx.x;
+  float tugPull = 0.0, tugShake = 0.0, peck = 0.0, peckUp = 0.0;
+  if (tug > 0.001) {
+#if KIND == 2
+    // pecking comes in bursts: the head lifts a little, then stabs down, 1.6 to 2.4 times a second
+    float burst = smoothstep(-0.2, 0.25, sin(t * 0.8 + seed * 31.0));
+    float pk = 0.5 + 0.5 * sin(TG_TAU * (t * (1.6 + 0.8 * fract(seed * 3.1)) + seed * 9.0));
+    peck = tug * burst * pk * pk;
+    peckUp = tug * burst * 0.35;
+    pitch -= peck * 0.22;
+#else
+    float tp = fract(t * (0.5 + 0.2 * fract(seed * 5.3)) + seed * 7.0);
+    tugPull = tug * smoothstep(0.0, 0.62, tp) * (1.0 - smoothstep(0.62, 0.7, tp));
+    tugShake = tug * smoothstep(0.3, 0.55, tp) * (1.0 - smoothstep(0.62, 0.7, tp)) * sin(t * 21.0 + seed * 40.0);
+    pitch += tugPull * 0.05;
+#endif
+  }
+
   if (part >= 1 && part <= 4) {
     vec4 oW = OFF_W; vec4 oT = OFF_T; vec4 oG = OFF_G;
     float ow = part == 1 ? oW.x : (part == 2 ? oW.y : (part == 3 ? oW.z : oW.w));
     float ot = part == 1 ? oT.x : (part == 2 ? oT.y : (part == 3 ? oT.z : oT.w));
     float og = part == 1 ? oG.x : (part == 2 ? oG.y : (part == 3 ? oG.z : oG.w));
     bool front = part <= 2;
+    float hip, lift;
+    float stc = 0.0;
+    float hipGait = 0.0; // the gait's hip angle in the world frame (before the body pitch is cancelled)
+#if KIND == 0
+    vec2 lw = tgLegWave(ph + ow, DUTY_W);
+    vec2 lt = tgLegWave(ph + ot, DUTY_T);
+    vec2 lg = tgLegWave(ph + og, DUTY_G);
+    hip = wWalk * tgHipFor(lw.x * REACH_W) + wTrot * tgHipFor(lt.x * REACH_T) + wGal * tgHipFor(lg.x * REACH_G);
+    lift = wWalk * KNEE_W * lw.y + wTrot * KNEE_T * lt.y + wGal * KNEE_G * lg.y;
+    // how planted this foot is (1 on the ground, 0 mid swing), used to keep it from riding up with the body
+    float liftPeak = wWalk * KNEE_W + wTrot * KNEE_T + wGal * KNEE_G;
+    stc = (1.0 - smoothstep(0.0, 0.3, lift / max(liftPeak, 0.001))) * moveK;
+    hipGait = hip;
+    hip -= pitch * stc; // the body's pitch is cancelled in the planted leg (applied later to everything)
+#else
     float aw = TG_TAU * (ph + ow), at = TG_TAU * (ph + ot), ag = TG_TAU * (ph + og);
-    float hip = wWalk * AMP_W * sin(aw) + wTrot * AMP_T * sin(at) + wGal * AMP_G * sin(ag);
-    float lift = wWalk * KNEE_W * max(cos(aw), 0.0) + wTrot * KNEE_T * max(cos(at), 0.0) + wGal * KNEE_G * max(cos(ag), 0.0);
+    hip = wWalk * AMP_W * sin(aw) + wTrot * AMP_T * sin(at) + wGal * AMP_G * sin(ag);
+    lift = wWalk * KNEE_W * max(cos(aw), 0.0) + wTrot * KNEE_T * max(cos(at), 0.0) + wGal * KNEE_G * max(cos(ag), 0.0);
+#endif
     float knee = front ? -lift : lift * HOCK_K;
     // stalking: bent legs
     hip += crouchBody * (front ? 0.25 : -0.2);
@@ -131,17 +197,24 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
     }
     tgRotZ(p, n, aPivot2, knee * aPart.y);
     tgRotZ(p, n, aPivot, hip);
+#if KIND == 0
+    // a planted foot stays on the ground as the leg leans (the leg lengthens by 1 / cos, a little, never more than 15%)
+    // and as the body bobs, so only its sweep over the ground is left
+    p = aPivot + (p - aPivot) * mix(1.0, min((1.0 + bob / COM_Y) / cos(hipGait), STRETCH_CAP), stc);
+#endif
   } else if (part == 5) {
     float graze = dead ? 0.0 : aGait.z;
 #if KIND == 2
     graze *= aLook.z; // birds: head pecks only while perched (fold = 1)
 #endif
-    float raise = smoothstep(0.5, 0.85, sin(t * 0.37 + seed * 40.0));
+    float raise = smoothstep(0.5, 0.85, sin(t * 0.37 + seed * 40.0)) * (1.0 - 0.8 * tug); // a feeding animal keeps its head down
     float dn = graze * (1.0 - 0.85 * raise);
     float nod = (wWalk + wTrot) * NOD_W * sin(2.0 * cyc + 1.0) + wGal * NOD_G * sin(cyc + 2.0);
     float chew = dn * 0.05 * sin(t * 7.0 + seed * 20.0);
     float yaw = LOOK_YAW * sin(t * 0.45 + seed * 13.0) * (1.0 - dn) * (1.0 - wGal) * (1.0 - lie * 0.5);
     float ang = -HEAD_DN * dn + nod + chew - 0.45 * crouchBody - 0.5 * sick * (1.0 - 0.5 * dn);
+    ang += tugPull * 0.6 - peck * 1.0 + peckUp;
+    yaw += tugShake * 0.3;
     ang = mix(ang, 0.15, lie * 0.7);
     if (dead) { ang = -0.55; yaw = 0.25; }
     tgRotY(p, n, aPivot, yaw);
@@ -200,6 +273,8 @@ uniform vec3 uCoatDark;
 uniform vec3 uBone;
 varying vec3 vTgColor;
 varying float vTgSel;
+varying float vTgFar;
+varying float vTgHunt;
 
 void tgShade() {
   bool dead = aGait.y < -0.5;
@@ -210,7 +285,7 @@ void tgShade() {
   col *= mix(1.0, v, c);
   if (dead) {
     float r = aGait.z;
-    col *= 0.7;
+    col *= 0.5; // a dead body reads darker than the living herd, so a kill is a dark mark in the grass
     vec3 flesh = vec3(0.22, 0.035, 0.03);
     float fleshW = (1.0 - smoothstep(0.38, 0.62, r)) * 0.85;
     float boneW = (1.0 - smoothstep(0.06, 0.3, r));
@@ -221,8 +296,13 @@ void tgShade() {
   col = mix(col, vec3(luma * 1.1) * vec3(0.96, 0.97, 0.95) + vec3(0.015), 0.5 * sick);
   vTgColor = col;
   vTgSel = floor(aLook.w + 0.001);
+  // distance readability: 0 close up, 1 from the wide view (see ModelDef.far)
+  vTgFar = smoothstep(FAR_NEAR, FAR_FAR, distance(uCamPos, vec3(instanceMatrix[3])));
+  vTgHunt = aFx.z;
 }
 `;
+
+const NO_FAR = { gain: 1, rim: 0, hunt: 0, rimCol: [1, 1, 1] as [number, number, number] };
 
 export interface AnimalMaterials {
   material: THREE.MeshStandardMaterial;
@@ -251,6 +331,11 @@ export function makeAnimalMaterials(sp: number, def: ModelDef, shared: AnimalSha
     shader.uniforms.uFill = { value: def.fill };
     shader.uniforms.uWarm = { value: new THREE.Vector3(...def.warm) };
     shader.uniforms.uNeutral = { value: def.neutral };
+    const far = def.far ?? NO_FAR;
+    shader.uniforms.uFarGain = { value: far.gain };
+    shader.uniforms.uRimCol = { value: new THREE.Vector3(...far.rimCol) };
+    shader.uniforms.uRimK = { value: far.rim };
+    shader.uniforms.uHuntK = { value: far.hunt };
     material.userData.shader = shader; // exposed for live tuning from the console
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', `#include <common>\n${defs}\n${COMMON_DECL}\n${VERT_SHADE_DECL}`)
@@ -260,8 +345,8 @@ export function makeAnimalMaterials(sp: number, def: ModelDef, shared: AnimalSha
       )
       .replace('#include <begin_vertex>', 'vec3 transformed = tgP;');
     shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', `#include <common>\nvarying vec3 vTgColor;\nvarying float vTgSel;\nuniform float uFill;\nuniform vec3 uWarm;\nuniform float uNeutral;`)
-      .replace('#include <color_fragment>', 'diffuseColor.rgb *= vTgColor;')
+      .replace('#include <common>', `#include <common>\nvarying vec3 vTgColor;\nvarying float vTgSel;\nvarying float vTgFar;\nvarying float vTgHunt;\nuniform float uFill;\nuniform vec3 uWarm;\nuniform float uNeutral;\nuniform float uFarGain;\nuniform vec3 uRimCol;\nuniform float uRimK;\nuniform float uHuntK;`)
+      .replace('#include <color_fragment>', 'diffuseColor.rgb *= vTgColor * mix(1.0, uFarGain, vTgFar);')
       // sky fill: pull toward a warm neutral (so brown coats stay brown in blue shade), then boost it so the shaded side keeps form
       .replace(
         '#include <lights_fragment_end>',
@@ -271,7 +356,9 @@ export function makeAnimalMaterials(sp: number, def: ModelDef, shared: AnimalSha
         '#include <emissivemap_fragment>',
         `#include <emissivemap_fragment>
         float tgRim = pow(1.0 - clamp(dot(normalize(vViewPosition), normal), 0.0, 1.0), 3.0);
-        totalEmissiveRadiance += vec3(1.0, 0.8, 0.35) * vTgSel * (0.015 + 0.45 * tgRim);`,
+        totalEmissiveRadiance += vec3(1.0, 0.8, 0.35) * vTgSel * (0.015 + 0.45 * tgRim);
+        float tgEdge = pow(1.0 - clamp(dot(normalize(vViewPosition), normal), 0.0, 1.0), 1.6);
+        totalEmissiveRadiance += uRimCol * vTgFar * (uRimK + vTgHunt * uHuntK) * tgEdge;`,
       );
   };
   material.customProgramCacheKey = () => `tg-animal-${sp}`;
@@ -283,7 +370,9 @@ export function makeAnimalMaterials(sp: number, def: ModelDef, shared: AnimalSha
     shader.uniforms.uPxK = shared.uPxK;
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', `#include <common>\n${defs}\n${COMMON_DECL}`)
-      .replace('#include <begin_vertex>', `vec3 tgP = position;\n vec3 tgN = vec3(0.0, 1.0, 0.0);\n tgAnimate(tgP, tgN);\n vec3 transformed = tgP;`);
+      // a bird in flight casts no shadow (collapse it to a point): at the boost the wide view needs, it would sweep a huge
+      // blocky smudge across the ground
+      .replace('#include <begin_vertex>', `vec3 tgP = position;\n vec3 tgN = vec3(0.0, 1.0, 0.0);\n tgAnimate(tgP, tgN);\n#if KIND == 2\n if (aFx.y > 1.0) tgP = vec3(0.0);\n#endif\n vec3 transformed = tgP;`);
   };
   depth.customProgramCacheKey = () => `tg-animal-depth-${sp}`;
   return { material, depth };

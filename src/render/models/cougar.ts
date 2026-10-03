@@ -105,12 +105,15 @@ export function buildCougar(): ModelDef {
     fill: 1.5,
     warm: [1.15, 1.0, 0.8],
     neutral: 0.7,
+    far: { gain: 0.85, rim: 0.04, hunt: 0.4, rimCol: [1.0, 0.86, 0.62] },
     params: {
       ...DEFAULT_PARAMS,
       kind: 0,
-      comY: 0.62,
-      trot0: 1.6, trot1: 2.5, gal0: 4.2, gal1: 5.6,
-      ampW: 0.5, ampT: 0.62, ampG: 0.95,
+      comY: 0.62, legL: 0.6,
+      // on-screen m/s at 1x
+      trot0: 2.6, trot1: 3.6, gal0: 8.5, gal1: 11.5,
+      ampW: 0.5, ampT: 0.66, ampG: 1.0,
+      dutyW: 0.62, dutyT: 0.5, dutyG: 0.36,
       kneeW: 0.55, kneeT: 0.85, kneeG: 1.3,
       bobW: 0.015, bobT: 0.03, bobG: 0.08,
       pitchT: 0.03, pitchG: 0.15,
@@ -120,7 +123,6 @@ export function buildCougar(): ModelDef {
       lieDrop: 0.4, lieHipF: 1.25, lieKneeF: -2.3, lieHipH: -0.8, lieKneeH: 1.6,
       crouchDrop: 0.26,
       deadDrop: 0.36, deadHipF: 0.9, deadHipH: -0.6,
-      strideW: 1.4, strideG: 4.8, strideSpeedMax: 15,
       length: 1.3, height: 0.8, ring: 1.3, minPx: 8, boostLen: 1.8,
     },
   };

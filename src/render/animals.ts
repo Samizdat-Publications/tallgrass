@@ -2,8 +2,11 @@
 //
 // One InstancedMesh per species. Per-instance matrix (position, yaw, terrain pitch/roll, scale) is built on the
 // CPU; the gait, graze, rest, carcass and wing poses are evaluated in the vertex shader (see models/shader.ts)
-// from two vec4 instance attributes. Snapshots arrive at 10 to 60 Hz; positions and headings are interpolated
+// from three vec4 instance attributes. Snapshots arrive at 10 to 60 Hz; positions and headings are interpolated
 // between the previous and current snapshot by id.
+//
+// Foot-lock: the leg cycle advances by (distance drawn this frame / stride), never by time, so a planted foot stands
+// still on the ground at any sim rate or frame rate (the stride comes from the gait, see models/types.ts plantedStride).
 import * as THREE from 'three';
 import { AGENT_STRIDE, CARCASS_STRIDE, F_INFECTED, SPECIES_COUNT, Sp, St } from '../sim/types';
 import type { Snapshot } from '../sim/types';
@@ -11,6 +14,7 @@ import { sampleHeight } from '../sim/world';
 import type { World } from '../sim/world';
 import { getModel } from './models';
 import type { AnimParams, ModelDef } from './models';
+import { plantedStride } from './models/types';
 import { makeAnimalMaterials } from './models/shader';
 import type { AnimalShared } from './models/shader';
 import { Dust, KillSites, Markers, SceneLit } from './models/fx';
@@ -39,13 +43,35 @@ const DUST: Array<[number, number, number, number, number, number] | null> = [
   [5.5, 0.4, 0.8, 0.2, 0.7, 1.1], // cougar
 ];
 
-function strideFreq(p: AnimParams, spd: number): number {
-  if (spd < 0.05) return 0;
-  const u = clamp(spd / p.strideSpeedMax, 0, 1);
-  const s = u * u * (3 - 2 * u);
-  const stride = p.strideW + (p.strideG - p.strideW) * s;
-  return Math.min(6, spd / stride);
+/** On-screen metres per second of sim speed at 1x (DT 0.15 s of motion per tick, 10 ticks per second). */
+const VIS_PER_SIM = 1.5;
+
+const smoothstep = (a: number, b: number, x: number): number => {
+  const t = clamp((x - a) / (b - a), 0, 1);
+  return t * t * (3 - 2 * t);
+};
+
+/**
+ * Metres of ground covered per leg cycle at a gait pace (the pace the animal moves at in its own world, on-screen m/s at
+ * 1x). The gait mix is the one the vertex shader uses. Quadrupeds use the stride that leaves a planted foot standing
+ * still on the ground (see plantedStride); hoppers and birds interpolate their authored strides.
+ */
+function strideFor(p: AnimParams, gaitSpd: number): number {
+  if (p.kind !== 0) {
+    const u = clamp(gaitSpd / p.strideSpeedMax, 0, 1);
+    return p.strideW + (p.strideG - p.strideW) * u * u * (3 - 2 * u);
+  }
+  const s1 = smoothstep(p.trot0, p.trot1, gaitSpd);
+  const wG = smoothstep(p.gal0, p.gal1, gaitSpd);
+  const wT = s1 * (1 - wG);
+  const wW = smoothstep(0.08, 0.4, gaitSpd) * (1 - s1);
+  const sum = wW + wT + wG;
+  if (sum < 1e-3) return plantedStride(p, 0);
+  return (wW * plantedStride(p, 0) + wT * plantedStride(p, 1) + wG * plantedStride(p, 2)) / sum;
 }
+
+/** Most leg cycles per second the cadence may reach (faster than this the legs alias on screen). */
+const MAX_CADENCE = 6;
 
 /** Per species draw batch (one InstancedMesh, rebuilt when it must grow). */
 class Batch {
@@ -60,6 +86,7 @@ class Batch {
   geometry!: THREE.BufferGeometry;
   gait!: THREE.InstancedBufferAttribute;
   look!: THREE.InstancedBufferAttribute;
+  fx!: THREE.InstancedBufferAttribute;
   ids = new Uint32Array(0);
   /** x, y, z, radius per instance, world space, for picking. */
   centers = new Float32Array(0);
@@ -87,10 +114,13 @@ class Batch {
     g.setIndex(src.getIndex());
     this.gait = new THREE.InstancedBufferAttribute(new Float32Array(cap * 4), 4);
     this.look = new THREE.InstancedBufferAttribute(new Float32Array(cap * 4), 4);
+    this.fx = new THREE.InstancedBufferAttribute(new Float32Array(cap * 4), 4);
     this.gait.setUsage(THREE.DynamicDrawUsage);
     this.look.setUsage(THREE.DynamicDrawUsage);
+    this.fx.setUsage(THREE.DynamicDrawUsage);
     g.setAttribute('aGait', this.gait);
     g.setAttribute('aLook', this.look);
+    g.setAttribute('aFx', this.fx);
     const mesh = new THREE.InstancedMesh(g, this.material, cap);
     mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     mesh.customDepthMaterial = this.depth;
@@ -128,6 +158,14 @@ class Slots {
   cap = 4096;
   phase = new Float32Array(this.cap);
   spd = new Float32Array(this.cap);
+  /** Smoothed on-screen ground speed (m per real second), from the distance actually drawn each frame. */
+  vis = new Float32Array(this.cap);
+  /** Where the animal was drawn last frame (the foot-lock measures the distance covered from this). */
+  px = new Float32Array(this.cap);
+  pz = new Float32Array(this.cap);
+  /** Feeding tug and hunting weights, eased. */
+  tug = new Float32Array(this.cap);
+  hunt = new Float32Array(this.cap);
   hdn = new Float32Array(this.cap);
   lie = new Float32Array(this.cap);
   crouch = new Float32Array(this.cap);
@@ -156,6 +194,11 @@ class Slots {
     };
     this.phase = g(this.phase, Float32Array);
     this.spd = g(this.spd, Float32Array);
+    this.vis = g(this.vis, Float32Array);
+    this.px = g(this.px, Float32Array);
+    this.pz = g(this.pz, Float32Array);
+    this.tug = g(this.tug, Float32Array);
+    this.hunt = g(this.hunt, Float32Array);
     this.hdn = g(this.hdn, Float32Array);
     this.lie = g(this.lie, Float32Array);
     this.crouch = g(this.crouch, Float32Array);
@@ -220,7 +263,7 @@ export class AnimalLayer {
     this.kills = new KillSites(world, this.lit);
     this.dust = new Dust(this.lit);
     this.markers = new Markers(world.size);
-    this.object3D.add(this.kills.mesh, this.dust.mesh, this.markers.mesh);
+    this.object3D.add(this.kills.mesh, this.dust.mesh, this.markers.mesh, this.markers.pingMesh);
 
     // Selection ring: a soft glowing ring that hugs the terrain under the selected animal.
     const N = 24;
@@ -369,7 +412,8 @@ export class AnimalLayer {
       }
 
       // animation state targets
-      const spdT = spd1 * this.timeScale;
+      // gait style follows the animal's own pace (walk, trot, gallop), not the time-lapse factor
+      const spdT = this.timeScale > 0 ? spd1 * VIS_PER_SIM : 0;
       let hdT = 0, lieT = 0, crT = 0;
       let flapT = 0;
       if (state === St.Graze || state === St.Eat || state === St.Drink) hdT = 1;
@@ -384,13 +428,30 @@ export class AnimalLayer {
       }
       if (S.fresh[slot]) {
         S.fresh[slot] = 0;
+        S.px[slot] = x;
+        S.pz[slot] = z;
         S.spd[slot] = spdT;
+        S.vis[slot] = 0;
         S.hdn[slot] = hdT;
         S.lie[slot] = lieT;
         S.crouch[slot] = crT;
         S.flap[slot] = flapT;
+        S.tug[slot] = 0;
+        S.hunt[slot] = 0;
       }
+      // The distance actually drawn since the last frame. The legs are locked to it (cadence = distance / stride), so a
+      // planted foot stands still on the ground whatever the sim rate, time scale or snapshot jitter.
+      let ds = Math.hypot(x - S.px[slot], z - S.pz[slot]);
+      if (ds > 30) ds = 0; // a teleport (respawn, new world), not a step
+      S.px[slot] = x;
+      S.pz[slot] = z;
+      const visT = dt > 1e-4 ? ds / dt : 0;
+      const feeding = state === St.Eat && (sp === Sp.Wolf || sp === Sp.Cougar || (sp === Sp.Raven && hdT > 0)) && this.timeScale > 0;
+      const hunting = (sp === Sp.Wolf || sp === Sp.Cougar) && this.timeScale > 0 ? (state === St.Chase || state === St.Stalk ? 1 : state === St.Eat ? 0.6 : 0) : 0;
+      S.tug[slot] += ((feeding ? 1 : 0) - S.tug[slot]) * kHead;
+      S.hunt[slot] += (hunting - S.hunt[slot]) * kHead;
       S.spd[slot] += (spdT - S.spd[slot]) * k8;
+      S.vis[slot] += (visT - S.vis[slot]) * k8;
       S.hdn[slot] += (hdT - S.hdn[slot]) * kHead;
       S.lie[slot] += (lieT - S.lie[slot]) * kLie;
       S.crouch[slot] += (crT - S.crouch[slot]) * kCrouch;
@@ -399,10 +460,13 @@ export class AnimalLayer {
       S.sick[slot] += (sickT - S.sick[slot]) * kSick;
       const sickK = S.sick[slot];
       const spdS = S.spd[slot];
-      S.phase[slot] = (S.phase[slot] + dt * strideFreq(pr, spdS) * (1 - 0.3 * sickK)) % 1;
+      // a creature that is not actually going anywhere (blocked, turning on the spot) stands rather than marching in place
+      const gaitSpd = Math.min(spdS, S.vis[slot] * 1.6 + 0.15);
+      // the model is drawn scaled (species readability boost, age, size), and its stride scales with it
+      const vs = sc * this.speciesScale[sp];
+      S.phase[slot] = (S.phase[slot] + Math.min(ds / (strideFor(pr, gaitSpd) * vs), MAX_CADENCE * dt)) % 1;
 
       // pose on the terrain
-      const vs = sc * this.speciesScale[sp];
       const ch = Math.cos(h), sh = Math.sin(h);
       const ground = sampleHeight(H, hn, cell, x, z);
       let pitch = 0, roll = 0, y = ground;
@@ -449,6 +513,8 @@ export class AnimalLayer {
       this.writeInstance(b, x, y, z, ch, sh, pitch, roll, vs);
 
       this.markers.add(sp, x, y + (sp === Sp.Raven ? 0.3 : pr.height * 0.6 * vs), z, pr.boostLen, vs);
+      // from the wide view, a slow ring where a predator chases or stalks and where anything is feeding at a carcass
+      if (hunting >= 1 || (feeding && S.tug[slot] > 0.5)) this.markers.addPing(x, y + 0.3, z, hunting >= 1 ? 1 : 0.7);
 
       // dust kicked up by fast movers
       const dp = DUST[sp];
@@ -477,9 +543,15 @@ export class AnimalLayer {
       const gait = b.gait.array as Float32Array;
       const look = b.look.array as Float32Array;
       gait[gp] = S.phase[slot];
-      gait[gp + 1] = spdS;
+      gait[gp + 1] = gaitSpd;
       gait[gp + 2] = sp === Sp.Raven ? (S.hdn[slot] > 0.5 ? 1 : S.flap[slot]) : S.hdn[slot];
       gait[gp + 3] = S.lie[slot];
+      // feeding tug (head hauls and shakes, ravens peck), altitude (a bird in flight casts no shadow), hunting weight
+      const fx = b.fx.array as Float32Array;
+      fx[gp] = S.tug[slot];
+      fx[gp + 1] = sp === Sp.Raven ? alt : 0;
+      fx[gp + 2] = S.hunt[slot];
+      fx[gp + 3] = 0;
       look[gp] = clamp(coat, 0, 1);
       look[gp + 1] = hash01(id);
       look[gp + 2] = S.crouch[slot];
@@ -532,6 +604,8 @@ export class AnimalLayer {
       look[gp + 1] = seed;
       look[gp + 2] = 0;
       look[gp + 3] = 0;
+      const fxc = b.fx.array as Float32Array;
+      fxc[gp] = 0; fxc[gp + 1] = 0; fxc[gp + 2] = 0; fxc[gp + 3] = 0;
       b.ids[k] = 0;
       b.centers[k * 4 + 3] = 0; // not pickable
     }
@@ -541,7 +615,7 @@ export class AnimalLayer {
       m.count = b.count;
       m.visible = b.count > 0;
       const used = b.count;
-      const attrs: THREE.BufferAttribute[] = [m.instanceMatrix, b.gait, b.look];
+      const attrs: THREE.BufferAttribute[] = [m.instanceMatrix, b.gait, b.look, b.fx];
       for (const a of attrs) {
         a.clearUpdateRanges();
         a.addUpdateRange(0, used * a.itemSize);

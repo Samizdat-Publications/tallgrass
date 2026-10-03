@@ -6,6 +6,8 @@ export interface AnimParams {
   kind: 0 | 1 | 2;
   /** Height of the pivot used for body pitch. */
   comY: number;
+  /** Hip pivot to ground (m) when standing; the stride of a planted foot scales with it. Defaults to comY. */
+  legL?: number;
   /** Walk to trot blend range and trot to gallop blend range (m/s). */
   trot0: number;
   trot1: number;
@@ -55,10 +57,19 @@ export interface AnimParams {
   offW: [number, number, number, number];
   offT: [number, number, number, number];
   offG: [number, number, number, number];
-  /** Metres travelled per leg cycle at a walk and at a full gallop (drives stride frequency on the CPU). */
+  /**
+   * Stance fraction (share of each leg cycle a foot is on the ground) per gait, quadrupeds only. During stance the foot
+   * sweeps back at a constant rate, so a leg cycle of `plantedStride()` metres leaves it exactly planted.
+   */
+  dutyW: number;
+  dutyT: number;
+  dutyG: number;
+  /**
+   * Metres per leg cycle at a walk and at a full gallop, and the speed at which the interpolation completes. Used for
+   * hoppers and birds only: quadrupeds derive their stride from the hip amplitude and stance fraction (plantedStride).
+   */
   strideW: number;
   strideG: number;
-  /** Speed (m/s) at which the walk to gallop stride interpolation completes. */
   strideSpeedMax: number;
   /** Wing beat frequency (Hz), birds only. */
   flapHz: number;
@@ -71,6 +82,28 @@ export interface AnimParams {
   minPx: number;
   /** Model length (m) used for that screen-size estimate. */
   boostLen: number;
+}
+
+/** A planted leg may lengthen at most this much (the shader's 1 / cos(hip) stretch that keeps the foot on the ground). */
+export const STRETCH_CAP = 1.15;
+
+/**
+ * Foot offset ahead of the hip (in leg lengths) at hip angle `amp`, for a planted leg: tan(amp) while the leg can stay
+ * on the ground by lengthening, sin(amp) * STRETCH_CAP once it hits the cap.
+ */
+export function footReach(amp: number): number {
+  return amp <= Math.acos(1 / STRETCH_CAP) ? Math.tan(amp) : Math.sin(amp) * STRETCH_CAP;
+}
+
+/**
+ * Metres a planted foot sweeps back per leg cycle for gait 0 walk, 1 trot, 2 gallop (quadrupeds): the foot travels
+ * 2 * L * reach(hip amplitude) along the ground, spread over the stance fraction of the cycle. Run the cycle at
+ * speed / stride Hz and the planted foot stands still on the ground.
+ */
+export function plantedStride(p: AnimParams, gait: 0 | 1 | 2): number {
+  const amp = gait === 0 ? p.ampW : gait === 1 ? p.ampT : p.ampG;
+  const duty = gait === 0 ? p.dutyW : gait === 1 ? p.dutyT : p.dutyG;
+  return (2 * (p.legL ?? p.comY) * footReach(amp)) / duty;
 }
 
 export interface ModelDef {
@@ -88,6 +121,12 @@ export interface ModelDef {
   warm: [number, number, number];
   /** 0..1: how far the sky fill is pulled to a neutral grey (times `warm`) before it lights the coat. */
   neutral: number;
+  /**
+   * Distance readability, all fading in between about 140 and 400 m from the camera: the coat is scaled by `gain` (value
+   * contrast against the grass), edges glow `rimCol` at `rim` strength, and by another `hunt` while the animal stalks,
+   * chases or feeds.
+   */
+  far?: { gain: number; rim: number; hunt: number; rimCol: [number, number, number] };
   triangles: number;
 }
 
@@ -129,6 +168,9 @@ export const DEFAULT_PARAMS: AnimParams = {
   offW: [0.25, 0.75, 0.0, 0.5],
   offT: [0.0, 0.5, 0.5, 0.0],
   offG: [0.5, 0.58, 0.0, 0.08],
+  dutyW: 0.62,
+  dutyT: 0.5,
+  dutyG: 0.42,
   strideW: 1.8,
   strideG: 5,
   strideSpeedMax: 12,

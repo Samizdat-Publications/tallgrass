@@ -171,7 +171,7 @@ export class Dust {
 const PATCH_G = 8; // grid cells per side
 
 /**
- * A dark, ragged, trampled patch of ground under each carcass. One merged mesh, rebuilt when the set of
+ * A dark, ragged, trampled patch of ground under each carcass (a multiply, so it darkens whatever it lies on). One merged mesh, rebuilt when the set of
  * carcasses changes. The patch fades slowly as the carcass is eaten so an old kill still leaves a mark.
  */
 export class KillSites {
@@ -182,6 +182,9 @@ export class KillSites {
   private lit: SceneLit;
   private cap = 0;
   private drawCount = 0;
+  private uSnow = { value: 0 };
+  private snowU: { value: number } | null = null;
+  private snowTry = 0;
 
   constructor(world: World, lit: SceneLit) {
     this.world = world;
@@ -189,19 +192,29 @@ export class KillSites {
     this.geo = new THREE.BufferGeometry();
     const mat = new THREE.ShaderMaterial({
       transparent: true, depthWrite: false, depthTest: true, fog: false,
+      // out = patch colour * ground colour, set explicitly (three's MultiplyBlending needs premultipliedAlpha and paints white without it)
+      blending: THREE.CustomBlending, blendEquation: THREE.AddEquation, blendSrc: THREE.DstColorFactor, blendDst: THREE.ZeroFactor,
+      blendSrcAlpha: THREE.ZeroFactor, blendDstAlpha: THREE.OneFactor,
       polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2,
-      uniforms: { uLit: lit as unknown as { value: THREE.Vector3 } },
+      uniforms: { uSnow: this.uSnow },
       vertexShader: /* glsl */ `
         attribute vec4 aInfo; // uv.xy (-1..1), remaining, seed
+        attribute vec4 aCen;  // patch centre xyz, radius
         varying vec4 vInfo;
+        varying float vFar;
         void main() {
           vInfo = aInfo;
-          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+          // the patch grows with camera distance (up to 1.8x) so a kill is still a mark from the wide view
+          float k = clamp(distance(cameraPosition, aCen.xyz) / 200.0, 1.0, 1.8);
+          vFar = (k - 1.0) / 0.8;
+          vec3 p = vec3(aCen.x + (position.x - aCen.x) * k, position.y, aCen.z + (position.z - aCen.z) * k);
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
         }`,
       fragmentShader: /* glsl */ `
         precision highp float;
-        uniform vec3 uLit;
+        uniform float uSnow;
         varying vec4 vInfo;
+        varying float vFar;
         float h21(vec2 p){ p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
         float vn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.0-2.0*f);
           return mix(mix(h21(i), h21(i+vec2(1,0)), f.x), mix(h21(i+vec2(0,1)), h21(i+vec2(1,1)), f.x), f.y); }
@@ -213,15 +226,17 @@ export class KillSites {
           float a = 1.0 - smoothstep(0.45, 1.0, edge);
           a *= smoothstep(0.12, 0.4, r); // leave the carcass itself clear
           float rem = vInfo.z;
-          a *= 0.7 + 0.3 * rem;
+          a *= (0.7 + 0.3 * rem) * (1.0 + 0.25 * vFar);
           if (a < 0.003) discard;
-          // dark stain in the middle, trampled dirt toward the rim, a few pale bone flecks late in the carcass's life
-          vec3 stain = vec3(0.035, 0.022, 0.018);
-          vec3 dirt = vec3(0.1, 0.075, 0.052);
-          vec3 col = mix(stain, dirt, smoothstep(0.1, 0.8, edge) * 0.9);
-          float fleck = step(0.93, h21(floor(uv * 14.0 + vInfo.w * 50.0))) * (1.0 - smoothstep(0.1, 0.5, rem)) * (1.0 - smoothstep(0.2, 0.7, r));
-          col = mix(col, vec3(0.45, 0.42, 0.36), fleck);
-          gl_FragColor = vec4(col * min(uLit, vec3(1.0)), a * 0.7);
+          // The patch MULTIPLIES whatever ground is there: a dark stain in the middle, trampled dirt toward the rim. Because it
+          // scales the ground instead of painting a fixed dark colour over it, it reads as damp, trampled earth on gold
+          // grass and as a rusty-grey stain on snow, never as a black ink blot.
+          vec3 stain = vec3(0.36, 0.28, 0.24);
+          vec3 dirt = vec3(0.7, 0.6, 0.5);
+          vec3 tint = mix(stain, dirt, smoothstep(0.1, 0.8, edge) * 0.9);
+          // on bright snow the same multiply would read as an ink blot: keep only a faint trampled-slush mark
+          tint = mix(tint, vec3(0.86, 0.84, 0.86), 0.7 * clamp(uSnow, 0.0, 1.0));
+          gl_FragColor = vec4(mix(vec3(1.0), tint, min(a * 0.9, 0.85)), 1.0);
         }`,
     });
     this.mesh = new THREE.Mesh(this.geo, mat);
@@ -230,6 +245,11 @@ export class KillSites {
     this.mesh.name = 'kill-sites';
     this.mesh.onBeforeRender = (_r, scene) => {
       this.lit.probe(scene);
+      if (!this.snowU && (this.snowTry++ & 15) === 0) {
+        const tu = scene.userData?.tgUniforms as { snow?: { value: number } } | undefined;
+        if (tu?.snow) this.snowU = tu.snow;
+      }
+      this.uSnow.value = this.snowU?.value ?? 0;
       if (scene.overrideMaterial) this.geo.setDrawRange(0, 0); // keep out of the AO G-buffer pass
     };
     this.mesh.onAfterRender = () => this.geo.setDrawRange(0, this.drawCount);
@@ -257,6 +277,7 @@ export class KillSites {
         this.mesh.geometry = this.geo;
         this.geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(this.cap * V * 3), 3).setUsage(THREE.DynamicDrawUsage));
         this.geo.setAttribute('aInfo', new THREE.BufferAttribute(new Float32Array(this.cap * V * 4), 4).setUsage(THREE.DynamicDrawUsage));
+        this.geo.setAttribute('aCen', new THREE.BufferAttribute(new Float32Array(this.cap * V * 4), 4).setUsage(THREE.DynamicDrawUsage));
         const idx = new Uint32Array(this.cap * G * G * 6);
         for (let c = 0; c < this.cap; c++) {
           let t = c * G * G * 6;
@@ -272,7 +293,8 @@ export class KillSites {
       }
       const pos = this.geo.getAttribute('position') as THREE.BufferAttribute;
       const info = this.geo.getAttribute('aInfo') as THREE.BufferAttribute;
-      const P = pos.array as Float32Array, I = info.array as Float32Array;
+      const cen = this.geo.getAttribute('aCen') as THREE.BufferAttribute;
+      const P = pos.array as Float32Array, I = info.array as Float32Array, C = cen.array as Float32Array;
       for (let c = 0; c < n; c++) {
         const cx = snap.carcasses[c * CARCASS_STRIDE], cz = snap.carcasses[c * CARCASS_STRIDE + 1];
         const sp = Math.round(snap.carcasses[c * CARCASS_STRIDE + 3]);
@@ -288,10 +310,12 @@ export class KillSites {
             P[o + 2] = z;
             const q = (c * V + j * (G + 1) + i) * 4;
             I[q] = u; I[q + 1] = v; I[q + 3] = seed;
+            C[q] = cx; C[q + 1] = 0; C[q + 2] = cz; C[q + 3] = R;
           }
         }
       }
       pos.needsUpdate = true;
+      cen.needsUpdate = true;
       this.drawCount = n * G * G * 6;
       this.geo.setDrawRange(0, this.drawCount);
     }
@@ -317,14 +341,17 @@ export class KillSites {
 // ---------------------------------------------------------------------------------------------------------
 // Distance markers
 
-/** [r, g, b, size in px on a 900 px tall viewport, max alpha] per species id. Deliberately small and quiet. */
-const MARKER: Array<[number, number, number, number, number] | null> = [
-  [0.045, 0.03, 0.022, 3.6, 0.5], // bison: dark umber
-  [0.34, 0.37, 0.42, 3.8, 0.4], // wolf: cool grey (a pack reads as a faint grey cluster, not a white fleck)
-  [0.015, 0.015, 0.02, 3.0, 0.5], // raven: black speck
-  [0.5, 0.34, 0.2, 3.0, 0.3], // pronghorn: warm tan
+/**
+ * [r, g, b, size in px on a 900 px tall viewport, max alpha, solo] per species id. Deliberately small and quiet. A solo
+ * species (predators) gets its dot even when alone; the rest only mark herds, packs and flocks.
+ */
+const MARKER: Array<[number, number, number, number, number, boolean] | null> = [
+  [0.045, 0.03, 0.022, 3.6, 0.5, false], // bison: dark umber
+  [0.16, 0.19, 0.25, 4.4, 0.55, true], // wolf: dark slate, so a pale wolf in gold grass has a dark core and reads from the wide view
+  [0.015, 0.015, 0.02, 3.0, 0.5, false], // raven: black speck
+  [0.5, 0.34, 0.2, 3.0, 0.3, false], // pronghorn: warm tan
   null, // rabbit
-  null, // cougar (solitary, a lone dot would only be noise)
+  [0.2, 0.17, 0.12, 4.4, 0.5, true], // cougar: dark umber-grey
 ];
 
 /** A marker is only drawn when at least this many of the same species share a ~24 m neighbourhood: herds and packs, never loners. */
@@ -333,31 +360,54 @@ const CLUSTER_CELL = 24;
 /** Markers are fully off inside this camera distance, and fade in over the next FADE_LEN meters. */
 const NEAR_OFF = 250;
 const FADE_LEN = 150;
+/** Hunt rings (around a chase, a stalk or a feeding) use their own, earlier, fade range. */
+const PING_NEAR = 170;
+const PING_FAR = 300;
+const PING_CELL = 14;
+const PING_CAP = 256;
 /** An animal this many pixels long (without the minimum-size boost) is already readable: no marker. */
 const PX_SHOW = 4.5;
 const PX_HIDE = 6.5;
 
 /**
- * Quiet species-colored dots that appear only when the camera is far (hidden inside ~250 m), only for clustered
- * animals (herds, packs, flocks), and only for animals still smaller than about 6 px on screen. They exist so a
- * herd or a circling flock still reads from the high drone view without looking like noise on the terrain.
+ * Quiet readability aids for the high drone view, all hidden up close:
+ *  - species-colored dots that appear only when the camera is far (hidden inside ~250 m) and only for animals still
+ *    smaller than about 6 px on screen: herds, packs and flocks as a group, predators even alone;
+ *  - a slow cream ripple on the ground around a predator that is chasing or stalking and around anything feeding at a
+ *    carcass (from about 170 m), so the hunt and the kill are where the eye goes.
  */
 export class Markers {
+  /** The dots (depth tested, so a ridge hides them). */
   readonly mesh: THREE.Mesh;
+  /** The hunt ripples: rings lying on the ground, drawn over the scene. */
+  readonly pingMesh: THREE.Mesh;
   private geo: THREE.InstancedBufferGeometry;
+  private pingGeo: THREE.InstancedBufferGeometry;
   private cap = 4096;
   private p = new Float32Array(this.cap * 4); // x, y, z, size px
   private c = new Float32Array(this.cap * 4); // r, g, b, max alpha
   // staging for the cluster test: species, x, y, z, natural px length, scale
   private st = new Float32Array(this.cap * 8);
+  // hunt ripples: staged (x, y, z, strength), de-duplicated per ~14 m cell, then written as instances
+  private ping = new Float32Array(PING_CAP * 4);
+  private pingSeen = new Set<number>();
+  private pingN = 0;
+  private pingP = new Float32Array(PING_CAP * 4); // x, y, z, size px
+  private pingC = new Float32Array(PING_CAP * 4); // r, g, b, max alpha
+  private pingK = new Float32Array(PING_CAP * 4); // seed, spare
   private attrP: THREE.InstancedBufferAttribute;
   private attrC: THREE.InstancedBufferAttribute;
-  private n = 0; // drawn
-  private m = 0; // staged
+  private attrPP: THREE.InstancedBufferAttribute;
+  private attrPC: THREE.InstancedBufferAttribute;
+  private attrPK: THREE.InstancedBufferAttribute;
+  private n = 0; // dots drawn
+  private m = 0; // dots staged
   private uView = { value: new THREE.Vector2(1600, 900) };
   private uNear = { value: NEAR_OFF };
   private uFar = { value: NEAR_OFF + FADE_LEN };
   private uBright = { value: 1 };
+  private uNow = { value: 0 };
+  private uPxK = { value: 1086 };
   private lit = new SceneLit();
   private tmpV = new THREE.Vector2();
   // camera state cached from the last render, for CPU-side culling
@@ -418,7 +468,9 @@ export class Markers {
       if ((camera as THREE.PerspectiveCamera).isPerspectiveCamera) {
         this.cam.setFromMatrixPosition(camera.matrixWorld);
         this.pxK = 900 / (2 * Math.tan(((camera as THREE.PerspectiveCamera).fov * Math.PI) / 360));
+        this.uPxK.value = this.pxK;
       }
+      this.uNow.value = (performance.now() / 1000) % 1000;
       this.lit.probe(scene);
       const lv = this.lit.value;
       this.uBright.value = Math.min(1, Math.max(0.3, 0.3 + 0.7 * ((lv.x + lv.y + lv.z) / 3 / 0.7)));
@@ -426,11 +478,66 @@ export class Markers {
       else this.geo.instanceCount = this.n;
     };
     this.mesh.onAfterRender = () => { this.geo.instanceCount = this.n; };
+
+    // ---- hunt ripples: a ring lying on the ground that keeps its size on screen, growing and fading out slowly
+    this.pingGeo = new THREE.InstancedBufferGeometry();
+    this.pingGeo.setAttribute('position', quad.getAttribute('position'));
+    this.pingGeo.setIndex(quad.getIndex());
+    this.attrPP = new THREE.InstancedBufferAttribute(this.pingP, 4).setUsage(THREE.DynamicDrawUsage);
+    this.attrPC = new THREE.InstancedBufferAttribute(this.pingC, 4).setUsage(THREE.DynamicDrawUsage);
+    this.attrPK = new THREE.InstancedBufferAttribute(this.pingK, 4).setUsage(THREE.DynamicDrawUsage);
+    this.pingGeo.setAttribute('aP', this.attrPP);
+    this.pingGeo.setAttribute('aC', this.attrPC);
+    this.pingGeo.setAttribute('aK', this.attrPK);
+    this.pingGeo.instanceCount = 0;
+    const pingMat = new THREE.ShaderMaterial({
+      transparent: true, depthWrite: false, depthTest: false, fog: false, side: THREE.DoubleSide,
+      uniforms: { uView: this.uView, uNow: this.uNow, uPxK: this.uPxK, uBright: this.uBright },
+      vertexShader: /* glsl */ `
+        attribute vec4 aP; attribute vec4 aC; attribute vec4 aK;
+        uniform vec2 uView; uniform float uNow; uniform float uPxK; uniform float uBright;
+        varying vec2 vUv; varying vec4 vCol;
+        void main() {
+          float dist = distance(cameraPosition, aP.xyz);
+          float fade = smoothstep(${PING_NEAR.toFixed(1)}, ${PING_FAR.toFixed(1)}, dist);
+          // a slow ripple: from a small circle to about three times that while it fades out
+          float ph = fract(uNow * 0.4 + aK.x);
+          float size = aP.w * (0.45 + 1.15 * ph);
+          float a = aC.a * fade * pow(1.0 - ph, 1.4) * smoothstep(0.0, 0.12, ph);
+          // metres across so that it keeps its size in pixels, lying flat just above the ground
+          float world = size * (uView.y / 900.0) * dist / uPxK;
+          vec3 wp = aP.xyz + vec3(position.x * world, 1.0, position.y * world);
+          vUv = position.xy * 2.0;
+          vCol = vec4(aC.rgb * uBright, a);
+          gl_Position = projectionMatrix * viewMatrix * vec4(wp, 1.0);
+          if (fade <= 0.001) gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
+        }`,
+      fragmentShader: /* glsl */ `
+        precision highp float;
+        varying vec2 vUv; varying vec4 vCol;
+        void main() {
+          float r = length(vUv);
+          float a = smoothstep(0.7, 0.84, r) * (1.0 - smoothstep(0.9, 1.0, r));
+          if (a * vCol.a < 0.004) discard;
+          gl_FragColor = vec4(vCol.rgb, a * vCol.a);
+        }`,
+    });
+    this.pingMesh = new THREE.Mesh(this.pingGeo, pingMat);
+    this.pingMesh.frustumCulled = false;
+    this.pingMesh.renderOrder = 26;
+    this.pingMesh.name = 'hunt-ripples';
+    this.pingMesh.onBeforeRender = (_r, scene) => {
+      if (scene.overrideMaterial) this.pingGeo.instanceCount = 0;
+      else this.pingGeo.instanceCount = this.pingN;
+    };
+    this.pingMesh.onAfterRender = () => { this.pingGeo.instanceCount = this.pingN; };
   }
 
   begin(): void {
     this.m = 0;
     this.n = 0;
+    this.pingN = 0;
+    this.pingSeen.clear();
   }
 
   /** Stage a marker candidate. `length` is the animal's true length in meters (before any screen-size boost). */
@@ -448,9 +555,22 @@ export class Markers {
     st[o] = sp; st[o + 1] = x; st[o + 2] = y; st[o + 3] = z; st[o + 4] = px; st[o + 5] = scale;
   }
 
+  /** A hunt ripple at (x, y, z): one per ~14 m neighbourhood however many animals are in it. strength 0..1. */
+  addPing(x: number, y: number, z: number, strength: number): void {
+    if (this.pingN >= PING_CAP) return;
+    const dx = x - this.cam.x, dy = y - this.cam.y, dz = z - this.cam.z;
+    if (dx * dx + dy * dy + dz * dz < PING_NEAR * PING_NEAR) return;
+    const key = Math.floor(x / PING_CELL) * 4099 + Math.floor(z / PING_CELL);
+    if (this.pingSeen.has(key)) return;
+    this.pingSeen.add(key);
+    const o = this.pingN++ * 4;
+    this.ping[o] = x; this.ping[o + 1] = y; this.ping[o + 2] = z; this.ping[o + 3] = strength;
+  }
+
   /** Run the cluster test and write the surviving markers. */
   end(): void {
     const G = this.gridN, st = this.st;
+    let n = 0;
     if (this.m > 0) {
       this.grid.fill(0);
       const cellOf = (v: number) => Math.min(G - 1, Math.max(0, Math.floor(v / CLUSTER_CELL)));
@@ -458,10 +578,10 @@ export class Markers {
         const o = k * 8;
         this.grid[(st[o] * G + cellOf(st[o + 3])) * G + cellOf(st[o + 1])]++;
       }
-      let n = 0;
       for (let k = 0; k < this.m; k++) {
         const o = k * 8;
         const sp = st[o];
+        const mk = MARKER[sp]!;
         const gi = cellOf(st[o + 1]), gj = cellOf(st[o + 3]);
         // count this cell plus its 4 neighbours so a herd straddling a cell edge still counts as a herd
         let cnt = this.grid[(sp * G + gj) * G + gi];
@@ -469,11 +589,10 @@ export class Markers {
         if (gi < G - 1) cnt += this.grid[(sp * G + gj) * G + gi + 1];
         if (gj > 0) cnt += this.grid[(sp * G + gj - 1) * G + gi];
         if (gj < G - 1) cnt += this.grid[(sp * G + gj + 1) * G + gi];
-        if (cnt < CLUSTER_MIN) continue;
-        const mk = MARKER[sp]!;
+        if (cnt < CLUSTER_MIN && !mk[5]) continue;
         const px = st[o + 4];
         const readable = 1 - Math.min(1, Math.max(0, (px - PX_SHOW) / (PX_HIDE - PX_SHOW)));
-        const dense = Math.min(1, (cnt - CLUSTER_MIN + 1) / 5);
+        const dense = mk[5] ? 1 : Math.min(1, (cnt - CLUSTER_MIN + 1) / 5);
         const a = mk[4] * readable * (0.45 + 0.55 * dense);
         if (a < 0.02) continue;
         const q = n++ * 4;
@@ -481,11 +600,20 @@ export class Markers {
         this.p[q + 3] = mk[3] * Math.sqrt(Math.min(1.4, Math.max(0.5, st[o + 5])));
         this.c[q] = mk[0]; this.c[q + 1] = mk[1]; this.c[q + 2] = mk[2]; this.c[q + 3] = a;
       }
-      this.n = n;
     }
+    this.n = n;
     this.geo.instanceCount = this.n;
-    this.attrP.clearUpdateRanges(); this.attrP.addUpdateRange(0, this.n * 4); this.attrP.needsUpdate = true;
-    this.attrC.clearUpdateRanges(); this.attrC.addUpdateRange(0, this.n * 4); this.attrC.needsUpdate = true;
+    for (const a of [this.attrP, this.attrC]) { a.clearUpdateRanges(); a.addUpdateRange(0, this.n * 4); a.needsUpdate = true; }
+
+    for (let i = 0; i < this.pingN; i++) {
+      const o = i * 4;
+      const seed = (Math.abs(Math.sin(this.ping[o] * 12.9898 + this.ping[o + 2] * 78.233) * 43758.5453) % 1);
+      this.pingP[o] = this.ping[o]; this.pingP[o + 1] = this.ping[o + 1]; this.pingP[o + 2] = this.ping[o + 2]; this.pingP[o + 3] = 30;
+      this.pingC[o] = 0.96; this.pingC[o + 1] = 0.9; this.pingC[o + 2] = 0.78; this.pingC[o + 3] = 0.65 * this.ping[o + 3];
+      this.pingK[o] = seed; this.pingK[o + 1] = 0; this.pingK[o + 2] = 0; this.pingK[o + 3] = 0;
+    }
+    this.pingGeo.instanceCount = this.pingN;
+    for (const a of [this.attrPP, this.attrPC, this.attrPK]) { a.clearUpdateRanges(); a.addUpdateRange(0, this.pingN * 4); a.needsUpdate = true; }
   }
 
   private grow(): void {
@@ -505,6 +633,8 @@ export class Markers {
 
   dispose(): void {
     this.geo.dispose();
+    this.pingGeo.dispose();
     (this.mesh.material as THREE.Material).dispose();
+    (this.pingMesh.material as THREE.Material).dispose();
   }
 }

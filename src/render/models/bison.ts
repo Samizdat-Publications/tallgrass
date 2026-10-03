@@ -9,14 +9,14 @@ export function buildBison(): ModelDef {
   const hoofCol = lin(0x0d0a08);
   const beardCol = lin(0x1c140e);
 
-  // Lighter tan wool over the forequarters, hump and head; dark brown hindquarters (multiplies the coat colour).
+  // Lighter brown wool over the forequarters, hump and head; near-black chocolate hindquarters (multiplies the coat colour).
   const wool: PaintFn = (p, n) => {
     const front = smooth(-0.25, 0.85, p[0]);
     const high = smooth(0.85, 1.75, p[1]);
     const belly = mix(1, 0.6, smooth(-0.1, -0.8, n[1]));
     const w = Math.min(1, front * (0.45 + 0.55 * high));
-    const top = smooth(0.2, 0.9, n[1]) * smooth(0.0, 0.5, p[0]) * 0.25;
-    return [(1 + (1.7 + top) * w) * belly, (1 + (1.35 + top) * w) * belly, (1 + 0.55 * w) * belly, 1];
+    const top = smooth(0.2, 0.9, n[1]) * smooth(0.0, 0.5, p[0]) * 0.2;
+    return [(1 + (1.0 + top) * w) * belly, (1 + (0.8 + top) * w) * belly, (1 + 0.4 * w) * belly, 1];
   };
 
   // Torso with the signature shoulder hump: [x, yCenter, up, down, side]
@@ -44,12 +44,12 @@ export function buildBison(): ModelDef {
   // Neck, big shaggy head and low-slung muzzle (one rotating part, pivot at the base of the neck).
   const neckPiv: V3 = [0.95, 1.32, 0];
   const headPaint: PaintFn = (p, n) => {
-    // pale tan forehead cap and mane, dark muzzle
+    // paler brown forehead cap and mane, dark muzzle
     const cap = smooth(1.3, 1.75, p[0]) * (1 - smooth(1.95, 2.15, p[0]));
     const mane = 1 - smooth(1.2, 1.5, p[0]);
     const k = Math.max(cap * 0.8, mane);
     const lowSnout = smooth(1.95, 2.15, p[0]);
-    return [mix(1.9, 1.15, lowSnout) * (0.6 + 0.4 * k), mix(1.55, 1.0, lowSnout) * (0.6 + 0.4 * k), mix(1.2, 0.95, lowSnout) * (0.6 + 0.4 * k), 1];
+    return [mix(1.5, 1.1, lowSnout) * (0.6 + 0.4 * k), mix(1.3, 1.0, lowSnout) * (0.6 + 0.4 * k), mix(1.1, 0.95, lowSnout) * (0.6 + 0.4 * k), 1];
   };
   b.addTube({
     part: PART.HEAD,
@@ -91,7 +91,7 @@ export function buildBison(): ModelDef {
   const legPaintF: PaintFn = (p) => {
     if (p[1] < 0.1) return [hoofCol[0], hoofCol[1], hoofCol[2], 0];
     const w = smooth(0.35, 0.9, p[1]);
-    return [1 + 0.8 * w, 1 + 0.62 * w, 1 + 0.35 * w, 1];
+    return [1 + 0.5 * w, 1 + 0.4 * w, 1 + 0.25 * w, 1];
   };
   const fHip: V3 = [0.52, 1.1, 0.26];
   const fKnee: V3 = [0.56, 0.52, 0.25];
@@ -143,19 +143,22 @@ export function buildBison(): ModelDef {
   return {
     geometry,
     triangles: b.triangleCount,
-    coatPale: lin(0x8a5636),
-    coatDark: lin(0x3a2114),
+    coatPale: lin(0x5e3a24),
+    coatDark: lin(0x2b1a10),
     bone: lin(0xd4cbb0),
     roughness: 0.95,
     fill: 1.6,
-    warm: [1.12, 1.0, 0.8],
+    warm: [1.24, 0.98, 0.7],
     neutral: 0.85,
     params: {
       ...DEFAULT_PARAMS,
       kind: 0,
       comY: 1.1,
-      trot0: 1.9, trot1: 2.7, gal0: 4.8, gal1: 6.2,
-      ampW: 0.42, ampT: 0.52, ampG: 0.8,
+      // gait bands are in on-screen m/s at 1x (sim speed x 1.5): grazing and walking bison (0.3 to 4) walk, a quickened
+      // herd trots, a stampede (flee, 7 to 16) gallops
+      trot0: 3.0, trot1: 4.2, gal0: 7.0, gal1: 9.5,
+      ampW: 0.5, ampT: 0.6, ampG: 0.8,
+      dutyW: 0.64, dutyT: 0.5, dutyG: 0.42,
       kneeW: 0.45, kneeT: 0.7, kneeG: 1.1,
       bobW: 0.02, bobT: 0.04, bobG: 0.08,
       pitchT: 0.02, pitchG: 0.07,
@@ -165,7 +168,6 @@ export function buildBison(): ModelDef {
       lieDrop: 0.62, lieHipF: 1.25, lieKneeF: -2.3, lieHipH: -0.8, lieKneeH: 1.6,
       crouchDrop: 0.1,
       deadDrop: 0.55, deadHipF: 0.9, deadHipH: -0.6,
-      strideW: 1.8, strideG: 5.2, strideSpeedMax: 13,
       length: 3.3, height: 1.85, ring: 2.3, minPx: 10, boostLen: 3.3,
     },
   };

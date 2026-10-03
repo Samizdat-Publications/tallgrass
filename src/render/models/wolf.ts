@@ -108,19 +108,24 @@ export function buildWolf(): ModelDef {
   return {
     geometry,
     triangles: b.triangleCount,
-    coatPale: lin(0xa3a6aa),
-    coatDark: lin(0x4a4d53),
+    coatPale: lin(0x9a9da2),
+    coatDark: lin(0x41444a),
     bone: lin(0xd8d0bc),
     roughness: 0.92,
     fill: 1.2,
     warm: [0.97, 1.0, 1.05],
     neutral: 0.4,
+    // from the wide view a wolf is a little darker (value contrast with gold grass) and one that stalks, chases or feeds
+    // gets a cool rim of light
+    far: { gain: 0.82, rim: 0.04, hunt: 0.4, rimCol: [0.7, 0.8, 1.0] },
     params: {
       ...DEFAULT_PARAMS,
       kind: 0,
-      comY: 0.66,
-      trot0: 1.5, trot1: 2.3, gal0: 3.9, gal1: 5.2,
-      ampW: 0.5, ampT: 0.62, ampG: 0.9,
+      comY: 0.66, legL: 0.637,
+      // on-screen m/s at 1x: a wolf "walking" (1.9 to 7) travels at a walk then a trot, a chase (12 to 20) is a full gallop
+      trot0: 2.4, trot1: 3.4, gal0: 8.0, gal1: 11.0,
+      ampW: 0.5, ampT: 0.68, ampG: 1.0,
+      dutyW: 0.62, dutyT: 0.5, dutyG: 0.36,
       kneeW: 0.5, kneeT: 0.8, kneeG: 1.25,
       bobW: 0.012, bobT: 0.025, bobG: 0.07,
       pitchT: 0.025, pitchG: 0.12,
@@ -130,7 +135,6 @@ export function buildWolf(): ModelDef {
       lieDrop: 0.4, lieHipF: 1.25, lieKneeF: -2.3, lieHipH: -0.8, lieKneeH: 1.6,
       crouchDrop: 0.18,
       deadDrop: 0.36, deadHipF: 0.9, deadHipH: -0.6,
-      strideW: 1.3, strideG: 4.2, strideSpeedMax: 16,
       length: 1.5, height: 0.85, ring: 1.1, minPx: 9, boostLen: 1.5,
     },
   };

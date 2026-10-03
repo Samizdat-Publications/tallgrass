@@ -6,18 +6,20 @@ import { DEFAULT_PARAMS, type ModelDef } from './types';
 export function buildPronghorn(): ModelDef {
   const b = new MeshBuilder();
   const hornCol = lin(0x0c0a08);
-  const white = 0.66;
+  const white = 0.76;
 
   /** Blend from tan coat (multiplier) to white (absolute) by w. */
   const toWhite = (k: number, w: number): Paint => [mix(k, white, w), mix(k, white * 0.97, w), mix(k, white * 0.9, w), 1 - w];
 
   const bodyPaint: PaintFn = (p, n) => {
-    const belly = smooth(0.05, -0.45, n[1]);
-    const lowFlank = smooth(0.77, 0.68, p[1]) * smooth(-0.5, -0.25, p[0]) * (1 - smooth(0.35, 0.55, p[0]) * 0.6);
-    const rump = smooth(-0.2, -0.36, p[0]);
+    // bold white: belly, a broad flank band, a big rump patch that wraps over the hips, a white chest
+    const belly = smooth(0.1, -0.4, n[1]);
+    const lowFlank = smooth(0.8, 0.7, p[1]) * smooth(-0.5, -0.25, p[0]) * (1 - smooth(0.35, 0.55, p[0]) * 0.6);
+    const rump = smooth(-0.1, -0.28, p[0]);
+    const chest = smooth(0.38, 0.5, p[0]) * smooth(0.1, -0.2, n[1]);
     const flank = smooth(0.25, 0.8, n[1]);
-    const saddle = 1 - 0.28 * flank;
-    return toWhite(saddle, Math.min(1, Math.max(belly, lowFlank, rump)));
+    const saddle = 1 - 0.3 * flank;
+    return toWhite(saddle, Math.min(1, Math.max(belly, lowFlank, rump, chest)));
   };
   b.addTube({
     part: PART.BODY, sides: 12, paint: bodyPaint,
@@ -42,11 +44,14 @@ export function buildPronghorn(): ModelDef {
   const neckPiv: V3 = [0.42, 0.9, 0];
   const headPaint: PaintFn = (p, n) => {
     const throat = smooth(0.0, -0.5, n[1]) * smooth(0.45, 0.6, p[0]);
+    // two white bands wrapping the neck, a pale cheek and muzzle
+    const band = Math.max(1 - smooth(0.02, 0.05, Math.abs(p[0] - 0.53)), 1 - smooth(0.02, 0.05, Math.abs(p[0] - 0.66)));
+    const cheek = smooth(0.74, 0.8, p[0]) * (1 - smooth(0.88, 0.94, p[0])) * smooth(0.1, -0.3, n[1]);
     const muzzle = smooth(0.9, 0.97, p[0]);
     const nose = smooth(1.0, 1.03, p[0]);
     if (nose > 0.5) return [0.03, 0.03, 0.03, 0];
     const k = 1 - 0.1 * smooth(0.2, 0.8, n[1]);
-    return toWhite(k, Math.max(throat * 0.9, muzzle * 0.6));
+    return toWhite(k, Math.max(throat * 0.9, band * 0.95, cheek * 0.8, muzzle * 0.6));
   };
   b.addTube({
     part: PART.HEAD, piv: neckPiv, sides: 10, paint: headPaint,
@@ -107,19 +112,21 @@ export function buildPronghorn(): ModelDef {
   return {
     geometry,
     triangles: b.triangleCount,
-    coatPale: lin(0xb86f3c),
-    coatDark: lin(0x7a3b1f),
+    coatPale: lin(0xb98850),
+    coatDark: lin(0x805a32),
     bone: lin(0xd8d0bc),
     roughness: 0.9,
     fill: 1.5,
-    warm: [1.15, 1.0, 0.8],
+    warm: [1.1, 1.0, 0.84],
     neutral: 0.7,
     params: {
       ...DEFAULT_PARAMS,
       kind: 0,
-      comY: 0.78,
-      trot0: 2.0, trot1: 3.0, gal0: 5.0, gal1: 7.0,
-      ampW: 0.45, ampT: 0.6, ampG: 0.85,
+      comY: 0.78, legL: 0.72,
+      // on-screen m/s at 1x: walking herds (0.6 to 5) walk then trot, a flight (10 to 24) is a full gallop
+      trot0: 3.0, trot1: 4.0, gal0: 8.0, gal1: 11.0,
+      ampW: 0.55, ampT: 0.66, ampG: 1.0,
+      dutyW: 0.62, dutyT: 0.5, dutyG: 0.36,
       kneeW: 0.5, kneeT: 0.8, kneeG: 1.2,
       bobW: 0.012, bobT: 0.03, bobG: 0.08,
       pitchT: 0.02, pitchG: 0.09,
@@ -129,7 +136,6 @@ export function buildPronghorn(): ModelDef {
       lieDrop: 0.45, lieHipF: 1.25, lieKneeF: -2.3, lieHipH: -0.8, lieKneeH: 1.6,
       crouchDrop: 0.1,
       deadDrop: 0.38, deadHipF: 0.9, deadHipH: -0.6,
-      strideW: 1.4, strideG: 5.6, strideSpeedMax: 22,
       length: 1.4, height: 1.2, ring: 1.0, minPx: 6, boostLen: 1.4,
     },
   };
