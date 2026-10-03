@@ -169,7 +169,7 @@ export function animalCaption(sp: number, male: boolean, age: number, matureAge:
     case 2: name = juvenile ? 'Raven fledgling' : 'Raven'; break;
     case 3: name = juvenile ? 'Pronghorn fawn' : male ? 'Pronghorn buck' : 'Pronghorn doe'; break;
     case 4: name = juvenile ? 'Rabbit kit' : male ? 'Rabbit buck' : 'Rabbit doe'; break;
-    case 5: name = juvenile ? 'Cougar cub' : male ? 'Male cougar' : 'Female cougar'; break;
+    case 5: name = juvenile ? 'Cougar kitten' : male ? 'Cougar, male' : 'Cougar, female'; break;
     default: name = S;
   }
   return `${name}, ${ageText(age, sp, maxAge)}`;
@@ -198,6 +198,12 @@ export function activityPhrase(sp: number, state: number): string {
     if (state === 8) return 'resting with the pack';
   }
   if (sp === 4 && state === 4) return 'bolting for cover';
+  if (sp === 5) {
+    if (state === 0) return 'lying up in the grove';
+    if (state === 10) return 'stalking from cover';
+    if (state === 5) return 'bursting from cover';
+    if (state === 8) return 'resting in the shade';
+  }
   return ACTIVITY[state] ?? STATE_FALLBACK;
 }
 const STATE_FALLBACK = 'moving about';
@@ -338,7 +344,8 @@ export function describeEvent(e: SimEvent): EventText {
     }
     case 'firstKill': {
       const prey = e.a >= 0 && e.a < SINGULAR.length ? SINGULAR[e.a] : 'animal';
-      return { sentence: `The valley sees its first kill: a wolf takes down a ${prey}.` };
+      const hunter = e.sp >= 0 && e.sp < SINGULAR.length ? SINGULAR[e.sp] : 'wolf';
+      return { sentence: `The valley sees its first kill: a ${hunter} takes down a ${prey}.` };
     }
     case 'record':
       return { sentence: 'A new record is set in the valley.' };

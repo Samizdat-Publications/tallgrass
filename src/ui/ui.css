@@ -1259,6 +1259,7 @@ button.tg-ent-b:hover {
   font: 500 calc(12 * var(--u)) / 1 var(--sans);
   color: var(--paper-dim);
   margin-right: calc(3 * var(--u));
+  word-spacing: 0.16em;
   white-space: nowrap;
 }
 .tg-story-empty {

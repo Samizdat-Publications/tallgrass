@@ -1,5 +1,6 @@
-// Public contract between the UI and the game (main.ts). Types only.
+// Public contract between the UI and the game (main.ts). Types only, plus the scenario list.
 import type { EnvState } from '../sim/types';
+import { SCENARIOS as GAME_SCENARIOS } from '../scenarios';
 import type { HistoryRow, AnimalDetail } from '../sim/worker';
 import type { SimEvent, StoryEntry } from '../sim/sim';
 
@@ -43,14 +44,11 @@ export interface UIFrame {
   storyId?: number;
 }
 
-/** Scenario ids passed to UIActions.newWorld, with the names the menu shows. */
-export const SCENARIOS: { id: string; name: string; blurb: string }[] = [
-  { id: 'prairie', name: 'Open prairie', blurb: 'Bison, wolves and ravens settle in together.' },
-  { id: 'yellowstone', name: 'Yellowstone return', blurb: 'No wolves at first. Then they come back.' },
-  { id: 'island', name: 'Island of plenty', blurb: 'No predators. See how far the herds can grow.' },
-  { id: 'drought', name: 'The long drought', blurb: 'The rains fail and the grass thins out.' },
-  { id: 'collapse', name: 'Collapse', blurb: 'A fragile valley, pushed to the edge.' },
-];
+/**
+ * Scenario ids passed to UIActions.newWorld, with the names and blurbs the menu shows. They come straight from
+ * src/scenarios.ts so the menu and the game can never drift apart (scenarioById also accepts the old aliases).
+ */
+export const SCENARIOS: { id: string; name: string; blurb: string }[] = GAME_SCENARIOS.map((x) => ({ id: x.id, name: x.name, blurb: x.blurb }));
 
 /** Positional tools stay armed until the player clicks the ground; the rest apply instantly. */
 export const POSITIONAL_TOOLS: ReadonlySet<ToolId> = new Set<ToolId>(['fire', 'addWolves', 'addBison']);

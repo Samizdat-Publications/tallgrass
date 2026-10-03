@@ -24,6 +24,7 @@ Locally: `npm run dev`, then http://localhost:5199/.
 - `4_seasons_grass_vs_concept.png`: early summer vs late summer grass, beside your concept art.
 - `5_ui_population_graph.png` and `6_ui_evolution.png`: the graphs.
 - `7_trophic_cascade.png`: the trophic cascade chart (below).
+- `8_stability_32_seeds_40_years.png`: the current ecosystem across 32 worlds: every species alive, never flat.
 - Every image made tonight, in order, is in `journey/` (see `journey/INDEX.md`), as you asked.
 
 ## Stability: what is proven and what isn't (honest)

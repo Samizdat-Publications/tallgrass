@@ -23,7 +23,7 @@ const YOUNG: [string, string][] = [
   ['chick', 'chicks'],
   ['fawn', 'fawns'],
   ['kit', 'kits'],
-  ['cub', 'cubs'],
+  ['kitten', 'kittens'],
 ];
 export const youngOf = (sp: number, n: number): string => (YOUNG[sp] ?? ['young one', 'young ones'])[n === 1 ? 0 : 1];
 
@@ -78,6 +78,11 @@ function lineText(g: Group, who: StorySubject): string {
       return g.n > 1 ? `Bolted from ${plural(g.a)} ${times(g.n)}.` : `Bolted from a ${singular(g.a)}.`;
     }
     case 'chase': {
+      if (who.sp === 5) {
+        // a cougar waits in cover and rushes
+        if (!validSp(g.a)) return g.n > 1 ? `Burst from cover ${times(g.n)}.` : 'Burst from cover.';
+        return g.n > 1 ? `Burst from cover after ${plural(g.a)} ${times(g.n)}.` : `Burst from cover after a ${singular(g.a)}.`;
+      }
       if (isPredator(who.sp)) {
         if (!validSp(g.a)) return g.n > 1 ? `Gave chase ${times(g.n)}.` : 'Gave chase.';
         return g.n > 1 ? `Gave chase to ${plural(g.a)} ${times(g.n)}.` : `Gave chase to a ${singular(g.a)}.`;
@@ -86,6 +91,10 @@ function lineText(g: Group, who: StorySubject): string {
       return g.n > 1 ? `Was chased by ${plural(g.a)} ${times(g.n)}.` : `Was chased by a ${singular(g.a)}.`;
     }
     case 'kill': {
+      if (who.sp === 5) {
+        if (!validSp(g.a)) return g.n > 1 ? `Made ${countWord(g.n)} ambush kills.` : 'Made an ambush kill.';
+        return g.n > 1 ? `Ambushed ${countWord(g.n)} ${plural(g.a)}.` : `Ambushed a ${singular(g.a)}.`;
+      }
       if (!validSp(g.a)) return g.n > 1 ? `Made ${countWord(g.n)} kills.` : 'Made a kill.';
       return g.n > 1 ? `Took down ${countWord(g.n)} ${plural(g.a)}.` : `Took down a ${singular(g.a)}.`;
     }

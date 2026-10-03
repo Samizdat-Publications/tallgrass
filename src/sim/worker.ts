@@ -73,6 +73,9 @@ export type FromWorker =
       /** Life story of the selected animal (kept after it dies). */
       story: StoryEntry[];
       storyId: number;
+      /** Wolf packs: stride 4 (den x, den y, territory radius m, pack size) plus serials for names. */
+      packs: Float32Array;
+      packSerials: number[];
       speed: number;
       ticksPerSec: number;
       stepMs: number;
@@ -119,6 +122,19 @@ function detail(id: number): AnimalDetail | null {
   return null;
 }
 
+function packInfo(): { packs: Float32Array; packSerials: number[] } {
+  const out: number[] = [];
+  const serials: number[] = [];
+  if (sim) {
+    for (let pk = 0; pk < sim.packAlive.length; pk++) {
+      if (!sim.packAlive[pk]) continue;
+      out.push(sim.packDenX[pk], sim.packDenY[pk], sim.p.wolfTerritory, sim.packSize[pk]);
+      serials.push(sim.packSerial[pk]);
+    }
+  }
+  return { packs: new Float32Array(out), packSerials: serials };
+}
+
 function record(): void {
   if (!sim) return;
   while (schedule.length && sim.tick >= schedule[0].tick) sim.apply(schedule.shift()!.iv);
@@ -152,7 +168,7 @@ function post(forceVeg: boolean): void {
   const msg: FromWorker = {
     type: 'snap', tick: s.tick, env: s.env, count: s.count, ids: s.ids, agents: s.agents, carcassCount: s.carcassCount,
     carcasses: s.carcasses, veg: s.veg, pop: Array.from(s.pop), events, history, selected: sel,
-    selectedGone: selectedId !== null && sel === null, story: sim.story.slice(), storyId: sim.trackedId, speed: skipping ? -1 : speed, ticksPerSec, stepMs: stepMsAvg,
+    selectedGone: selectedId !== null && sel === null, story: sim.story.slice(), storyId: sim.trackedId, ...packInfo(), speed: skipping ? -1 : speed, ticksPerSec, stepMs: stepMsAvg,
   };
   history = [];
   const transfer: Transferable[] = [s.ids.buffer, s.agents.buffer, s.carcasses.buffer];

@@ -1,7 +1,7 @@
 // Mock page for the game UI: concept art as the scene, a fake 30 Hz data driver, and ?state= presets for screenshots.
 //
 // Query: ?state=default|graph|graphhover|inspector|wolf|menu|overlay|tool|cinematic|night|noon|card|hidden
-//        evolution|evohover (the expanded graph on its Evolution tab)
+//        story (live life story)|memorial (the animal dies)|evolution|evohover (the expanded graph on its Evolution tab)
 //        &speed=10  &species=3|6  &day=0.72  &seed=bluestem-4417  &w=1
 // Page contract: window.__ready = true after the first render (fonts loaded).
 import { GameUI } from '../src/ui/ui';
@@ -9,7 +9,7 @@ import type { OverlayId, ToolId, UIActions, UIFrame } from '../src/ui/ui';
 import { DAY_TICKS, SEASON_TICKS, SPECIES_COUNT, TICKS_PER_SECOND, Weather, YEAR_TICKS } from '../src/sim/types';
 import type { EnvState } from '../src/sim/types';
 import { START_DAY, START_SEASON } from '../src/sim/env';
-import type { SimEvent } from '../src/sim/sim';
+import type { SimEvent, StoryEntry } from '../src/sim/sim';
 import type { AnimalDetail, HistoryRow } from '../src/sim/worker';
 
 declare global {
@@ -39,8 +39,9 @@ let lastRunSpeed = speed || 10;
 let skipping = false;
 let selectedId: number | null = null;
 let following: number | null = null;
+let deadId = 0;
 let seed = q.get('seed') ?? 'bluestem-4417';
-let scenario = 'baseline';
+let scenario = 'prairie';
 let weather: number = Weather.Clear;
 
 const TAU = Math.PI * 2;
@@ -113,6 +114,14 @@ function envAt(t: number): EnvState {
 }
 
 function bisonDetail(): AnimalDetail {
+  if (state === 'cougar') {
+    return {
+      id: 30511, sp: 5, x: 200, y: 140, age: 2300 + (tick - T0), maxAge: 3000, matureAge: 420, energy: 0.6, hydration: 0.7, stamina: 0.8, state: 10,
+      male: false, gen: 2, kills: 6, children: 3, pack: -1, packSize: 0, alpha: false, infected: false, pregnant: false, born: 0,
+      parentA: 29901, parentB: 29850,
+      genes: { speed: 1.1, size: 1.02, sight: 1.2, boldness: 1.3, herding: 0.2, coat: 0.55, litter: 1 },
+    };
+  }
   const wolf = state === 'wolf';
   return {
     id: wolf ? 20977 : 18234,
@@ -142,6 +151,18 @@ function bisonDetail(): AnimalDetail {
       : { speed: 1.12, size: 0.94, sight: 1.28, boldness: 0.62, herding: 1.34, coat: 0.84, litter: 1 },
   };
 }
+
+// ---- fake life story of the selected animal ---------------------------------------------------------------------
+
+function storyFor(wolf: boolean): StoryEntry[] {
+  const e = (back: number, kind: StoryEntry['kind'], a = 0): StoryEntry => ({ tick: T0 - back, kind, a });
+  if (state === 'cougar') return [e(8000, 'chase', 3), e(7960, 'kill', 3), e(5200, 'chase', 3), e(5160, 'kill', 3), e(3000, 'birth', 2), e(1400, 'chase', 4), e(1380, 'kill', 4), e(500, 'fled', 1)];
+  return wolf
+    ? [e(11200, 'dispersed'), e(9800, 'chase', 3), e(9650, 'kill', 3), e(7000, 'chase', 3), e(6900, 'chase', 3), e(5200, 'birth', 5), e(3000, 'chase', 0), e(2900, 'kill', 0), e(1500, 'infected'), e(900, 'recovered')]
+    : [e(6900, 'fled', 1), e(6800, 'fled', 1), e(6000, 'fled', 1), e(4400, 'birth', 1), e(3100, 'infected'), e(2500, 'recovered'), e(1200, 'fled', 1), e(900, 'birth', 1)];
+}
+let storyLive: StoryEntry[] = storyFor(state === 'wolf');
+let dyingSoon = state === 'memorial';
 
 // ---- fake event stream -----------------------------------------------------------------------------------------
 
@@ -199,6 +220,7 @@ const actions: UIActions = {
     log.push(`select ${id}`);
     selectedId = id;
     if (id === null) following = null;
+    if (id === null) deadId = 0;
   },
   flyTo: (x, y) => log.push(`flyTo ${x},${y}`),
   setOverlay: (o: OverlayId) => log.push(`setOverlay ${o}`),
@@ -215,7 +237,7 @@ const actions: UIActions = {
 
 ui = new GameUI(root, actions);
 window.__ui = ui;
-if (state === 'inspector' || state === 'wolf') selectedId = bisonDetail().id;
+if (state === 'inspector' || state === 'wolf' || state === 'story' || state === 'memorial' || state === 'cougar') selectedId = bisonDetail().id;
 
 // ---- driver -----------------------------------------------------------------------------------------------------
 
@@ -258,6 +280,13 @@ function frame(first: boolean): void {
     }
   }
   const t = Math.round(tick);
+  if (dyingSoon && now - t0Wall > 1700 && selectedId !== null) {
+    // the selected bison is killed by wolves: selected goes null, the story ends with a 'died' entry
+    storyLive = [...storyLive, { tick: t, kind: 'fled', a: 1 }, { tick: t + 20, kind: 'died', a: 3 }];
+    dyingSoon = false;
+    deadId = selectedId;
+    selectedId = null;
+  }
   const sel = selectedId !== null ? bisonDetail() : null;
   const f: UIFrame = {
     tick: t,
@@ -271,6 +300,8 @@ function frame(first: boolean): void {
     seed,
     scenario,
     following,
+    story: storyLive,
+    storyId: selectedId ?? deadId ?? 0,
   };
   ui.update(f);
 }
