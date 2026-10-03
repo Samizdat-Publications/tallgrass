@@ -1,0 +1,31 @@
+{
+  "name": "ecosystem-sim",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Samizdat-Publications/tallgrass.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/Samizdat-Publications/tallgrass/issues"
+  },
+  "homepage": "https://github.com/Samizdat-Publications/tallgrass#readme",
+  "devDependencies": {
+    "playwright": "^1.63.0",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.2",
+    "wrangler": "^4.147.0"
+  },
+  "dependencies": {
+    "three": "^0.186.1"
+  }
+}
