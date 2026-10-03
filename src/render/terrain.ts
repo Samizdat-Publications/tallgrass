@@ -10,7 +10,7 @@ import {
 } from './common';
 
 const SHADOW_RES = 256;
-const FAR_RES = 256;
+const FAR_RES = 512;
 const EXT_CELL = 8;
 const FAR_ORIGIN = -768;
 const FAR_SIZE = 2048;
@@ -263,6 +263,7 @@ export class Terrain {
         uRect: { value: new THREE.Vector3(0, 0, size) },
         uT0: { value: 1.5 },
         uGrow: { value: 1.095 },
+        uPen: { value: 0.035 },
         uExtCell: { value: EXT_CELL },
         uExtN: { value: FAR_SIZE / EXT_CELL },
         uExtOrigin: { value: FAR_ORIGIN },
@@ -276,6 +277,7 @@ export class Terrain {
         uniform vec3 uRect;
         uniform float uT0;
         uniform float uGrow;
+        uniform float uPen;
         uniform vec3 uLightDir;
         uniform sampler2D tExt;
         uniform float uExtCell;
@@ -323,7 +325,7 @@ export class Terrain {
               vec2 p = xz + d2 * t;
               float hr = h0 + tanEl * t;
               float hit = blockerH(p, wStart) - hr;
-              float w = 0.4 + t * 0.035;
+              float w = 0.4 + t * uPen;
               vis = min(vis, clamp(0.5 - 0.5 * hit / w, 0.0, 1.0));
               t *= uGrow;
               if (t > 2600.0) break;
@@ -346,6 +348,7 @@ export class Terrain {
       (u.uRect.value as THREE.Vector3).set(0, 0, this.world.size);
       u.uT0.value = 1.5;
       u.uGrow.value = 1.095;
+      u.uPen.value = 0.035;
       renderer.setRenderTarget(this.shadowRT);
       this.shadowQuad.render(renderer);
     }
@@ -356,12 +359,14 @@ export class Terrain {
       (u.uRect.value as THREE.Vector3).set(FAR_ORIGIN, FAR_ORIGIN, FAR_SIZE);
       u.uT0.value = 6;
       u.uGrow.value = 1.125;
+      u.uPen.value = 0.075;
       renderer.setRenderTarget(this.shadowFarRT);
       this.shadowQuad.render(renderer);
       // restore the inner pass parameters for the next inner update
       (u.uRect.value as THREE.Vector3).set(0, 0, this.world.size);
       u.uT0.value = 1.5;
       u.uGrow.value = 1.095;
+      u.uPen.value = 0.035;
     }
     renderer.setRenderTarget(prev);
   }
@@ -569,7 +574,7 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
   // far-field look across the edge so no rectangle shows from any angle
   vec2 qd = abs(xz - 0.5 * uWorldSize) - 0.5 * uWorldSize;
   float sd = max(qd.x, qd.y);
-  float edgeW = smoothstep(-52.0, 44.0, sd);
+  float edgeW = smoothstep(-70.0, 70.0, sd);
 
   float lodFine = 1.0 - smoothstep(70.0, 320.0, dist);
   float lodMid = 1.0 - smoothstep(300.0, 1100.0, dist);
@@ -581,11 +586,26 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
 
   vec4 veg = texture2D(tVeg, cuv);
   vec4 st = texture2D(tStatic, cuv);
-  float bio = mix(veg.r, 0.5 + 0.35 * nE, edgeW);
+
+  // ---- macro variation at three scales (about 40 m, 120 m, 400 m); all hash noise, so nothing tiles
+  float nM1 = tgFbm2(xz * 0.025 + 77.0);
+  float nM2 = tgFbm2(xz * 0.0085 + 140.0);
+  vec2 dq = xz * 0.0075 + vec2(tgNoise2(xz * 0.004 + 3.0) * 1.8, 0.0);
+  float draw = 1.0 - abs(2.0 * tgFbm2(dq + 40.0) - 1.0);           // ridged: thin winding draws and swales
+  draw = smoothstep(0.72, 0.96, draw);
+  float highGround = smoothstep(8.0, 70.0, wp.y);
+
+  float farBio = 0.6 + 0.25 * (nE - 0.5) * 2.0;
+  float bio = mix(veg.r, farBio, edgeW);
+  // bare dirt patches: where the macro noise peaks the grass thins out (a little in the valley, a lot in the far field)
+  float dirt = smoothstep(0.64, 0.8, nM1 + 0.1 * (nM2 - 0.5));
+  bio *= 1.0 - dirt * mix(0.35, 0.8, edgeW);
   float fert = mix(veg.g, 0.6, edgeW);
   float burn = veg.b * (1.0 - edgeW);
   float fear = veg.a * (1.0 - edgeW);
-  float moist = mix(st.r, 0.52 + 0.5 * (nE - 0.5) - 0.12 * smoothstep(15.0, 90.0, wp.y), edgeW);
+  float farMoist = 0.46 + 0.22 * (nE - 0.5) + 0.2 * draw - 0.3 * highGround;
+  float moist = mix(st.r, farMoist, edgeW);
+  moist = clamp(moist + 0.28 * draw * (1.0 - edgeW) - 0.1 * highGround * (1.0 - edgeW), 0.0, 1.0);
   float cover = st.g * (1.0 - edgeW);
   float wd = mix(st.a * 64.0, 90.0, edgeW);
 
@@ -600,7 +620,7 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
   float lodStreak = 1.0 - smoothstep(180.0, 700.0, dist);
   float streakMid = mix(0.5, tgNoise2(vec2(sp.x * 0.022, sp.y * 0.16)), lodStreak);
   float streakFar = tgNoise2(vec2(sp.x * 0.004, sp.y * 0.03) + nD * 2.0);
-  float streakFine = mix(0.5, tgNoise2(vec2(sp.x * 0.06, sp.y * 0.5)), lodFine);
+  float streakFine = mix(0.5, tgNoise2(vec2(sp.x * 0.1, sp.y * 0.3)), lodFine * (1.0 - 0.6 * graze));
   float streak = streakFine * 0.25 + streakMid * 0.4 + streakFar * 0.35;
   float wave = tgNoise2(vec2(sp.x * 0.026 - uTime * (0.07 + 0.15 * uWind.z), sp.y * 0.011));
   wave = wave * 0.65 + 0.35 * tgNoise2(vec2(sp.x * 0.06 - uTime * (0.1 + 0.2 * uWind.z), sp.y * 0.03));
@@ -612,7 +632,7 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
   float um = clamp((moist - 0.4) / 0.26, 0.0, 1.0);
   float up = 1.0 - um * um * (3.0 - 2.0 * um);
   float riparian = 1.0 - smoothstep(6.0, 34.0, wd);
-  float dry = clamp(uCure + (0.55 - moist) * 1.1 + stubA * 0.55 + 0.3 * up + (nB - 0.5) * 0.24 - 0.45 * riparian, 0.0, 1.0);
+  float dry = clamp(uCure + (0.55 - moist) * 1.1 + stubA * 0.55 + 0.3 * up + (nB - 0.5) * 0.24 + (nM2 - 0.5) * 0.26 - 0.45 * riparian - mix(0.5, 0.3, edgeW) * draw * (0.4 + 0.6 * (1.0 - uCure)) - 0.2 * (nM1 - 0.5), 0.0, 1.0);
   vec3 grassCol = mix(uGrassGreen, uGrassDry, dry) * vec3(1.0 + 0.08 * up * dry, 1.0 - 0.07 * up * dry, 1.0 - 0.16 * up * dry);
   // the blades add their own shading; the far-field ground is the canopy average: slightly olive and a little less saturated
   grassCol *= vec3(1.04, 1.01, 0.86);
@@ -625,14 +645,23 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
   grassCol = mix(grassCol, grassCol * vec3(1.12, 1.07, 0.88), dry * smoothstep(0.45, 0.72, swath));
   grassCol = mix(grassCol, grassCol * vec3(0.88, 0.8, 0.66), dry * smoothstep(0.58, 0.3, swath) * 0.8);
 
+  // the far field stands in for blades seen from a distance: a touch darker and calmer than the sunlit blade tops
+  grassCol *= mix(1.0, 0.88, edgeW);
+
+  // blade-scale speckle so ground the grass layer does not cover (beyond the world edge) reads as grass, not as a smooth plane
+  float speck = tgNoise2(xz * 5.5) * 0.6 + tgNoise2(xz * 14.0) * 0.4;
+  grassCol *= 1.0 + (speck - 0.5) * 0.5 * (1.0 - smoothstep(25.0, 110.0, dist)) * (0.35 + 0.65 * edgeW);
+
   // short grass: a little of the soil shows through, darker and earthier, never light sand
-  float soilShow = smoothstep(0.1, 0.0, bio + (nC - 0.5) * 0.05);
+  float soilShow = smoothstep(0.1, 0.0, bio + (nC - 0.5) * 0.05) + dirt * 0.5 * edgeW;
+  soilShow = clamp(soilShow, 0.0, 1.0);
   vec3 shortGrass = mix(grassCol, grassCol * vec3(0.9, 0.84, 0.74) + uSoil * 0.12, stubA * 0.5);
   vec3 col = mix(shortGrass, uSoil * (0.8 + 0.5 * nA), soilShow * 0.85);
   gTgGrass = 1.0 - soilShow;
 
   // rock only on truly steep faces, and only partly
-  float rock = smoothstep(0.78, 1.25, slopeG + (nA - 0.5) * 0.3 + (nD - 0.5) * 0.25);
+  float outcrop = smoothstep(0.7, 0.8, tgFbm2(xz * 0.045 + 90.0)) * smoothstep(0.12, 0.45, slopeG);
+  float rock = max(smoothstep(0.78, 1.25, slopeG + (nA - 0.5) * 0.3 + (nD - 0.5) * 0.25), outcrop * 0.85);
   vec3 rockCol = uRock * (0.7 + 0.6 * nC) * (0.85 + 0.3 * nB);
   col = mix(col, rockCol, rock * 0.7);
 
@@ -657,7 +686,10 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
   float frost = uFrost * (0.1 + 0.3 * shadeAmt) * (1.0 - charAmt);
   col = mix(col, col * vec3(0.9, 0.97, 1.08) + vec3(0.035, 0.045, 0.06), frost);
   float snowAmt = uSnow * (1.0 - rock * 0.7) * (1.0 - charAmt * 0.6) * smoothstep(0.3, 0.9, nrm.y);
-  col = mix(col, vec3(0.9, 0.93, 0.98) * (0.94 + 0.06 * nC), snowAmt);
+  // snow covers the flats first and softly; the sun colours it (warm at golden hour), the shade stays a gentle blue-grey
+  vec3 snowC = vec3(0.88, 0.87, 0.855) * (0.94 + 0.06 * nC);
+  float snowPatch = smoothstep(0.0, 1.0, snowAmt * (0.6 + 0.8 * tgFbm2(xz * 0.05 + 12.0)));
+  col = mix(col, snowC, clamp(snowPatch, 0.0, 1.0) * 0.92);
 
   // rain darkens and glosses the ground
   col *= mix(1.0, 0.74, uWet * (1.0 - snowAmt));

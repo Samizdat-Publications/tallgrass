@@ -706,13 +706,20 @@ export class Sim implements SimLike {
     if (dsp > 0.04) {
       let dh = Math.atan2(dvy, dvx) - a.heading[i];
       if (dh > Math.PI) dh -= Math.PI * 2; else if (dh < -Math.PI) dh += Math.PI * 2;
-      const maxTurn = (urgent ? 0.2 : 0.09) * (sp < 0.6 ? 2 : 1);
+      // agile when it matters: a chasing wolf or a fleeing pronghorn can wheel hard
+      // turn rate scales with speed so the turning circle stays a couple of body lengths (no orbiting a target)
+      const maxTurn = Math.max(urgent ? 0.3 : 0.12, (sp * DT) / (urgent ? 1.5 : 2.2));
       a.heading[i] += dh > maxTurn ? maxTurn : dh < -maxTurn ? -maxTurn : dh;
       // you can't sprint around a hairpin
       if (dh > 1.3 || dh < -1.3) sp *= 0.9;
     }
     let vx = Math.cos(a.heading[i]) * sp;
     let vy = Math.sin(a.heading[i]) * sp;
+    if (this.p.steerFree > 0 || (urgent && this.p.steerFreeUrgent > 0)) {
+      // free steering (velocity eases straight toward the desired velocity)
+      vx = a.vx[i] + (dvx - a.vx[i]) * accel;
+      vy = a.vy[i] + (dvy - a.vy[i]) * accel;
+    }
     // stamina: sprinting drains, everything else recovers
     const sprinting = sp > P.walkSpeed * 2.2;
     if (sprinting) {
@@ -1107,7 +1114,7 @@ export class Sim implements SimLike {
       if (k >= 0) {
         const dx = this.cX[k] - x, dy = this.cY[k] - y, d = Math.sqrt(dx * dx + dy * dy);
         if (d < 2.2) { state = St.Eat; a.timer[i] = k; }
-        else { dvx = (dx / d) * Math.min(run, trot * 1.5); dvy = (dy / d) * Math.min(run, trot * 1.5); state = St.Walk; }
+        else { const v = Math.min(run, trot * 1.5, 0.6 + d * 0.5); dvx = (dx / d) * v; dvy = (dy / d) * v; state = St.Walk; }
         a.dvx[i] = dvx; a.dvy[i] = dvy; a.state[i] = state;
         return;
       }
@@ -1124,7 +1131,9 @@ export class Sim implements SimLike {
     if (resting) a.timer[i] += 3;
 
     const opportunist = tgt < 0 && !resting && !juvenile && a.energy[i] >= hungerLine && rng.next() < p.wolfOpportunism;
-    if (tgt < 0 && (a.energy[i] < hungerLine || opportunist) && !resting) {
+    // hunts begin on herds the pack has scented; a wolf doesn't stumble onto scattered prey while mousing
+    const scented = pk < 0 || this.packScentHit[pk] === 1 || this.p.huntNeedsScent === 0;
+    if (tgt < 0 && (a.energy[i] < hungerLine || opportunist) && !resting && (scented || opportunist)) {
       // look for the most vulnerable prey in sight
       const sight = P.sight * a.genes[o + G_SIGHT] * (night ? 0.75 : 1);
       const g = this.prey, nb = g.nb, bs = g.bs;
@@ -1302,7 +1311,7 @@ export class Sim implements SimLike {
       const t = a.target[i];
       if (a.same(t, a.targetId[i])) {
         const dx = a.x[t] - a.x[i], dy = a.y[t] - a.y[i];
-        if (dx * dx + dy * dy < 3.6) {
+        if (dx * dx + dy * dy < 5) {
           // attack roll: packmates close by help, big healthy prey resists
           let helpers = 0;
           if (pk >= 0) {

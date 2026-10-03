@@ -18,13 +18,13 @@ interface Key {
 // Night is a documentary "day for night": silver-blue, readable, never black (see MOON_I, hemi at el <= -14).
 const KEYS: Key[] = [
   { el: -40, zen: C('#17163e'), mid: C('#2a3470'), hor: C('#5a5084'), glow: C('#c2682c'), sun: C('#000000'), sunI: 0,
-    hSky: C('#6e90d0'), hGnd: C('#2c3a58'), hI: 0.72, expo: 1.55, haze: 0.5 },
+    hSky: C('#6f98dc'), hGnd: C('#2e3f66'), hI: 0.9, expo: 1.55, haze: 0.5 },
   { el: -14, zen: C('#191a46'), mid: C('#2d3a78'), hor: C('#62588c'), glow: C('#c2682c'), sun: C('#000000'), sunI: 0,
-    hSky: C('#6e90d0'), hGnd: C('#2c3a58'), hI: 0.76, expo: 1.55, haze: 0.6 },
+    hSky: C('#6f98dc'), hGnd: C('#2e3f66'), hI: 0.95, expo: 1.55, haze: 0.6 },
   { el: -7, zen: C('#1c326c'), mid: C('#4a5c94'), hor: C('#a0809a'), glow: C('#ff9a60'), sun: C('#ff6a28'), sunI: 0,
-    hSky: C('#7088c8'), hGnd: C('#5c4c58'), hI: 1.15, expo: 1.5, haze: 0.7 },
+    hSky: C('#7e98d4'), hGnd: C('#645466'), hI: 1.55, expo: 1.75, haze: 0.7 },
   { el: -1.5, zen: C('#31529a'), mid: C('#7a8cba'), hor: C('#dca880'), glow: C('#ff9a55'), sun: C('#ffc29a'), sunI: 1.7,
-    hSky: C('#86a2dc'), hGnd: C('#a07858'), hI: 1.7, expo: 1.4, haze: 0.8 },
+    hSky: C('#8eaae2'), hGnd: C('#a88060'), hI: 1.9, expo: 1.6, haze: 0.8 },
   { el: 3, zen: C('#3a66aa'), mid: C('#8fa8c8'), hor: C('#efc796'), glow: C('#ffb060'), sun: C('#ffcb9a'), sunI: 3.7,
     hSky: C('#8eaae0'), hGnd: C('#b08850'), hI: 1.5, expo: 1.1, haze: 0.9 },
   { el: 9, zen: C('#4a7ac0'), mid: C('#a8c0d8'), hor: C('#f0d6aa'), glow: C('#ffc070'), sun: C('#ffddb0'), sunI: 5.3,
@@ -38,7 +38,7 @@ const KEYS: Key[] = [
 ];
 
 const MOON_COLOR = C('#bccdff');
-const MOON_I = 2.9;
+const MOON_I = 3.6;
 
 const _a = new THREE.Color();
 const _b = new THREE.Color();
@@ -151,7 +151,7 @@ export function computeAtmosphere(env: EnvLike, sm: Smoothed, u: SharedUniforms,
   mixKey(u.sunGlow.value, (k) => k.glow, k0, k1, t);
   const dayness = smoothstep(-6, 8, elDeg);
   // season tints
-  u.skyZenith.value.multiply(_a.setRGB(lerp(1, 0.9, winter), lerp(1, 0.97, winter), lerp(1, 1.12, winter)));
+  u.skyZenith.value.multiply(_a.setRGB(lerp(1, 0.95, winter), lerp(1, 0.98, winter), lerp(1, 1.05, winter)));
   u.skyHorizon.value.lerp(_b.set('#cfd8e6'), 0.3 * winter * dayness);
   u.skyHorizon.value.multiply(_a.setRGB(1 + 0.06 * autumn, 1 - 0.02 * autumn, 1 - 0.12 * autumn));
   u.skyHorizon.value.lerp(_b.set('#d8b070'), dust * dayness);
@@ -185,7 +185,7 @@ export function computeAtmosphere(env: EnvLike, sm: Smoothed, u: SharedUniforms,
     ).normalize();
     if (u.lightDir.value.y < 0.02) u.lightDir.value.y = 0.02, u.lightDir.value.normalize();
     // season tint on light color
-    col.multiply(_b.setRGB(lerp(1, 0.94, winter), lerp(1, 0.98, winter), lerp(1, 1.06, winter)));
+    col.multiply(_b.setRGB(lerp(1, 0.985, winter), lerp(1, 0.99, winter), lerp(1, 1.02, winter)));
     L.lightIntensity = total;
     col.multiplyScalar(total);
   } else {
@@ -199,7 +199,7 @@ export function computeAtmosphere(env: EnvLike, sm: Smoothed, u: SharedUniforms,
   // ambient
   mixKey(L.hemiSky, (k) => k.hSky, k0, k1, t);
   mixKey(L.hemiGround, (k) => k.hGnd, k0, k1, t);
-  L.hemiSky.multiply(_a.setRGB(lerp(1, 0.9, winter), lerp(1, 0.97, winter), lerp(1, 1.1, winter)));
+  L.hemiSky.multiply(_a.setRGB(lerp(1, 0.95, winter), lerp(1, 0.98, winter), lerp(1, 1.04, winter)));
   L.hemiIntensity = lerp(k0.hI, k1.hI, t) * (1 + over * 0.3);
   if (over > 0.001) {
     const l = (L.hemiSky.r + L.hemiSky.g + L.hemiSky.b) / 3;
@@ -230,12 +230,12 @@ export function computeAtmosphere(env: EnvLike, sm: Smoothed, u: SharedUniforms,
   L.gradeNight = nightG;
   L.gradeHighlight.setRGB(1.0 + 0.08 * golden - 0.1 * nightG, 1.0 + 0.0 * golden + 0.02 * nightG, 1.0 - 0.1 * golden + 0.14 * nightG);
   L.gradeShadow.setRGB(1.0 - 0.14 * golden - 0.2 * nightG, 1.0 + 0.0 * golden + 0.0 * nightG, 1.0 + 0.24 * golden + 0.26 * nightG);
-  L.gradeSat = 1.1 - 0.1 * golden - 0.35 * nightG - 0.12 * over - 0.1 * winter;
-  L.gradeContrast = 1.08 - 0.06 * over - 0.08 * nightG;
+  L.gradeSat = 1.1 - 0.1 * golden - 0.1 * nightG - 0.12 * over - 0.04 * winter;
+  L.gradeContrast = 1.08 - 0.06 * over + 0.06 * nightG;
   L.vignette = 0.26 + 0.06 * nightG;
   L.bloom = 0.17 + 0.13 * golden + 0.06 * nightG;
   // shadow floor: a faint cool lift, plus more at night so nothing is ever pure black
-  L.gradeLift.setRGB(0.0016 + 0.0022 * nightG, 0.0021 + 0.0034 * nightG, 0.0034 + 0.0062 * nightG);
+  L.gradeLift.setRGB(0.0016 + 0.003 * nightG, 0.0021 + 0.0048 * nightG, 0.0034 + 0.0085 * nightG);
 
   // wind
   const wd = env.windDir;

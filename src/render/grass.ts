@@ -404,6 +404,11 @@ void main() {
   float ridge = max(1.0 - smoothstep(0.40, 0.66, moist), 0.8 * smoothstep(0.22, 0.5, slopeM));
   float pres = smoothstep(0.015, 0.14, bioEff) * (1.0 - 0.72 * cover) * (1.0 - smoothstep(0.3, 0.7, water)) * (1.0 - 0.5 * burn);
   pres *= mix(0.62, 1.0, smoothstep(0.28, 0.62, tusC)) * (1.0 - 0.18 * ridge);
+  // fade out over the last 25 m inside the world edge (thinner and shorter) so the field melts into the far-ring
+  // terrain instead of ending in a straight line
+  float edgeD = min(min(p.x, p.y), min(uWorld.x - p.x, uWorld.x - p.y));
+  float edgeK = smoothstep(0.0, 25.0, edgeD);
+  pres *= edgeK * edgeK;
   if (rThin >= keepD * pres) { cullBlade(); return; }
 
   float gy = terrainH(p);
@@ -436,7 +441,7 @@ void main() {
   // ---- size
   float hfrac = 0.07 + 0.93 * smoothstep(0.0, 0.85, bioEff);
   hfrac = max(hfrac, 0.3 * smoothstep(0.02, 0.16, bioEff));
-  hfrac *= 1.0 - 0.32 * ridge;
+  hfrac *= (1.0 - 0.32 * ridge) * mix(0.3, 1.0, edgeK);
   float H = uMaxH * hfrac * (0.70 + 0.55 * rA) * (0.88 + 0.24 * patch1) * (0.85 + 0.3 * tusC) * (1.0 - 0.38 * cover);
   H = mix(H, 0.05 + 0.07 * rA, burn);
   H *= 1.0 - 0.85 * smoothstep(uDens.w * 0.8, uDens.w, dist);

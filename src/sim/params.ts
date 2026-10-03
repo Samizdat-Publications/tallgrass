@@ -108,6 +108,10 @@ export interface Params {
   mutation: number;
   // misc
   maxAgents: number;
+  /** 1 = old free steering for every animal; steerFreeUrgent = free steering only in chases and flights. */
+  steerFree: number;
+  steerFreeUrgent: number;
+  huntNeedsScent: number;
 }
 
 export function defaultParams(): Params {
@@ -185,6 +189,9 @@ export function defaultParams(): Params {
     diseaseMetab: 1.7,
     mutation: 0.035,
     maxAgents: 20000,
+    steerFree: 0,
+    steerFreeUrgent: 0,
+    huntNeedsScent: 1,
   };
 }
 

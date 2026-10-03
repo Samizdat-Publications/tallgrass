@@ -107,6 +107,9 @@ export class Engine {
   private lastNear = 0;
   private shadowRange = 300;
   private firstFrame = true;
+  private lastTick = 0;
+  private frostSm = 0;
+  private lastTickF = 0;
   private _focus = new THREE.Vector3();
   /** Fade tree canopies and trunks out of the line between the camera and the point it watches (default on). */
   occlusionFade = true;
@@ -224,6 +227,7 @@ export class Engine {
   applyEnvNow(): void {
     this.firstFrame = true;
     this.updateEnvState(0);
+    this.firstFrame = false;
     this.terrain.updateShadow(this.renderer, this.uniforms.lightDir.value, true);
   }
 
@@ -323,21 +327,34 @@ export class Engine {
     const u = this.uniforms;
     const sm = this.sm;
 
-    // smooth weather-driven state so a weather switch fades in instead of popping
+    // Weather-driven state eases in and out over sim time, so snow settles and melts over tens of seconds at 1x (a few at
+    // 10x or 100x) instead of popping when the weather flips. Sim time comes from env.tick (10 ticks per second at 1x);
+    // pages that never advance the tick (dev pages) fall back to real time. Paused sim = frozen weather state.
     const w = env.weather;
-    const overTarget = w === 3 ? 0.9 : w === 1 ? 0.45 + 0.4 * env.rain : w === 4 ? 0.6 : 0;
+    const overTarget = w === 3 ? 0.9 : w === 1 ? 0.45 + 0.4 * env.rain : w === 4 ? 0.38 : 0;
     const snowTarget = w === 4 ? 1 : 0;
     const wetTarget = w === 1 || w === 3 ? clamp(0.3 + env.rain, 0, 1) : w === 4 ? 0.2 : 0;
-    const k = this.firstFrame ? 1 : 1 - Math.exp(-dt * 0.5);
-    sm.overcast += (overTarget - sm.overcast) * k;
-    sm.snow += (snowTarget - sm.snow) * (this.firstFrame ? 1 : 1 - Math.exp(-dt * (snowTarget > sm.snow ? 0.12 : 0.05)));
-    sm.wet += (wetTarget - sm.wet) * (this.firstFrame ? 1 : 1 - Math.exp(-dt * 0.3));
+    let simTicks: number;
+    if (this.firstFrame) simTicks = 1e6;
+    else if (env.tick === 0) simTicks = dt * 10;
+    else {
+      const d = env.tick - this.lastTick;
+      simTicks = d > 0 && d < 5000 ? Math.min(d, 14) : d >= 5000 ? 14 : 0;
+    }
+    this.lastTick = env.tick;
+    const ease = (cur: number, target: number, tau: number) => cur + (target - cur) * (1 - Math.exp(-simTicks / tau));
+    sm.overcast = ease(sm.overcast, overTarget, 160);
+    sm.snow = ease(sm.snow, snowTarget, snowTarget > sm.snow ? 320 : 220);
+    sm.wet = ease(sm.wet, wetTarget, 200);
 
     computeAtmosphere(env, sm, u, this.lighting);
     this.applySeason(env.season);
     const winter = smoothstep(2.4, 3.1, u.season.value) * (1 - smoothstep(3.55, 3.95, u.season.value));
     const frostTime = 1 - smoothstep(0.36, 0.5, env.dayFrac) * (1 - smoothstep(0.62, 0.74, env.dayFrac));
-    u.frost.value = winter * frostTime * (1 - 0.6 * env.warmth);
+    const frostTarget = winter * frostTime * (1 - 0.6 * env.warmth);
+    this.frostSm = this.firstFrame ? frostTarget : this.frostSm + (frostTarget - this.frostSm) * (1 - Math.exp(-(env.tick === 0 ? dt * 10 : Math.min(14, Math.max(0, env.tick - this.lastTickF))) / 90));
+    this.lastTickF = env.tick;
+    u.frost.value = this.frostSm;
     u.snow.value = sm.snow;
     u.wet.value = sm.wet;
     u.rock.value.copy(ROCK_COLOR);
@@ -378,7 +395,7 @@ export class Engine {
       const focus = this.cam.getFocus(this._focus);
       u.occCam.value.copy(this.camera.position);
       u.occFocus.value.set(focus.x, focus.y + 0.5, focus.z);
-      const r = clamp(dist * 0.045, 1.6, 6);
+      const r = clamp(dist * 0.065, 1.8, 7);
       u.occParams.value.set(r * 0.6, r * 1.7, this.occlusionFade ? 1 - smoothstep(110, 175, dist) : 0);
     }
 

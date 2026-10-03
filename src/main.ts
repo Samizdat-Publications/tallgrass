@@ -251,6 +251,7 @@ w.__animals = animals;
 w.__grass = grass;
 w.__snap = () => pending;
 w.__director = director;
+w.__apply = (iv: Intervention) => send({ type: 'apply', iv });
 w.__audio = audio;
 w.__followId = (id: number | null) => {
   following = id;

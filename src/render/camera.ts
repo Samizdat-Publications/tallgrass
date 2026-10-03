@@ -3,7 +3,7 @@
 // Angles in the public API are degrees; pitch is the camera's elevation above the horizon as seen from the
 // target (0 = level with the ground, 90 = straight down). Positions are sim meters: x, y map to three (x, z).
 import * as THREE from 'three';
-import { clamp } from './common';
+import { clamp, smoothstep } from './common';
 
 export type CameraPreset = 'wide' | 'low' | 'top';
 
@@ -44,6 +44,13 @@ export class DroneCamera {
   private cur: State;
   private rate = 4;
   private follower: (() => { x: number; y: number } | null) | null = null;
+  // critically damped follow: velocity of the focus point (m/s)
+  private vx = 0;
+  private vz = 0;
+  /** Follow dead zone radius as a fraction of orbit distance (the subject can drift this far from frame center before the camera moves). */
+  followDeadzone = 0.055;
+  /** Follow smoothing time in seconds: higher = lazier, more cinematic catch-up. */
+  followSmoothTime = 0.4;
   private cinematic = false;
   private cinPitch = 0.4;
   private cinT = 0;
@@ -68,8 +75,8 @@ export class DroneCamera {
 
   /** Smoothly move the focus to sim position (x, y). Optional distance in meters and pitch in degrees. */
   flyTo(x: number, y: number, distance?: number, pitchDeg?: number): void {
-    this.goal.tx = clamp(x, -200, this.opt.worldSize + 200);
-    this.goal.tz = clamp(y, -200, this.opt.worldSize + 200);
+    this.goal.tx = clamp(x, 0, this.opt.worldSize);
+    this.goal.tz = clamp(y, 0, this.opt.worldSize);
     if (distance !== undefined) this.goal.dist = clamp(distance, MIN_DIST, MAX_DIST);
     if (pitchDeg !== undefined) this.goal.pitch = clamp(pitchDeg * DEG, MIN_PITCH, MAX_PITCH);
     this.goal.lift = this.goal.dist < 60 ? 1.0 : 0;
@@ -114,6 +121,7 @@ export class DroneCamera {
 
   /** Jump to the goal immediately, no smoothing. */
   snap(): void {
+    this.vx = this.vz = 0;
     this.cur = { ...this.goal };
     this.apply();
   }
@@ -167,7 +175,14 @@ export class DroneCamera {
 
     if (this.follower) {
       const p = this.follower();
-      if (p) { g.tx = p.x; g.tz = p.y; }
+      if (p) {
+        // dead zone: the goal only moves once the subject leaves a small circle around it, and then only just enough
+        // to keep the subject on the circle's edge, so small wanders do not jiggle the frame
+        const dx = p.x - g.tx, dz = p.y - g.tz;
+        const d = Math.hypot(dx, dz);
+        const dzr = clamp(c.dist * this.followDeadzone, 0.8, 9);
+        if (d > dzr) { const f = 1 - dzr / d; g.tx += dx * f; g.tz += dz * f; }
+      }
     }
 
     if (this.cinematic) {
@@ -182,9 +197,23 @@ export class DroneCamera {
     }
 
     const k = 1 - Math.exp(-dt * this.rate);
-    const kf = this.follower ? 1 - Math.exp(-dt * 5) : k;
-    c.tx += (g.tx - c.tx) * (this.follower ? kf : k);
-    c.tz += (g.tz - c.tz) * (this.follower ? kf : k);
+    if (this.follower) {
+      // critically damped spring toward the goal (smooth catch-up, no overshoot), instead of an exponential chase
+      const st = Math.max(0.05, this.followSmoothTime);
+      const om = 2 / st;
+      const x = om * dt;
+      const ex = 1 / (1 + x + 0.48 * x * x + 0.235 * x * x * x);
+      let ox = c.tx - g.tx, oz = c.tz - g.tz;
+      const tx = (this.vx + om * ox) * dt, tz = (this.vz + om * oz) * dt;
+      this.vx = (this.vx - om * tx) * ex;
+      this.vz = (this.vz - om * tz) * ex;
+      ox = (ox + tx) * ex; oz = (oz + tz) * ex;
+      c.tx = g.tx + ox; c.tz = g.tz + oz;
+    } else {
+      this.vx = this.vz = 0;
+      c.tx += (g.tx - c.tx) * k;
+      c.tz += (g.tz - c.tz) * k;
+    }
     c.yaw += wrapAngle(g.yaw - c.yaw) * k;
     c.pitch += (g.pitch - c.pitch) * k;
     c.dist += (g.dist - c.dist) * k;
@@ -203,9 +232,18 @@ export class DroneCamera {
     const c = this.cur;
     const ty = this.opt.ground(c.tx, c.tz) + c.lift;
     const cp = Math.cos(c.pitch), sp = Math.sin(c.pitch);
-    const px = c.tx + c.dist * cp * Math.sin(c.yaw);
-    const pz = c.tz + c.dist * cp * Math.cos(c.yaw);
+    let px = c.tx + c.dist * cp * Math.sin(c.yaw);
+    let pz = c.tz + c.dist * cp * Math.cos(c.yaw);
     let py = ty + c.dist * sp;
+    // Near the ground the camera stays inside the world: the grass layer stops at the world edge, and a low camera that
+    // peeks over it sees a hard line where blades end. High cameras may leave the square (map view, wide overview).
+    const S = this.opt.worldSize;
+    const low = 1 - smoothstep(35, 90, py - this.opt.ground(px, pz));
+    if (low > 0) {
+      const m = 6;
+      px = px + (clamp(px, m, S - m) - px) * low;
+      pz = pz + (clamp(pz, m, S - m) - pz) * low;
+    }
     const floor = this.opt.ground(px, pz) + 1.6;
     if (py < floor) py = floor;
     this.camera.position.set(px, py, pz);
@@ -218,8 +256,8 @@ export class DroneCamera {
     // forward on the ground is away from the camera; right is its screen-right
     g.tx += right * cy - forward * sy;
     g.tz += -right * sy - forward * cy;
-    g.tx = clamp(g.tx, -300, this.opt.worldSize + 300);
-    g.tz = clamp(g.tz, -300, this.opt.worldSize + 300);
+    g.tx = clamp(g.tx, 0, this.opt.worldSize);
+    g.tz = clamp(g.tz, 0, this.opt.worldSize);
   }
 
   private userInput(cancelFollow: boolean): void {
