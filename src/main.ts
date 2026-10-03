@@ -13,7 +13,7 @@ import { challengeById } from './challenges';
 import { Director } from './director';
 import { AudioDirector } from './audio/audio';
 import { countNearby, nearWater01 } from './audio/inputs';
-import { DAY_TICKS, Sp, type Intervention, type Snapshot } from './sim/types';
+import { DAY_TICKS, Sp, YEAR_TICKS, type Intervention, type Snapshot } from './sim/types';
 import type { FromWorker, ToWorker } from './sim/worker';
 
 const q = new URLSearchParams(location.search);
@@ -43,6 +43,26 @@ const director = new Director(engine.cam, (id, out) => animals.getPosition(id, o
 const audio = new AudioDirector();
 void audio.load();
 window.addEventListener('keydown', (e) => { if (e.key === 'm' || e.key === 'M') audio.setMuted(!audio.muted); });
+
+// Photo mode: P saves the current frame as a PNG. The UI is HTML over the canvas, so the picture is clean.
+window.addEventListener('keydown', (e) => {
+  if ((e.key !== 'p' && e.key !== 'P') || e.repeat || e.ctrlKey || e.metaKey || (e.target as HTMLElement)?.closest?.('input, textarea')) return;
+  engine.renderOnce(0); // the drawing buffer is only readable in the same task as the render
+  const year = pending ? Math.floor(pending.tick / YEAR_TICKS) + 1 : 1;
+  engine.renderer.domElement.toBlob((blob) => {
+    if (!blob) return;
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `tallgrass-${seedStr.replace(/[^\w-]+/g, '_')}-year${year}.png`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  }, 'image/png');
+  const flash = document.createElement('div');
+  flash.style.cssText = 'position:fixed;inset:0;background:#fff;opacity:0.55;pointer-events:none;z-index:50;transition:opacity 0.35s ease-out';
+  document.body.append(flash);
+  requestAnimationFrame(() => { flash.style.opacity = '0'; });
+  setTimeout(() => flash.remove(), 450);
+});
 
 // ------------------------------------------------------------------ worker
 

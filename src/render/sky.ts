@@ -237,6 +237,17 @@ export function computeAtmosphere(env: EnvLike, sm: Smoothed, u: SharedUniforms,
   // shadow floor: a faint cool lift, plus more at night so nothing is ever pure black
   L.gradeLift.setRGB(0.0016 + 0.003 * nightG, 0.0021 + 0.0048 * nightG, 0.0034 + 0.0085 * nightG);
 
+  // russet ground under red dusk light compounds into wine: in autumn the low sun gives up some of its red
+  if (autumn > 0.01) {
+    const lowSun = (1 - smoothstep(4, 16, elDeg)) * smoothstep(-6, 0, elDeg);
+    const k = autumn * lowSun;
+    u.lightColor.value.multiply(_b.setRGB(1 - 0.07 * k, 1 + 0.03 * k, 1 + 0.0 * k));
+    L.hemiGround.multiply(_b.setRGB(1 - 0.14 * k, 1 + 0.05 * k, 1 - 0.05 * k));
+    L.gradeSat -= 0.06 * k;
+    // keep the cool-shadow grade from turning shaded russet ground olive-grey
+    L.gradeShadow.lerp(_b.setRGB(1.02, 1.0, 0.98), 0.6 * k);
+  }
+
   // wind
   const wd = env.windDir;
   u.wind.value.set(Math.cos(wd), Math.sin(wd), clamp(env.windStrength, 0, 1));

@@ -237,7 +237,7 @@ export function injectTerrainShadow(
         vec2 qd = abs(vTgShadowXZ - 0.5 * uTgWorld) - 0.5 * uTgWorld;
         float sd = max(qd.x, qd.y);
         // blend the two maps across the border so there is no seam at the edge of the playable square
-        float wIn = 1.0 - smoothstep(-14.0, 26.0, sd);
+        float wIn = 1.0 - smoothstep(-20.0, 30.0, sd);
         vec2 fuv = (vTgShadowXZ - uTgFarRect.xy) / uTgFarRect.z;
         float far = texture2D(tTgShadowFar, clamp(fuv, 0.0, 1.0)).r;
         return mix(far, texture2D(tTgShadow, clamp(uv, 0.0, 1.0)).r, wIn);

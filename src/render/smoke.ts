@@ -102,11 +102,11 @@ export class Smoke {
           vec2 nuv = vUv * 1.6 + vec2(vData.z * 17.0, vData.z * 9.0) + vec2(0.0, -age * 0.8);
           float n = tgFbm2(nuv);
           float body = clamp(1.0 - r2, 0.0, 1.0);
-          float dens = smoothstep(0.0, 0.55, body * (0.55 + 0.9 * n) - 0.12);
+          float dens = smoothstep(0.0, 0.8, body * (0.5 + 0.9 * n) - 0.06);
           // fade in fast (it leaves the flames), thin out as it rises
           float fadeIn = smoothstep(0.0, 0.07, age);
           float fadeOut = pow(1.0 - age, 1.6);
-          float alpha = dens * fadeIn * fadeOut * 0.62;
+          float alpha = dens * fadeIn * fadeOut * 0.5;
           if (alpha < 0.004) discard;
 
           // lit like a little volume: a disc normal against the light (view space), forward scattering against the sun
@@ -116,11 +116,11 @@ export class Smoke {
           vec3 V = normalize(cameraPosition - vWorld);
           float fwd = pow(max(dot(-V, uLightDir), 0.0), 3.0);
           vec3 amb = (uSkyMid * 0.75 + uSkyHorizon * 0.25) * 0.9 + vec3(0.012);
-          vec3 albedo = mix(vec3(0.20, 0.185, 0.17), vec3(0.42, 0.40, 0.38), age) * (0.8 + 0.5 * n);
-          vec3 col = albedo * (amb + uLightColor * (0.16 + 0.5 * wrap * wrap) + uLightColor * fwd * 0.5);
+          vec3 albedo = mix(vec3(0.085, 0.078, 0.07), vec3(0.2, 0.19, 0.18), age) * (0.8 + 0.5 * n);
+          vec3 col = albedo * (amb + uLightColor * (0.14 + 0.45 * wrap * wrap) + uLightColor * fwd * 0.35);
           // flames light the young smoke from below
-          float glow = vData.w * smoothstep(0.32, 0.0, age);
-          col += vec3(2.2, 0.62, 0.12) * glow * (0.35 + 0.65 * n) * (0.5 + 0.5 * (1.0 - vUv.y));
+          float glow = vData.w * smoothstep(0.2, 0.0, age);
+          col += vec3(1.5, 0.42, 0.08) * glow * (0.35 + 0.65 * n) * smoothstep(0.2, -0.9, vUv.y);
           gl_FragColor = vec4(min(max(col, vec3(0.0)), vec3(32.0)), alpha);
         }`,
       transparent: true,

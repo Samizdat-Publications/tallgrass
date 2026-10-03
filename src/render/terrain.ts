@@ -11,7 +11,7 @@ import {
 
 const SHADOW_RES = 256;
 const FAR_RES = 512;
-const EXT_CELL = 8;
+const EXT_CELL = 4;
 const FAR_ORIGIN = -768;
 const FAR_SIZE = 2048;
 
@@ -166,6 +166,18 @@ export class Terrain {
     this.creekDist = shaped.creekDist;
     // Near the border the ground is blurred along the border only (60 m window), so rim bumps and the creek notch do not extrude
     // outward as streaks, while the profile across the border (the rim slope) is untouched. The far ring then continues that profile.
+    // The sim raises a 22 m bowl wall over the last 82 m of every edge (world.ts). Seen from above that wall frames the playable
+    // square like a picture frame, so the render takes most of it back out (never near the creek, whose banks are already shaped).
+    for (let j = 0; j < hn; j++) {
+      for (let i = 0; i < hn; i++) {
+        const u = i / (hn - 1), v = j / (hn - 1);
+        const edge = Math.min(u, 1 - u, v, 1 - v);
+        if (edge >= 0.16) continue;
+        const up = 22 * Math.pow((0.16 - edge) / 0.16, 2);
+        const wc = smoothstep(10, 34, shaped.creekDist[j * hn + i]);
+        shaped.height[j * hn + i] -= 0.62 * up * wc;
+      }
+    }
     const blurred = boxBlur(boxBlur(shaped.height, hn, 20), hn, 20);
     const Lx = boxBlur1(shaped.height, hn, 45, 0);
     const Lz = boxBlur1(shaped.height, hn, 45, 1);
@@ -222,14 +234,14 @@ export class Terrain {
     const L = 75;
     // Far ring: continues the border height with the rim's outward slope easing to zero (C1 at the border, no crease).
     const Lg = 50;
-    const gClamp = (g: number) => clamp(g, -0.1, 0.4);
+    const gClamp = (g: number) => clamp(g, -0.3, 0.85);
     // extension along x at row zc, then along z: each continues the border height with the slope easing out (C1 across every border
     // and corner, so no crease or crack along the extension of an edge)
     const extX = (x: number, zc: number): number => {
       const cx = clamp(x, 0, S);
       const hb = sampleHeight(rh, hn, cell, cx, zc);
       if (x === cx) return hb;
-      const g = gClamp((hb - sampleHeight(rh, hn, cell, x < 0 ? 20 : S - 20, zc)) / 20);
+      const g = gClamp((hb - sampleHeight(rh, hn, cell, x < 0 ? 4 : S - 4, zc)) / 4);
       return hb + g * Lg * (1 - Math.exp(-Math.abs(x - cx) / Lg));
     };
     this.heightFn = (x: number, z: number) => {
@@ -240,7 +252,7 @@ export class Terrain {
       const e0 = extX(x, cz);
       let inner = e0;
       if (dz !== 0) {
-        const gz = gClamp((e0 - extX(x, dz < 0 ? 20 : S - 20)) / 20);
+        const gz = gClamp((e0 - extX(x, dz < 0 ? 4 : S - 4)) / 4);
         inner = e0 + gz * Lg * (1 - Math.exp(-Math.abs(dz) / Lg));
       }
       const t = smoothstep(0, 170, d);
@@ -300,6 +312,7 @@ export class Terrain {
         uT0: { value: 1.5 },
         uGrow: { value: 1.095 },
         uPen: { value: 0.035 },
+        uBias: { value: 0 },
         uExtCell: { value: EXT_CELL },
         uExtN: { value: FAR_SIZE / EXT_CELL },
         uExtOrigin: { value: FAR_ORIGIN },
@@ -314,6 +327,7 @@ export class Terrain {
         uniform float uT0;
         uniform float uGrow;
         uniform float uPen;
+        uniform float uBias;
         uniform vec3 uLightDir;
         uniform sampler2D tExt;
         uniform float uExtCell;
@@ -349,7 +363,7 @@ export class Terrain {
         void main(){
           vec2 xz = uRect.xy + vUv * uRect.z;
           float wStart = smoothstep(80.0, 260.0, outsideDist(xz));
-          float h0 = blockerH(xz, 1.0) + 0.35;
+          float h0 = blockerH(xz, 1.0) + 0.35 + uBias;
           vec2 d2 = uLightDir.xz;
           float len = length(d2);
           float vis = 1.0;
@@ -385,6 +399,7 @@ export class Terrain {
       u.uT0.value = 1.5;
       u.uGrow.value = 1.095;
       u.uPen.value = 0.035;
+      u.uBias.value = 0;
       renderer.setRenderTarget(this.shadowRT);
       this.shadowQuad.render(renderer);
     }
@@ -393,9 +408,10 @@ export class Terrain {
       this.lastLightFar.copy(lightDir);
       (u.uLightDir.value as THREE.Vector3).copy(lightDir);
       (u.uRect.value as THREE.Vector3).set(FAR_ORIGIN, FAR_ORIGIN, FAR_SIZE);
-      u.uT0.value = 6;
-      u.uGrow.value = 1.125;
-      u.uPen.value = 0.075;
+      u.uT0.value = 3;
+      u.uGrow.value = 1.1;
+      u.uPen.value = 0.04;
+      u.uBias.value = 2.2;
       renderer.setRenderTarget(this.shadowFarRT);
       this.shadowQuad.render(renderer);
       // restore the inner pass parameters for the next inner update
@@ -684,6 +700,16 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
   // the far field stands in for blades seen from a distance: a touch darker and calmer than the sunlit blade tops
   grassCol *= mix(1.0, 0.88, edgeW);
 
+  // honey, not orange: dry ridges go lighter and straw-gold, swales and draws go deeper olive-gold, and the redness is capped
+  // (the light is already warm, so red ground under red light reads as wine at dusk)
+  float dryAmt = dry * (1.0 - riparian);
+  grassCol *= 1.0 + 0.24 * up * dryAmt * (0.6 + 0.8 * nM1);
+  vec3 swaleC = vec3(0.34, 0.27, 0.07) * (0.8 + 0.4 * nA);
+  grassCol = mix(grassCol, grassCol * vec3(0.84, 0.92, 0.7) * 0.92 + swaleC * 0.16, clamp(draw * 0.75 + (1.0 - up) * 0.14 * smoothstep(0.4, 0.8, nM2), 0.0, 1.0) * dryAmt);
+  float lumG0 = dot(grassCol, vec3(0.2126, 0.7152, 0.0722));
+  grassCol.r = min(grassCol.r, grassCol.g * 2.15 + 0.003);
+  grassCol = mix(vec3(lumG0), grassCol, 0.95);
+
   // blade-scale speckle so ground the grass layer does not cover (beyond the world edge) reads as grass, not as a smooth plane
   float speck = tgNoise2(xz * 5.5) * 0.6 + tgNoise2(xz * 14.0) * 0.4;
   grassCol *= 1.0 + (speck - 0.5) * 0.5 * (1.0 - smoothstep(25.0, 110.0, dist)) * (0.35 + 0.65 * edgeW);
@@ -717,8 +743,8 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
   float scar = smoothstep(0.12, 0.3, bR);
   float scorch = smoothstep(0.0, 0.16, bR) * (1.0 - scar);
   float fresh = smoothstep(0.3, 0.76, burn);
-  vec3 charC = vec3(0.05, 0.043, 0.037);
-  vec3 ashC = vec3(0.34, 0.325, 0.3);
+  vec3 charC = vec3(0.058, 0.046, 0.034);
+  vec3 ashC = vec3(0.37, 0.325, 0.27);
   float ashPatch = smoothstep(0.35, 0.7, tgFbm2(xz * 0.35 + 19.0));
   float ashMix = clamp(ashPatch * (0.3 + 0.6 * (1.0 - fresh)) + 0.32 * (1.0 - fresh) + 0.1 * (nC - 0.5), 0.0, 1.0);
   vec3 scarCol = mix(charC, ashC, ashMix) * (0.72 + 0.5 * nC) * (0.85 + 0.3 * nA);
@@ -727,10 +753,15 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
   col = mix(col, scarCol, scar);
   gTgGrass *= (1.0 - scar);
   float charAmt = scar;
-  // embers: only the burning front (v = 1.0) glows, flickering, with a warm halo spilling a little onto the scorched ground
+  // flames: only cells that are burning right now (value 1.0) glow, flickering; the glow spills a little onto the ground around them
   float flick = 0.55 + 0.45 * tgNoise2(xz * 1.3 + uTime * 1.7) + 0.25 * tgNoise2(xz * 4.1 - uTime * 2.9);
-  float ember = smoothstep(0.86, 1.0, bR) * flick;
-  float emberHalo = smoothstep(0.55, 0.95, bR) * (0.4 + 0.6 * flick);
+  float burningNow = smoothstep(0.9, 0.99, burn);
+  float ember = smoothstep(0.86, 1.0, bR) * burningNow * flick;
+  float emberHalo = burningNow * (0.4 + 0.6 * flick);
+  // smouldering: for a while after the flames pass (ash value 0.68 to 0.78) scattered embers still glow in the char and fade out
+  float smold = smoothstep(0.66, 0.77, burn) * (1.0 - burningNow);
+  float spots = smoothstep(0.72, 0.9, tgNoise2(xz * 2.6 + vec2(uTime * 0.12, 3.0)) * 0.6 + tgNoise2(xz * 7.0 - uTime * 0.2) * 0.4);
+  float smolder = smold * spots * (0.5 + 0.5 * tgNoise2(xz * 3.0 + uTime * 1.1));
 
   // winter: frost is a thin cold bloom in the shade, never a snow blanket; snow only when it is snowing
   float shadeAmt = 1.0 - ts;
@@ -751,7 +782,7 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
   float lowSun = 1.0 - smoothstep(0.1, 0.65, uLightDir.y);
   float glow = pow(fwd, 3.0) * (0.35 + 0.65 * lowSun) * gTgGrass * (1.0 - rock) * (1.0 - snowAmt) * ts * (1.0 - uWet);
   gTgEmis = col * uLightColor * glow * 0.1;
-  gTgEmis += vec3(3.4, 0.95, 0.15) * ember + vec3(1.1, 0.22, 0.03) * emberHalo * 0.5;
+  gTgEmis += vec3(3.4, 0.95, 0.15) * ember + vec3(1.1, 0.22, 0.03) * emberHalo * 0.4 + vec3(1.6, 0.34, 0.05) * smolder;
 
   if (uFear > 0.001) {
     col = mix(col, vec3(0.85, 0.05, 0.04), fear * uFear * 0.7);
