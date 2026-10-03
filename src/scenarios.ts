@@ -36,7 +36,7 @@ export const SCENARIOS: Scenario[] = [
     id: 'dryyears', name: 'The dry years',
     blurb: 'Drought comes in the second year, then returns every four years and lasts a year and a half.',
     params: {},
-    schedule: [1, 5, 9, 13, 17, 21, 25, 29].map((y) => ({ tick: YEAR_TICKS * y, iv: { kind: 'drought' as const, ticks: YEAR_TICKS * 1.5, severity: 0.8 } })),
+    schedule: [1, 5, 9, 13, 17, 21, 25, 29].map((y) => ({ tick: YEAR_TICKS * y, iv: { kind: 'drought' as const, ticks: YEAR_TICKS * 1.5, severity: 0.7 } })),
   },
   {
     id: 'cougars', name: 'Cougar country',

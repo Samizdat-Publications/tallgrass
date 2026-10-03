@@ -25,9 +25,9 @@ const ADD_WOLVES: Intervention = { kind: 'introduce', species: Sp.Wolf, count: 6
 const CULL: Intervention = { kind: 'cull', species: Sp.Bison, fraction: 0.7 };
 const RAIN: Intervention = { kind: 'rain', ticks: 1600 };
 const POLICIES: Record<string, Policy> = {
-  knife: (y, p, _k, since) => (since > 1.5 && (p[Sp.Bison] < 250 || p[Sp.Deer] < 60) ? ADD_BISON : null),
+  herd: (y, p, _k, since) => (since > 1.5 && (p[Sp.Bison] < 250 || p[Sp.Deer] < 60) ? ADD_BISON : null),
   island: (y, p, _k, since) => (y > 0.2 && since > 2 && p[Sp.Wolf] < 10 ? ADD_WOLVES : since > 1 && p[Sp.Bison] > 2300 ? CULL : null),
-  collapse: (y, p, _k, since) => (since > 2 && p[Sp.Wolf] < 10 ? ADD_WOLVES : since > 2 && p[Sp.Bison] > 1700 ? CULL : null),
+  collapse: (y, p, _k, since) => (since > 2 && p[Sp.Wolf] < 12 ? ADD_WOLVES : null),
   homecoming: (y, p, k, since) => (y > 0.3 && since > 2 && k < 3 ? ADD_WOLVES : null),
   // break each drought soon after it starts (they come every four years from year 1)
   dry: (y, _p, _k, since) => (since > 3 && y % 4 > 1.1 && y % 4 < 1.4 ? RAIN : null),

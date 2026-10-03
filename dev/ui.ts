@@ -272,7 +272,7 @@ if (q.has('labels')) {
   document.querySelector('.tg-ui')?.prepend(box);
 }
 if (state === 'challenge' || state === 'challenge-won') {
-  ui.setChallenge(challengeById(state === 'challenge' ? 'knife' : 'dry'));
+  ui.setChallenge(challengeById(state === 'challenge' ? 'herd' : 'dry'));
   for (let i = 0; i < Number(q.get('used') ?? (state === 'challenge' ? 2 : 1)); i++) ui.tryUseTool();
 }
 if (state === 'inspector' || state === 'wolf' || state === 'story' || state === 'memorial' || state === 'cougar') selectedId = bisonDetail().id;

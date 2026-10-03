@@ -8,7 +8,7 @@ Open **https://tallgrass.stewartgregerson.workers.dev** in Chrome or Edge. Click
 Last deploy: 13:30 Saturday (commit 40f06ef: challenges, overlays, photo mode, UI and renderer round 3), verified: loads with no errors at 59 to 60 fps, default world and `?challenge=homecoming`. The fixes for foot sliding and the next renderer pass are still being verified and will follow.
 
 Locally: `npm run dev`, then http://localhost:5199/.
-- `?seed=anything` picks a world, `?scenario=yellowstone` picks a scenario, `?challenge=knife` starts a challenge. The menu (top right) does all three.
+- `?seed=anything` picks a world, `?scenario=yellowstone` picks a scenario, `?challenge=herd` starts a challenge. The menu (top right) does all three.
 - Keys: Space pause, 1/2/3 speed, **N next event** (the camera flies to it), **C cinematic documentary mode**, **P photo** (saves a clean PNG of the frame), G big graph, E evolution chart, L log scale, F follow the selected animal, H hide UI, M mute, Esc back out. Click an animal to inspect it and read its life story. Left-drag orbits, right-drag pans, wheel zooms.
 
 ## What it is

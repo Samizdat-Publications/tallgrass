@@ -20,15 +20,20 @@ Plain predator-prey models (Lotka-Volterra) oscillate until something hits zero.
 9. **The landscape of fear.** Kill sites stay frightening for a while; grazers avoid them, so grass there recovers.
 10. **Realistic lifespans.** Bison live about nine times their age at maturity. With shorter lives, old age alone turned the herd over every year and left no margin for predation; that single change took 40-year bison persistence from 69% to 100%.
 11. **Density-dependent disease** flares in crowded herds as a backstop.
+12. **Slow breeders (checkpoint v5).** A bison cow calves about once a season-and-a-half of sim time and lives longer; pronghorn breed more slowly too. A herd can no longer double in a season and then starve, so fewer deaths are starvation and more are predation.
+13. **Prey switching by abundance (type III).** Wolves put their effort where prey is common: a species' weight in their hunting choices is N / (N + 150). A crashed species gets a refuge instead of being hunted to the last animal.
+14. **A staggered start.** Founding cows begin part-way through pregnancy or rest, so the first calves don't all arrive in one pulse (that pulse used to set off a boom, a crash and a predator pit).
+15. **Small game is lean.** Voles and ground squirrels keep a wolf alive, but only at half the old rate, so wolf numbers can't coast through a prey crash for years.
 
 ## Evolution
 Every animal carries speed, size, sight, boldness, herding, coat and litter genes, passed on with mutation. Trait costs are physical: big bodies hold more reserves but need more grass and run slower, and speed costs energy mainly while sprinting. Over centuries you see a real arms race: bison get faster and bigger, and wolves get faster in response (`review/stability/v2-9762475/baseline/traits.png`). Coat darkness is kept within each species' believable range, so bison stay dark and wolves stay pale.
 
-## Evidence
+## Evidence (checkpoint v5 is the default; v4 numbers kept for comparison)
+- v5: 20 worlds past 1,000 bison generations (720 to 750 years): bison, wolves and ravens 20/20, pronghorn 18/20. `review/stability/v5P-4875c69/`.
 - Trophic cascade, Yellowstone style: `review/stability/cascade/trophic_cascade.png`.
-- 20 worlds past 1,000 bison generations (600 to 670 years): bison, wolves and ravens 20/20, pronghorn 15/20. `review/stability/v4-5df7663/`.
+- v4: 20 worlds past 1,000 bison generations (600 to 670 years): bison, wolves and ravens 20/20, pronghorn 15/20. `review/stability/v4-5df7663/`.
 - Shocks over 120 years (70% cull, two-summer drought, wolf wipeout and return): `review/stability/v4-5df7663-shocks/stability_overview.png`.
 - 32 worlds x 40 years: bison, wolves and ravens 32/32, pronghorn 30/32.
 
 ## Known weakness (being worked on)
-Regulation is mostly bottom-up. Bison breed fast enough to outgrow a nearly constant wolf load, so most bison deaths are starvation after a boom, and wolves are pinned between a territory ceiling and a small-game floor, so their numbers barely respond to prey. `tools/dynamics.py` measures this (births per capita, death shares, wolf lag). Slowing the ungulates alone opens a predator pit after the opening boom; the current experiments make wolves food-limited at both ends.
+Wolves are still pinned near a ceiling set by space (den spacing fits about six packs), so their numbers respond to prey only weakly and the graphs show prey cycles more than predator cycles. And over centuries, evolution pushes the herds bigger and more fecund, so the long-run balance drifts back toward food limits (at 40 years about 25% of bison deaths are starvation; over 700 years about 60%). Experiments in progress: prey-scaled wolf capacity (`wolfPreyRef`), a litter cap for species that rarely twin, and per-animal herd protection so herding pays (`loneIndividual`).

@@ -100,40 +100,39 @@ export const CHALLENGES: Challenge[] = [
     },
   },
   {
-    id: 'knife',
-    name: "Knife's edge",
-    blurb: 'This valley nearly loses its herd every few years. Keep every species alive for 40 years.',
+    id: 'herd',
+    name: 'Save the herd',
+    blurb: 'In this valley the wolves slowly grind the bison down until none are left. Keep every species alive for 40 years.',
     goals: ['Bison, wolves, ravens and pronghorn all alive at year 40', 'At most 5 interventions'],
-    seed: '18', scenario: 'prairie', years: 40, maxTools: 5,
+    seed: '26', scenario: 'prairie', years: 40, maxTools: 5,
     makeCheck() {
       const guard = extinctionGuard(CORE);
       return (s) => {
         const lost = guard(s);
         if (lost) return { state: 'lost', progress: lost, reason: lost };
-        if (s.year >= 40) return { state: 'won', progress: 'Forty years, and the valley is whole.', reason: 'Every species made it through forty years.' };
-        return { state: 'running', progress: `Year ${yr(s.year)} of 40. All four species alive.` };
+        if (s.year >= 40) return { state: 'won', progress: 'Forty years, and the herd is still here.', reason: 'Every species made it through forty years.' };
+        return { state: 'running', progress: `Year ${yr(s.year)} of 40. ${s.pop[Sp.Bison].toLocaleString()} bison, all four species alive.` };
       };
     },
   },
   {
     id: 'collapse',
     name: 'Pull it back',
-    blurb: 'Fifteen hundred bison and a single small pack. Bring the valley back into balance.',
-    goals: ['Nothing goes extinct', 'At year 30: at least 12 wolves and between 300 and 1,400 bison'],
-    seed: '23', scenario: 'collapse', years: 30, maxTools: 8,
+    blurb: 'Fifteen hundred bison and a single small pack. Without more predators the pronghorn boom and then crash. Keep them from collapsing.',
+    goals: ['Keep the pronghorn above 100 from year 3 on', 'Nothing goes extinct', 'Survive 30 years', 'At most 4 interventions'],
+    seed: '23', scenario: 'collapse', years: 30, maxTools: 4,
     makeCheck() {
       const guard = extinctionGuard(CORE);
       return (s) => {
         const lost = guard(s);
         if (lost) return { state: 'lost', progress: lost, reason: lost };
-        const b = s.pop[Sp.Bison], w = s.pop[Sp.Wolf];
-        const ok = w >= 12 && b >= 300 && b <= 1400;
-        if (s.year >= 30) {
-          return ok
-            ? { state: 'won', progress: 'The valley is back in balance.', reason: `Year 30: ${b.toLocaleString()} bison and ${w} wolves.` }
-            : { state: 'lost', progress: 'Out of time.', reason: `Year 30 ended with ${b.toLocaleString()} bison and ${w} wolves.` };
+        const ph = s.pop[Sp.Deer];
+        if (s.year >= 3 && ph < 100) {
+          const r = `The pronghorn crashed to ${ph} in year ${yr(s.year)}.`;
+          return { state: 'lost', progress: r, reason: r };
         }
-        return { state: 'running', progress: `Year ${yr(s.year)} of 30. ${b.toLocaleString()} bison, ${w} wolves${ok ? ' (on target)' : ''}.` };
+        if (s.year >= 30) return { state: 'won', progress: 'The valley is back in balance.', reason: `Thirty years, and the pronghorn never fell below 100.` };
+        return { state: 'running', progress: `Year ${yr(s.year)} of 30. ${ph.toLocaleString()} pronghorn${s.year < 3 ? '; the floor of 100 starts in year 4' : ', floor 100'}.` };
       };
     },
   },

@@ -17,7 +17,7 @@ import { DAY_TICKS, Sp, YEAR_TICKS, type Intervention, type Snapshot } from './s
 import type { FromWorker, ToWorker } from './sim/worker';
 
 const q = new URLSearchParams(location.search);
-// a challenge brings its own world: ?challenge=knife overrides seed and scenario
+// a challenge brings its own world: ?challenge=herd overrides seed and scenario
 const challenge = challengeById(q.get('challenge'));
 const seedStr = challenge?.seed ?? q.get('seed') ?? 'tallgrass';
 const seed = /^\d+$/.test(seedStr) ? Number(seedStr) : hashSeed(seedStr);
