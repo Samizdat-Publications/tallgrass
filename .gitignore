@@ -1,0 +1,16 @@
+.env
+.env.*
+STOP
+.claude/hooks/keep_going.log
+.claude/hooks/.keep_going_state.json
+node_modules/
+.venv/
+__pycache__/
+*.pyc
+.godot/
+dist/
+/scratch/
+*.log
+.claude/data/
+.claude/settings.local.json
+.claude/hooks/run_until.txt.bak
