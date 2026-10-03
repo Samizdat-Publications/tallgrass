@@ -17,6 +17,17 @@ export class Environment {
   rainTicks = 0;
   private weatherTimer = 0;
   private storm = false;
+  /** Slow climate swing in grass growth (0 = off): wet and dry runs of years from two incommensurate cycles. */
+  climateAmp = 0;
+  private climatePhase = -1;
+
+  /** -1 (driest) .. 1 (wettest) on the slow climate cycle; 0 when the cycle is off. */
+  climate(): number {
+    if (this.climateAmp <= 0) return 0;
+    if (this.climatePhase < 0) this.climatePhase = this.rng.next() * Math.PI * 2;
+    const y = this.state.tick / YEAR_TICKS;
+    return 0.6 * Math.sin((y / 11) * Math.PI * 2 + this.climatePhase) + 0.4 * Math.sin((y / 17.3) * Math.PI * 2 + this.climatePhase * 1.7);
+  }
 
   constructor(private rng: Rng) {}
 
@@ -82,6 +93,7 @@ export class Environment {
     let f = 0.04 + 0.96 * Math.pow(g, 1.3);
     if (this.droughtTicks > 0) f *= 1 - this.droughtSeverity;
     if (this.state.rain > 0.3 && s < 3) f *= 1 + 0.35 * this.state.rain;
+    if (this.climateAmp > 0) f *= 1 + this.climateAmp * this.climate();
     return f;
   }
 

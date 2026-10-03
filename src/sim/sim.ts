@@ -4,10 +4,7 @@ import { Environment } from './env';
 import { BucketGrid } from './grid';
 import { applyOverrides, defaultParams, Params, SpeciesParams } from './params';
 import { Rng } from './rng';
-import {
-  AGENT_STRIDE, CARCASS_STRIDE, F_ALPHA, F_INFECTED, F_JUVENILE, F_MALE, F_PREGNANT, Intervention, SimLike, Snapshot,
-  SPECIES_COUNT, SPECIES_KEYS, Sp, St, YEAR_TICKS,
-} from './types';
+import { AGENT_STRIDE, CARCASS_STRIDE, F_ALPHA, F_INFECTED, F_JUVENILE, F_MALE, F_PREGNANT, Intervention, SimLike, Snapshot, SPECIES_COUNT, SPECIES_KEYS, Sp, St, YEAR_TICKS, SEASON_TICKS } from './types';
 import { STRIDE, Vegetation } from './vegetation';
 import { generateWorld, World } from './world';
 
@@ -151,6 +148,7 @@ export class Sim implements SimLike {
     this.rng = new Rng(this.seed);
     this.world = opts.world ?? generateWorld(this.seed);
     this.env = new Environment(this.rng.fork(11));
+    this.env.climateAmp = this.p.climateAmp;
     this.veg = new Vegetation(this.world, this.p, this.env, this.rng.fork(12));
     this.a = new Agents(4096);
     this.prey = new BucketGrid(this.world.size, BUCKET);
@@ -285,6 +283,20 @@ export class Sim implements SimLike {
       if (s > bs) { bs = s; best = [x, y]; }
     }
     return best;
+  }
+
+  /**
+   * Can a grazer conceive now? By default any time outside winter. With matingWindow > 0, only in a window placed
+   * so that, after this species' gestation, the young arrive in mid-spring (a yearly birth pulse).
+   */
+  private inMatingSeason(P: SpeciesParams): boolean {
+    const s = this.env.state.season;
+    const w = this.p.matingWindow;
+    if (w <= 0) return s < 3;
+    const centre = (0.45 - P.gestation / SEASON_TICKS + 4) % 4;
+    let d = Math.abs(s - centre);
+    if (d > 2) d = 4 - d;
+    return d < w / 2;
   }
 
   // ------------------------------------------------------------------ packs
@@ -934,7 +946,7 @@ export class Sim implements SimLike {
     }
 
     // --- reproduction
-    if (mate >= 0 && this.env.state.season < 3) {
+    if (mate >= 0 && this.inMatingSeason(P)) {
       a.pregnant[i] = P.gestation;
       a.mateId[i] = a.id[mate];
       for (let k = 0; k < NG; k++) a.mateGenes[o + k] = a.genes[mate * NG + k];

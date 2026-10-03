@@ -90,6 +90,10 @@ export interface Params {
   wolfPreyRef: number;
   /** 1 = wolves judge how alone a target is by its own herd-mates nearby, not by the crowd in its grid cell. */
   loneIndividual: number;
+  /** Width in seasons of the yearly conception window that puts births in mid-spring (0 = conceive any time outside winter). */
+  matingWindow: number;
+  /** Amplitude of the slow climate cycle on grass growth (0 = off; 0.3 = +/-30%). */
+  climateAmp: number;
   // fear
   fearKill: number;
   fearKillRadius: number;
@@ -203,6 +207,8 @@ export function defaultParams(): Params {
     wolfLitterSpan: 0.5,
     wolfPreyRef: 0,
     loneIndividual: 0,
+    matingWindow: 0,
+    climateAmp: 0,
     fearKill: 0.7,
     fearKillRadius: 22,
     fearPredatorStamp: 0.0008,
