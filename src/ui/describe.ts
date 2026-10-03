@@ -1,5 +1,6 @@
 // Pure text helpers for the UI: calendar words, event sentences, chapter cards, animal captions.
 // No DOM and no CSS imports here, so this file can be unit tested under plain Node (tsx).
+import { defaultParams } from '../sim/params';
 import { SEASON_TICKS, SPECIES_NAMES, WEATHER_NAMES, YEAR_TICKS } from '../sim/types';
 import { START_SEASON } from '../sim/env';
 import type { SimEvent } from '../sim/sim';
@@ -135,8 +136,8 @@ export function regionWord(x: number, y: number): string {
 
 /** Biological lifespans in years, by species id. Sim time is compressed, so ages are shown on this scale. */
 export const LIFESPAN_YEARS = [20, 12, 15, 12, 5, 14];
-/** Sim lifespans in ticks (src/sim/params.ts), used where only a species id is known (the "elder" event). */
-export const MAX_AGE_TICKS = [3600, 9600, 7200, 3000, 3000, 3000];
+/** Sim lifespans in ticks, straight from the sim's defaults, used where only a species id is known (the "elder" event). */
+export const MAX_AGE_TICKS = defaultParams().species.map((s) => s.maxAge);
 
 /** An age in ticks on the biological scale: age / maxAge * the species' real lifespan. */
 export function bioYears(ageTicks: number, sp: number, maxAgeTicks?: number): number {
