@@ -42,13 +42,15 @@ export interface SpeciesParams {
   diet: number;
   /** Juveniles younger than this lie hidden in the grass while their mother grazes nearby (0 = never). */
   hideAge: number;
+  /** Most young per birth, however the litter gene evolves (bison almost never twin). */
+  maxLitter: number;
 }
 
 const base = (o: Partial<SpeciesParams>): SpeciesParams => ({
   maxAge: 3000, matureAge: 500, gestation: 150, birthCooldown: 400, litter: 1,
   walkSpeed: 1.4, runSpeed: 9, stamina: 120, sight: 35, metabolism: 1 / 1200, thirst: 1 / 900,
   bite: 0.006, foodValue: 0.42, meat: 1, toughness: 1, initial: 0, herdRadius: 12,
-  wariness: 0.4, defense: 0, camo: 0.5, diet: 0, hideAge: 0,
+  wariness: 0.4, defense: 0, camo: 0.5, diet: 0, hideAge: 0, maxLitter: 99,
   ...o,
 });
 

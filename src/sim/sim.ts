@@ -1148,7 +1148,7 @@ export class Sim implements SimLike {
     }
     if (!this.vitals(i, P)) return;
     if (a.pregnant[i] > 0 && --a.pregnant[i] === 0) {
-      const litter = Math.max(1, Math.round(P.litter * a.genes[i * NG + G_LITTER] + (this.rng.next() - 0.5) * 0.6));
+      const litter = Math.min(P.maxLitter, Math.max(1, Math.round(P.litter * a.genes[i * NG + G_LITTER] + (this.rng.next() - 0.5) * 0.6)));
       for (let k = 0; k < litter; k++) this.birth(i, -1, a.sp[i], a.x[i] + this.rng.range(-1, 1), a.y[i] + this.rng.range(-1, 1));
       this.logStory(i, 'birth', litter);
       a.energy[i] -= 0.12 * litter;
