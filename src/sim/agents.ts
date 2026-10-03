@@ -53,6 +53,8 @@ export class Agents {
   mother!: Int32Array;
   motherId!: Uint32Array;
   pack!: Int16Array;
+  /** Same-species herd-mates within reach at the last herd scan (herbivores). */
+  nbr!: Uint8Array;
   gen!: Uint16Array;
   kills!: Uint16Array;
   children!: Uint16Array;
@@ -106,6 +108,7 @@ export class Agents {
     this.mother = g(Int32Array, this.mother);
     this.motherId = g(Uint32Array, this.motherId);
     this.pack = g(Int16Array, this.pack);
+    this.nbr = g(Uint8Array, this.nbr);
     this.gen = g(Uint16Array, this.gen);
     this.kills = g(Uint16Array, this.kills);
     this.children = g(Uint16Array, this.children);
@@ -142,6 +145,7 @@ export class Agents {
     this.mother[i] = -1;
     this.motherId[i] = 0;
     this.pack[i] = -1;
+    this.nbr[i] = 0;
     this.gen[i] = 0;
     this.kills[i] = 0;
     this.children[i] = 0;

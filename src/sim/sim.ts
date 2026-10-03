@@ -917,6 +917,8 @@ export class Sim implements SimLike {
       }
     }
 
+    a.nbr[i] = n > 255 ? 255 : n;
+
     // --- disease: density-dependent transmission plus rare sparks in crowded herds
     if (a.infected[i] === 0 && a.immune[i] === 0) {
       let pInf = 1 - Math.pow(1 - p.diseaseBeta, infNear);
@@ -1251,7 +1253,7 @@ export class Sim implements SimLike {
             if (opportunist && (dd > 25 || (young === 1 && old === 1 && a.energy[j] > 0.35 && a.infected[j] === 0))) continue;
             const weak = 1.7 - a.energy[j] + (a.infected[j] > 0 ? 0.6 : 0);
             // the selfish herd: an animal on its own is the easy target, so staying with the herd pays
-            const lone = 1 + 2.5 * Math.exp(-crowd / 3);
+            const lone = 1 + 2.5 * Math.exp(-(p.loneIndividual > 0 ? a.nbr[j] : crowd) / 3);
             // can I actually catch it? fast prey only pays when it's young, sick or tired
             const preySpeed = Pj.runSpeed * a.genes[j * NG + G_SPEED] * (young > 1 ? 0.75 : 1) * (a.stamina[j] > 0.1 ? 1 : 0.5) * (a.infected[j] > 0 ? 0.8 : 1);
             const catchable = Math.min(1, (P.runSpeed * spdGene) / preySpeed);

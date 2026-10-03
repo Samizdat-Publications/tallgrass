@@ -86,6 +86,8 @@ export interface Params {
   wolfLitterSpan: number;
   /** Prey count (bison + 0.4 x pronghorn) at which wolf den spacing and pack size are nominal; 0 = fixed capacity. */
   wolfPreyRef: number;
+  /** 1 = wolves judge how alone a target is by its own herd-mates nearby, not by the crowd in its grid cell. */
+  loneIndividual: number;
   // fear
   fearKill: number;
   fearKillRadius: number;
@@ -197,6 +199,7 @@ export function defaultParams(): Params {
     wolfLitterBase: 0.6,
     wolfLitterSpan: 0.5,
     wolfPreyRef: 0,
+    loneIndividual: 0,
     fearKill: 0.7,
     fearKillRadius: 22,
     fearPredatorStamp: 0.0008,
