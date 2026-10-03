@@ -30,6 +30,7 @@ const SETS = {
     { name: '08_dawn', eval: "window.__timeOfDay(0.27)", wait: 4500 },
     { name: '09_top_map', eval: "window.__cam('top')", wait: 3500 },
     { name: '10_ui_graph_fast', eval: "window.__focusHerd(); window.__speed(100); document.dispatchEvent(new KeyboardEvent('keydown', { key: 'g', bubbles: true }))", wait: 9000 },
+    { name: '11_overlay_territories', eval: "document.dispatchEvent(new KeyboardEvent('keydown', { key: 'g', bubbles: true })); window.__speed(1); window.__timeOfDay(0.62); window.__cam('wide'); window.__overlay.setMode('territory')", wait: 4500 },
   ],
   // map overlays (window.__overlay from src/main.ts), after a fast-forward so packs and grazing patterns exist
   overlays: [

@@ -856,6 +856,7 @@ export class Sim implements SimLike {
     const o = i * NG;
     const juvenile = a.age[i] < P.matureAge;
     const hr = P.herdRadius, hr2 = hr * hr;
+    const spacing = p.herdSpacing, spacing2 = p.herdSepRange * p.herdSepRange, coh = p.herdCohesion;
 
     // --- herd scan (3x3 buckets)
     const g = this.prey, nb = g.nb, bs = g.bs;
@@ -879,11 +880,11 @@ export class Sim implements SimLike {
           n++;
           cx += a.x[j]; cy += a.y[j];
           avx += a.vx[j]; avy += a.vy[j];
-          if (d2 < 7) {
-            // keep a body length apart, a little more when running
+          if (d2 < spacing2) {
+            // keep some personal space from the nearest herd-mates
             const d = Math.sqrt(d2) + 0.01;
-            sepx -= dx / d * (2.7 - d);
-            sepy -= dy / d * (2.7 - d);
+            sepx -= dx / d * (spacing - d);
+            sepy -= dy / d * (spacing - d);
           }
           if (a.flee[j] > 18) { alarm++; alx += a.fleeX[j]; aly += a.fleeY[j]; if (a.flee[j] > maxFlee) maxFlee = a.flee[j]; }
           if (a.infected[j] > 0 && d2 < 16) infNear++;
@@ -1012,7 +1013,7 @@ export class Sim implements SimLike {
         dvy = sepy * 0.5;
         if (n > 0) {
           const dx = cx - x, dy = cy - y, d = Math.sqrt(dx * dx + dy * dy);
-          if (d > 7) { dvx += (dx / d) * 0.6 * herd; dvy += (dy / d) * 0.6 * herd; state = St.Walk; }
+          if (d > coh + 1) { dvx += (dx / d) * 0.6 * herd; dvy += (dy / d) * 0.6 * herd; state = St.Walk; }
         }
       } else {
         // graze while drifting toward better grass; walk on only when the patch is spent
@@ -1041,7 +1042,7 @@ export class Sim implements SimLike {
           dvy = bdy * v + sepy * 0.5;
           if (n > 0) {
             const dx = cx - x, dy = cy - y, d = Math.sqrt(dx * dx + dy * dy);
-            if (d > 6) { dvx += (dx / d) * 0.3 * herd; dvy += (dy / d) * 0.3 * herd; }
+            if (d > coh) { dvx += (dx / d) * 0.3 * herd; dvy += (dy / d) * 0.3 * herd; }
           }
         } else {
           if (bestS < p.migrateBelow) {
@@ -1066,7 +1067,7 @@ export class Sim implements SimLike {
           dvy = bdy * walk + sepy;
           if (n > 0) {
             const dx = cx - x, dy = cy - y, d = Math.sqrt(dx * dx + dy * dy);
-            if (d > 5) { dvx += (dx / d) * 0.7 * herd; dvy += (dy / d) * 0.7 * herd; }
+            if (d > coh - 1) { dvx += (dx / d) * 0.7 * herd; dvy += (dy / d) * 0.7 * herd; }
             dvx += avx * 0.3 * herd;
             dvy += avy * 0.3 * herd;
           }

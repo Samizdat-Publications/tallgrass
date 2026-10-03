@@ -28,6 +28,7 @@
 | 10-03 05:21 | Gemini `gemini-3-pro-image` | concept art: 01_moonlit_prairie -> art/concept/01_moonlit_prairie.jpg | 1 image | ~$0.13 |
 | 10-03 05:22 | Gemini `gemini-3-pro-image` | concept art: 02_early_summer -> art/concept/02_early_summer.jpg | 1 image | ~$0.13 |
 | 10-03 06:20 | Gemini `gemini-3.1-pro-preview` | blind video critique of reel.mp4 (62511 KB) | 1 call | ~$0.05 |
+| 10-03 12:00 | Gemini `gemini-3.1-pro-preview` | blind video critique of reel.mp4 (53635 KB) | 1 call | ~$0.05 |
 
 ## Downloaded third-party assets
 | Asset | Source | License | Used in |

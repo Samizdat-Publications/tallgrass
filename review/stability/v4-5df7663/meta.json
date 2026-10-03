@@ -1,0 +1,66 @@
+{
+ "args": {
+  "seeds": 20,
+  "seedBase": 1,
+  "ticks": 3600000,
+  "generations": 1000,
+  "sampleEvery": 2000,
+  "threads": 20,
+  "scenarios": [
+   "baseline"
+  ],
+  "params": {},
+  "mock": false,
+  "maxMinutes": 290,
+  "progressSec": 15,
+  "out": "C:\\Users\\stewa\\Documents\\Claude\\ecosystem-sim\\review\\stability\\v4-5df7663",
+  "argv": [
+   "--seeds",
+   "20",
+   "--generations",
+   "1000",
+   "--ticks",
+   "3600000",
+   "--sample",
+   "2000",
+   "--threads",
+   "20",
+   "--out",
+   "review/stability/v4-5df7663",
+   "--scenario",
+   "baseline",
+   "--max-minutes",
+   "290"
+  ]
+ },
+ "commit": "unknown",
+ "node": "v24.19.0",
+ "platform": "win32 x64",
+ "startedAt": "2026-10-03T13:43:08.047Z",
+ "finishedAt": "2026-10-03T16:01:50.357Z",
+ "wallSeconds": 8321.25,
+ "stopReason": null,
+ "tasks": {
+  "total": 20,
+  "completed": 20,
+  "errors": 0,
+  "aborted": 0,
+  "skipped": 0
+ },
+ "msPerTick": 3.934763,
+ "ticksRun": 30486000,
+ "ticksPerSecWall": 3664,
+ "scenarios": {
+  "baseline": {
+   "seeds": 20,
+   "completed": 20,
+   "persistencePct": {
+    "bison": 100,
+    "wolf": 100,
+    "raven": 100,
+    "pronghorn": 75
+   },
+   "maxGen": 1001.8034351145038
+  }
+ }
+}

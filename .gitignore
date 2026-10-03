@@ -14,3 +14,4 @@ dist/
 .claude/data/
 .claude/settings.local.json
 .claude/hooks/run_until.txt.bak
+review/round-03-video/*.mp4

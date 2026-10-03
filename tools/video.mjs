@@ -20,7 +20,8 @@ const SEGMENTS = [
   [22, 'window.__speed(10)'], // fast-forward, wide
   [3, "window.__focusHerd()"],
   [20, "window.__speed(100); document.dispatchEvent(new KeyboardEvent('keydown', { key: 'g', bubbles: true }))"], // years fly by with the graph
-  [12, "document.dispatchEvent(new KeyboardEvent('keydown', { key: 'g', bubbles: true })); window.__speed(1); document.dispatchEvent(new KeyboardEvent('keydown', { key: 'c', bubbles: true }))"],
+  [9, "document.dispatchEvent(new KeyboardEvent('keydown', { key: 'g', bubbles: true })); window.__speed(10); window.__cam('wide'); window.__overlay?.setMode('territory')"], // wolf territories shifting
+  [12, "window.__overlay?.setMode('none'); window.__speed(1); document.dispatchEvent(new KeyboardEvent('keydown', { key: 'c', bubbles: true }))"],
 ];
 
 const kill = setTimeout(() => { console.error('video: hard timeout'); process.exit(2); }, 12 * 60 * 1000);

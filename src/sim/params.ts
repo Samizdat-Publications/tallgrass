@@ -70,6 +70,11 @@ export interface Params {
   /** Body condition a female needs before she will conceive. */
   conceiveEnergy: number;
   migrateBelow: number;
+  /** Herbivore personal space (m) and the distance from the local herd centre beyond which an animal drifts back (m). */
+  herdSpacing: number;
+  /** Neighbors closer than this (m) push apart toward herdSpacing. */
+  herdSepRange: number;
+  herdCohesion: number;
   // fear
   fearKill: number;
   fearKillRadius: number;
@@ -172,6 +177,9 @@ export function defaultParams(): Params {
     grazeMin: 0.12,
     conceiveEnergy: 0.6,
     migrateBelow: 0.2,
+    herdSpacing: 2.7,
+    herdSepRange: Math.sqrt(7),
+    herdCohesion: 6,
     fearKill: 0.7,
     fearKillRadius: 22,
     fearPredatorStamp: 0.0008,
