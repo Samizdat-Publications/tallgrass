@@ -1,6 +1,7 @@
 // Mock page for the game UI: concept art as the scene, a fake 30 Hz data driver, and ?state= presets for screenshots.
 //
 // Query: ?state=default|graph|graphhover|inspector|wolf|menu|overlay|tool|cinematic|night|noon|card|hidden
+//        evolution|evohover (the expanded graph on its Evolution tab)
 //        &speed=10  &species=3|6  &day=0.72  &seed=bluestem-4417  &w=1
 // Page contract: window.__ready = true after the first render (fonts loaded).
 import { GameUI } from '../src/ui/ui';
@@ -59,9 +60,26 @@ function grassAt(t: number, pop: number[]): number {
   const y = t / YEAR_TICKS;
   return Math.max(0.05, Math.min(0.95, 0.52 + 0.17 * Math.sin(TAU * (y - 0.35)) - 0.00018 * (pop[0] - 620)));
 }
+// Slow, plausible evolutionary drift, in the order of TRAIT_SERIES in src/sim/worker.ts:
+// bison speed, size, coat; wolf speed, size, coat; pronghorn speed, coat. Wolves out-run the bison a little.
+function traitsAt(t: number): number[] {
+  const y = t / YEAR_TICKS;
+  const ease = (k: number) => 1 - Math.exp(-y / k);
+  const n = (k: number) => 0.0035 * Math.sin(t * 0.0009 * k + k) + 0.0004 * Math.sin(t * 0.004 * k);
+  return [
+    1 + 0.05 * ease(9) + 0.012 * Math.sin((TAU * y) / 7) + n(1), // bison speed: +5% and a slow wave
+    1 + 0.03 * ease(14) + n(2), // bison size
+    0.85 + 0.07 * ease(11) + 0.6 * n(3), // bison coat darkens
+    1 + 0.09 * ease(7) + 0.014 * Math.sin((TAU * (y - 1.2)) / 7) + n(4), // wolf speed: the arms race
+    1 - 0.02 * ease(12) + n(5), // wolf size
+    0.3 - 0.09 * ease(10) + 0.6 * n(6), // wolf coat pales
+    nSpecies > 3 ? 1 + 0.07 * ease(8) + 0.01 * Math.sin((TAU * (y - 0.4)) / 5) + n(7) : NaN, // pronghorn speed
+    nSpecies > 3 ? 0.5 + 0.06 * ease(9) + 0.6 * n(8) : NaN, // pronghorn coat
+  ];
+}
 function rowAt(t: number): HistoryRow {
   const pop = popAt(t);
-  return { tick: t, pop, grass: grassAt(t, pop) };
+  return { tick: t, pop, grass: grassAt(t, pop), traits: traitsAt(t) };
 }
 const prefill: HistoryRow[] = [];
 for (let t = 0; t <= T0; t += 60) prefill.push(rowAt(t));
@@ -100,7 +118,7 @@ function bisonDetail(): AnimalDetail {
     id: wolf ? 20977 : 18234,
     sp: wolf ? 1 : 0,
     x: 220, y: 180,
-    age: wolf ? 7100 + (tick - T0) : 2860 + (tick - T0),
+    age: wolf ? 4300 + (tick - T0) : 1500 + (tick - T0),
     maxAge: wolf ? 9600 : 3600,
     matureAge: wolf ? 1200 : 600,
     energy: wolf ? 0.74 : 0.68,
@@ -275,6 +293,10 @@ switch (state) {
   case 'graphhover':
     key('g');
     break;
+  case 'evolution':
+  case 'evohover':
+    key('e');
+    break;
   case 'menu':
     (document.querySelector('.tg-menubtn') as HTMLButtonElement).click();
     break;
@@ -293,7 +315,7 @@ switch (state) {
 }
 if (q.has('log')) key('l');
 if (q.has('hover')) setTimeout(() => hoverChart(Number(q.get('hover'))), 900);
-if (state === 'graphhover') setTimeout(() => hoverChart(0.58), 900);
+if (state === 'graphhover' || state === 'evohover') setTimeout(() => hoverChart(0.58), 900);
 if (state === 'tool') {
   // hover the armed tool's neighbour so two labels show: the armed one stays out by itself
 }

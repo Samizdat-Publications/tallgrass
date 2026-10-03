@@ -3,6 +3,7 @@ import type { AnimalDetail } from '../sim/worker';
 import { button, h, setText } from './dom';
 import { activityPhrase, animalCaption, fmtInt, lineageText, packName, plural } from './describe';
 import { icon } from './icons';
+import { traitIndex } from './traits';
 import type { UIActions } from './types';
 
 interface TraitDef {
@@ -45,7 +46,10 @@ export class Inspector {
   private activity: HTMLElement;
   private chips: HTMLElement;
   private bars = new Map<string, BarRef>();
-  private gauges: { dot: HTMLElement; tick: HTMLElement; val: HTMLElement }[] = [];
+  private gauges: { dot: HTMLElement; tick: HTMLElement; val: HTMLElement; mean: HTMLElement }[] = [];
+  /** Latest mean of each recorded trait across the species (from the newest history row). */
+  private means: number[] | null = null;
+  private sp = -1;
   private stats: HTMLElement;
   private followBtn: HTMLButtonElement;
   private followLabel: HTMLElement;
@@ -75,11 +79,12 @@ export class Inspector {
       const dot = h('span', { class: 'tg-gauge-dot' });
       const tick = h('span', { class: 'tg-gauge-tick' });
       const val = h('span', { class: 'tg-gauge-val' });
-      const gauge = h('span', { class: 'tg-gauge-track' }, tick, dot);
+      const mean = h('span', { class: 'tg-gauge-mean' });
+      const gauge = h('span', { class: 'tg-gauge-track' }, tick, mean, dot);
       traits.append(
         h('div', { class: 'tg-gauge', title: t.title }, h('div', { class: 'tg-gauge-top' }, h('span', { class: 'tg-gauge-label', text: t.label }), val), gauge),
       );
-      this.gauges.push({ dot, tick, val });
+      this.gauges.push({ dot, tick, val, mean });
     }
 
     this.followLabel = h('span', { text: 'Follow' });
@@ -104,7 +109,7 @@ export class Inspector {
       this.chips,
       bars,
       traits,
-      h('p', { class: 'tg-insp-note', text: 'Dot: this animal. Tick: where the founders started.' }),
+      h('p', { class: 'tg-insp-note', text: 'Dot: this animal. Grey tick: where the founders started. Bright tick: the species now.' }),
       this.stats,
       h('div', { class: 'tg-insp-actions' }, this.followBtn, closeBtn),
     );
@@ -157,8 +162,31 @@ export class Inspector {
     }, 220);
   }
 
+  /** The species' current mean traits (from the newest history row). Cheap: moves a few ticks. */
+  setMeans(means: number[] | null): void {
+    this.means = means;
+    if (this.sp >= 0) this.applyMeans();
+  }
+
+  private applyMeans(): void {
+    TRAITS.forEach((t, i) => {
+      const kind = t.key === 'speed' || t.key === 'size' || t.key === 'coat' ? t.key : null;
+      const idx = kind ? traitIndex(this.sp, kind) : -1;
+      const m = idx >= 0 && this.means ? this.means[idx] : NaN;
+      const el = this.gauges[i].mean;
+      if (Number.isFinite(m)) {
+        const f = Math.max(0, Math.min(1, (m - t.min) / (t.max - t.min)));
+        el.style.left = `${(f * 100).toFixed(1)}%`;
+        el.classList.add('is-on');
+      } else {
+        el.classList.remove('is-on');
+      }
+    });
+  }
+
   /** Parts that only change when a different animal is picked. */
   private rebuild(d: AnimalDetail): void {
+    this.sp = d.sp;
     this.el.style.setProperty('--sp', `var(--sp-${d.sp})`);
     setText(this.lineage, lineageText(d.sp, d.gen, d.male, d.parentA));
     TRAITS.forEach((t, i) => {
@@ -172,6 +200,7 @@ export class Inspector {
       if (parent) parent.title = `${t.title}: ${v.toFixed(2)}. The tick is where the founders started (${t.base(d.sp).toFixed(2)}).`;
     });
     this.lastKey = '';
+    this.applyMeans();
   }
 
   private refresh(d: AnimalDetail): void {

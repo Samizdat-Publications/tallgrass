@@ -770,11 +770,58 @@ button.tg-ent-b:hover {
   padding: 0 calc(10 * var(--u));
   font-size: calc(13 * var(--u));
 }
-.tg-pop.is-open .tg-pop-chips {
+.tg-pop.is-open[data-view='pop'] .tg-pop-chips:not(.tg-evo-legend),
+.tg-pop.is-open[data-view='evo'] .tg-evo-legend {
   display: flex;
   gap: calc(6 * var(--u));
   flex-wrap: nowrap;
-  margin-left: calc(6 * var(--u));
+  margin-left: calc(4 * var(--u));
+}
+.tg-pop.is-open[data-view='evo'] .tg-pop-log {
+  display: none;
+}
+.tg-tabs {
+  display: none;
+}
+.tg-pop.is-open .tg-tabs {
+  display: flex;
+  gap: calc(16 * var(--u));
+  margin-right: calc(4 * var(--u));
+}
+.tg-pop.is-open .tg-pop-title {
+  display: none;
+}
+.tg-tab {
+  position: relative;
+  padding: calc(3 * var(--u)) 0 calc(5 * var(--u));
+  font: italic 400 calc(16 * var(--u)) / 1 var(--serif);
+  color: var(--paper-dim);
+  transition: color 0.15s;
+}
+.tg-tab:hover {
+  color: var(--paper);
+}
+.tg-tab[aria-selected='true'] {
+  color: var(--paper);
+}
+.tg-tab[aria-selected='true']::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--gold);
+}
+.tg-evo-val {
+  margin-left: calc(2 * var(--u));
+  font-weight: 700;
+  font-variant-numeric: lining-nums tabular-nums;
+  color: var(--paper);
+}
+.tg-evo-legend .tg-chip {
+  gap: calc(5 * var(--u));
 }
 .tg-chip {
   display: inline-flex;
@@ -1066,6 +1113,19 @@ button.tg-ent-b:hover {
   bottom: 1px;
   width: 1px;
   background: rgba(239, 230, 208, 0.55);
+}
+.tg-gauge-mean {
+  position: absolute;
+  top: calc(-3 * var(--u));
+  bottom: calc(-3 * var(--u));
+  width: 2px;
+  margin-left: -1px;
+  border-radius: 1px;
+  background: var(--sp, var(--gold));
+  display: none;
+}
+.tg-gauge-mean.is-on {
+  display: block;
 }
 .tg-gauge-dot {
   position: absolute;

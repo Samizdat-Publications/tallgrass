@@ -5,6 +5,9 @@ import { button, h, setText, unitPx } from './dom';
 import { fmtInt, seasonPhrase, seasonOfTick, yearOfTick, yearStartTick } from './describe';
 import { icon } from './icons';
 import { GOLD, GRASS_COLOR, PAPER_DIM, SANS, SPECIES_COLORS } from './palette';
+import { hexA, niceStep, niceStepInt } from './chartutil';
+import { HERO, drawEvolution, evoTipRows, fmtPct, latest, type EvoData } from './evo';
+import { TRAIT_COUNT } from './traits';
 
 export interface Marker {
   tick: number;
@@ -34,6 +37,9 @@ export class PopGraph {
   private grassMax = 1;
   private seen: boolean[] = Array.from({ length: SPECIES_COUNT }, (_, i) => i < ALWAYS_SHOWN);
   private markers: Marker[] = [];
+  /** Mean heritable traits per history row, one array per trait (see traits.ts). NaN when absent. */
+  private traitSeries: number[][] = Array.from({ length: TRAIT_COUNT }, () => []);
+  private view: 'pop' | 'evo' = 'pop';
 
   // view state
   private expanded = false;
@@ -57,6 +63,9 @@ export class PopGraph {
   private logBtn: HTMLButtonElement;
   private expandBtn: HTMLButtonElement;
   private sub: HTMLElement;
+  private tabBtns: Record<'pop' | 'evo', HTMLButtonElement>;
+  private evoLegend: HTMLElement;
+  private evoLegendText: HTMLElement[] = [];
   private ro: ResizeObserver;
 
   constructor() {
@@ -78,12 +87,40 @@ export class PopGraph {
       html: icon('expand', 16),
       onclick: () => this.toggleExpanded(),
     });
+    const mkTab = (v: 'pop' | 'evo', label: string) =>
+      button({
+        class: 'tg-tab',
+        role: 'tab',
+        'aria-selected': String(v === 'pop'),
+        tabindex: v === 'pop' ? '0' : '-1',
+        text: label,
+        onclick: () => this.setView(v),
+        onkeydown: (e: KeyboardEvent) => {
+          if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+            e.preventDefault();
+            const next = v === 'pop' ? 'evo' : 'pop';
+            this.setView(next);
+            this.tabBtns[next].focus();
+          }
+        },
+      });
+    this.tabBtns = { pop: mkTab('pop', 'Population'), evo: mkTab('evo', 'Evolution') };
+    const tabs = h('div', { class: 'tg-tabs', role: 'tablist', 'aria-label': 'Graph view' }, this.tabBtns.pop, this.tabBtns.evo);
+    // legend for the evolution view: who is faster than the founders, right now
+    this.evoLegend = h('div', { class: 'tg-pop-chips tg-evo-legend', 'aria-label': 'Mean speed against the founders' });
+    for (const hh of HERO) {
+      const t = h('span', { class: 'tg-evo-val' });
+      this.evoLegendText.push(t);
+      this.evoLegend.append(h('span', { class: 'tg-chip', style: `--c:var(--sp-${hh.sp})` }, h('i', { class: 'tg-dot' }), hh.name, t));
+    }
     const head = h(
       'div',
       { class: 'tg-pop-head' },
       h('span', { class: 'tg-pop-title', text: 'Population' }),
+      tabs,
       this.sub,
       this.chipsEl,
+      this.evoLegend,
       h('span', { class: 'tg-grow' }),
       this.logBtn,
       this.expandBtn,
@@ -95,7 +132,7 @@ export class PopGraph {
     this.chart.addEventListener('pointermove', (e) => this.onHover(e));
     this.chart.addEventListener('pointerleave', () => this.onHover(null));
 
-    this.el = h('section', { class: 'tg-pop tg-glass tg-leaf', 'aria-label': 'Population', 'data-rows': '1' }, head, this.cellsEl, this.chartWrap);
+    this.el = h('section', { class: 'tg-pop tg-glass tg-leaf', 'aria-label': 'Population', 'data-rows': '1', 'data-view': 'pop' }, head, this.cellsEl, this.chartWrap);
 
     this.ro = new ResizeObserver(() => {
       this.unit = unitPx(this.el);
@@ -119,6 +156,7 @@ export class PopGraph {
     this.grass = [];
     this.grassMax = 1;
     this.markers = [];
+    this.traitSeries.forEach((t) => (t.length = 0));
     this.seen = this.seen.map((_, i) => i < ALWAYS_SHOWN);
     this.rebuildCells();
     this.dirty = true;
@@ -141,6 +179,7 @@ export class PopGraph {
       }
       this.grass.push(r.grass);
       if (r.grass > this.grassMax) this.grassMax = r.grass;
+      for (let k = 0; k < TRAIT_COUNT; k++) this.traitSeries[k].push(r.traits?.[k] ?? NaN);
     }
     if (seenChanged) this.rebuildCells();
     this.dirty = true;
@@ -157,6 +196,45 @@ export class PopGraph {
 
   get isExpanded(): boolean {
     return this.expanded;
+  }
+
+  get isEvolution(): boolean {
+    return this.view === 'evo';
+  }
+
+  /** Switch between the population chart and the evolution view of the expanded graph. */
+  setView(v: 'pop' | 'evo'): void {
+    this.view = v;
+    this.el.dataset.view = v;
+    for (const k of ['pop', 'evo'] as const) {
+      this.tabBtns[k].setAttribute('aria-selected', String(k === v));
+      this.tabBtns[k].tabIndex = k === v ? 0 : -1;
+    }
+    this.chart.setAttribute('aria-label', v === 'evo' ? 'Mean speed, size and coat of each species over time, against the founders' : 'Population of each species over time');
+    this.tip.classList.remove('is-on');
+    this.dirty = true;
+    this.lastDraw = 0;
+  }
+
+  /** E key: open the graph on the evolution view, or flip between the two views when it is already open. */
+  toggleEvolution(): void {
+    if (!this.expanded) {
+      this.toggleExpanded();
+      this.setView('evo');
+    } else {
+      this.setView(this.view === 'evo' ? 'pop' : 'evo');
+    }
+  }
+
+  /** Latest mean trait values (NaN where unknown), for the inspector's second tick. Null before any history. */
+  latestTraits(): number[] | null {
+    if (!this.ticks.length) return null;
+    const d = this.evoData();
+    return this.traitSeries.map((_, k) => latest(d, k));
+  }
+
+  private evoData(): EvoData {
+    return { ticks: this.ticks, series: this.traitSeries };
   }
 
   toggleExpanded(): void {
@@ -248,7 +326,7 @@ export class PopGraph {
   private draw(): void {
     if (!this.unit) this.unit = unitPx(this.el);
     if (this.expanded) {
-      this.drawChart(this.hoverX);
+      this.drawExpanded();
     } else {
       const n = this.ticks.length;
       if (n >= 2) {
@@ -348,6 +426,40 @@ export class PopGraph {
   private plotRect(w: number, ht: number) {
     const u = this.unit;
     return { l: 40 * u, r: w - 38 * u, t: 10 * u, b: ht - 22 * u };
+  }
+
+  private drawExpanded(): void {
+    if (this.view === 'evo') this.drawEvo();
+    else this.drawChart(this.hoverX);
+  }
+
+  private drawEvo(): void {
+    const f = this.fit(this.chart);
+    if (!f) return;
+    const u = this.unit || 1;
+    const d = this.evoData();
+    const idx = drawEvolution(f.g, f.w, f.h, u, d, this.hoverX);
+    // legend chips carry the latest value for each line
+    HERO.forEach((hh, i) => {
+      const v = latest(d, hh.index);
+      setText(this.evoLegendText[i], Number.isFinite(v) ? fmtPct((v - 1) * 100) : 'absent');
+    });
+    if (idx >= 0) {
+      const t = this.ticks[idx];
+      const rows: HTMLElement[] = [h('div', { class: 'tg-tip-h', text: `Year ${yearOfTick(t)}, ${seasonPhrase(seasonOfTick(t))}` })];
+      for (const r of evoTipRows(d, idx)) {
+        rows.push(h('div', { class: 'tg-tip-r', style: `--c:${r.color}` }, h('i', { class: 'tg-dot' }), h('span', { text: r.label }), h('b', { text: r.value })));
+      }
+      this.tip.replaceChildren(...rows);
+      this.tip.classList.add('is-on');
+      const x = evoX(f.w, u, t, this.ticks);
+      const tw = this.tip.offsetWidth;
+      const left = x + 14 * u + tw > f.w ? x - 14 * u - tw : x + 14 * u;
+      this.tip.style.left = `${Math.max(0, left)}px`;
+      this.tip.style.top = `${8 * u}px`;
+    } else {
+      this.tip.classList.remove('is-on');
+    }
   }
 
   private drawChart(hoverX: number): void {
@@ -606,29 +718,15 @@ export class PopGraph {
     if (this.hoverRaf) return;
     this.hoverRaf = requestAnimationFrame(() => {
       this.hoverRaf = 0;
-      if (this.expanded) this.drawChart(this.hoverX);
+      if (this.expanded) this.drawExpanded();
     });
   }
 }
 
-// ---- helpers -------------------------------------------------------------------------------------------------
-
-function niceStep(max: number, target: number): number {
-  const raw = Math.max(max, 1) / target;
-  const p = Math.pow(10, Math.floor(Math.log10(raw)));
-  const f = raw / p;
-  return (f < 1.5 ? 1 : f < 3 ? 2 : f < 7 ? 5 : 10) * p;
-}
-
-/** Whole-year tick spacing: 1, 2, 5, 10, 20, 50, ... */
-function niceStepInt(spanYears: number, maxTicks: number): number {
-  const steps = [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000];
-  for (const s of steps) if (spanYears / s <= maxTicks) return s;
-  return 10000;
-}
-
-/** "#RRGGBB" to "rgba(r,g,b,a)". */
-function hexA(hex: string, a: number): string {
-  const n = parseInt(hex.slice(1), 16);
-  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
+/** Pixel x of a tick in the evolution hero chart (same mapping as drawEvolution). */
+function evoX(w: number, u: number, tick: number, ticks: number[]): number {
+  const L = 40 * u, R = 54 * u;
+  const t0 = ticks[0];
+  const t1 = Math.max(ticks[ticks.length - 1], t0 + YEAR_TICKS * 0.5);
+  return L + ((tick - t0) / (t1 - t0)) * (w - L - R);
 }

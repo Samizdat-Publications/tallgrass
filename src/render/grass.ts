@@ -68,7 +68,7 @@ const RING_EDGE = [14, 40, 90, 175]; // outer edge (m) of each level, measured w
 const FADE_START = 120;
 const FADE_END = 175;
 const HALF_DIST = 18; // D(d) = D0 / (1 + (d / HALF_DIST)^2)^DENS_POW
-const FLOWER_BASE = 0.012; // fraction of blades that are flowers at peak bloom, before stand clustering
+const FLOWER_BASE = 0.018; // fraction of blades that are flowers at peak bloom, before stand clustering
 const DENS_POW = 0.8; // below 1 keeps the mid and far field dense enough to read as a field, not stipple
 const VERTEX_ROWS: number[][] = [
   [0, 0.18, 0.4, 0.62, 0.8, 0.9, 0.95],
@@ -99,9 +99,9 @@ type Level = {
 type PalKey = [number, number, number, number]; // season, base, mid, tip (sRGB hex)
 // living grass: fresh spring green, blue-green summer tallgrass, olive late season, dull straw-green in winter
 const GREEN_KEYS: PalKey[] = [
-  [0.0, 0x2f5a1e, 0x6aa332, 0xa8d45a],
-  [0.5, 0x2a5420, 0x5e9a38, 0x9cc860],
-  [1.0, 0x234a2a, 0x4a8a4c, 0x88b87c],
+  [0.0, 0x2f5a1e, 0x66a032, 0xa4d05a],
+  [0.5, 0x2a5420, 0x5a9638, 0x98c460],
+  [1.0, 0x234a2c, 0x4c8050, 0x86b084],
   [1.5, 0x2a4a26, 0x587f40, 0x93b062],
   [2.0, 0x33452a, 0x66773a, 0x9aa05a],
   [2.5, 0x3a4528, 0x6d703a, 0x9c9a58],
@@ -114,8 +114,8 @@ const DRY_KEYS: PalKey[] = [
   [0.0, 0x5a4a28, 0x8f7a4a, 0xbba46a],
   [0.5, 0x5e4c28, 0x97814a, 0xc2ab6e],
   [1.0, 0x5e4a20, 0xa08838, 0xcfb25a],
-  [1.5, 0x6a4a1a, 0xbc8c34, 0xe6bc64],
-  [1.9, 0x70501c, 0xc9923a, 0xf0c470],
+  [1.5, 0x6a4a1a, 0xbe8a30, 0xe8ba60],
+  [1.9, 0x74481a, 0xcc8c2e, 0xf0bc62],
   [2.3, 0x6a3c16, 0xb8742a, 0xe09a48],
   [2.7, 0x5a2c12, 0xa4562a, 0xd07e3c],
   [3.1, 0x80704a, 0xbfae7e, 0xdccfa2],
@@ -403,7 +403,7 @@ void main() {
   float slopeM = length(st0.rg * 2.0 - 1.0);
   float ridge = max(1.0 - smoothstep(0.40, 0.66, moist), 0.8 * smoothstep(0.22, 0.5, slopeM));
   float pres = smoothstep(0.015, 0.14, bioEff) * (1.0 - 0.72 * cover) * (1.0 - smoothstep(0.3, 0.7, water)) * (1.0 - 0.5 * burn);
-  pres *= mix(0.55, 1.0, smoothstep(0.28, 0.62, tusC)) * (1.0 - 0.18 * ridge);
+  pres *= mix(0.62, 1.0, smoothstep(0.28, 0.62, tusC)) * (1.0 - 0.18 * ridge);
   if (rThin >= keepD * pres) { cullBlade(); return; }
 
   float gy = terrainH(p);
@@ -521,7 +521,7 @@ void main() {
   vec3 Ng = normalize(vec3(-(st0.r * 2.0 - 1.0), 1.0, -(st0.g * 2.0 - 1.0)));
 
   float stub = 1.0 - smoothstep(0.06, 0.42, bio);
-  float dry = uCure + (0.55 - moist) * uMoistK - st1.g * 0.28 + (patch1 - 0.5) * 0.3 + (rC - 0.5) * 0.22 + stub * 0.55 + 0.3 * ridge;
+  float dry = uCure + (0.55 - moist) * uMoistK - st1.g * 0.28 + (patch1 - 0.5) * 0.3 + (rC - 0.5) * 0.22 * (1.0 - smoothstep(25.0, 90.0, dist)) + stub * 0.55 + 0.3 * ridge;
 
   vUv = vec2(side, vg);
   vN = Nb;
@@ -615,10 +615,16 @@ void main() {
   float fType = vP3.x;
   float tusC = vP3.z;
   float ridge = vP3.w;
-  vec3 aGreen = grad3(uGreenB, uGreenM, uGreenT, v);
-  vec3 aDry = grad3(uDryB, uDryM, uDryT, v);
+  // seen from above or from afar the dark blade bases are hidden under the canopy: lift them, or the sparse
+  // thinned blades show up as dark flecks on the ground
+  float baseLift = max(smoothstep(0.3, 0.85, V.y), smoothstep(30.0, 90.0, vP2.y));
+  float vc = mix(v, 0.55 + 0.45 * v, baseLift);
+  vec3 aGreen = grad3(uGreenB, uGreenM, uGreenT, vc);
+  vec3 aDry = grad3(uDryB, uDryM, uDryT, vc);
   vec3 albedo = mix(aGreen, aDry, dry);
-  albedo *= 0.8 + 0.4 * bright;
+  // per-blade variation fades with distance so the mid field is smooth, not salt and pepper
+  float nearK = 1.0 - smoothstep(25.0, 90.0, vP2.y);
+  albedo *= mix(1.0, 0.8 + 0.4 * bright, nearK);
   // broad swaths (already faded out with distance), patches and tussocks: gentle, never a regular pattern
   albedo *= 1.0 + 0.55 * (vP2.z - 0.5);
   albedo *= 0.9 + 0.2 * vP2.w;
@@ -626,7 +632,7 @@ void main() {
   // ridge grass reads russet and a little paler (little bluestem)
   albedo *= mix(vec3(1.0), vec3(1.07, 0.93, 0.8), ridge * dry * 0.75);
   albedo *= 1.0 + 0.1 * smoothstep(0.15, 0.0, abs(sideX)) - 0.12 * smoothstep(0.6, 1.0, abs(sideX));
-  albedo *= vec3(1.0 + 0.14 * (hue - 0.5), 1.0, 1.0 - 0.3 * (hue - 0.5));
+  albedo *= mix(vec3(1.0), vec3(1.0 + 0.14 * (hue - 0.5), 1.0, 1.0 - 0.3 * (hue - 0.5)), nearK);
   albedo = mix(albedo, uStubble * (0.7 + 0.6 * bright), 0.85 * stub);
   // seed heads: pale green-straw while the grass is green, tan once it has cured
   float seedTip = seed * smoothstep(0.82, 0.9, v);
@@ -675,9 +681,13 @@ void main() {
   // a slope turned away from the sun shades the blades standing on it (they are only a metre tall), which the
   // horizon map does not cover
   shadow *= smoothstep(-0.12, 0.12, dot(Ng, L));
-  vec3 Nl = sn(mix(Nf, Ng, 0.4));
+  // with distance the blades stand in for a continuous sward, so light them like the ground they stand on:
+  // otherwise randomly oriented thin blades read as dark pepper on the sunlit terrain between them
+  float farK = smoothstep(25.0, 85.0, vP2.y);
+  vec3 Nl = sn(mix(Nf, Ng, 0.4 + 0.5 * farK));
   float ndl = dot(Nl, L);
   float wrap = saturate(ndl * 0.8 + 0.2);
+  wrap = mix(wrap, max(wrap, 0.62), farK);
   vec3 diffuse = albedo * uSunColor * wrap * RECIPROCAL_PI * shadow;
 
   float canopyT = mix(0.35, 1.0, smoothstep(0.0, 0.8, vP2.x));
@@ -700,10 +710,10 @@ void main() {
   irr += mix(uAmbGround, uAmbSky, 0.5 * Namb.y + 0.5);
 #endif
   float aoDist = 1.0 - smoothstep(12.0, 75.0, vP2.y);
-  float ao = mix(uAO, 1.0, smoothstep(0.0, 0.7, v));
-  ao = mix(1.0, ao, (0.4 + 0.6 * bio) * aoDist);
+  float ao = mix(uAO, 1.0, smoothstep(0.0, 0.7, vc));
+  ao = mix(1.0, ao, (0.4 + 0.6 * bio) * aoDist * (1.0 - 0.7 * baseLift));
   // shorter blades sit under taller ones: darker overall, which gives the field its light and dark structure
-  float canopy = mix(1.0, mix(0.45, 1.0, smoothstep(0.0, 0.75, vP2.x)), 0.25 + 0.6 * aoDist);
+  float canopy = mix(1.0, mix(0.45, 1.0, smoothstep(0.0, 0.75, vP2.x)), 0.08 + 0.77 * aoDist);
   ao *= canopy;
   irr += uSunColor * uBounce * (0.5 + 0.5 * clamp(L.y, 0.0, 1.0));
   vec3 ambient = albedo * irr * RECIPROCAL_PI * ao;

@@ -20,8 +20,10 @@ Then open http://localhost:5199/ (Chrome or Edge). The first load takes a few se
 4. Try the menu's "Yellowstone return" scenario.
 
 ## Status (honest)
-- **Playable vertical slice:** done (03:00). Screenshots: `review/round-01/`.
-- **Stability:** NOT yet at the acceptance bar. Prey (bison, pronghorn, ravens) persisted 16/16 in a 40-year 16-seed run at one point, but that run had a bug that silently sterilized dispersing wolves. With the bug fixed, wolves boom and crash the prey. Balancing is in progress (see `REVIEWS.md` and `DECISIONS.md`).
+- **Playable vertical slice:** done (03:00). Review round 1 stills: `review/round-01/` (critic scores and triage in `REVIEWS.md`). Round-1 fixes are in progress.
+- **Predators control the herd (measured):** `review/stability/cascade/trophic_cascade.png`. Same three worlds, two scenarios: with no predators the herd climbs to 2,500 to 3,000 on overgrazed grass (mean biomass about 0.27). When 12 wolves arrive in year 3, the herd settles at 300 to 600 and the grass recovers to 0.45 to 0.53. That is the Yellowstone trophic cascade, emergent, not scripted.
+- **Persistence:** stability checkpoint v1 (commit f1d6e2c), 16 seeds x 40 years: wolves 16/16, bison 15/16, ravens 15/16, pronghorn 14/16 (all at or above the 80% bar). The full 20-seed, 1,000-generation acceptance run is in progress (see the stability section below once it lands).
+- **Getting there took real fixes, not knob-twiddling** (details in `DECISIONS.md`): a bug that silently sterilized dispersing wolves, herds starving beside green pasture (they now migrate), wolves with omniscient prey-finding (now scent scales with herd size), hidden pronghorn fawns, inter-pack strife, and small game for lean times.
 
 ## Blocked / workarounds
 - **PixelLab:** no key. `PIXELLAB_API_KEY` is blank in Noclip's `.env` and not in environment variables. Workaround: icons are hand-made inline SVG.

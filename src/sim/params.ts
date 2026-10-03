@@ -92,6 +92,7 @@ export interface Params {
   wolfTestGiveUp: number;
   wolfStrife: number;
   wolfScentHerd: number;
+  wolfScentPow: number;
   wolfSmallGame: number;
   ravenNestSites: number;
   // carcasses
@@ -172,6 +173,7 @@ export function defaultParams(): Params {
     wolfTestGiveUp: 0.05,
     wolfStrife: 0.002,
     wolfScentHerd: 12,
+    wolfScentPow: 1,
     wolfSmallGame: 1.1,
     ravenNestSites: 320,
     carcassRot: 0.0009,

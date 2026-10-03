@@ -105,7 +105,10 @@ export class GameUI {
 
     this.slate.update(f.env);
     this.time.update(f.speed, f.ticksPerSec, now);
-    if (f.history.length) this.pop.addHistory(f.history);
+    if (f.history.length) {
+      this.pop.addHistory(f.history);
+      this.inspector.setMeans(this.pop.latestTraits());
+    }
     if (f.events.length) this.handleEvents(f.events, now, f.tick);
     this.pop.update(now, f.pop);
     this.inspector.update(f.selected, f.following);
@@ -171,6 +174,7 @@ export class GameUI {
     this.seed = f.seed;
     this.scenario = f.scenario;
     this.pop.reset();
+    this.inspector.setMeans(null);
     this.chron.clear();
     this.chapterCard.clear();
     this.queued = null;
@@ -259,6 +263,9 @@ export class GameUI {
         break;
       case 'l':
         if (!e.repeat) this.pop.toggleLog();
+        break;
+      case 'e':
+        if (!e.repeat) this.pop.toggleEvolution();
         break;
       case 'f':
         if (!e.repeat && this.selectedId !== null) this.actions.follow(this.followingId === this.selectedId ? null : this.selectedId);

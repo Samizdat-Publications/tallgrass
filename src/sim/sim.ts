@@ -407,7 +407,7 @@ export class Sim implements SimLike {
         for (let k = 0; k < litter; k++) {
           const c = this.birth(f, m, Sp.Wolf, this.packDenX[pk] + this.rng.range(-3, 3), this.packDenY[pk] + this.rng.range(-3, 3));
           a.pack[c] = pk;
-          a.energy[c] = 0.8;
+          a.energy[c] = 0.42; // born lean: pups live on what the pack brings home from kills
         }
         // a big, well-fed pack can raise a second litter from another female
         if (this.packSize[pk] >= 6 && this.packStore[pk] > 3) {
@@ -421,7 +421,7 @@ export class Sim implements SimLike {
             for (let k = 0; k < l2; k++) {
               const c = this.birth(f2, m, Sp.Wolf, this.packDenX[pk] + this.rng.range(-3, 3), this.packDenY[pk] + this.rng.range(-3, 3));
               a.pack[c] = pk;
-              a.energy[c] = 0.8;
+              a.energy[c] = 0.42;
             }
           }
         }
@@ -586,7 +586,7 @@ export class Sim implements SimLike {
         const wx = (xx + 0.5) * bs, wy = (yy + 0.5) * bs;
         if (Math.hypot(wx - dx0, wy - dy0) > range) continue;
         // big herds are easy to scent; a few scattered animals mostly go unnoticed (a refuge for sparse prey)
-        if (this.rng.next() > 1 - Math.exp(-cnt / this.p.wolfScentHerd)) continue;
+        if (this.rng.next() > 1 - Math.exp(-Math.pow(cnt / this.p.wolfScentHerd, this.p.wolfScentPow))) continue;
         const v = cnt / (Math.hypot(wx - cx, wy - cy) + 50);
         if (v > best) { best = v; bxw = wx; byw = wy; }
       }

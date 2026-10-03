@@ -21,6 +21,7 @@ const KEYS: [string[], string][] = [
   [['F'], 'follow the selected animal'],
   [['G'], 'grow or shrink the graph'],
   [['L'], 'log scale on the graph'],
+  [['E'], 'evolution view of the graph'],
   [['C'], 'cinematic mode'],
   [['H'], 'hide the interface'],
   [['Esc'], 'let go, disarm, close'],
