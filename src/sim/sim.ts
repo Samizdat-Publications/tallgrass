@@ -97,6 +97,8 @@ export class Sim implements SimLike {
   packHuntX = new Float32Array(MAX_PACKS);
   packHuntY = new Float32Array(MAX_PACKS);
   private packEnergy = new Float32Array(MAX_PACKS);
+  /** Search image: how keen each pack is on each prey species (learned from recent kills). */
+  packPref = new Float32Array(MAX_PACKS * SPECIES_COUNT);
   private packCandF = new Int32Array(MAX_PACKS);
   private packCandM = new Int32Array(MAX_PACKS);
   private packCx = new Float32Array(MAX_PACKS);
@@ -107,6 +109,7 @@ export class Sim implements SimLike {
   /** Counters since the last sample() call. */
   private cKills = 0;
   private cKillsDeer = 0;
+  private cStrife = 0;
   private cChases = 0;
   private cGiveUps = 0;
   private cBirths = new Int32Array(SPECIES_COUNT);
@@ -271,6 +274,7 @@ export class Sim implements SimLike {
         this.packFounded[pk] = this.tick;
         this.packSerial[pk] = this.nextPackSerial++;
         this.packSize[pk] = 0;
+        for (let s = 0; s < SPECIES_COUNT; s++) this.packPref[pk * SPECIES_COUNT + s] = 0.7;
         if (this.tick > 0) this.event('packFounded', Sp.Wolf, x, y, this.packSerial[pk], 0);
         return pk;
       }
@@ -367,8 +371,9 @@ export class Sim implements SimLike {
       const am = this.packAlphaM[pk];
       if (am < 0 || !a.alive[am] || a.pack[am] !== pk || a.sp[am] !== Sp.Wolf) this.packAlphaM[pk] = this.packCandM[pk];
       if (!a.same(this.packTarget[pk], this.packTargetId[pk])) this.packTarget[pk] = -1;
-      // the store slowly spoils
+      // the store slowly spoils; the search image slowly relaxes toward neutral
       this.packStore[pk] *= 0.9995;
+      if ((this.tick & 63) === 0) for (let s = 0; s < SPECIES_COUNT; s++) { const k = pk * SPECIES_COUNT + s; this.packPref[k] += (0.7 - this.packPref[k]) * 0.01; }
       // every 20 ticks, sniff out the best prey concentration; range widens when the pack is hungry
       if ((this.tick + pk) % 20 === 0) {
         const hungry = this.packEnergy[pk] / this.packSize[pk] < 0.55;
@@ -395,6 +400,22 @@ export class Sim implements SimLike {
           const c = this.birth(f, m, Sp.Wolf, this.packDenX[pk] + this.rng.range(-3, 3), this.packDenY[pk] + this.rng.range(-3, 3));
           a.pack[c] = pk;
           a.energy[c] = 0.8;
+        }
+        // a big, well-fed pack can raise a second litter from another female
+        if (this.packSize[pk] >= 6 && this.packStore[pk] > 1.2) {
+          let f2 = -1;
+          for (let k = 0; k < this.predN; k++) {
+            const i = this.predList[k];
+            if (a.alive[i] && a.pack[i] === pk && !a.male[i] && i !== f && a.age[i] >= P.matureAge && a.energy[i] > 0.5) { f2 = i; break; }
+          }
+          if (f2 >= 0) {
+            const l2 = Math.max(1, Math.round(litter * 0.6));
+            for (let k = 0; k < l2; k++) {
+              const c = this.birth(f2, m, Sp.Wolf, this.packDenX[pk] + this.rng.range(-3, 3), this.packDenY[pk] + this.rng.range(-3, 3));
+              a.pack[c] = pk;
+              a.energy[c] = 0.8;
+            }
+          }
         }
       }
     }
@@ -1056,7 +1077,8 @@ export class Sim implements SimLike {
             // can I actually catch it? fast prey only pays when it's young, sick or tired
             const preySpeed = Pj.runSpeed * a.genes[j * NG + G_SPEED] * (young > 1 ? 0.75 : 1) * (a.stamina[j] > 0.1 ? 1 : 0.5) * (a.infected[j] > 0 ? 0.8 : 1);
             const catchable = Math.min(1, (P.runSpeed * spdGene) / preySpeed);
-            const score = (young * old * weak * lone * catchable * catchable) / (Pj.toughness * a.genes[j * NG + G_SIZE]) / (dd + 15);
+            const pref = pk >= 0 ? this.packPref[pk * SPECIES_COUNT + a.sp[j]] : 0.7;
+            const score = (pref * young * old * weak * lone * catchable * catchable) / (Pj.toughness * a.genes[j * NG + G_SIZE]) / (dd + 15);
             if (score > bestS) { bestS = score; best = j; }
           }
         }
@@ -1229,6 +1251,14 @@ export class Sim implements SimLike {
             if (!this.firstKillLogged) { this.firstKillLogged = true; this.event('firstKill', Sp.Wolf, a.x[t], a.y[t], a.sp[t], 0); }
             this.veg.stamp(this.veg.fear, a.x[t], a.y[t], p.fearKillRadius, p.fearKill, 1);
             if (a.sp[t] === Sp.Deer) this.cKillsDeer++;
+            if (pk >= 0) {
+              // a successful kill sharpens the search image for that prey and dulls the others
+              const o2 = pk * SPECIES_COUNT;
+              for (let s = 0; s < SPECIES_COUNT; s++) {
+                const v = this.packPref[o2 + s];
+                this.packPref[o2 + s] = s === a.sp[t] ? Math.min(1, v + 0.12) : Math.max(0.25, v * 0.94);
+              }
+            }
             this.die(t, 'killed');
             a.target[i] = -1;
             if (pk >= 0) this.packTarget[pk] = -1;
@@ -1237,6 +1267,24 @@ export class Sim implements SimLike {
             a.energy[i] -= 0.12;
           }
         }
+      }
+    }
+    // territorial strife: rival packs that meet fight, and the outnumbered side can lose a wolf
+    if (pk >= 0 && (i + this.tick) % 8 === 0 && p.wolfStrife > 0) {
+      const g = this.pred;
+      const b = g.bucketOf(a.x[i], a.y[i]);
+      for (let k = g.start[b], e = g.start[b + 1]; k < e; k++) {
+        const j = g.items[k];
+        if (!a.alive[j] || a.sp[j] !== Sp.Wolf || a.pack[j] < 0 || a.pack[j] === pk) continue;
+        const dx = a.x[j] - a.x[i], dy = a.y[j] - a.y[i];
+        if (dx * dx + dy * dy > 100) continue;
+        const mine = this.packSize[pk], theirs = this.packSize[a.pack[j]];
+        // hungry wolves trespass and fight harder
+        // trespassers (outside their own territory) take the brunt of it
+        const home = Math.hypot(a.x[i] - this.packDenX[pk], a.y[i] - this.packDenY[pk]) < p.wolfTerritory;
+        const pDie = p.wolfStrife * 8 * (theirs / (mine + theirs)) * (1.5 - a.energy[i]) * (home ? 0.25 : 1);
+        if (this.rng.next() < pDie) { this.cStrife++; this.die(i, 'killed'); return; }
+        break;
       }
     }
     // pups draw on the pack store
@@ -1479,6 +1527,7 @@ export class Sim implements SimLike {
     row.infected_bison = infBison;
     row.kills = this.cKills;
     row.kills_pronghorn = this.cKillsDeer;
+    row.strife_wolf = this.cStrife;
     row.births_pronghorn = this.cBirths[Sp.Deer];
     row.starved_pronghorn = this.cStarve[Sp.Deer];
     row.chases = this.cChases;
@@ -1500,6 +1549,7 @@ export class Sim implements SimLike {
     row.drought = this.env.droughtTicks > 0 ? 1 : 0;
     this.cKills = 0;
     this.cKillsDeer = 0;
+    this.cStrife = 0;
     this.cChases = 0;
     this.cGiveUps = 0;
     this.cBirths.fill(0);

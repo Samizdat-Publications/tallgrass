@@ -4,7 +4,7 @@ import { Sim, SimEvent } from './sim';
 import { Intervention, SPECIES_COUNT, TICKS_PER_SECOND } from './types';
 
 export type ToWorker =
-  | { type: 'init'; seed: number; params?: Record<string, number> }
+  | { type: 'init'; seed: number; params?: Record<string, number>; schedule?: { tick: number; iv: Intervention }[] }
   | { type: 'speed'; speed: number }
   | { type: 'apply'; iv: Intervention }
   | { type: 'select'; id: number | null }
@@ -72,6 +72,7 @@ const VEG_EVERY_MS = 200;
 const SKIP_KINDS = new Set(['stampede', 'packFounded', 'packLost', 'drought', 'outbreak', 'extinct', 'fire', 'elder', 'record']);
 
 let sim: Sim | null = null;
+let schedule: { tick: number; iv: Intervention }[] = [];
 let speed = 1;
 let selectedId: number | null = null;
 let eventCursor = 0;
@@ -108,6 +109,7 @@ function detail(id: number): AnimalDetail | null {
 
 function record(): void {
   if (!sim) return;
+  while (schedule.length && sim.tick >= schedule[0].tick) sim.apply(schedule.shift()!.iv);
   if (sim.tick % HISTORY_EVERY === 0) {
     const pop = sim.populations();
     history.push({ tick: sim.tick, pop, grass: sim.veg.meanGrass() });
@@ -181,6 +183,7 @@ ctx.onmessage = (e: MessageEvent<ToWorker>) => {
   switch (m.type) {
     case 'init':
       sim = new Sim({ seed: m.seed, params: m.params });
+      schedule = (m.schedule ?? []).slice().sort((x, y) => x.tick - y.tick);
       eventCursor = 0;
       history = [];
       for (let k = 0; k < 1; k++) record();

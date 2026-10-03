@@ -7,11 +7,11 @@ Deadline: `.claude/hooks/run_until.txt` (2026-10-04 12:00). Owner rulings live i
 |---|---|---|
 | M0 | Phase 0 permission sweep, repo, env, API smoke | DONE 01:20 |
 | M1 | DESIGN.md, ADR-001 (TS + Three.js), world generator, shared contract, capture tool | DONE 01:50 |
-| M2 | Sim core: vegetation, bison, wolves, ravens, carcasses; deterministic; createSim/SimLike | in progress (lead) |
-| M3 | Headless harness: batch runner, metrics, charts (builder) | in progress |
-| M4 | Render foundation (engine, terrain, water, sky, trees, post, camera) (builder) | in progress |
-| M5 | Grass field (builder) / Animal layer (builder) | in progress |
-| M6 | Vertical slice: worker + renderer + minimal HUD (time controls, pop graph), playable via `npm run dev` | todo |
+| M2 | Sim core: vegetation, bison, wolves, ravens, carcasses, pronghorn; deterministic; createSim/SimLike | DONE 02:15, balancing ongoing |
+| M3 | Headless harness: batch runner, metrics, charts (builder) | DONE |
+| M4 | Render foundation (engine, terrain, water, sky, trees, post, camera) (builder) | DONE |
+| M5 | Grass field (builder) / Animal layer (builder) | DONE (grass NaN bug in engine being fixed) |
+| M6 | Vertical slice: worker + renderer + full UI, playable via `npm run dev` | DONE 02:55 (pending grass fix) |
 | M7 | Balance to stability acceptance (20 seeds, 1000+ bison gens, shocks) | todo |
 | M8 | Review round 1 (stills + charts), fix top issues | todo |
 | M9 | Depth: pronghorn, rabbits, cougar, genetics visible, events + chronicle, god tools, scenarios, seeds | todo |

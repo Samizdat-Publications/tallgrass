@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Tallgrass: UI dev page</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  html, body { margin: 0; height: 100%; background: #14100a; overflow: hidden; }
+  /* the concept art stands in for the 3D scene */
+  #scene {
+    position: fixed; inset: 0;
+    background: #14100a url(../art/concept/00_prairie_golden_hour.jpg) center / cover no-repeat;
+  }
+  body[data-look='night'] #scene { filter: brightness(0.28) saturate(0.7) hue-rotate(-12deg); }
+  body[data-look='noon'] #scene { filter: brightness(1.45) saturate(0.7) contrast(0.9); }
+  #ui-root { position: fixed; inset: 0; }
+</style>
+</head>
+<body>
+<div id="scene"></div>
+<div id="ui-root"></div>
+<script type="module" src="./ui.ts"></script>
+</body>
+</html>

@@ -1,24 +1,23 @@
 # NEXT SESSION: pick up here
 
-**Updated:** 2026-10-03 ~01:55
+**Updated:** 2026-10-03 ~03:00
 
-## Right now
-- Lead (Opus) is writing the sim core in `src/sim/` (sim.ts, agents, vegetation, behaviors). Contract: `src/sim/types.ts` (Snapshot, AGENT_STRIDE=12, SimLike, Intervention). World gen: `src/sim/world.ts` (done).
-- Four builder agents (general-purpose, model sonnet) are running in the background on disjoint files:
-  1. render foundation: src/render/{engine,terrain,water,sky,trees,post,camera}.ts + dev/terrain.html
-  2. grass: src/render/grass.ts + dev/grass.html
-  3. animals: src/render/animals.ts + src/render/models/ + dev/animals.html
-  4. harness: src/headless/{batch,batchWorker,metrics,mocksim,run,scenarios}.ts + tools/charts.py
-  Their screenshots land in scratch/b1..b3. Review what comes back before merging; commit after review.
+## State
+- The game runs end to end: `npm run dev` then open http://localhost:5199/ (or `node tools/capture.mjs --page index.html --out x.png`).
+  - `src/main.ts` wires the sim worker (`src/sim/worker.ts`), Engine (`src/render/engine.ts`), GrassField, AnimalLayer and GameUI (`src/ui/ui.ts`).
+  - Query params: `seed`, `scenario` (prairie|yellowstone|island|drought|collapse, see `src/scenarios.ts`), `cam` (wide|low|top; omitted = fly to the biggest herd), `speed`, `q=medium`, `tm`, `grass=0`.
+  - Capture hooks: `__engine`, `__cam`, `__speed`, `__step`, `__ui`, `__select`, `__animals`, `__grass`, `__focusHerd`.
+- **Open bug (being fixed by the grass builder, agent a7043abcf9209d6f5):** the grass makes the whole frame black whenever it is visible (NaN/Inf into bloom). `grass=0` works around it.
+- Sim balance (16 seeds x 40 years, `scratch/long3`): bison, pronghorn and ravens persist 16/16; wolves 9/16. A batch with softer strife and bigger or double litters is running: `scratch/long4` (log `scratch/long4.log`).
 
 ## Next 3 steps
-1. Finish sim core, run `npx tsx src/headless/run.ts --seed 1 --ticks 50000` and get bison + wolves coexisting.
-2. Integrate: `src/sim/worker.ts` (runs Sim, posts Snapshot), `src/main.ts` + `index.html` (Engine + GrassField + AnimalLayer + HUD).
-3. Batch 8 seeds, charts, first balancing pass. Then review round 1.
+1. When long4 finishes: check wolf persistence. Then apply the deferred world-gen change (fewer upland trees and shrubs: the polka-dot look) and DAY_TICKS 400 -> 800 (a slower day). Both change sim inputs, so re-run the batch afterwards.
+2. When the grass fix lands: capture stills (wide herd, low golden, close wolves, night, UI states) for review round 1 (fresh critic, folder `review/round-01/`). Archive the stills via `tools/journey.py`.
+3. Commit, push, deploy to workers.dev, and update MORNING.md with the run instructions.
 
 ## Gotchas
-- Git Bash rewrites `/dev/x.html` args: pass `dev/x.html` to tools/capture.mjs (it normalizes).
-- Custom agent types `builder`/`blind-critic` are NOT registered this session: use general-purpose + model override + pasted role prompt (blind-critic prompt: `.claude/agents/blind-critic.md`, give it ONLY a folder path, tools Read/Glob).
-- Coordinate convention: sim (x, y) -> three (x, h, y); rotation.y = -heading.
-- Every generated image goes to `journey/` via `tools/journey.py` (owner ruling).
-- Gemini text/video model: `gemini-3.1-pro-preview` (2.5-pro is 404). Image: `gemini-3-pro-image`.
+- Fog is a post-process; materials output linear HDR (scene renders into a 4x MSAA HalfFloat target). Any NaN blacks out the frame via bloom.
+- The rendered terrain is reshaped near the creek: render layers use `renderWorld` (world with `engine.terrain.heightTex` heights), not raw `world.height`.
+- Don't change sim or world files while a batch runs: later seeds may load the edited code.
+- Custom agent types are not registered: use general-purpose + model override. Builders can be resumed with SendMessage (they keep their context).
+- Git Bash rewrites `/dev/x.html`: pass `dev/x.html` to capture.mjs.
