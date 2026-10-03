@@ -1944,7 +1944,8 @@ export class Sim implements SimLike {
     row.gen_wolf = pops[Sp.Wolf] ? gsum[Sp.Wolf] / pops[Sp.Wolf] : 0;
     row.gen_pronghorn = pops[Sp.Deer] ? gsum[Sp.Deer] / pops[Sp.Deer] : 0;
     const traits: [number, number][] = [[Sp.Bison, G_SPEED], [Sp.Bison, G_SIZE], [Sp.Bison, G_COAT], [Sp.Bison, G_SIGHT], [Sp.Bison, G_HERD],
-      [Sp.Wolf, G_SPEED], [Sp.Wolf, G_SIZE], [Sp.Wolf, G_COAT], [Sp.Wolf, G_SIGHT], [Sp.Deer, G_SPEED], [Sp.Deer, G_COAT]];
+      [Sp.Wolf, G_SPEED], [Sp.Wolf, G_SIZE], [Sp.Wolf, G_COAT], [Sp.Wolf, G_SIGHT], [Sp.Deer, G_SPEED], [Sp.Deer, G_COAT],
+      [Sp.Bison, G_LITTER], [Sp.Deer, G_LITTER]];
     for (const [s, g] of traits) {
       row[`trait_${SPECIES_KEYS[s]}_${GENE_NAMES[g]}`] = pops[s] ? tsum[s * NG + g] / pops[s] : NaN;
     }

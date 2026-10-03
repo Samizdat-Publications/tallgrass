@@ -146,7 +146,8 @@ export interface Params {
 export function defaultParams(): Params {
   const species: SpeciesParams[] = new Array(SPECIES_COUNT);
   species[Sp.Bison] = base({
-    maxAge: 5400, matureAge: 600, gestation: 200, birthCooldown: 380, litter: 1.0,
+    // v5: one calf about every 1,450 ticks and a longer life, so the herd can't outbreed a crash in a season
+    maxAge: 8000, matureAge: 600, gestation: 200, birthCooldown: 1250, litter: 1.0,
     walkSpeed: 1.5, runSpeed: 10, stamina: 140, sight: 38, metabolism: 1 / 1300, thirst: 1 / 1500,
     bite: 0.0065, foodValue: 0.55, meat: 7, toughness: 3.6, initial: 800, herdRadius: 14,
     wariness: 0.4, defense: 0.6, camo: 0.25,
@@ -163,7 +164,7 @@ export function defaultParams(): Params {
   });
   // pronghorn: fast, wary, light, fecund; outruns a healthy wolf, so wolves take fawns, the sick and the tired
   species[Sp.Deer] = base({
-    maxAge: 3000, matureAge: 420, gestation: 150, birthCooldown: 400, litter: 1.4,
+    maxAge: 4500, matureAge: 420, gestation: 150, birthCooldown: 1000, litter: 1.4,
     walkSpeed: 1.7, runSpeed: 15.5, stamina: 90, sight: 55, metabolism: 1 / 1300, thirst: 1 / 2200,
     bite: 0.0052, foodValue: 0.55, meat: 2.2, toughness: 0.75, initial: 350, herdRadius: 12,
     wariness: 0.85, defense: 0.08, camo: 0.6, diet: 1, hideAge: 170,
@@ -178,7 +179,7 @@ export function defaultParams(): Params {
   return {
     species,
     grassGrowth: 0.0016,
-    grassInit: 0.6,
+    grassInit: 0.45,
     grassSeedFloor: 0.00003,
     winterDieback: 0.00012,
     droughtGrowth: 0.3,
@@ -193,8 +194,8 @@ export function defaultParams(): Params {
     herdSpacing: 2.7,
     herdSepRange: Math.sqrt(7),
     herdCohesion: 6,
-    wolfRareHalf: 0,
-    founderDesync: 0,
+    wolfRareHalf: 150,
+    founderDesync: 1,
     wolfBreedStore: 0,
     wolfLitterBase: 0.6,
     wolfLitterSpan: 0.5,
@@ -229,7 +230,7 @@ export function defaultParams(): Params {
     wolfStrife: 0.002,
     wolfScentHerd: 12,
     wolfScentPow: 1,
-    wolfSmallGame: 1.1,
+    wolfSmallGame: 0.5,
     ravenNestSites: 320,
     carcassRot: 0.0009,
     carcassSoil: 0.05,
