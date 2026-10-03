@@ -75,6 +75,8 @@ export interface Params {
   /** Neighbors closer than this (m) push apart toward herdSpacing. */
   herdSepRange: number;
   herdCohesion: number;
+  /** Type III prey switching: wolves weight a prey species by N / (N + this). 0 = off. */
+  wolfRareHalf: number;
   // fear
   fearKill: number;
   fearKillRadius: number;
@@ -180,6 +182,7 @@ export function defaultParams(): Params {
     herdSpacing: 2.7,
     herdSepRange: Math.sqrt(7),
     herdCohesion: 6,
+    wolfRareHalf: 0,
     fearKill: 0.7,
     fearKillRadius: 22,
     fearPredatorStamp: 0.0008,

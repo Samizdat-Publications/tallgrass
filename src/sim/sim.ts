@@ -1232,7 +1232,10 @@ export class Sim implements SimLike {
             const preySpeed = Pj.runSpeed * a.genes[j * NG + G_SPEED] * (young > 1 ? 0.75 : 1) * (a.stamina[j] > 0.1 ? 1 : 0.5) * (a.infected[j] > 0 ? 0.8 : 1);
             const catchable = Math.min(1, (P.runSpeed * spdGene) / preySpeed);
             const pref = pk >= 0 ? this.packPref[pk * SPECIES_COUNT + a.sp[j]] : 0.7;
-            const score = (pref * young * old * weak * lone * catchable * catchable) / (Pj.toughness * a.genes[j * NG + G_SIZE]) / (dd + 15);
+            // prey switching (type III): hunting effort follows the common prey, so a crashed species gets a refuge
+            const np = this.pop[a.sp[j]];
+            const rare = p.wolfRareHalf > 0 ? np / (np + p.wolfRareHalf) : 1;
+            const score = (pref * young * old * weak * lone * catchable * catchable * rare) / (Pj.toughness * a.genes[j * NG + G_SIZE]) / (dd + 15);
             if (score > bestS) { bestS = score; best = j; }
           }
         }
