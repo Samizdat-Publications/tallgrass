@@ -262,6 +262,13 @@ export class Sim implements SimLike {
     a.energy[i] = 0.7 + this.rng.next() * 0.2;
     a.hydration[i] = 0.8 + this.rng.next() * 0.2;
     this.defaultGenes(sp, a.genes, i * NG);
+    // founders mid-way through their breeding cycles, so the first calves don't all arrive in one pulse
+    if (this.p.founderDesync > 0 && !a.male[i] && a.age[i] >= P.matureAge && P.gestation > 0) {
+      if (this.rng.next() < 0.35) {
+        a.pregnant[i] = 1 + this.rng.int(P.gestation);
+        this.defaultGenes(sp, a.mateGenes, i * NG); // an unseen founder bull of the same stock
+      } else a.cooldown[i] = this.rng.int(P.birthCooldown + 1);
+    }
     this.everPresent[sp] = 1;
     return i;
   }

@@ -77,6 +77,8 @@ export interface Params {
   herdCohesion: number;
   /** Type III prey switching: wolves weight a prey species by N / (N + this). 0 = off. */
   wolfRareHalf: number;
+  /** 1 = founders start part-way through pregnancy or cooldown instead of all ready to breed. 0 = off. */
+  founderDesync: number;
   // fear
   fearKill: number;
   fearKillRadius: number;
@@ -183,6 +185,7 @@ export function defaultParams(): Params {
     herdSepRange: Math.sqrt(7),
     herdCohesion: 6,
     wolfRareHalf: 0,
+    founderDesync: 0,
     fearKill: 0.7,
     fearKillRadius: 22,
     fearPredatorStamp: 0.0008,

@@ -26,5 +26,9 @@ Every animal carries speed, size, sight, boldness, herding, coat and litter gene
 
 ## Evidence
 - Trophic cascade, Yellowstone style: `review/stability/cascade/trophic_cascade.png`.
-- 32 worlds x 40 years, every species alive: `review/morning/8_stability_32_seeds_40_years.png`.
-- 1,000+ bison generations, shocks: `review/stability/v2-9762475*` and `v4-5df7663*`.
+- 20 worlds past 1,000 bison generations (600 to 670 years): bison, wolves and ravens 20/20, pronghorn 15/20. `review/stability/v4-5df7663/`.
+- Shocks over 120 years (70% cull, two-summer drought, wolf wipeout and return): `review/stability/v4-5df7663-shocks/stability_overview.png`.
+- 32 worlds x 40 years: bison, wolves and ravens 32/32, pronghorn 30/32.
+
+## Known weakness (being worked on)
+Regulation is mostly bottom-up. Bison breed fast enough to outgrow a nearly constant wolf load, so most bison deaths are starvation after a boom, and wolves are pinned between a territory ceiling and a small-game floor, so their numbers barely respond to prey. `tools/dynamics.py` measures this (births per capita, death shares, wolf lag). Slowing the ungulates alone opens a predator pit after the opening boom; the current experiments make wolves food-limited at both ends.
