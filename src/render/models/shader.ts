@@ -249,6 +249,8 @@ export function makeAnimalMaterials(sp: number, def: ModelDef, shared: AnimalSha
     shader.uniforms.uCoatDark = { value: new THREE.Vector3(...def.coatDark) };
     shader.uniforms.uBone = { value: new THREE.Vector3(...def.bone) };
     shader.uniforms.uFill = { value: def.fill };
+    shader.uniforms.uWarm = { value: new THREE.Vector3(...def.warm) };
+    shader.uniforms.uNeutral = { value: def.neutral };
     material.userData.shader = shader; // exposed for live tuning from the console
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', `#include <common>\n${defs}\n${COMMON_DECL}\n${VERT_SHADE_DECL}`)
@@ -258,10 +260,13 @@ export function makeAnimalMaterials(sp: number, def: ModelDef, shared: AnimalSha
       )
       .replace('#include <begin_vertex>', 'vec3 transformed = tgP;');
     shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', `#include <common>\nvarying vec3 vTgColor;\nvarying float vTgSel;\nuniform float uFill;`)
+      .replace('#include <common>', `#include <common>\nvarying vec3 vTgColor;\nvarying float vTgSel;\nuniform float uFill;\nuniform vec3 uWarm;\nuniform float uNeutral;`)
       .replace('#include <color_fragment>', 'diffuseColor.rgb *= vTgColor;')
-      // stronger sky fill so the shaded side keeps form instead of going black
-      .replace('#include <lights_fragment_end>', `#include <lights_fragment_end>\n reflectedLight.indirectDiffuse *= uFill;`)
+      // sky fill: pull toward a warm neutral (so brown coats stay brown in blue shade), then boost it so the shaded side keeps form
+      .replace(
+        '#include <lights_fragment_end>',
+        `irradiance = mix(irradiance, vec3(dot(irradiance, vec3(0.2126, 0.7152, 0.0722))) * uWarm, uNeutral) * uFill;\n#include <lights_fragment_end>`,
+      )
       .replace(
         '#include <emissivemap_fragment>',
         `#include <emissivemap_fragment>

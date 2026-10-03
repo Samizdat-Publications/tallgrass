@@ -84,6 +84,10 @@ export interface ModelDef {
   roughness: number;
   /** Multiplier on the hemisphere (sky) fill light for this species. */
   fill: number;
+  /** Tint of the neutralised sky fill (linear RGB, around 1). Warm for brown animals so shade stays brown, not grey-blue. */
+  warm: [number, number, number];
+  /** 0..1: how far the sky fill is pulled to a neutral grey (times `warm`) before it lights the coat. */
+  neutral: number;
   triangles: number;
 }
 

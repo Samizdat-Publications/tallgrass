@@ -1,24 +1,19 @@
 # NEXT SESSION: pick up here
 
-**Updated:** 2026-10-03 04:15
+**Updated:** 2026-10-03 08:45
 
 ## State
-- Game runs: `npm run dev` -> http://localhost:5199/. Entry `src/main.ts` (worker + Engine + GrassField + AnimalLayer + GameUI + Director). Hooks for capture: `__engine, __cam, __speed, __step, __ui, __select, __followId, __find, __timeOfDay, __focusHerd, __snap, __director`.
-- `tools/stills.mjs --out <dir>` shoots the scripted review set (10 stills) from the real game. `tools/capture.mjs` for single shots/video.
-- **Stability checkpoint v1 = commit f1d6e2c.** 16 seeds x 40 yr: wolves 16/16, bison 15/16, ravens 15/16, pronghorn 14/16 (`scratch/long12`).
-- **Acceptance run in progress** from a frozen copy (`scratch/frozen/f1d6e2c/src`): 20 seeds to 1000 bison generations, out `review/stability/v1-f1d6e2c`, log `scratch/accept_v1.log`, capped at 110 min (started 03:40). The shock run (cull70, drought, wolfwipe) was stopped because of CPU contention; rerun it after the baseline finishes with more threads:
-  `npx tsx scratch/frozen/f1d6e2c/src/headless/batch.ts --seeds 20 --ticks 144000 --sample 1200 --threads 14 --out review/stability/v1-f1d6e2c-shocks --scenario cull70,drought,wolfwipe`
-- Live code has since diverged from f1d6e2c: perf changes (herbivore think every 6 ticks, herd scan cap 40, vegetation STRIDE 16) and the director. Re-verify balance with a 16-seed 40-year batch before the next acceptance run.
-- Builders working on round-1 fixes (resumable via SendMessage): renderer af57fcb936ce73c50 (night, haze, trees, terrain seasons, water, occlusion), grass a7043abcf9209d6f5 (stripes, flowers, seasons), animals a9e03f187914c14b8 (readability, markers, carcass sites, dust, sick tint), audio adc64e8b7f6128445 (ElevenLabs SFX + AudioDirector). UI builder a1f8911043eb89066 is done.
-- KNOWN: at 04:05 the scene rendered black even without the director: a builder file mid-edit. Re-test `cin` director capture after the builders report.
+- Live: https://tallgrass.stewartgregerson.workers.dev (deployed 06:35, pre movement fix). Game runs via `npm run dev`.
+- Stability evidence: `review/stability/v1-f1d6e2c` (partial), `review/stability/v2-9762475` (20 seeds, 14 reached 1,000 generations, all 14 kept bison, wolves and ravens; 6 early collapses), `review/stability/v2-9762475-shocks`, `review/stability/cascade`.
+- Live code diverged from v2: heading-constrained movement, selfish herd, free sight, conception param, grassInit, wolf arrival params. Defaults should equal v3d + selfish herd unless a variant wins.
+- Running: `scratch/varC` (evolution fixes only) and `scratch/varE` (plus conceiveEnergy 0.72), 32 seeds x 40 yr each.
 
 ## Next 3 steps
-1. When builders report: review their shots, run `tools/stills.mjs`, verify the scene renders and the director cuts between shots (cinematic: press C), commit.
-2. Wire the AudioDirector into main.ts (the audio builder's report says how).
-3. After the baseline acceptance run: rerun the shocks, make charts (`tools/charts.py`), write the stability section of MORNING.md, then review round 2 (fresh critic) and a Gemini video round.
+1. Pick the best of varC/varE (32 seeds, need >= 80% all species), then run a full 20-seed 1,000-generation acceptance plus shocks from a frozen copy (sample 1000, not 2400, so seasonal cycles aren't aliased). Shocks with a burn-in: run 120 years so the shock lands at year ~48.
+2. Review round 3: `tools/stills.mjs` + fresh blind critic; plus a new reel for Gemini. Visual leftovers: fire scar pure black with no smoke, autumn dusk too red, far-distance markers look like noise, dust smear on the wolf follow, bison read grey in some light.
+3. Redeploy and refresh MORNING.md screenshots and numbers.
 
 ## Gotchas
-- `TaskStop` on a background npx job leaves orphan node children: check `Get-CimInstance Win32_Process -Filter "Name='node.exe'"` for command lines containing ecosystem-sim and stop them.
-- CPU contention: 12 sim threads plus 4 builders capturing makes everything slow; capture.mjs needs `--timeout 240000` under load.
-- Fog is post-process; NaN anywhere blacks the frame via bloom.
-- Don't edit the frozen copy; don't change sim files while a non-frozen batch runs.
+- 16-seed comparisons have about +/-10% noise; use 32 seeds for decisions.
+- Never edit sim files while a non-frozen batch is running.
+- A turn-rate limit can make animals orbit targets: keep the speed-scaled turn radius.

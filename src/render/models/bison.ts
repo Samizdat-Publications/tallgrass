@@ -143,11 +143,13 @@ export function buildBison(): ModelDef {
   return {
     geometry,
     triangles: b.triangleCount,
-    coatPale: lin(0x86695a),
-    coatDark: lin(0x36291f),
+    coatPale: lin(0x8a5636),
+    coatDark: lin(0x3a2114),
     bone: lin(0xd4cbb0),
     roughness: 0.95,
-    fill: 2.2,
+    fill: 1.6,
+    warm: [1.12, 1.0, 0.8],
+    neutral: 0.85,
     params: {
       ...DEFAULT_PARAMS,
       kind: 0,

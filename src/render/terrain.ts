@@ -115,6 +115,22 @@ function boxBlur(src: Float32Array, n: number, r: number): Float32Array {
   return out;
 }
 
+/** 1D box blur along x (axis 0) or z (axis 1) on a square grid (edge clamped). */
+function boxBlur1(src: Float32Array, n: number, r: number, axis: 0 | 1): Float32Array {
+  const out = new Float32Array(n * n);
+  const pre = new Float64Array(n + 1);
+  for (let a = 0; a < n; a++) {
+    pre[0] = 0;
+    for (let b = 0; b < n; b++) pre[b + 1] = pre[b] + (axis === 0 ? src[a * n + b] : src[b * n + a]);
+    for (let b = 0; b < n; b++) {
+      const lo = Math.max(0, b - r), hi = Math.min(n - 1, b + r);
+      const v = (pre[hi + 1] - pre[lo]) / (hi - lo + 1);
+      if (axis === 0) out[a * n + b] = v; else out[b * n + a] = v;
+    }
+  }
+  return out;
+}
+
 export class Terrain {
   readonly mesh: THREE.Mesh;
   readonly material: THREE.MeshStandardMaterial;
@@ -148,15 +164,23 @@ export class Terrain {
     // ---- render heights: smooth creek channel and banks (see shapeCreek)
     const shaped = shapeCreek(world);
     this.creekDist = shaped.creekDist;
-    // the sim's valley bowl ends in a sharp rim crest right at the border, which frames the playable square from above.
-    // Ease the last 50 m of ground toward a smoothed version so the rim rolls into the far ring.
+    // Near the border the ground is blurred along the border only (60 m window), so rim bumps and the creek notch do not extrude
+    // outward as streaks, while the profile across the border (the rim slope) is untouched. The far ring then continues that profile.
     const blurred = boxBlur(boxBlur(shaped.height, hn, 20), hn, 20);
+    const Lx = boxBlur1(shaped.height, hn, 45, 0);
+    const Lz = boxBlur1(shaped.height, hn, 45, 1);
     this.renderHeight = Float32Array.from(shaped.height);
     for (let j = 0; j < hn; j++) {
       for (let i = 0; i < hn; i++) {
-        const dEdge = Math.min(i, j, hn - 1 - i, hn - 1 - j) * cell;
-        const w = smoothstep(50, 0, dEdge);
-        if (w > 0) this.renderHeight[j * hn + i] = shaped.height[j * hn + i] * (1 - w) + blurred[j * hn + i] * w;
+        const dX = Math.min(i, hn - 1 - i) * cell, dZ = Math.min(j, hn - 1 - j) * cell;
+        const dE = Math.min(dX, dZ);
+        const w = smoothstep(60, 0, dE);
+        if (w <= 0) continue;
+        // tangent of the nearest edge: left/right edges run along z, top/bottom along x; corners use both
+        const wx = dX < dZ ? 0 : 1, wz = dX < dZ ? 1 : 0;
+        const nearCorner = Math.max(dX, dZ) < 60 ? 0.5 : 0;
+        const L = nearCorner > 0 ? 0.5 * (Lx[j * hn + i] + Lz[j * hn + i]) : wz * Lz[j * hn + i] + wx * Lx[j * hn + i];
+        this.renderHeight[j * hn + i] = shaped.height[j * hn + i] * (1 - w) + L * w;
       }
     }
     const rh = this.renderHeight;
@@ -197,27 +221,40 @@ export class Terrain {
     }
     const rimBase = rimSum / rimCount;
     const L = 75;
+    // Far ring: continues the border height with the rim's outward slope easing to zero (C1 at the border, no crease).
+    const Lg = 50;
+    const gClamp = (g: number) => clamp(g, -0.1, 0.4);
+    // extension along x at row zc, then along z: each continues the border height with the slope easing out (C1 across every border
+    // and corner, so no crease or crack along the extension of an edge)
+    const extX = (x: number, zc: number): number => {
+      const cx = clamp(x, 0, S);
+      const hb = sampleHeight(rh, hn, cell, cx, zc);
+      if (x === cx) return hb;
+      const g = gClamp((hb - sampleHeight(rh, hn, cell, x < 0 ? 20 : S - 20, zc)) / 20);
+      return hb + g * Lg * (1 - Math.exp(-Math.abs(x - cx) / Lg));
+    };
     this.heightFn = (x: number, z: number) => {
       const cx = clamp(x, 0, S), cz = clamp(z, 0, S);
-      const h = sampleHeight(rh, hn, cell, cx, cz);
       const dx = x - cx, dz = z - cz;
-      if (dx === 0 && dz === 0) return h;
+      if (dx === 0 && dz === 0) return sampleHeight(rh, hn, cell, cx, cz);
       const d = Math.hypot(dx, dz);
-      const hb = sampleHeight(blurred, hn, cell, cx, cz);
-      const m = smoothstep(0, 220, d);
-      const base = hb * (1 - m) + (rimBase + 5) * m + (h - hb) * Math.exp(-d / 38);
+      const e0 = extX(x, cz);
+      let inner = e0;
+      if (dz !== 0) {
+        const gz = gClamp((e0 - extX(x, dz < 0 ? 20 : S - 20)) / 20);
+        inner = e0 + gz * Lg * (1 - Math.exp(-Math.abs(dz) / Lg));
+      }
+      const t = smoothstep(0, 170, d);
       const gain = 0.2 * L * (1 - Math.exp(-d / L));
-      const ramp = smoothstep(0, 220, d);
       const far = smoothstep(150, 2600, d);
-      // detail fades with distance because the far mesh is coarse: avoids aliased ridges between vertex rows
       const big = fbm2(x * 0.0021 + 7.3, z * 0.0021 - 3.1, 4, 11);
       const mid = fbm2(x * 0.0075 - 2.2, z * 0.0075 + 8.4, 3, 29);
       const near = fbm2(x * 0.02 + 1.7, z * 0.02 - 6.1, 3, 41);
-      // relief at the scales the valley itself has (about 130 m and 50 m hills) starts right at the border, so the far ring
-      // continues the valley instead of looking like a smooth plateau around a bumpy square
-      const midA = (1 - smoothstep(260, 620, d)) * smoothstep(0, 50, d);
-      const nearA = (1 - smoothstep(60, 170, d)) * smoothstep(0, 22, d);
-      return base + gain + ramp * (6 + 24 * big) + 16 * (mid - 0.5) * midA + 9 * (near - 0.5) * nearA + far * (20 + 90 * big) + d * 0.008;
+      // relief at the scales the valley itself has (about 130 m and 50 m hills) starts right at the border
+      const midA = (1 - smoothstep(260, 620, d)) * smoothstep(0, 60, d);
+      const nearA = (1 - smoothstep(60, 170, d)) * smoothstep(0, 26, d);
+      const farBase = (rimBase + 5) + gain + (6 + 24 * big);
+      return inner * (1 - t) + farBase * t + 16 * (mid - 0.5) * midA + 9 * (near - 0.5) * nearA + far * (20 + 90 * big) + d * 0.008;
     };
 
     this.heightAt = (x: number, z: number) => (this.axis ? this.meshHeight(x, z) : this.heightFn(x, z));

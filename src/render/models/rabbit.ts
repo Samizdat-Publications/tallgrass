@@ -67,6 +67,8 @@ export function buildRabbit(): ModelDef {
     bone: lin(0xd8d0bc),
     roughness: 0.95,
     fill: 1.5,
+    warm: [1.12, 1.0, 0.82],
+    neutral: 0.7,
     params: {
       ...DEFAULT_PARAMS,
       kind: 1,

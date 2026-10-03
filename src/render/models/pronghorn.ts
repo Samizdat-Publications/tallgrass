@@ -6,7 +6,7 @@ import { DEFAULT_PARAMS, type ModelDef } from './types';
 export function buildPronghorn(): ModelDef {
   const b = new MeshBuilder();
   const hornCol = lin(0x0c0a08);
-  const white = 0.86;
+  const white = 0.66;
 
   /** Blend from tan coat (multiplier) to white (absolute) by w. */
   const toWhite = (k: number, w: number): Paint => [mix(k, white, w), mix(k, white * 0.97, w), mix(k, white * 0.9, w), 1 - w];
@@ -112,6 +112,8 @@ export function buildPronghorn(): ModelDef {
     bone: lin(0xd8d0bc),
     roughness: 0.9,
     fill: 1.5,
+    warm: [1.15, 1.0, 0.8],
+    neutral: 0.7,
     params: {
       ...DEFAULT_PARAMS,
       kind: 0,
@@ -128,7 +130,7 @@ export function buildPronghorn(): ModelDef {
       crouchDrop: 0.1,
       deadDrop: 0.38, deadHipF: 0.9, deadHipH: -0.6,
       strideW: 1.4, strideG: 5.6, strideSpeedMax: 22,
-      length: 1.4, height: 1.2, ring: 1.0, minPx: 8, boostLen: 1.4,
+      length: 1.4, height: 1.2, ring: 1.0, minPx: 6, boostLen: 1.4,
     },
   };
 }

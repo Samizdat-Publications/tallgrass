@@ -358,6 +358,7 @@ export class Sim implements SimLike {
 
     this.updateCarcasses();
     this.checkEvents();
+    if (this.p.wolfArrivalTick > 0 && t === this.p.wolfArrivalTick) this.introduce(Sp.Wolf, this.p.wolfArrivalCount);
     this.tick++;
   }
 
@@ -756,7 +757,7 @@ export class Sim implements SimLike {
     // a fast build costs most while actually sprinting; keen sight costs a little all the time
     const running = v > P.walkSpeed * 2.2;
     const activity = a.state[i] === St.Rest ? 0.7 : running ? 1.8 : v > 0.3 ? 1.05 : 0.9;
-    let m = P.metabolism * Math.pow(size, -0.25) * (0.98 + 0.02 * spd * spd) * (0.98 + 0.02 * sight) * activity;
+    let m = P.metabolism * Math.pow(size, -0.25) * (0.98 + 0.02 * spd * spd) * activity;
     if (a.infected[i] > 0) m *= this.p.diseaseMetab;
     if (a.age[i] < P.matureAge) m *= 0.75;
     // cold costs extra, much more for a small bird
@@ -804,7 +805,7 @@ export class Sim implements SimLike {
     const bx = Math.min(nb - 1, Math.max(0, (x / bs) | 0)), by = Math.min(nb - 1, Math.max(0, (y / bs) | 0));
     let n = 0, cx = 0, cy = 0, avx = 0, avy = 0, sepx = 0, sepy = 0, alarm = 0, alx = 0, aly = 0, infNear = 0, maxFlee = 0;
     let mate = -1, mateD = 1e9;
-    const wantMate = !a.male[i] && !juvenile && a.pregnant[i] === 0 && a.cooldown[i] === 0 && a.energy[i] > 0.6;
+    const wantMate = !a.male[i] && !juvenile && a.pregnant[i] === 0 && a.cooldown[i] === 0 && a.energy[i] > p.conceiveEnergy;
     for (let yy = by - 1; yy <= by + 1; yy++) {
       if (yy < 0 || yy >= nb) continue;
       for (let xx = bx - 1; xx <= bx + 1; xx++) {
@@ -1162,7 +1163,8 @@ export class Sim implements SimLike {
             // a sated wolf only bothers with easy, close prey
             if (opportunist && (dd > 25 || (young === 1 && old === 1 && a.energy[j] > 0.35 && a.infected[j] === 0))) continue;
             const weak = 1.7 - a.energy[j] + (a.infected[j] > 0 ? 0.6 : 0);
-            const lone = 1.6 / (1 + 0.12 * crowd);
+            // the selfish herd: an animal on its own is the easy target, so staying with the herd pays
+            const lone = 1 + 2.5 * Math.exp(-crowd / 3);
             // can I actually catch it? fast prey only pays when it's young, sick or tired
             const preySpeed = Pj.runSpeed * a.genes[j * NG + G_SPEED] * (young > 1 ? 0.75 : 1) * (a.stamina[j] > 0.1 ? 1 : 0.5) * (a.infected[j] > 0 ? 0.8 : 1);
             const catchable = Math.min(1, (P.runSpeed * spdGene) / preySpeed);

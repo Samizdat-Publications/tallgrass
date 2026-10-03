@@ -80,6 +80,8 @@ export function buildRaven(): ModelDef {
     bone: lin(0xd8d0bc),
     roughness: 0.5,
     fill: 1.6,
+    warm: [1.0, 1.0, 1.0],
+    neutral: 0.6,
     params: {
       ...DEFAULT_PARAMS,
       kind: 2,

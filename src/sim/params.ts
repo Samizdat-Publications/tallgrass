@@ -56,6 +56,8 @@ export interface Params {
   species: SpeciesParams[];
   // vegetation
   grassGrowth: number;
+  /** Starting grass as a fraction of capacity (the world opens already grazed). */
+  grassInit: number;
   grassSeedFloor: number;
   winterDieback: number;
   droughtGrowth: number;
@@ -65,6 +67,8 @@ export interface Params {
   trampleRun: number;
   trampleWalk: number;
   grazeMin: number;
+  /** Body condition a female needs before she will conceive. */
+  conceiveEnergy: number;
   migrateBelow: number;
   // fear
   fearKill: number;
@@ -88,6 +92,9 @@ export interface Params {
   wolfPupDenAge: number;
   wolfInjuryChance: number;
   wolfImmigration: number;
+  /** If > 0, wolves are absent at first and this many arrive at wolfArrivalTick (a natural recolonization). */
+  wolfArrivalTick: number;
+  wolfArrivalCount: number;
   wolfOpportunism: number;
   wolfTestGiveUp: number;
   wolfStrife: number;
@@ -117,7 +124,7 @@ export interface Params {
 export function defaultParams(): Params {
   const species: SpeciesParams[] = new Array(SPECIES_COUNT);
   species[Sp.Bison] = base({
-    maxAge: 3600, matureAge: 600, gestation: 200, birthCooldown: 380, litter: 1.0,
+    maxAge: 5400, matureAge: 600, gestation: 200, birthCooldown: 380, litter: 1.0,
     walkSpeed: 1.5, runSpeed: 10, stamina: 140, sight: 38, metabolism: 1 / 1300, thirst: 1 / 1500,
     bite: 0.0065, foodValue: 0.55, meat: 7, toughness: 3.6, initial: 800, herdRadius: 14,
     wariness: 0.4, defense: 0.6, camo: 0.25,
@@ -144,6 +151,7 @@ export function defaultParams(): Params {
   return {
     species,
     grassGrowth: 0.0016,
+    grassInit: 0.6,
     grassSeedFloor: 0.00003,
     winterDieback: 0.00012,
     droughtGrowth: 0.3,
@@ -153,6 +161,7 @@ export function defaultParams(): Params {
     trampleRun: 0.0015,
     trampleWalk: 0.0002,
     grazeMin: 0.12,
+    conceiveEnergy: 0.6,
     migrateBelow: 0.2,
     fearKill: 0.7,
     fearKillRadius: 22,
@@ -173,6 +182,8 @@ export function defaultParams(): Params {
     wolfPupDenAge: 450,
     wolfInjuryChance: 0.01,
     wolfImmigration: 0,
+    wolfArrivalTick: 0,
+    wolfArrivalCount: 12,
     wolfOpportunism: 0.25,
     wolfTestGiveUp: 0.05,
     wolfStrife: 0.002,
@@ -191,7 +202,7 @@ export function defaultParams(): Params {
     maxAgents: 20000,
     steerFree: 0,
     steerFreeUrgent: 0,
-    huntNeedsScent: 1,
+    huntNeedsScent: 0,
   };
 }
 

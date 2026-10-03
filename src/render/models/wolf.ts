@@ -113,6 +113,8 @@ export function buildWolf(): ModelDef {
     bone: lin(0xd8d0bc),
     roughness: 0.92,
     fill: 1.2,
+    warm: [0.97, 1.0, 1.05],
+    neutral: 0.4,
     params: {
       ...DEFAULT_PARAMS,
       kind: 0,

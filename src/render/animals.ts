@@ -25,14 +25,18 @@ const wrapPi = (a: number): number => {
 };
 const hash01 = (n: number): number => (Math.imul(n | 0, 0x9e3779b1) >>> 8) / 16777216;
 
-/** Dust kicked up by fast movers: [min speed m/s, puffs per second per m/s over the minimum, puff size m, alpha]. */
-const DUST: Array<[number, number, number, number] | null> = [
-  [4.5, 1.8, 3.4, 0.34], // bison
-  [4.5, 1.4, 1.8, 0.3], // wolf
+/**
+ * Dust kicked up by fast movers: [min speed m/s, puffs per second per m/s over the minimum, start size m (before the
+ * animal's own scale), alpha, min life s, max life s]. Wolves, pronghorn and cougars get a few short-lived round
+ * puffs at the feet; only a bison herd makes a real dust cloud.
+ */
+const DUST: Array<[number, number, number, number, number, number] | null> = [
+  [4.5, 1.5, 2.6, 0.3, 1.3, 2.1], // bison
+  [5.5, 0.5, 0.75, 0.2, 0.7, 1.1], // wolf
   null, // raven
-  [5, 1.0, 2.0, 0.28], // pronghorn
+  [6, 0.4, 0.95, 0.2, 0.8, 1.2], // pronghorn
   null, // rabbit
-  [4.5, 1.0, 1.9, 0.28], // cougar
+  [5.5, 0.4, 0.8, 0.2, 0.7, 1.1], // cougar
 ];
 
 function strideFreq(p: AnimParams, spd: number): number {
@@ -215,7 +219,7 @@ export class AnimalLayer {
     }
     this.kills = new KillSites(world, this.lit);
     this.dust = new Dust(this.lit);
-    this.markers = new Markers();
+    this.markers = new Markers(world.size);
     this.object3D.add(this.kills.mesh, this.dust.mesh, this.markers.mesh);
 
     // Selection ring: a soft glowing ring that hugs the terrain under the selected animal.
@@ -428,9 +432,23 @@ export class AnimalLayer {
         S.bank[slot] += (lean - S.bank[slot]) * kBank;
         roll += S.bank[slot];
       }
+      // wading: in a water cell the animal stands on the bed while the water is shallower than its belly; in deeper
+      // water it rides with the belly at the surface (a gentle bob, level pose) instead of looking like it stands on it
+      if (sp !== Sp.Raven || alt <= 0.3) {
+        const wc = Math.min(world.n - 1, Math.max(0, Math.floor(z / cell))) * world.n + Math.min(world.n - 1, Math.max(0, Math.floor(x / cell)));
+        if (world.water[wc]) {
+          const surf = world.waterHeight[wc];
+          const belly = pr.height * 0.36 * vs;
+          if (surf - ground > belly) {
+            y = surf - belly + 0.04 * Math.sin(this.timeSec * 1.7 + hash01(id) * 40);
+            pitch *= 0.25;
+            roll *= 0.25;
+          }
+        }
+      }
       this.writeInstance(b, x, y, z, ch, sh, pitch, roll, vs);
 
-      this.markers.add(sp, x, y + (sp === Sp.Raven ? 0.3 : pr.height * 0.6 * vs), z, vs);
+      this.markers.add(sp, x, y + (sp === Sp.Raven ? 0.3 : pr.height * 0.6 * vs), z, pr.boostLen, vs);
 
       // dust kicked up by fast movers
       const dp = DUST[sp];
@@ -446,8 +464,8 @@ export class AnimalLayer {
           const drift = -0.1 * spdS;
           this.dust.emit(
             px, sampleHeight(H, hn, cell, px, pz) + 0.15, pz,
-            ch * drift + (Math.random() - 0.5) * 0.9, 0.3 + Math.random() * 0.5, sh * drift + (Math.random() - 0.5) * 0.9,
-            dp[2] * vs * (0.75 + 0.5 * Math.random()), 1.8 + Math.random() * 1.4, dp[3] * (0.7 + 0.6 * Math.random()), Math.random(),
+            ch * drift * 0.6 + (Math.random() - 0.5) * 0.6, 0.15 + Math.random() * 0.3, sh * drift * 0.6 + (Math.random() - 0.5) * 0.6,
+            dp[2] * vs * (0.8 + 0.4 * Math.random()), dp[4] + Math.random() * (dp[5] - dp[4]), dp[3] * (0.75 + 0.5 * Math.random()), Math.random(),
           );
         }
         if (S.dust[slot] > 1) S.dust[slot] = 1;
@@ -498,7 +516,10 @@ export class AnimalLayer {
       const hF = sampleHeight(H, hn, cell, x + ch * hl, z + sh * hl);
       const hB = sampleHeight(H, hn, cell, x - ch * hl, z - sh * hl);
       const pitch = Math.atan2(hF - hB, 2 * hl);
-      this.writeInstance(b, x, ground + 0.22, z, ch, sh, pitch, 0, 1);
+      let cy = ground + 0.22;
+      const wc = Math.min(world.n - 1, Math.max(0, Math.floor(z / cell))) * world.n + Math.min(world.n - 1, Math.max(0, Math.floor(x / cell)));
+      if (world.water[wc]) cy = Math.max(cy, world.waterHeight[wc] - 0.3); // a carcass in a pond floats at the surface
+      this.writeInstance(b, x, cy, z, ch, sh, pitch, 0, 1);
       const k = b.count - 1;
       const gp = k * 4;
       const gait = b.gait.array as Float32Array;

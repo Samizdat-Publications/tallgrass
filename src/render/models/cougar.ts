@@ -103,6 +103,8 @@ export function buildCougar(): ModelDef {
     bone: lin(0xd8d0bc),
     roughness: 0.9,
     fill: 1.5,
+    warm: [1.15, 1.0, 0.8],
+    neutral: 0.7,
     params: {
       ...DEFAULT_PARAMS,
       kind: 0,

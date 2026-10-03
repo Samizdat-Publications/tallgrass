@@ -28,7 +28,7 @@ export class SceneLit {
       const d = this.tmp.copy(this.sun.position);
       if (this.sun.target) d.sub(this.sun.target.position);
       d.normalize();
-      const k = this.sun.intensity * Math.min(1, Math.max(0.12, d.y * 1.3)) * 0.2;
+      const k = this.sun.intensity * Math.min(1, Math.max(0.12, d.y * 1.3)) * 0.1;
       v.x += this.sun.color.r * k;
       v.y += this.sun.color.g * k;
       v.z += this.sun.color.b * k;
@@ -63,7 +63,7 @@ export class Dust {
   /** Dust clock: real seconds, frozen while the sim is paused. */
   now = 0;
   private uNow = { value: 0 };
-  private uColor = { value: new THREE.Vector3(0.82, 0.56, 0.3) };
+  private uColor = { value: new THREE.Vector3(0.7, 0.5, 0.3) };
   private lit: SceneLit;
 
   constructor(lit: SceneLit) {
@@ -97,8 +97,8 @@ export class Dust {
           if (u < 0.0 || u > 1.0) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); vAlpha = 0.0; vUv = vec2(0.0); vSeed = 0.0; return; }
           float drag = 1.0 - 0.45 * u;
           vec3 pos = aP.xyz + aV.xyz * age * drag;
-          pos.y += 0.55 * age * (1.0 - 0.6 * u);
-          float size = aV.w * (0.55 + 1.7 * pow(u, 0.55));
+          pos.y += 0.3 * age * (1.0 - 0.6 * u);
+          float size = aV.w * (0.6 + 0.95 * pow(u, 0.6));
           size *= clamp(distance(cameraPosition, pos) / 130.0, 1.0, 2.4); // stay readable from the wide view
           vec4 mv = viewMatrix * vec4(pos, 1.0);
           float c = cos(aQ.y * 6.2831 + u * 0.8), s = sin(aQ.y * 6.2831 + u * 0.8);
@@ -107,7 +107,7 @@ export class Dust {
           gl_Position = projectionMatrix * mv;
           vUv = position.xy * 2.0;
           vSeed = aQ.y;
-          vAlpha = aQ.z * smoothstep(0.0, 0.08, u) * pow(1.0 - u, 1.25);
+          vAlpha = aQ.z * smoothstep(0.0, 0.1, u) * pow(1.0 - u, 1.7);
         }`,
       fragmentShader: /* glsl */ `
         precision highp float;
@@ -221,7 +221,7 @@ export class KillSites {
           vec3 col = mix(stain, dirt, smoothstep(0.1, 0.8, edge) * 0.9);
           float fleck = step(0.93, h21(floor(uv * 14.0 + vInfo.w * 50.0))) * (1.0 - smoothstep(0.1, 0.5, rem)) * (1.0 - smoothstep(0.2, 0.7, r));
           col = mix(col, vec3(0.45, 0.42, 0.36), fleck);
-          gl_FragColor = vec4(col * min(uLit, vec3(1.0)), a * 0.85);
+          gl_FragColor = vec4(col * min(uLit, vec3(1.0)), a * 0.7);
         }`,
     });
     this.mesh = new THREE.Mesh(this.geo, mat);
@@ -276,7 +276,7 @@ export class KillSites {
       for (let c = 0; c < n; c++) {
         const cx = snap.carcasses[c * CARCASS_STRIDE], cz = snap.carcasses[c * CARCASS_STRIDE + 1];
         const sp = Math.round(snap.carcasses[c * CARCASS_STRIDE + 3]);
-        const R = sp === 0 ? 4.6 : sp === 3 || sp === 5 ? 2.8 : sp === 1 ? 2.4 : 1.4;
+        const R = sp === 0 ? 3.8 : sp === 3 || sp === 5 ? 2.0 : sp === 1 ? 1.8 : 1.0;
         const seed = (Math.abs(Math.sin(cx * 12.9898 + cz * 78.233) * 43758.5453) % 1);
         for (let j = 0; j <= G; j++) {
           for (let i = 0; i <= G; i++) {
@@ -317,19 +317,30 @@ export class KillSites {
 // ---------------------------------------------------------------------------------------------------------
 // Distance markers
 
-/** [r, g, b, size in px on a 900 px tall viewport, max alpha] per species id. Linear-ish colors chosen for contrast on golden grass. */
+/** [r, g, b, size in px on a 900 px tall viewport, max alpha] per species id. Deliberately small and quiet. */
 const MARKER: Array<[number, number, number, number, number] | null> = [
-  [0.1, 0.055, 0.035, 5.5, 0.62], // bison: dark umber
-  [0.92, 0.95, 1.0, 7.0, 0.8], // wolf: pale halo so packs read
-  [0.02, 0.02, 0.03, 4.5, 0.55], // raven: black speck
-  [0.95, 0.82, 0.62, 4.0, 0.38], // pronghorn: warm rump flash
+  [0.045, 0.03, 0.022, 3.6, 0.5], // bison: dark umber
+  [0.34, 0.37, 0.42, 3.8, 0.4], // wolf: cool grey (a pack reads as a faint grey cluster, not a white fleck)
+  [0.015, 0.015, 0.02, 3.0, 0.5], // raven: black speck
+  [0.5, 0.34, 0.2, 3.0, 0.3], // pronghorn: warm tan
   null, // rabbit
-  [0.95, 0.55, 0.18, 6.5, 0.75], // cougar: tawny
+  null, // cougar (solitary, a lone dot would only be noise)
 ];
 
+/** A marker is only drawn when at least this many of the same species share a ~24 m neighbourhood: herds and packs, never loners. */
+const CLUSTER_MIN = 3;
+const CLUSTER_CELL = 24;
+/** Markers are fully off inside this camera distance, and fade in over the next FADE_LEN meters. */
+const NEAR_OFF = 250;
+const FADE_LEN = 150;
+/** An animal this many pixels long (without the minimum-size boost) is already readable: no marker. */
+const PX_SHOW = 4.5;
+const PX_HIDE = 6.5;
+
 /**
- * Soft species-colored dots that fade in only when the camera is far from an animal, so herds, packs and ravens
- * still read from the high drone view without a UI. Fully hidden inside ~170 m, full strength past ~330 m.
+ * Quiet species-colored dots that appear only when the camera is far (hidden inside ~250 m), only for clustered
+ * animals (herds, packs, flocks), and only for animals still smaller than about 6 px on screen. They exist so a
+ * herd or a circling flock still reads from the high drone view without looking like noise on the terrain.
  */
 export class Markers {
   readonly mesh: THREE.Mesh;
@@ -337,16 +348,27 @@ export class Markers {
   private cap = 4096;
   private p = new Float32Array(this.cap * 4); // x, y, z, size px
   private c = new Float32Array(this.cap * 4); // r, g, b, max alpha
+  // staging for the cluster test: species, x, y, z, natural px length, scale
+  private st = new Float32Array(this.cap * 8);
   private attrP: THREE.InstancedBufferAttribute;
   private attrC: THREE.InstancedBufferAttribute;
-  private n = 0;
+  private n = 0; // drawn
+  private m = 0; // staged
   private uView = { value: new THREE.Vector2(1600, 900) };
-  private uNear = { value: 170 };
-  private uFar = { value: 330 };
+  private uNear = { value: NEAR_OFF };
+  private uFar = { value: NEAR_OFF + FADE_LEN };
   private uBright = { value: 1 };
   private lit = new SceneLit();
+  private tmpV = new THREE.Vector2();
+  // camera state cached from the last render, for CPU-side culling
+  private cam = new THREE.Vector3(256, 400, 256);
+  private pxK = 1086; // pixels per meter at 1 m on a 900 px tall viewport
+  private grid: Int32Array;
+  private gridN: number;
 
-  constructor() {
+  constructor(worldSize = 512) {
+    this.gridN = Math.ceil(worldSize / CLUSTER_CELL) + 2;
+    this.grid = new Int32Array(6 * this.gridN * this.gridN);
     const quad = new THREE.PlaneGeometry(1, 1);
     this.geo = new THREE.InstancedBufferGeometry();
     this.geo.setAttribute('position', quad.getAttribute('position'));
@@ -380,7 +402,8 @@ export class Markers {
         varying vec2 vUv; varying vec4 vCol;
         void main() {
           float r = length(vUv);
-          float a = 1.0 - smoothstep(0.35, 1.0, r);
+          float a = 1.0 - smoothstep(0.2, 1.0, r);
+          a *= a;
           if (a * vCol.a < 0.004) discard;
           gl_FragColor = vec4(vCol.rgb, a * vCol.a);
         }`,
@@ -389,9 +412,13 @@ export class Markers {
     this.mesh.frustumCulled = false;
     this.mesh.renderOrder = 25;
     this.mesh.name = 'markers';
-    this.mesh.onBeforeRender = (r, scene) => {
+    this.mesh.onBeforeRender = (r, scene, camera) => {
       const s = r.getDrawingBufferSize(this.tmpV);
       this.uView.value.copy(s);
+      if ((camera as THREE.PerspectiveCamera).isPerspectiveCamera) {
+        this.cam.setFromMatrixPosition(camera.matrixWorld);
+        this.pxK = 900 / (2 * Math.tan(((camera as THREE.PerspectiveCamera).fov * Math.PI) / 360));
+      }
       this.lit.probe(scene);
       const lv = this.lit.value;
       this.uBright.value = Math.min(1, Math.max(0.3, 0.3 + 0.7 * ((lv.x + lv.y + lv.z) / 3 / 0.7)));
@@ -400,34 +427,77 @@ export class Markers {
     };
     this.mesh.onAfterRender = () => { this.geo.instanceCount = this.n; };
   }
-  private tmpV = new THREE.Vector2();
 
-  begin(): void { this.n = 0; }
+  begin(): void {
+    this.m = 0;
+    this.n = 0;
+  }
 
-  add(sp: number, x: number, y: number, z: number, scale: number): void {
-    const m = MARKER[sp];
-    if (!m) return;
-    if (this.n >= this.cap) this.grow();
-    const o = this.n++ * 4;
-    this.p[o] = x; this.p[o + 1] = y; this.p[o + 2] = z; this.p[o + 3] = m[3] * Math.sqrt(Math.min(1.4, Math.max(0.5, scale)));
-    this.c[o] = m[0]; this.c[o + 1] = m[1]; this.c[o + 2] = m[2]; this.c[o + 3] = m[4];
+  /** Stage a marker candidate. `length` is the animal's true length in meters (before any screen-size boost). */
+  add(sp: number, x: number, y: number, z: number, length: number, scale: number): void {
+    const mk = MARKER[sp];
+    if (!mk) return;
+    const dx = x - this.cam.x, dy = y - this.cam.y, dz = z - this.cam.z;
+    const d2 = dx * dx + dy * dy + dz * dz;
+    if (d2 < NEAR_OFF * NEAR_OFF) return; // fully faded: skip the work
+    const px = (length * scale * this.pxK) / Math.sqrt(d2);
+    if (px > PX_HIDE) return;
+    if (this.m >= this.cap) this.grow();
+    const o = this.m++ * 8;
+    const st = this.st;
+    st[o] = sp; st[o + 1] = x; st[o + 2] = y; st[o + 3] = z; st[o + 4] = px; st[o + 5] = scale;
+  }
+
+  /** Run the cluster test and write the surviving markers. */
+  end(): void {
+    const G = this.gridN, st = this.st;
+    if (this.m > 0) {
+      this.grid.fill(0);
+      const cellOf = (v: number) => Math.min(G - 1, Math.max(0, Math.floor(v / CLUSTER_CELL)));
+      for (let k = 0; k < this.m; k++) {
+        const o = k * 8;
+        this.grid[(st[o] * G + cellOf(st[o + 3])) * G + cellOf(st[o + 1])]++;
+      }
+      let n = 0;
+      for (let k = 0; k < this.m; k++) {
+        const o = k * 8;
+        const sp = st[o];
+        const gi = cellOf(st[o + 1]), gj = cellOf(st[o + 3]);
+        // count this cell plus its 4 neighbours so a herd straddling a cell edge still counts as a herd
+        let cnt = this.grid[(sp * G + gj) * G + gi];
+        if (gi > 0) cnt += this.grid[(sp * G + gj) * G + gi - 1];
+        if (gi < G - 1) cnt += this.grid[(sp * G + gj) * G + gi + 1];
+        if (gj > 0) cnt += this.grid[(sp * G + gj - 1) * G + gi];
+        if (gj < G - 1) cnt += this.grid[(sp * G + gj + 1) * G + gi];
+        if (cnt < CLUSTER_MIN) continue;
+        const mk = MARKER[sp]!;
+        const px = st[o + 4];
+        const readable = 1 - Math.min(1, Math.max(0, (px - PX_SHOW) / (PX_HIDE - PX_SHOW)));
+        const dense = Math.min(1, (cnt - CLUSTER_MIN + 1) / 5);
+        const a = mk[4] * readable * (0.45 + 0.55 * dense);
+        if (a < 0.02) continue;
+        const q = n++ * 4;
+        this.p[q] = st[o + 1]; this.p[q + 1] = st[o + 2]; this.p[q + 2] = st[o + 3];
+        this.p[q + 3] = mk[3] * Math.sqrt(Math.min(1.4, Math.max(0.5, st[o + 5])));
+        this.c[q] = mk[0]; this.c[q + 1] = mk[1]; this.c[q + 2] = mk[2]; this.c[q + 3] = a;
+      }
+      this.n = n;
+    }
+    this.geo.instanceCount = this.n;
+    this.attrP.clearUpdateRanges(); this.attrP.addUpdateRange(0, this.n * 4); this.attrP.needsUpdate = true;
+    this.attrC.clearUpdateRanges(); this.attrC.addUpdateRange(0, this.n * 4); this.attrC.needsUpdate = true;
   }
 
   private grow(): void {
     const cap = this.cap * 2;
     const p = new Float32Array(cap * 4); p.set(this.p);
     const c = new Float32Array(cap * 4); c.set(this.c);
-    this.p = p; this.c = c; this.cap = cap;
+    const st = new Float32Array(cap * 8); st.set(this.st);
+    this.p = p; this.c = c; this.st = st; this.cap = cap;
     this.attrP = new THREE.InstancedBufferAttribute(p, 4).setUsage(THREE.DynamicDrawUsage);
     this.attrC = new THREE.InstancedBufferAttribute(c, 4).setUsage(THREE.DynamicDrawUsage);
     this.geo.setAttribute('aP', this.attrP);
     this.geo.setAttribute('aC', this.attrC);
-  }
-
-  end(): void {
-    this.geo.instanceCount = this.n;
-    this.attrP.clearUpdateRanges(); this.attrP.addUpdateRange(0, this.n * 4); this.attrP.needsUpdate = true;
-    this.attrC.clearUpdateRanges(); this.attrC.addUpdateRange(0, this.n * 4); this.attrC.needsUpdate = true;
   }
 
   /** Distance range (m) over which dots fade in. */
