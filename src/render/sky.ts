@@ -21,10 +21,12 @@ const KEYS: Key[] = [
     hSky: C('#6f98dc'), hGnd: C('#2e3f66'), hI: 0.9, expo: 1.55, haze: 0.5 },
   { el: -14, zen: C('#191a46'), mid: C('#2d3a78'), hor: C('#62588c'), glow: C('#c2682c'), sun: C('#000000'), sunI: 0,
     hSky: C('#6f98dc'), hGnd: C('#2e3f66'), hI: 0.95, expo: 1.55, haze: 0.6 },
-  { el: -7, zen: C('#1c326c'), mid: C('#4a5c94'), hor: C('#a0809a'), glow: C('#ff9a60'), sun: C('#ff6a28'), sunI: 0,
-    hSky: C('#7e98d4'), hGnd: C('#645466'), hI: 1.55, expo: 1.75, haze: 0.7 },
-  { el: -1.5, zen: C('#31529a'), mid: C('#7a8cba'), hor: C('#dca880'), glow: C('#ff9a55'), sun: C('#ffc29a'), sunI: 1.7,
-    hSky: C('#8eaae2'), hGnd: C('#a88060'), hI: 1.9, expo: 1.6, haze: 0.8 },
+  { el: -11, zen: C('#18286a'), mid: C('#384c88'), hor: C('#855a86'), glow: C('#ff7a50'), sun: C('#c8483c'), sunI: 0.1,
+    hSky: C('#7088cc'), hGnd: C('#4c4050'), hI: 1.1, expo: 1.65, haze: 0.5 },
+  { el: -7, zen: C('#1c326c'), mid: C('#4a5c94'), hor: C('#b07a8a'), glow: C('#ff9a60'), sun: C('#ff7038'), sunI: 0.85,
+    hSky: C('#7e98d4'), hGnd: C('#6a5248'), hI: 1.35, expo: 1.7, haze: 0.5 },
+  { el: -1.5, zen: C('#31529a'), mid: C('#7a8cba'), hor: C('#dca880'), glow: C('#ff9a55'), sun: C('#ffc29a'), sunI: 2.2,
+    hSky: C('#8eaae2'), hGnd: C('#a88060'), hI: 1.7, expo: 1.5, haze: 0.6 },
   { el: 3, zen: C('#3a66aa'), mid: C('#8fa8c8'), hor: C('#efc796'), glow: C('#ffb060'), sun: C('#ffcb9a'), sunI: 3.7,
     hSky: C('#8eaae0'), hGnd: C('#b08850'), hI: 1.5, expo: 1.1, haze: 0.9 },
   { el: 9, zen: C('#4a7ac0'), mid: C('#a8c0d8'), hor: C('#f0d6aa'), glow: C('#ffc070'), sun: C('#ffddb0'), sunI: 5.3,
@@ -168,7 +170,7 @@ export function computeAtmosphere(env: EnvLike, sm: Smoothed, u: SharedUniforms,
 
   // key light: sun by day, moon at night, continuous through twilight
   const sunI = lerp(k0.sunI, k1.sunI, t) * (1 - over * 0.78);
-  const moonAmt = smoothstep(-3, -13, elDeg);
+  const moonAmt = smoothstep(-6, -15, elDeg);
   const moonI = MOON_I * moonAmt * (1 - over * 0.5);
   mixKey(_a, (k) => k.sun, k0, k1, t);
   const total = sunI + moonI;
@@ -226,12 +228,13 @@ export function computeAtmosphere(env: EnvLike, sm: Smoothed, u: SharedUniforms,
   const golden = smoothstep(-4, 3, elDeg) * (1 - smoothstep(14, 32, elDeg));
   const night = u.night.value;
   // twilight keeps a little of the night grade so the handoff never dips dark
-  const nightG = Math.max(night, 0.6 * smoothstep(-2, -9, elDeg));
+  const twilight = smoothstep(-12, -4, elDeg) * (1 - smoothstep(-1, 3, elDeg));
+  const nightG = Math.max(night, 0.28 * smoothstep(-3, -10, elDeg));
   L.gradeNight = nightG;
   L.gradeHighlight.setRGB(1.0 + 0.08 * golden - 0.1 * nightG, 1.0 + 0.0 * golden + 0.02 * nightG, 1.0 - 0.1 * golden + 0.14 * nightG);
   L.gradeShadow.setRGB(1.0 - 0.14 * golden - 0.2 * nightG, 1.0 + 0.0 * golden + 0.0 * nightG, 1.0 + 0.24 * golden + 0.26 * nightG);
-  L.gradeSat = 1.1 - 0.1 * golden - 0.1 * nightG - 0.12 * over - 0.04 * winter;
-  L.gradeContrast = 1.08 - 0.06 * over + 0.06 * nightG;
+  L.gradeSat = 1.1 - 0.1 * golden + 0.06 * twilight - 0.1 * nightG - 0.12 * over - 0.04 * winter;
+  L.gradeContrast = 1.1 - 0.06 * over + 0.06 * nightG + 0.08 * twilight;
   L.vignette = 0.26 + 0.06 * nightG;
   L.bloom = 0.17 + 0.13 * golden + 0.06 * nightG;
   // shadow floor: a faint cool lift, plus more at night so nothing is ever pure black

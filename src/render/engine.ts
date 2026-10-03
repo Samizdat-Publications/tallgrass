@@ -38,8 +38,8 @@ const SEASONS: SeasonKey[] = [
   { s: 0.5, lush: '#63852f', cured: '#b09b52', stub: '#8f7d4c', soil: '#5e4630', gH: 0.9, gL: 1.0, leaf: 0.85, lA: '#55692c', lB: '#76863a' },
   { s: 1.0, lush: '#6f8a30', cured: '#c58b37', stub: '#8e7a46', soil: '#664a30', gH: 0.1, gL: 0.82, leaf: 1.0, lA: '#3d4d24', lB: '#667432' },
   { s: 1.5, lush: '#738833', cured: '#c58b37', stub: '#8e7a46', soil: '#664a30', gH: 0.06, gL: 0.66, leaf: 1.0, lA: '#43512a', lB: '#707c34' },
-  { s: 2.0, lush: '#88863a', cured: '#b9772e', stub: '#8c7240', soil: '#5e4632', gH: 0.08, gL: 0.42, leaf: 0.9, lA: '#8f7a26', lB: '#b08424' },
-  { s: 2.5, lush: '#8a7a35', cured: '#a8662a', stub: '#86683c', soil: '#5a4230', gH: 0.05, gL: 0.26, leaf: 0.42, lA: '#9a6a22', lB: '#8c5420' },
+  { s: 2.0, lush: '#88863a', cured: '#b9772e', stub: '#8c7240', soil: '#5e4632', gH: 0.08, gL: 0.42, leaf: 0.9, lA: '#77702e', lB: '#a98230' },
+  { s: 2.5, lush: '#8a7a35', cured: '#a8662a', stub: '#86683c', soil: '#5a4230', gH: 0.05, gL: 0.26, leaf: 0.42, lA: '#8a6a2a', lB: '#a07830' },
   { s: 3.0, lush: '#8d8a62', cured: '#b9a77c', stub: '#a89a74', soil: '#584a3c', gH: 0.05, gL: 0.16, leaf: 0.08, lA: '#6a5238', lB: '#7a6040' },
   { s: 3.5, lush: '#8d8f66', cured: '#b5a57e', stub: '#a59876', soil: '#584a3c', gH: 0.1, gL: 0.3, leaf: 0.1, lA: '#6a5238', lB: '#7a6040' },
 ];
@@ -169,6 +169,7 @@ export class Engine {
     this.sun.shadow.radius = 2;
     this.hemi = new THREE.HemisphereLight(0xffffff, 0x886644, 1);
 
+    this.scene.userData.tgUniforms = this.uniforms;
     this.scene.add(this.sky.mesh, this.terrain.mesh, this.water.mesh, this.trees.group, this.smoke.mesh, this.sun, this.hemi);
 
     this.post = new PostFX(renderer, this.scene, this.camera, this.uniforms);
@@ -361,9 +362,15 @@ export class Engine {
       simTicks = d > 0 && d < 5000 ? Math.min(d, 14) : d >= 5000 ? 14 : 0;
     }
     this.lastTick = env.tick;
-    const ease = (cur: number, target: number, tau: number) => cur + (target - cur) * (1 - Math.exp(-simTicks / tau));
+    // sim-time easing, but never faster than a floor in real seconds, so 10x or 100x fast-forward still shows snow settling
+    // and melting instead of snapping
+    const ease = (cur: number, target: number, tau: number, minReal = 0) => {
+      const kSim = simTicks / tau;
+      const kReal = minReal > 0 && !this.firstFrame ? dt / minReal : Infinity;
+      return cur + (target - cur) * (1 - Math.exp(-Math.min(kSim, kReal)));
+    };
     sm.overcast = ease(sm.overcast, overTarget, 160);
-    sm.snow = ease(sm.snow, snowTarget, snowTarget > sm.snow ? 320 : 220);
+    sm.snow = ease(sm.snow, snowTarget, snowTarget > sm.snow ? 320 : 220, snowTarget > sm.snow ? 7 : 9);
     sm.wet = ease(sm.wet, wetTarget, 200);
 
     computeAtmosphere(env, sm, u, this.lighting);
@@ -414,8 +421,8 @@ export class Engine {
       const focus = this.cam.getFocus(this._focus);
       u.occCam.value.copy(this.camera.position);
       u.occFocus.value.set(focus.x, focus.y + 0.5, focus.z);
-      const r = clamp(dist * 0.065, 1.8, 7);
-      u.occParams.value.set(r * 0.6, r * 1.7, this.occlusionFade ? 1 - smoothstep(110, 175, dist) : 0);
+      const r = clamp(dist * 0.04, 1.4, 5);
+      u.occParams.value.set(r * 0.5, r * 1.35, this.occlusionFade ? 1 - smoothstep(110, 175, dist) : 0);
     }
 
     this.terrain.updateShadow(this.renderer, u.lightDir.value);
@@ -439,6 +446,7 @@ export class Engine {
     u.greenHigh.value = lerp(a.gH, b.gH, t);
     u.greenLow.value = lerp(a.gL, b.gL, t);
     u.leafAmount.value = lerp(a.leaf, b.leaf, t);
+    this.trees.setLeafAmount(u.leafAmount.value);
 
     // terrain grass color = the blade layer's own palette (probes into grassTint, see grass.ts), so ground and blades match
     const cure = keyCurve(CURE_KEYS, s);

@@ -34,7 +34,7 @@ function buildCrown(seed: number, detail: number): CrownBuild {
   const rng = mulberry32(seed * 7919 + 13);
   const lumps: { c: THREE.Vector3; rho: number; sx: number }[] = [];
   const cy0 = 0.58, cyR = 0.3;
-  const N = 46 + Math.floor(rng() * 8);
+  const N = 56 + Math.floor(rng() * 8);
   for (let i = 0; i < N; i++) {
     // random direction, radius biased toward the shell
     let dx = rng() * 2 - 1, dy = rng() * 2 - 1, dz = rng() * 2 - 1;
@@ -44,7 +44,7 @@ function buildCrown(seed: number, detail: number): CrownBuild {
     const yy = dy < 0 ? dy * 0.72 : dy;
     lumps.push({
       c: new THREE.Vector3(dx * rad * 0.9, cy0 + yy * rad * cyR, dz * rad * 0.9),
-      rho: 0.15 + rng() * 0.12,
+      rho: 0.13 + rng() * 0.1,
       sx: 0.85 + rng() * 0.4,
     });
   }
@@ -71,7 +71,7 @@ function buildCrown(seed: number, detail: number): CrownBuild {
       cr.copy(Pw).sub(Cw);
       const dist = cr.length();
       cr.normalize();
-      nw.set(dir.x * 0.35 + cr.x * 0.65, dir.y * 0.35 + cr.y * 0.65 + 0.2, dir.z * 0.35 + cr.z * 0.65).normalize();
+      nw.set(dir.x * 0.1 + cr.x * 0.9, dir.y * 0.1 + cr.y * 0.9 + 0.2, dir.z * 0.1 + cr.z * 0.9).normalize();
       const nu = new THREE.Vector3(nw.x * R0, nw.y * H0, nw.z * R0).normalize();
       nrm.push(nu.x, nu.y, nu.z);
       // interior and underside darker, sunlit outer top bright
@@ -208,7 +208,7 @@ vec3 tgFragWorld(){ return cameraPosition + transpose( mat3( viewMatrix ) ) * ( 
 `;
 
 function foliageMaterial(shared: SharedUniforms, shrub: boolean): THREE.MeshStandardMaterial {
-  const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.86, metalness: 0 });
+  const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 1.0, metalness: 0 });
   // soft cut-out: alpha-to-coverage gives smooth leaf edges on the MSAA scene target instead of screen-door discard
   mat.alphaTest = 0.5;
   mat.alphaToCoverage = true;
@@ -227,7 +227,7 @@ function foliageMaterial(shared: SharedUniforms, shrub: boolean): THREE.MeshStan
       )
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvOcc = aOcc; vLump = aLump; vObj = position;')
       .replace('#include <project_vertex>', swayChunk(true));
-    const cell = shrub ? '0.5' : '0.85';
+    const cell = shrub ? '0.42' : '0.62';
     shader.fragmentShader = shader.fragmentShader
       .replace(
         'void main() {',
@@ -261,13 +261,16 @@ function foliageMaterial(shared: SharedUniforms, shrub: boolean): THREE.MeshStan
           vec3 wpw = tgFragWorld();
           float fdist = length( vViewPosition );
           float lod = smoothstep( 60.0, 190.0, fdist );
-          float keep = clamp( uLeaf + ( inst.b - 0.5 ) * 0.5 * ( 4.0 * uLeaf * ( 1.0 - uLeaf ) ) ${shrub ? '+ 0.45 * ( 1.0 - uLeaf )' : ''}, 0.0, 1.0 );
+          float keepRaw = clamp( uLeaf + ( inst.b - 0.5 ) * 0.5 * ( 4.0 * uLeaf * ( 1.0 - uLeaf ) ) ${shrub ? '+ 0.45 * ( 1.0 - uLeaf )' : ''}, 0.0, 1.0 );
+          // below about 0.1 a cottonwood is bare; in between leaves thin out one by one, not in whole clusters
+          float keep = ${shrub ? 'keepRaw' : 'smoothstep( 0.1, 0.55, keepRaw )'};
           float rim = 1.0 - abs( dot( tgSafeNorm( vNormal ), tgSafeNorm( vViewPosition ) ) );
+          float occC = clamp( vOcc, 0.0, 1.0 );
 
-          // leaf clusters: 3D cellular pattern in world space (about ${cell} m cells, 8-cell neighborhood)
-          float F1 = 9.0, F2 = 9.0;
+          // leaf puffs: nearest-point 3D cells in world space (about ${cell} m), each a ROUND clump with a ragged edge, not a polygon
+          float F1 = 9.0;
           vec3 cid = vec3( 0.0 ), crel = vec3( 0.0 );
-          float alive = 1.0, tone = 0.5, puff = 0.5, edgeD = 0.5;
+          float tone = 0.5, puff = 0.5, puffMask = 1.0;
           if ( lod < 0.999 ) {
             vec3 pc = wpw / ${cell} - 0.5;
             vec3 ip = floor( pc );
@@ -279,40 +282,53 @@ function foliageMaterial(shared: SharedUniforms, shrub: boolean): THREE.MeshStan
                   vec3 o = 0.15 + 0.7 * tgHash33( ip + g );
                   vec3 rv = g + o - fp;
                   float d = dot( rv, rv );
-                  if ( d < F1 ) { F2 = F1; F1 = d; cid = ip + g; crel = rv; }
-                  else if ( d < F2 ) { F2 = d; }
+                  if ( d < F1 ) { F1 = d; cid = ip + g; crel = rv; }
                 }
               }
             }
-            F1 = sqrt( F1 ); F2 = sqrt( F2 );
-            edgeD = F2 - F1;
-            float cr = tgHash31( cid + 3.7 );
+            F1 = sqrt( F1 );
             float cr2 = tgHash31( cid + 17.3 );
             tone = cr2;
             puff = 1.0 - clamp( F1 * 1.25, 0.0, 1.0 );
-            // clusters drop out with the season; a few are always bare so the crown is never a solid mass
-            alive = step( cr, keep ) * ( 1.0 - step( ${shrub ? '0.8' : '0.9'}, cr2 ) * 0.9 );
+            float rad = mix( ${shrub ? '0.7, 1.0' : '0.92, 1.18'}, tgHash31( cid + 3.7 ) );
+            float pn = ( tgNoise3( wpw * 5.0 ) - 0.5 ) * 0.24;
+            puffMask = smoothstep( rad, rad - 0.3, F1 + pn );
             gTgPuff = -crel;
           }
-          float nrag = tgNoise3( wpw * 6.5 ) * 0.6 + tgNoise3( wpw * 13.0 ) * 0.4;
-          float occC = clamp( vOcc, 0.0, 1.0 );
-          // gaps open up in the interior and underside (where it is dark anyway); the sunlit outer shell stays full
-          float holeThr = ${shrub ? '0.03' : '0.012'} + 0.1 * rim * rim + ${shrub ? '0.04' : '0.2'} * ( 1.0 - occC );
-          float cover = smoothstep( 0.0, 0.06, edgeD + ( nrag - 0.5 ) * 0.16 - holeThr ) * alive;
+          // leaves: speckle at leaf scale, dropped by the season and more often at silhouettes and on the dark underside
+          float fine = tgNoise3( wpw * 8.5 ) * 0.55 + tgNoise3( wpw * 19.0 ) * 0.45;
+          float edgeBias = rim * rim * 0.5 + ( 1.0 - occC ) * ${shrub ? '0.12' : '0.2'};
+          float leafThr = keep * 1.05 - edgeBias;
+          float leafMask = smoothstep( leafThr + 0.07, leafThr - 0.07, fine );
+          float cover = puffMask * leafMask;
           // distance: fade the pattern out to the average so far canopies never shimmer
-          float avgCover = ${shrub ? '0.78' : '0.84'} * ( 0.1 + 0.9 * keep );
+          float avgCover = ${shrub ? '0.78' : '0.86'} * ( 0.05 + 0.95 * keep );
           cover = mix( cover, avgCover, lod );
           float fade = tgOcclusionFade( wpw );
           diffuseColor.a = cover * fade;
 
-          float mixT = clamp( 0.5 + ( tone - 0.5 ) * 1.1 + ( inst.g - 0.5 ) * 0.5 + ( vLump - 0.5 ) * 0.2, 0.0, 1.0 );
+          float mixT = clamp( 0.5 + ( tone - 0.5 ) * 0.6 + ( inst.g - 0.5 ) * 0.5 + ( vLump - 0.5 ) * 0.06, 0.0, 1.0 );
           vec3 leaf = mix( uLeafA, uLeafB, mixT );
           // vOcc is interpolated per MSAA pixel center and can overshoot at silhouette pixels: clamp before any pow
           float occ = clamp( vOcc, 0.0, 1.0 );
           float shade = 0.12 + 0.95 * pow( occ, 1.15 );
-          shade *= mix( 0.7 + 0.5 * puff, 1.0, lod );
+          shade *= mix( 0.78 + 0.34 * puff, 1.0, lod );
           leaf *= shade * ( 0.84 + 0.2 * tgNoise3( wpw * 2.6 ) + 0.16 * tgNoise3( wpw * 9.0 ) ) * inst.r;
-          ${shrub ? 'leaf = mix( leaf, vec3( dot( leaf, vec3( 0.333 ) ) ) * vec3( 1.0, 0.98, 0.86 ) + vec3( 0.02, 0.018, 0.012 ), 0.62 );' : ''}
+          ${shrub ? `{
+            // four shrub families picked per bush (inst.g), warm or sage, with the season pulling them toward russet and straw
+            vec3 c0 = vec3( 0.2, 0.21, 0.1 );   // sage olive
+            vec3 c1 = vec3( 0.1, 0.115, 0.04 );   // olive green
+            vec3 c2 = vec3( 0.05, 0.1, 0.028 );     // dark green
+            vec3 c3 = vec3( 0.25, 0.16, 0.065 );    // dry brown
+            float hh = clamp( inst.g, 0.0, 0.999 ) * 3.0;
+            vec3 sb = mix( c0, c1, smoothstep( 0.8, 1.2, hh ) );
+            sb = mix( sb, c2, smoothstep( 1.8, 2.2, hh ) );
+            sb = mix( sb, c3, smoothstep( 2.5, 2.9, hh ) );
+            float autumnK = smoothstep( 1.0, 1.7, uLeafA.r / ( uLeafA.g + 0.01 ) );
+            sb = mix( sb, mix( uLeafB, vec3( 0.28, 0.12, 0.04 ), 0.4 ) * 1.1, 0.5 * autumnK );
+            sb = mix( sb, vec3( 0.2, 0.15, 0.1 ), 0.55 * ( 1.0 - uLeaf ) );
+            leaf = sb * shade * ( 0.8 + 0.4 * tone ) * inst.r * 0.95;
+          }` : ''}
           diffuseColor.rgb = mix( leaf, vec3( 0.9, 0.93, 1.0 ), uSnow * 0.5 * smoothstep( 0.3, 0.9, occ ) );
         }`,
       )
@@ -339,7 +355,7 @@ if ( !( dot( normal, normal ) > 0.25 ) ) normal = vec3( 0.0, 1.0, 0.0 );`)
       );
     shader.fragmentShader = injectSafeOutput( shader.fragmentShader );
   };
-  mat.customProgramCacheKey = () => (shrub ? 'tg-shrub-v3' : 'tg-foliage-v3');
+  mat.customProgramCacheKey = () => (shrub ? 'tg-shrub-v4' : 'tg-foliage-v4');
   return mat;
 }
 
@@ -435,6 +451,8 @@ export class Trees {
   readonly meshes: THREE.InstancedMesh[] = [];
   treeCount = 0;
   shrubCount = 0;
+  rockCount = 0;
+  private crownsShown = true;
   private disposables: { dispose(): void }[] = [];
   private lods: LodInstances[] = [];
 
@@ -523,23 +541,39 @@ export class Trees {
       this.lods.push(new LodInstances(N, barkMats, null, pos, [barkMesh, barkFar], [110, Infinity]));
     }
 
-    // shrubs
-    const ns = world.shrubs.length / 3;
+    // shrubs: thin the sim's even scatter into thickets (along water, in draws and on rocky slopes), vary size, shape and family,
+    // and sink them a little so they sit in the grass instead of on it
+    const keepIdx: number[] = [];
+    for (let i = 0; i < world.shrubs.length / 3; i++) {
+      const x = world.shrubs[i * 3], z = world.shrubs[i * 3 + 1];
+      const ci = Math.min(world.n - 1, Math.max(0, Math.floor(x / world.cell))), cj = Math.min(world.n - 1, Math.max(0, Math.floor(z / world.cell)));
+      const c = cj * world.n + ci;
+      const thick = fbm2(x * 0.028 + 5, z * 0.028 - 13, 3, 61);
+      let pk = 0.07 + 0.85 * smoothstep(0.5, 0.7, thick);
+      if (world.waterDist[c] < 22 && world.waterDist[c] > 3) pk += 0.3;
+      if (world.slope[c] > 0.26) pk += 0.2;
+      if (hash2(i, 55, 7) < Math.min(0.95, pk)) keepIdx.push(i);
+    }
+    const ns = keepIdx.length;
     this.shrubCount = ns;
     if (ns > 0) {
       const mats = new Float32Array(ns * 16), cols = new Float32Array(ns * 3), pos = new Float32Array(ns * 3);
-      for (let i = 0; i < ns; i++) {
+      for (let q = 0; q < ns; q++) {
+        const i = keepIdx[q];
         const x = world.shrubs[i * 3], z = world.shrubs[i * 3 + 1], r = world.shrubs[i * 3 + 2];
-        const y = heightAt(x, z) - 0.08;
+        const big = hash2(i, 41, 3) < 0.12 ? 1.5 : 1.0;
+        const sc = r * (0.55 + hash2(i, 8, 3) * 0.55) * big;
+        const flat = 0.45 + hash2(i, 9, 3) * 0.55;
+        const y = heightAt(x, z) - 0.22 * sc * flat;
         dummy.position.set(x, y, z);
         dummy.rotation.set(0, hash2(i, 7, 3) * Math.PI * 2, 0);
-        const sc = r * (0.9 + hash2(i, 8, 3) * 0.3) * 1.05;
-        dummy.scale.set(sc, sc * (0.5 + hash2(i, 9, 3) * 0.25), sc);
+        dummy.scale.set(sc * (0.8 + hash2(i, 42, 3) * 0.5), sc * flat, sc * (0.8 + hash2(i, 43, 3) * 0.5));
         dummy.updateMatrix();
-        dummy.matrix.toArray(mats, i * 16);
-        col.setRGB(0.8 + hash2(i, 10, 3) * 0.35, hash2(i, 11, 3), hash2(i, 12, 3));
-        cols[i * 3] = col.r; cols[i * 3 + 1] = col.g; cols[i * 3 + 2] = col.b;
-        pos[i * 3] = x; pos[i * 3 + 1] = y + 0.5; pos[i * 3 + 2] = z;
+        dummy.matrix.toArray(mats, q * 16);
+        // (brightness, family, season phase): families spread across sage, olive, dark green and dry brown
+        col.setRGB(0.75 + hash2(i, 10, 3) * 0.5, hash2(i, 11, 3), hash2(i, 12, 3));
+        cols[q * 3] = col.r; cols[q * 3 + 1] = col.g; cols[q * 3 + 2] = col.b;
+        pos[q * 3] = x; pos[q * 3 + 1] = y + 0.4; pos[q * 3 + 2] = z;
       }
       const shrubMeshes: THREE.InstancedMesh[] = [];
       [2, 1, 0].forEach((detail, li) => {
@@ -559,12 +593,124 @@ export class Trees {
       });
       this.lods.push(new LodInstances(ns, mats, cols, pos, shrubMeshes, [38, 240, 900]));
     }
+
+    // rock outcrops: angular, partly buried stones in clusters on rocky slopes and ridges (a few lone ones on the flats)
+    this.buildOutcrops(world, shared, heightAt);
     this.update(new THREE.Vector3(world.size / 2, 100, world.size / 2), true);
   }
 
   /** Re-bucket instances by distance to the camera (cheap; skips when the camera has barely moved). */
   update(cam: THREE.Vector3, force = false): void {
     for (const l of this.lods) l.update(cam, force);
+  }
+
+  /** Bare winter trees: hide the cottonwood crowns entirely so only clean branches remain. */
+  setLeafAmount(leaf: number): void {
+    const show = leaf > 0.1;
+    if (show === this.crownsShown) return;
+    this.crownsShown = show;
+    for (const m of this.meshes) if (m.name.startsWith('cottonwood-crown')) m.visible = show;
+  }
+
+  private buildOutcrops(world: World, shared: SharedUniforms, heightAt: (x: number, z: number) => number): void {
+    // geometry: a faceted lump with flat normals, three variants
+    const geos: THREE.BufferGeometry[] = [];
+    for (let v = 0; v < 3; v++) {
+      const ico = new THREE.IcosahedronGeometry(1, 1);
+      const pa = ico.getAttribute('position');
+      for (let i = 0; i < pa.count; i++) {
+        const x = pa.getX(i), y = pa.getY(i), z = pa.getZ(i);
+        const n = vnoise2(x * 2.2 + v * 7, y * 2.4 + z * 1.7, 31 + v);
+        const k = 0.78 + 0.5 * n;
+        pa.setXYZ(i, x * k * (1.0 + 0.25 * (v - 1)), y * k * 0.62, z * k);
+      }
+      // the icosahedron is non-indexed already, so computed normals are per face: a faceted, chipped stone
+      ico.computeVertexNormals();
+      geos.push(ico);
+      this.disposables.push(ico);
+    }
+    const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.93, metalness: 0 });
+    mat.onBeforeCompile = (shader) => {
+      injectTerrainShadow(shader, shared);
+      shader.vertexShader = shader.vertexShader
+        .replace('void main() {', `varying vec3 vRockLocal;
+void main() {`)
+        .replace('#include <begin_vertex>', `#include <begin_vertex>
+vRockLocal = position;`);
+      shader.fragmentShader = shader.fragmentShader
+        .replace('void main() {', `varying vec3 vRockLocal;
+${NOISE_GLSL}
+${WORLDPOS_GLSL}
+void main() {`)
+        .replace(
+          '#include <color_fragment>',
+          `#include <color_fragment>
+          {
+            vec3 wpr = tgFragWorld();
+            float strata = tgNoise3( vec3( wpr.x * 1.3, wpr.y * 7.0, wpr.z * 1.3 ) );
+            float grit = tgNoise3( wpr * 9.0 );
+            diffuseColor.rgb *= 0.7 + 0.3 * strata + 0.18 * grit;
+            // lichen: yellow-green and orange crusts on the upward faces
+            float lich = smoothstep( 0.62, 0.8, tgNoise3( wpr * 3.1 + 7.0 ) ) * smoothstep( 0.2, 0.8, normalize( vNormal ).y );
+            float lich2 = smoothstep( 0.66, 0.82, tgNoise3( wpr * 4.7 + 21.0 ) );
+            diffuseColor.rgb = mix( diffuseColor.rgb, vec3( 0.32, 0.34, 0.1 ), lich * 0.55 );
+            diffuseColor.rgb = mix( diffuseColor.rgb, vec3( 0.55, 0.26, 0.05 ), lich2 * 0.4 );
+            gTgShadow = tgSampleTerrainShadow();
+          }`,
+        );
+      shader.fragmentShader = injectSafeOutput(shader.fragmentShader);
+    };
+    mat.customProgramCacheKey = () => 'tg-rock-v1';
+    this.disposables.push(mat);
+
+    interface R { x: number; z: number; s: number; sq: number; rot: number; c: number }
+    const rocks: R[] = [];
+    const S = world.size;
+    for (let k = 0; k < 9000 && rocks.length < 230; k++) {
+      const x = 46 + hash2(k, 1, 91) * (S - 92), z = 46 + hash2(k, 2, 91) * (S - 92);
+      const ci = Math.floor(x / world.cell), cj = Math.floor(z / world.cell), c = cj * world.n + ci;
+      if (world.water[c] || world.waterDist[c] < 5) continue;
+      const slope = world.slope[c];
+      const thick = fbm2(x * 0.035 + 3, z * 0.035 - 5, 3, 91);
+      const p = smoothstep(0.2, 0.5, slope) * smoothstep(0.5, 0.68, thick) + 0.0006;
+      if (hash2(k, 3, 91) > p) continue;
+      const n = 2 + Math.floor(hash2(k, 4, 91) * 5);
+      for (let q = 0; q < n && rocks.length < 230; q++) {
+        const a = hash2(k, 10 + q, 91) * Math.PI * 2, r = hash2(k, 20 + q, 91) * 4.5;
+        const rx = x + Math.cos(a) * r, rz = z + Math.sin(a) * r;
+        const sz = 0.28 + Math.pow(hash2(k, 30 + q, 91), 2.6) * 1.35;
+        rocks.push({ x: rx, z: rz, s: sz, sq: 0.55 + hash2(k, 40 + q, 91) * 0.6, rot: hash2(k, 50 + q, 91) * 6.28, c: hash2(k, 60 + q, 91) });
+      }
+    }
+    const per: R[][] = [[], [], []];
+    rocks.forEach((r, i) => per[i % 3].push(r));
+    const dummy = new THREE.Object3D();
+    const col = new THREE.Color();
+    // warm sandstone, grey-tan, rusty and a few darker basalt stones
+    const palette = ['#a98558', '#94775a', '#9c6842', '#7e6c56', '#b08f60', '#7a5a3e'];
+    per.forEach((list, v) => {
+      if (!list.length) return;
+      const m = new THREE.InstancedMesh(geos[v], mat, list.length);
+      m.name = `outcrop-${v}`;
+      list.forEach((r, i) => {
+        const y = heightAt(r.x, r.z);
+        dummy.position.set(r.x, y + 0.18 * r.s, r.z);
+        dummy.rotation.set((hash2(i, v, 5) - 0.5) * 0.35, r.rot, (hash2(i, v, 6) - 0.5) * 0.35);
+        dummy.scale.set(r.s * (0.9 + 0.5 * r.sq), r.s * (0.55 + 0.35 * r.sq), r.s * (1.1 - 0.4 * r.sq + 0.2));
+        dummy.updateMatrix();
+        m.setMatrixAt(i, dummy.matrix);
+        col.set(palette[Math.min(palette.length - 1, Math.floor(r.c * palette.length))]);
+        m.setColorAt(i, col);
+      });
+      m.castShadow = true;
+      m.receiveShadow = true;
+      m.frustumCulled = false;
+      m.instanceMatrix.needsUpdate = true;
+      if (m.instanceColor) m.instanceColor.needsUpdate = true;
+      this.group.add(m);
+      this.meshes.push(m);
+    });
+    this.rockCount = rocks.length;
   }
 
   dispose(): void {

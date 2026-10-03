@@ -565,6 +565,9 @@ uniform float uAO;
 uniform float uDebug;
 uniform float uSat;
 uniform float uBounce;
+uniform float uSnow;
+uniform float uSpecK;
+uniform float uMoon;
 uniform vec3 uGreenB;
 uniform vec3 uGreenM;
 uniform vec3 uGreenT;
@@ -622,14 +625,14 @@ void main() {
   float ridge = vP3.w;
   // seen from above or from afar the dark blade bases are hidden under the canopy: lift them, or the sparse
   // thinned blades show up as dark flecks on the ground
-  float baseLift = max(smoothstep(0.3, 0.85, V.y), smoothstep(30.0, 90.0, vP2.y));
+  float baseLift = max(max(smoothstep(0.3, 0.85, V.y), smoothstep(30.0, 90.0, vP2.y)), 0.85 * uMoon);
   float vc = mix(v, 0.55 + 0.45 * v, baseLift);
   vec3 aGreen = grad3(uGreenB, uGreenM, uGreenT, vc);
   vec3 aDry = grad3(uDryB, uDryM, uDryT, vc);
   vec3 albedo = mix(aGreen, aDry, dry);
   // per-blade variation fades with distance so the mid field is smooth, not salt and pepper
   float nearK = 1.0 - smoothstep(25.0, 90.0, vP2.y);
-  albedo *= mix(1.0, 0.8 + 0.4 * bright, nearK);
+  albedo *= mix(1.0, 0.8 + 0.4 * bright, nearK * (1.0 - 0.75 * uMoon));
   // broad swaths (already faded out with distance), patches and tussocks: gentle, never a regular pattern
   albedo *= 1.0 + 0.55 * (vP2.z - 0.5);
   albedo *= 0.9 + 0.2 * vP2.w;
@@ -679,6 +682,12 @@ void main() {
 #endif
   }
   albedo = mix(albedo, uAsh, burn);
+  // snow on the blades: starts at the tips and in the patches where it settles first, so the field greys and whitens gradually
+  {
+    float snowPatch = 0.3 + 0.7 * vP2.w;
+    float snowK = clamp(uSnow * 1.35 - 0.1 - (1.0 - snowPatch) * 0.55, 0.0, 1.0) * (0.3 + 0.7 * smoothstep(0.2, 1.0, v)) * (1.0 - burn);
+    albedo = mix(albedo, vec3(0.8, 0.8, 0.82), snowK * 0.78);
+  }
 
   // ---- lighting
   vec3 L = sn(uSunDir);
@@ -689,10 +698,11 @@ void main() {
   // with distance the blades stand in for a continuous sward, so light them like the ground they stand on:
   // otherwise randomly oriented thin blades read as dark pepper on the sunlit terrain between them
   float farK = smoothstep(25.0, 85.0, vP2.y);
-  vec3 Nl = sn(mix(Nf, Ng, 0.4 + 0.5 * farK));
+  // under moonlight single blades must not flash: shade every blade with nearly the ground normal and a high wrap
+  vec3 Nl = sn(mix(Nf, Ng, mix(0.4 + 0.5 * farK, 0.97, uMoon)));
   float ndl = dot(Nl, L);
   float wrap = saturate(ndl * 0.8 + 0.2);
-  wrap = mix(wrap, max(wrap, 0.62), farK);
+  wrap = mix(wrap, max(wrap, 0.62), max(farK, uMoon));
   vec3 diffuse = albedo * uSunColor * wrap * RECIPROCAL_PI * shadow;
 
   float canopyT = mix(0.35, 1.0, smoothstep(0.0, 0.8, vP2.x));
@@ -700,7 +710,7 @@ void main() {
   float fwd = pow(clamp(dot(-V, L), 0.0, 1.0), 3.0);
   float transK = pow(max(backFace, 0.0), 1.5) * (0.2 + 0.8 * fwd) * (0.12 + 0.88 * pow(max(v, 0.0), 1.3)) * (0.55 + 0.9 * max(bright, 0.0));
   vec3 trans = pow(max(albedo, vec3(0.0)), vec3(0.8)) * uSunColor * transK * uTrans * shadow * RECIPROCAL_PI;
-  trans *= mix(1.0, canopyT, 0.8);
+  trans *= mix(1.0, canopyT, 0.8) * (1.0 - 0.9 * uMoon);
 
   vec3 Namb = sn(mix(Nf, vec3(0.0, 1.0, 0.0), 0.6));
   vec3 irr = ambientLightColor;
@@ -715,7 +725,7 @@ void main() {
   irr += mix(uAmbGround, uAmbSky, 0.5 * Namb.y + 0.5);
 #endif
   float aoDist = 1.0 - smoothstep(12.0, 75.0, vP2.y);
-  float ao = mix(uAO, 1.0, smoothstep(0.0, 0.7, vc));
+  float ao = mix(mix(uAO, 1.0, 0.5 * uMoon), 1.0, smoothstep(0.0, 0.7, vc));
   ao = mix(1.0, ao, (0.4 + 0.6 * bio) * aoDist * (1.0 - 0.7 * baseLift));
   // shorter blades sit under taller ones: darker overall, which gives the field its light and dark structure
   float canopy = mix(1.0, mix(0.45, 1.0, smoothstep(0.0, 0.75, vP2.x)), 0.08 + 0.77 * aoDist);
@@ -726,8 +736,8 @@ void main() {
   vec3 Hh = sn(L + V);
   vec3 Ns = sn(mix(Nf, Ng, 0.25));
   float nh = clamp(dot(Ns, Hh), 0.0, 1.0);
-  float sp = pow(nh, 48.0) * 0.55 + pow(nh, 8.0) * 0.08;
-  vec3 spec = uSunColor * sp * uSpec * smoothstep(0.3, 1.0, v) * shadow * RECIPROCAL_PI * 1.6 * (1.0 - smoothstep(15.0, 90.0, vP2.y));
+  float sp = pow(nh, 20.0) * 0.3 + pow(nh, 6.0) * 0.07;
+  vec3 spec = uSunColor * sp * uSpec * uSpecK * smoothstep(0.3, 1.0, v) * shadow * RECIPROCAL_PI * 1.6 * (1.0 - smoothstep(15.0, 90.0, vP2.y));
 
   vec3 col = ambient + (diffuse + trans) * mix(1.0, ao, 0.75) + spec * canopy;
   col *= 1.0 + uGustLight * (gust - 0.4) * (0.35 + 0.65 * uWindStr);
@@ -793,6 +803,8 @@ export class GrassField {
   private terrainShadowU: { value: THREE.Texture | null } | null = null;
   private whiteTex: THREE.DataTexture;
   private frameNo = 0;
+  private snowU: { value: number } | null = null;
+  private snowTry = 0;
   private vegVersion = -1;
   private lastVegRebuild = -1e9;
   private frustum = new THREE.Frustum();
@@ -854,6 +866,9 @@ export class GrassField {
       uDebug: { value: 0 },
       uSat: { value: 1 },
       uBounce: { value: 0.07 },
+      uSnow: { value: 0 },
+      uSpecK: { value: 1 },
+      uMoon: { value: 0 },
       uGreenB: { value: new THREE.Color() },
       uGreenM: { value: new THREE.Color() },
       uGreenT: { value: new THREE.Color() },
@@ -1101,6 +1116,17 @@ export class GrassField {
     u.uDebug.value = P.debug;
     u.uSat.value = P.saturation;
     u.uBounce.value = P.bounce;
+    if (!this.snowU && (this.snowTry++ & 15) === 0) {
+      let root: THREE.Object3D = this.object3D;
+      while (root.parent) root = root.parent;
+      const tu = root.userData?.tgUniforms as { snow?: { value: number } } | undefined;
+      if (tu?.snow) this.snowU = tu.snow;
+    }
+    u.uSnow.value = this.snowU?.value ?? 0;
+    // grass blades under moonlight (blue key light) must not sparkle like static: damp the specular sheen there
+    const moon = Math.max(0, Math.min(1, (sun.color.b / Math.max(sun.color.r, 1e-3) - 0.95) * 3));
+    u.uSpecK.value = 1 - 0.93 * moon;
+    u.uMoon.value = moon;
 
     u.uSunDir.value.copy(sun.dir).normalize();
     u.uSunColor.value.copy(sun.color).multiplyScalar(P.lightScale);

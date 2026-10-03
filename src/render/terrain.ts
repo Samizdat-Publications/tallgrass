@@ -9,7 +9,7 @@ import {
   HEIGHT_GLSL, NOISE_GLSL, SharedUniforms, clamp, fbm2, injectSafeOutput, injectTerrainShadow, smoothstep, vnoise2,
 } from './common';
 
-const SHADOW_RES = 256;
+const SHADOW_RES = 512;
 const FAR_RES = 512;
 const EXT_CELL = 4;
 const FAR_ORIGIN = -768;
@@ -87,6 +87,39 @@ function shapeCreek(world: World): { height: Float32Array; creekDist: Float32Arr
       h = hb * (1 - j) + sim * j;
     }
     out[v] = h;
+  }
+  // ponds: reshape each into a smooth round basin with a gently ragged shoreline, so the water meets the land along a natural
+  // curve instead of the grid-aligned stair-steps the sim's coarse bowl leaves
+  const ponds = world.ponds;
+  for (let q = 0; q < ponds.length; q += 4) {
+    const cx = ponds[q], cz = ponds[q + 1], r = ponds[q + 2], sf = ponds[q + 3];
+    const R2 = r * 2.4;
+    const i0 = Math.max(0, Math.floor((cx - R2) / cell)), i1 = Math.min(hn - 1, Math.ceil((cx + R2) / cell));
+    const j0 = Math.max(0, Math.floor((cz - R2) / cell)), j1 = Math.min(hn - 1, Math.ceil((cz + R2) / cell));
+    for (let j = j0; j <= j1; j++) {
+      for (let i = i0; i <= i1; i++) {
+        const x = i * cell, z = j * cell;
+        const dx = x - cx, dz = z - cz;
+        const d = Math.hypot(dx, dz);
+        if (d > R2) continue;
+        const ang = Math.atan2(dz, dx);
+        const rag = 1 + 0.16 * (vnoise2(Math.cos(ang) * 1.8 + 5 + q, Math.sin(ang) * 1.8 + 3, 17) - 0.5) + 0.07 * (vnoise2(Math.cos(ang) * 4.5 + q, Math.sin(ang) * 4.5, 23) - 0.5);
+        const re = r * 0.98 * rag;
+        const v = j * hn + i;
+        const sim = world.height[v];
+        let h: number;
+        if (d < re) {
+          const u = d / re;
+          h = sf - 0.12 - 1.5 * (1 - u * u);
+        } else {
+          const bank = sf + 0.12 + 0.42 * smoothstep(re, re + 0.5 * r, d);
+          const j2 = smoothstep(re + 0.5 * r, R2, d);
+          h = bank * (1 - j2) + Math.max(sim, bank) * j2;
+          if (d < re + 2.2) h = Math.min(h, sf + 0.05 + (d - re) * 0.35);
+        }
+        out[v] = h;
+      }
+    }
   }
   return { height: out, creekDist: dC };
 }
@@ -370,12 +403,13 @@ export class Terrain {
           if (len > 1e-4) {
             d2 /= len;
             float tanEl = uLightDir.y / len;
-            float t = uT0;
+            float jit = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
+            float t = uT0 * (0.82 + 0.36 * jit);
             for (int i = 0; i < 64; i++) {
               vec2 p = xz + d2 * t;
               float hr = h0 + tanEl * t;
               float hit = blockerH(p, wStart) - hr;
-              float w = 0.4 + t * uPen;
+              float w = 0.7 + t * uPen * 1.5;
               vis = min(vis, clamp(0.5 - 0.5 * hit / w, 0.0, 1.0));
               t *= uGrow;
               if (t > 2600.0) break;
@@ -486,6 +520,20 @@ export class Terrain {
         nor[k] = -dhdx / l; nor[k + 1] = 1 / l; nor[k + 2] = -dhdz / l;
       }
     }
+    // Ridge and hollow signal per vertex: height excess over the average of the four neighbours about 16 m away (spacing-aware),
+    // normalised so +1 is a pronounced crest and -1 a pronounced draw. The ground shader turns it into dry pale ridges and
+    // deep olive draws, which is most of what makes a far hill read as grass instead of smooth sand.
+    const curv = new Float32Array(M * M);
+    for (let j = 0; j < M; j++) {
+      for (let i = 0; i < M; i++) {
+        const sp = (axis[Math.min(M - 1, i + 1)] - axis[Math.max(0, i - 1)]) * 0.5;
+        const k = Math.max(1, Math.round(16 / Math.max(sp, 0.5)));
+        const i0 = Math.max(0, i - k), i1 = Math.min(M - 1, i + k), j0 = Math.max(0, j - k), j1 = Math.min(M - 1, j + k);
+        const avg = 0.25 * (hts[j * M + i0] + hts[j * M + i1] + hts[j0 * M + i] + hts[j1 * M + i]);
+        const R = Math.max(1, 0.25 * (axis[i1] - axis[i0] + axis[j1] - axis[j0]));
+        curv[j * M + i] = clamp((hts[j * M + i] - avg) / (R * 0.1), -1, 1);
+      }
+    }
     this.axis = axis;
     this.hts = hts;
     const idx = new Uint32Array((M - 1) * (M - 1) * 6);
@@ -501,6 +549,7 @@ export class Terrain {
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
     geo.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
+    geo.setAttribute('aCurv', new THREE.BufferAttribute(curv, 1));
     geo.setIndex(new THREE.BufferAttribute(idx, 1));
     geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(this.world.size / 2, 20, this.world.size / 2), 9000);
     geo.boundingBox = new THREE.Box3(new THREE.Vector3(-5000, -20, -5000), new THREE.Vector3(5600, 400, 5600));
@@ -525,13 +574,14 @@ export class Terrain {
       u.uGrassGreen = sh.grassGreen;
       u.uGrassDry = sh.grassDry;
       u.uCure = sh.cure;
+      u.uSeason = sh.season;
       u.uFrost = sh.frost;
       u.uSnow = sh.snow;
       u.uWet = sh.wet;
       u.uFear = sh.fearOverlay;
       shader.vertexShader = shader.vertexShader
-        .replace('void main() {', 'varying vec3 vTgWorld;\nvarying vec3 vTgNormal;\nvoid main() {')
-        .replace('#include <begin_vertex>', '#include <begin_vertex>\nvTgWorld = (modelMatrix * vec4(transformed, 1.0)).xyz;\nvTgNormal = normal;');
+        .replace('void main() {', 'attribute float aCurv;\nvarying float vTgCurv;\nvarying vec3 vTgWorld;\nvarying vec3 vTgNormal;\nvoid main() {')
+        .replace('#include <begin_vertex>', '#include <begin_vertex>\nvTgWorld = (modelMatrix * vec4(transformed, 1.0)).xyz;\nvTgNormal = normal;\nvTgCurv = aCurv;');
       shader.fragmentShader = shader.fragmentShader
         .replace('void main() {', GROUND_PARS + '\nvoid main() {')
         .replace(
@@ -550,23 +600,19 @@ export class Terrain {
           '#include <normal_fragment_maps>',
           `#include <normal_fragment_maps>
           {
-            vec3 tgv = vTgWorld - cameraPosition;
-            float tgd = length(tgv);
-            float tgGraze = smoothstep(0.04, 0.3, max(-tgv.y / tgd, 0.0));
-            float k = (1.0 - smoothstep(25.0, 140.0, tgd)) * 0.16 * mix(0.2, 1.0, tgGraze);
-            if (k > 0.001) {
-              vec2 e = vec2(0.4, 0.0);
-              float h0 = tgStreakH(vTgWorld.xz);
-              float hx = tgStreakH(vTgWorld.xz + e.xy);
-              float hz = tgStreakH(vTgWorld.xz + e.yx);
-              vec3 g = vec3(h0 - hx, 0.0, h0 - hz) * k * gTgGrass;
-              normal = normalize(normal + mat3(viewMatrix) * g);
+            // combed-grass relief from the height the ground shader computed, via screen derivatives (no extra noise taps)
+            vec3 tgSx = dFdx( -vViewPosition ), tgSy = dFdy( -vViewPosition );
+            vec3 tgR1 = cross( tgSy, normal ), tgR2 = cross( normal, tgSx );
+            float tgDet = dot( tgSx, tgR1 );
+            if ( abs( tgDet ) > 1e-10 ) {
+              vec3 tgGrad = sign( tgDet ) * ( dFdx( gTgH ) * tgR1 + dFdy( gTgH ) * tgR2 );
+              normal = normalize( abs( tgDet ) * normal - tgGrad );
             }
           }`,
         );
       shader.fragmentShader = injectSafeOutput( shader.fragmentShader );
     };
-    mat.customProgramCacheKey = () => 'tallgrass-terrain-v3';
+    mat.customProgramCacheKey = () => 'tallgrass-terrain-v4';
 
     const mesh = new THREE.Mesh(geo, mat);
     mesh.castShadow = false;
@@ -599,6 +645,7 @@ uniform vec3 uLightColor;
 uniform vec3 uGrassGreen;
 uniform vec3 uGrassDry;
 uniform float uCure;
+uniform float uSeason;
 uniform vec3 uStubble;
 uniform vec3 uSoil;
 uniform vec3 uRock;
@@ -608,15 +655,22 @@ uniform float uWet;
 uniform float uFear;
 varying vec3 vTgWorld;
 varying vec3 vTgNormal;
+varying float vTgCurv;
 ${NOISE_GLSL}
 float gTgRough = 0.95;
+float gTgH = 0.0;
 vec3 gTgEmis = vec3(0.0);
 float gTgGrass = 1.0;
 
-float tgStreakH(vec2 xz){
-  vec2 wd = uWind.xy;
-  vec2 sp = vec2(dot(xz, wd), dot(xz, vec2(-wd.y, wd.x)));
-  return tgNoise2(vec2(sp.x * 0.05, sp.y * 1.3)) * 0.6 + tgNoise2(vec2(sp.x * 0.11, sp.y * 3.1)) * 0.4;
+// Oriented value noise: streaks that run along one of four fixed directions, blended by weights ow (so the pattern never shears
+// when the flow direction changes). across / along are frequencies perpendicular to and along the streak.
+float tgCombN(vec2 q, vec4 ow, float across, float along, float seed){
+  float n = 0.0;
+  n += ow.x * tgNoise2(vec2(q.x * along, q.y * across) + seed);
+  n += ow.y * tgNoise2(vec2((q.x + q.y) * 0.7071 * along, (q.y - q.x) * 0.7071 * across) + seed + 3.1);
+  n += ow.z * tgNoise2(vec2(q.y * along, q.x * across) + seed + 6.7);
+  n += ow.w * tgNoise2(vec2((q.y - q.x) * 0.7071 * along, (q.x + q.y) * 0.7071 * across) + seed + 9.3);
+  return n;
 }
 
 vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
@@ -662,18 +716,42 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
   float wd = mix(st.a * 64.0, 90.0, edgeW);
 
   float slopeG = sqrt(max(1.0 - nrm.y * nrm.y, 0.0)) / max(nrm.y, 0.05);
+  float winterK = smoothstep(2.5, 3.0, uSeason) * (1.0 - smoothstep(3.6, 3.95, uSeason));
+  float autumnK = smoothstep(1.8, 2.2, uSeason) * (1.0 - smoothstep(2.6, 3.0, uSeason));
+  float curv = vTgCurv;
+  float ridgeK = smoothstep(0.04, 0.7, curv);
+  float hollowK = smoothstep(0.04, 0.7, -curv);
+  moist = clamp(moist + 0.22 * hollowK - 0.14 * ridgeK, 0.0, 1.0);
+  float farK = smoothstep(90.0, 420.0, dist);
 
-  // wind-combed texture along the wind (kept soft: it must read as grass from above, never as plough rows)
-  vec2 wdir = uWind.xy;
-  vec2 sp = vec2(dot(xz, wdir), dot(xz, vec2(-wdir.y, wdir.x)));
-  sp.x += 26.0 * tgNoise2(xz * 0.013) + 12.0 * tgNoise2(xz * 0.04 + 5.0) + 6.0 * nD;
-  sp.y += 9.0 * tgNoise2(xz * 0.03 + 9.0) + 4.0 * tgNoise2(xz * 0.11 + 2.0);
+  // ---- combed grass: the streaks follow the fall line on slopes and the wind on flats, and bend with a slow domain warp
+  vec2 wv = uWind.xy;
+  vec2 fall = nrm.xz;
+  float fl = length(fall);
+  vec2 fv = fl > 1e-4 ? fall / fl : wv;
+  float slopeW = smoothstep(0.03, 0.2, slopeG);
+  vec2 c2 = mix(vec2(wv.x * wv.x - wv.y * wv.y, 2.0 * wv.x * wv.y), vec2(fv.x * fv.x - fv.y * fv.y, 2.0 * fv.x * fv.y), slopeW);
+  c2 /= max(length(c2), 1e-3);
+  vec4 ow = vec4(0.5 + 0.5 * c2.x, 0.5 + 0.5 * c2.y, 0.5 - 0.5 * c2.x, 0.5 - 0.5 * c2.y);
+  ow *= ow;
+  ow /= (ow.x + ow.y + ow.z + ow.w);
+  vec2 wq = xz + 18.0 * vec2(tgNoise2(xz * 0.011 + 4.0) - 0.5, tgNoise2(xz * 0.011 + 9.0) - 0.5);
+  float fp = dist * 0.0011;                       // metres covered by one pixel
+  float f1 = 1.0 - smoothstep(0.25, 0.6, fp);      // blade-scale strokes fade out beyond about 250 to 550 m
+  float f2 = 1.0 - smoothstep(0.45, 1.3, fp);
+  float f3 = 1.0 - smoothstep(1.2, 3.5, fp);
+  float s1 = tgCombN(wq, ow, 0.6, 0.11, 1.0);
+  float s2 = tgCombN(wq, ow, 0.2, 0.027, 2.0);
+  float s3 = tgCombN(wq, ow, 0.05, 0.012, 3.0);
+  float s4 = tgCombN(wq, ow, 0.012, 0.0045, 4.0);
+  // crisp strokes, not mush: push the mid-scale noise through a contrast curve so hills show distinct combed lines
+  float c2s = smoothstep(0.3, 0.7, s2), c3s = smoothstep(0.32, 0.68, s3);
+  float streakTone = (s1 - 0.5) * 0.4 * f1 + (c2s - 0.5) * 0.7 * f2 + (c3s - 0.5) * 0.4 * f3 + (s4 - 0.5) * 0.12;
   float graze = smoothstep(0.04, 0.3, max(-rayDir.y, 0.0));
-  float lodStreak = 1.0 - smoothstep(180.0, 700.0, dist);
-  float streakMid = mix(0.5, tgNoise2(vec2(sp.x * 0.022, sp.y * 0.16)), lodStreak);
-  float streakFar = tgNoise2(vec2(sp.x * 0.004, sp.y * 0.03) + nD * 2.0);
-  float streakFine = mix(0.5, tgNoise2(vec2(sp.x * 0.1, sp.y * 0.3)), lodFine * (1.0 - 0.6 * graze));
-  float streak = streakFine * 0.25 + streakMid * 0.4 + streakFar * 0.35;
+  gTgH = ((s1 - 0.5) * 0.1 * f1 + (s2 - 0.5) * 0.22 * f2 + (s3 - 0.5) * 0.55 * f3) * mix(0.5, 1.0, graze) * (0.4 + 0.6 * farK);
+  // rolling wind waves of light and dark
+  vec2 sp = vec2(dot(xz, wv), dot(xz, vec2(-wv.y, wv.x)));
+  sp.x += 26.0 * tgNoise2(xz * 0.013) + 6.0 * nD;
   float wave = tgNoise2(vec2(sp.x * 0.026 - uTime * (0.07 + 0.15 * uWind.z), sp.y * 0.011));
   wave = wave * 0.65 + 0.35 * tgNoise2(vec2(sp.x * 0.06 - uTime * (0.1 + 0.2 * uWind.z), sp.y * 0.03));
 
@@ -689,13 +767,24 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
   // the blades add their own shading; the far-field ground is the canopy average: slightly olive and a little less saturated
   grassCol *= vec3(1.04, 1.01, 0.86);
   grassCol = mix(vec3(dot(grassCol, vec3(0.3333))), grassCol, 0.8);
-  grassCol *= 0.84 + 0.32 * nA;
-  grassCol *= 1.0 + (streak - 0.5) * 0.55 * mix(0.3, 1.0, graze);
-  grassCol *= 1.0 + (wave - 0.5) * 0.26 * (0.35 + uWind.z);
-  // swaths of pale straw and deeper ochre so the dry prairie never reads as one flat color
-  float swath = tgFbm2(xz * 0.016 + 21.0);
-  grassCol = mix(grassCol, grassCol * vec3(1.12, 1.07, 0.88), dry * smoothstep(0.45, 0.72, swath));
-  grassCol = mix(grassCol, grassCol * vec3(0.88, 0.8, 0.66), dry * smoothstep(0.58, 0.3, swath) * 0.8);
+  grassCol *= 0.86 + 0.28 * nA;
+  grassCol *= clamp(1.0 + streakTone * 0.7, 0.6, 1.4);
+  grassCol *= 1.0 + (wave - 0.5) * 0.22 * (0.35 + uWind.z);
+  // tonal patches the way real prairie goes: straw, olive, sage and russet in swaths 40 to 250 m across
+  vec2 pw = xz + 40.0 * vec2(tgNoise2(xz * 0.006 + 1.0) - 0.5, tgNoise2(xz * 0.006 + 7.0) - 0.5);
+  float p1 = tgFbm2(pw * 0.011 + 50.0);
+  float p2 = tgFbm2(pw * 0.027 + 120.0);
+  float p3 = tgFbm2(pw * 0.004 + 200.0);
+  vec3 tOl = vec3(0.76, 0.9, 0.56);
+  vec3 tSt = vec3(1.1, 1.1, 0.84);
+  vec3 tSg = vec3(0.84, 0.97, 0.8);
+  vec3 tRu = vec3(1.0, 0.92, 0.76);
+  vec3 tint = mix(mix(tOl, tSt, smoothstep(0.38, 0.62, p1)), mix(tSg, tRu, smoothstep(0.4, 0.62, p2)), smoothstep(0.35, 0.65, p3));
+  grassCol *= mix(vec3(1.0), tint, mix(0.6, 1.0, farK) * (1.0 - 0.75 * winterK));
+  // sunlit ridges go pale and dry, draws and hollows go deep olive
+  grassCol *= 1.0 + 0.26 * ridgeK * (0.5 + 0.5 * dry) - 0.22 * hollowK;
+  grassCol = mix(grassCol, grassCol * vec3(0.76, 0.92, 0.56), hollowK * 0.4 * (1.0 - 0.75 * winterK));
+  grassCol = mix(grassCol, grassCol * vec3(1.12, 1.05, 0.8), ridgeK * 0.5 * dry);
 
   // the far field stands in for blades seen from a distance: a touch darker and calmer than the sunlit blade tops
   grassCol *= mix(1.0, 0.88, edgeW);
@@ -707,8 +796,8 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
   vec3 swaleC = vec3(0.34, 0.27, 0.07) * (0.8 + 0.4 * nA);
   grassCol = mix(grassCol, grassCol * vec3(0.84, 0.92, 0.7) * 0.92 + swaleC * 0.16, clamp(draw * 0.75 + (1.0 - up) * 0.14 * smoothstep(0.4, 0.8, nM2), 0.0, 1.0) * dryAmt);
   float lumG0 = dot(grassCol, vec3(0.2126, 0.7152, 0.0722));
-  grassCol.r = min(grassCol.r, grassCol.g * 2.15 + 0.003);
-  grassCol = mix(vec3(lumG0), grassCol, 0.95);
+  grassCol.r = min(grassCol.r, grassCol.g * mix(2.15, 1.7, autumnK) + 0.003);
+  grassCol = mix(vec3(lumG0), grassCol, mix(0.95, 0.76, smoothstep(150.0, 900.0, dist)));
 
   // blade-scale speckle so ground the grass layer does not cover (beyond the world edge) reads as grass, not as a smooth plane
   float speck = tgNoise2(xz * 5.5) * 0.6 + tgNoise2(xz * 14.0) * 0.4;
@@ -767,20 +856,28 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
   float shadeAmt = 1.0 - ts;
   float frost = uFrost * (0.1 + 0.3 * shadeAmt) * (1.0 - charAmt);
   col = mix(col, col * vec3(0.9, 0.97, 1.08) + vec3(0.035, 0.045, 0.06), frost);
-  float snowAmt = uSnow * (1.0 - rock * 0.7) * (1.0 - charAmt * 0.6) * smoothstep(0.3, 0.9, nrm.y);
-  // snow covers the flats first and softly; the sun colours it (warm at golden hour), the shade stays a gentle blue-grey
-  vec3 snowC = vec3(0.88, 0.87, 0.855) * (0.94 + 0.06 * nC);
-  float snowPatch = smoothstep(0.0, 1.0, snowAmt * (0.6 + 0.8 * tgFbm2(xz * 0.05 + 12.0)));
-  col = mix(col, snowC, clamp(snowPatch, 0.0, 1.0) * 0.92);
+  // snow lands on flats and in hollows first, is blown off convex ridges and steep faces, and builds up patchily as it keeps
+  // snowing; the ground shows through grass tips, ridges and rock until it is deep
+  float flatK = smoothstep(0.58, 0.93, nrm.y);
+  float drift = tgFbm2(xz * 0.05 + 12.0) * 0.6 + tgFbm2(xz * 0.31 + 4.0) * 0.4;
+  float pot = flatK * 0.62 + drift * 0.5 + hollowK * 0.28 - ridgeK * 0.34 - rock * 0.5 - charAmt * 0.6 + 0.1 * gTgGrass;
+  float Tsn = mix(1.4, 0.06, clamp(uSnow, 0.0, 1.0));
+  float snowAmt = smoothstep(Tsn - 0.16, Tsn + 0.1, pot) * smoothstep(0.0, 0.06, uSnow);
+  float tipsPoke = (0.25 * gTgGrass * smoothstep(0.52, 0.8, s2)) * (1.0 - smoothstep(0.5, 1.0, uSnow));
+  float snowCover = clamp(snowAmt * (0.9 - tipsPoke), 0.0, 1.0);
+  vec3 snowC = vec3(0.87, 0.87, 0.885) * (0.93 + 0.07 * nC);
+  snowC = mix(snowC, col * 2.4 + vec3(0.06), 0.1 * (1.0 - snowCover * 0.5));
+  col = mix(col, snowC, snowCover);
+  gTgH *= 1.0 - 0.55 * snowCover;
 
   // rain darkens and glosses the ground
-  col *= mix(1.0, 0.74, uWet * (1.0 - snowAmt));
+  col *= mix(1.0, 0.74, uWet * (1.0 - snowCover));
   gTgRough = mix(0.95, 0.62, uWet);
 
   // looking toward a low sun makes standing grass glow: forward scattering through the blades
   float fwd = max(dot(rayDir, uLightDir), 0.0);
   float lowSun = 1.0 - smoothstep(0.1, 0.65, uLightDir.y);
-  float glow = pow(fwd, 3.0) * (0.35 + 0.65 * lowSun) * gTgGrass * (1.0 - rock) * (1.0 - snowAmt) * ts * (1.0 - uWet);
+  float glow = pow(fwd, 3.0) * (0.35 + 0.65 * lowSun) * gTgGrass * (1.0 - rock) * (1.0 - snowCover) * ts * (1.0 - uWet);
   gTgEmis = col * uLightColor * glow * 0.1;
   gTgEmis += vec3(3.4, 0.95, 0.15) * ember + vec3(1.1, 0.22, 0.03) * emberHalo * 0.4 + vec3(1.6, 0.34, 0.05) * smolder;
 
