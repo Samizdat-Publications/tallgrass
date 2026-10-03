@@ -1,7 +1,7 @@
 // Web Worker host for the simulation. The main thread only renders and sends commands.
 import { NG, GENE_NAMES, G_COAT, G_SIZE, G_SPEED } from './agents';
 import { Sim, SimEvent, StoryEntry } from './sim';
-import { Intervention, SPECIES_COUNT, TICKS_PER_SECOND } from './types';
+import { Intervention, SPECIES_COUNT, Sp, TICKS_PER_SECOND } from './types';
 
 export type ToWorker =
   | { type: 'init'; seed: number; params?: Record<string, number>; schedule?: { tick: number; iv: Intervention }[] }
@@ -65,6 +65,8 @@ export type FromWorker =
       carcassCount: number;
       carcasses: Float32Array;
       veg?: Uint8Array;
+      /** Trait heatmap, TRAIT_GRID^2 RGBA bytes: R speed relative to the species mean (128 = average), G animal density. Sent with veg. */
+      traitGrid?: Uint8Array;
       pop: number[];
       events: SimEvent[];
       history: HistoryRow[];
@@ -122,6 +124,53 @@ function detail(id: number): AnimalDetail | null {
   return null;
 }
 
+export const TRAIT_GRID = 32;
+
+/** Where the fastest bodies live: each grazer and predator's speed gene against its own species' mean, averaged per cell. */
+function traitGrid(): Uint8Array {
+  const out = new Uint8Array(TRAIT_GRID * TRAIT_GRID * 4);
+  if (!sim) return out;
+  const a = sim.a;
+  const sum = new Float64Array(8), cnt = new Int32Array(8);
+  for (let i = 0; i < a.hi; i++) {
+    if (!a.alive[i] || a.sp[i] === Sp.Raven) continue;
+    sum[a.sp[i]] += a.genes[i * NG + G_SPEED];
+    cnt[a.sp[i]]++;
+  }
+  const rel = new Float32Array(TRAIT_GRID * TRAIT_GRID), n = new Int32Array(TRAIT_GRID * TRAIT_GRID);
+  const k = TRAIT_GRID / sim.world.size;
+  for (let i = 0; i < a.hi; i++) {
+    if (!a.alive[i] || a.sp[i] === Sp.Raven) continue;
+    const s = a.sp[i];
+    const cx = Math.min(TRAIT_GRID - 1, Math.max(0, (a.x[i] * k) | 0)), cy = Math.min(TRAIT_GRID - 1, Math.max(0, (a.y[i] * k) | 0));
+    const c = cy * TRAIT_GRID + cx;
+    rel[c] += a.genes[i * NG + G_SPEED] / (sum[s] / cnt[s]) - 1;
+    n[c]++;
+  }
+  // a count-weighted 3x3 blur turns lone animals into regions
+  const G = TRAIT_GRID;
+  for (let cy = 0; cy < G; cy++) {
+    for (let cx = 0; cx < G; cx++) {
+      let s = 0, w = 0;
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          const x = cx + dx, y = cy + dy;
+          if (x < 0 || y < 0 || x >= G || y >= G) continue;
+          const k = dx === 0 && dy === 0 ? 2 : 1;
+          s += rel[y * G + x] * k;
+          w += n[y * G + x] * k;
+        }
+      }
+      const c = cy * G + cx;
+      const m = w ? s / w : 0;
+      out[c * 4] = Math.max(0, Math.min(255, Math.round(128 + m * 1280))); // +/-10% spans the full range
+      out[c * 4 + 1] = Math.min(255, n[c] * 50); // density of this cell only, so empty ground stays clear
+      out[c * 4 + 3] = 255;
+    }
+  }
+  return out;
+}
+
 function packInfo(): { packs: Float32Array; packSerials: number[] } {
   const out: number[] = [];
   const serials: number[] = [];
@@ -167,7 +216,7 @@ function post(forceVeg: boolean): void {
   const sel = selectedId !== null ? detail(selectedId) : null;
   const msg: FromWorker = {
     type: 'snap', tick: s.tick, env: s.env, count: s.count, ids: s.ids, agents: s.agents, carcassCount: s.carcassCount,
-    carcasses: s.carcasses, veg: s.veg, pop: Array.from(s.pop), events, history, selected: sel,
+    carcasses: s.carcasses, veg: s.veg, traitGrid: withVeg ? traitGrid() : undefined, pop: Array.from(s.pop), events, history, selected: sel,
     selectedGone: selectedId !== null && sel === null, story: sim.story.slice(), storyId: sim.trackedId, ...packInfo(), speed: skipping ? -1 : speed, ticksPerSec, stepMs: stepMsAvg,
   };
   history = [];

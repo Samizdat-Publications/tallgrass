@@ -33,9 +33,13 @@ export class ToolRail {
   readonly el: HTMLElement;
   private armed: ToolId | null = null;
   private wraps = new Map<ToolId, { wrap: HTMLElement; btn: HTMLButtonElement; hint: HTMLElement }>();
+  private note: HTMLElement;
+  private disabled = false;
 
   constructor(private actions: UIActions) {
     this.el = h('nav', { class: 'tg-rail', 'aria-label': 'God tools', role: 'toolbar' });
+    this.note = h('p', { class: 'tg-rail-note', role: 'status', hidden: true });
+    this.el.append(this.note);
     let lastGroup = 0;
     for (const t of TOOL_DEFS) {
       if (t.group !== lastGroup) {
@@ -83,6 +87,20 @@ export class ToolRail {
       const def = TOOL_DEFS.find((d) => d.id === id);
       if (def) w.hint.textContent = on && def.armedHint ? def.armedHint : def.hint;
     }
+  }
+
+  /** Lock the whole rail (a challenge has spent its interventions) and say why in a short note. */
+  setDisabled(on: boolean, note = ''): void {
+    if (on === this.disabled) return;
+    this.disabled = on;
+    this.el.classList.toggle('is-disabled', on);
+    for (const w of this.wraps.values()) {
+      w.btn.disabled = on;
+      w.btn.setAttribute('aria-disabled', String(on));
+    }
+    this.note.hidden = !on;
+    this.note.textContent = on ? note : '';
+    if (on && this.armed) this.setArmed(null);
   }
 
   get armedTool(): ToolId | null {

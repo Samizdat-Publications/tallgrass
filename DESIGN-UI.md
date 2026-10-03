@@ -77,6 +77,12 @@ Species (lines, chips, and dots; four clearly separate hues so no two lines in a
 - **Overlays menu (bottom right of the time bar):** vegetation, fear, territories, trait heatmap. Only one is active at a time.
 - **Cinematic mode (`C`):** hides all UI, slowly drifts the camera, adds thin letterbox bars, and still shows chapter cards.
 
+## Challenges
+- **Menu:** a "Challenges" section above "Named worlds" (name, blurb, and a line with the years and the intervention budget). A click reloads the page with `?challenge=id`; the challenge brings its own seed and scenario.
+- **Goal card:** a compact glass card under the location slate: challenge name, one line per goal, the live progress line, and "Interventions left: 3 of 5" with a pip for each. It folds from its header, fades with the rest of the UI in cinematic mode, and the tool rail makes room beneath it.
+- **Budget:** every applied tool counts. When none are left the rail locks with an ember note ("No interventions left") and further applies are ignored.
+- **Result card:** unboxed, in the chapter-card style, over a feathered shade: "Challenge complete" or "The valley slipped away", the reason, the years taken and interventions used, and two buttons: "Try again" and "Keep watching". The sim pauses behind it; Keep watching (or Esc) dismisses it and resumes, and the goal card keeps the result.
+
 ## Copy
 - Name things by what the player sees: "Start a fire", not "Ignite cell". "Bring in wolves", not "Introduce species 1".
 - Chapter card titles are short noun phrases: "The long drought", "A new pack on the ridge", "The last wolf", "Wolves return", "Stampede at the creek".

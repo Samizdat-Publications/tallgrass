@@ -136,6 +136,11 @@ export class TimeBar {
     else this.setSpeed(0);
   }
 
+  /** Resume at the last running speed if the sim is paused. */
+  resume(): void {
+    if (this.shown === 0) this.setSpeed(this.lastRunSpeed || 1);
+  }
+
   skip(): void {
     this.optimistic = { v: -1, until: performance.now() + 700 };
     this.render(-1);

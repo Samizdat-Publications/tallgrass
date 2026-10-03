@@ -9,11 +9,16 @@ import '@fontsource/alegreya-sans/700.css';
 import './ui.css';
 
 import type { SimEvent } from '../sim/sim';
+import { YEAR_TICKS } from '../sim/types';
+import type { Challenge } from '../challenges';
 import { ChapterCard } from './chapter';
+import { ChallengeRun } from './challenge';
+import { GoalCard } from './goal';
+import { ResultCard } from './result';
 import { Chronicle, type ChronicleEntry } from './chronicle';
 import { cardRank, describeEvent, yearOfTick } from './describe';
 import { FeedFilter } from './feed';
-import { h } from './dom';
+import { h, unitPx } from './dom';
 import { Inspector } from './inspector';
 import { TopRight } from './menu';
 import { PopGraph, type Marker } from './popgraph';
@@ -55,6 +60,11 @@ export class GameUI {
   private inspector: Inspector;
   private top: TopRight;
   private chapterCard = new ChapterCard();
+  private goal: GoalCard;
+  private result: ResultCard;
+  private run: ChallengeRun | null = null;
+  private resultShown = false;
+  private goalRo: ResizeObserver;
 
   private seed = '';
   private scenario = '';
@@ -76,12 +86,21 @@ export class GameUI {
     this.inspector = new Inspector(actions);
     this.top = new TopRight(actions);
 
+    this.goal = new GoalCard(() => this.tryAgain());
+    this.result = new ResultCard(
+      () => this.tryAgain(),
+      () => this.keepWatching(),
+    );
+    // the rail makes room under the goal card, whatever height the card is
+    this.goalRo = new ResizeObserver(() => this.syncGoalHeight());
+    this.goalRo.observe(this.goal.el);
+
     const right = h('div', { class: 'tg-right' }, this.top.el, this.chron.el, this.inspector.el);
     const bottom = h('div', { class: 'tg-bottom' }, h('span'), this.time.el, this.time.overlayEl);
-    const chrome = h('div', { class: 'tg-chrome' }, this.slate.el, this.tools.el, right, this.pop.el, bottom);
+    const chrome = h('div', { class: 'tg-chrome' }, this.slate.el, this.goal.el, this.tools.el, right, this.pop.el, bottom);
     const bars = h('div', { class: 'tg-bars', 'aria-hidden': 'true' });
 
-    this.ui = h('div', { class: 'tg-ui', dataset: { cinematic: 'false' } }, chrome, bars, this.chapterCard.el);
+    this.ui = h('div', { class: 'tg-ui', dataset: { cinematic: 'false' } }, chrome, bars, this.chapterCard.el, this.result.el);
     root.append(this.ui);
 
     this.keyDown = (e) => this.onKeyDown(e);
@@ -114,6 +133,81 @@ export class GameUI {
     this.inspector.update(f.selected, f.following, f.story, f.storyId);
     this.top.setWorld(f.seed, f.scenario);
     this.flushQueuedCard(now);
+    if (this.run) this.stepChallenge(f);
+  }
+
+  // ---- challenges --------------------------------------------------------------------------------------------
+
+  /** Start (or clear, with null) a challenge attempt. Call once after construction. */
+  setChallenge(c: Challenge | null): void {
+    this.run = c ? new ChallengeRun(c) : null;
+    this.resultShown = false;
+    this.result.hide();
+    this.goal.setRun(this.run);
+    this.top.setChallenge(c ? c.id : null);
+    this.ui.classList.toggle('has-challenge', !!c);
+    this.syncToolLock();
+    this.syncGoalHeight();
+  }
+
+  /**
+   * Main asks this before it sends any tool to the sim. Counts the tool against the challenge budget and returns
+   * false when the budget is spent, in which case the tool must be ignored.
+   */
+  tryUseTool(): boolean {
+    if (!this.run) return true;
+    const ok = this.run.tryUse();
+    this.goal.update(this.run);
+    this.syncToolLock();
+    return ok;
+  }
+
+  private stepChallenge(f: UIFrame): void {
+    const run = this.run;
+    if (!run) return;
+    const ended = run.evaluate(f.tick / YEAR_TICKS, f.pop, f.packs ?? 0);
+    this.goal.update(run);
+    if (ended && !this.resultShown) this.showResult(run);
+  }
+
+  private showResult(run: ChallengeRun): void {
+    const res = run.result;
+    if (!res) return;
+    this.resultShown = true;
+    const won = res.state === 'won';
+    const years = Math.max(0, Math.floor(run.endedYear));
+    const yearsText = years < 1 ? 'under a year' : `${years} ${years === 1 ? 'year' : 'years'}`;
+    const max = run.challenge.maxTools;
+    const n = run.toolsUsed;
+    const used = max === null ? `${n} ${n === 1 ? 'intervention' : 'interventions'} used` : `${n} of ${max} interventions used`;
+    this.chapterCard.clear();
+    this.result.show({
+      won,
+      title: won ? 'Challenge complete' : 'The valley slipped away',
+      reason: res.reason ?? res.progress,
+      stat: `${run.challenge.name}: ${yearsText}, ${used}.`,
+    });
+    // stop the clock behind the card so nothing changes while the player reads it
+    this.time.setSpeed(0);
+  }
+
+  private keepWatching(): void {
+    this.result.hide();
+    this.time.resume();
+  }
+
+  private tryAgain(): void {
+    if (this.run) this.actions.startChallenge(this.run.challenge.id);
+  }
+
+  private syncToolLock(): void {
+    this.tools.setDisabled(!!this.run && this.run.exhausted, 'No interventions left');
+  }
+
+  private syncGoalHeight(): void {
+    const el = this.goal.el;
+    const px = this.run && !el.hidden ? el.offsetHeight + 10 * unitPx(this.ui) : 0;
+    this.ui.style.setProperty('--goal-h', `${px}px`);
   }
 
   /** Show a chapter card right now (ignores the rate limit). */
@@ -162,6 +256,7 @@ export class GameUI {
   destroy(): void {
     window.removeEventListener('keydown', this.keyDown);
     window.removeEventListener('keyup', this.keyUp);
+    this.goalRo.disconnect();
     this.time.destroy();
     this.top.destroy();
     this.pop.destroy();
@@ -280,7 +375,9 @@ export class GameUI {
 
   /** Esc backs out one layer at a time: popovers, then the armed tool, then the selection, then cinematic mode. */
   private onEscape(): void {
-    if (this.top.isOpen) {
+    if (this.result.isOpen) {
+      this.keepWatching();
+    } else if (this.top.isOpen) {
       this.top.close();
     } else if (this.time.isMenuOpen) {
       this.time.closeMenu();

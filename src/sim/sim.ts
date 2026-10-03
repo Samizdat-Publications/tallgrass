@@ -1545,7 +1545,6 @@ export class Sim implements SimLike {
           a.target[i] = prey;
           a.targetId[i] = a.id[prey];
           this.logStory(i, 'chase', a.sp[prey]);
-          dbg('cg_spring');
           const dx = a.x[prey] - x, dy = a.y[prey] - y, d = Math.sqrt(dx * dx + dy * dy) + 0.01;
           dvx = (dx / d) * run;
           dvy = (dy / d) * run;
@@ -1579,7 +1578,6 @@ export class Sim implements SimLike {
         a.flee[i] = 1; // keeps the destination until arrival
       } else {
         state = St.Stalk;
-        dbg('cg_wait');
         a.flee[i] = 260 + rng.int(220); // patience before moving on
       }
       return done();
@@ -1636,7 +1634,6 @@ export class Sim implements SimLike {
       if (a.same(t, a.targetId[i])) {
         const dx = a.x[t] - a.x[i], dy = a.y[t] - a.y[i];
         if (dx * dx + dy * dy < 4.5) {
-          dbg('cg_contact');
           const Pt = p.species[a.sp[t]];
           const isYoung = a.age[t] < Pt.matureAge;
           const et = a.energy[t];

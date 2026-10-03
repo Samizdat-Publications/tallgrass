@@ -21,6 +21,8 @@ export interface UIActions {
   setOverlay(o: OverlayId): void;
   setCinematic(on: boolean): void;
   newWorld(seed: string, scenario: string): void;
+  /** Load a challenge by id (the page reloads with ?challenge=id). */
+  startChallenge(id: string): void;
 }
 
 export interface UIFrame {
@@ -42,6 +44,8 @@ export interface UIFrame {
   story?: StoryEntry[];
   /** Id of the animal the story belongs to. */
   storyId?: number;
+  /** Wolf packs holding a territory right now (for challenges). */
+  packs?: number;
 }
 
 /**

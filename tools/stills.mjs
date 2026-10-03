@@ -15,6 +15,7 @@ const out = arg('out', 'scratch/stills');
 const set = arg('set', 'review');
 const query = arg('query', '');
 const [W, H] = arg('size', '1600x900').split('x').map(Number);
+const loadTimeout = Number(arg('timeout', 90000));
 
 // St: 1 graze, 3 run, 4 flee, 5 chase, 6 eat, 9 fly, 10 stalk. Sp: 0 bison, 1 wolf, 2 raven, 3 pronghorn.
 const SETS = {
@@ -30,11 +31,22 @@ const SETS = {
     { name: '09_top_map', eval: "window.__cam('top')", wait: 3500 },
     { name: '10_ui_graph_fast', eval: "window.__focusHerd(); window.__speed(100); document.dispatchEvent(new KeyboardEvent('keydown', { key: 'g', bubbles: true }))", wait: 9000 },
   ],
+  // map overlays (window.__overlay from src/main.ts), after a fast-forward so packs and grazing patterns exist
+  overlays: [
+    { name: 'ov_00_warm', eval: "window.__speed(10)", wait: 15000 },
+    { name: 'ov_00_midday', eval: "window.__speed(1); window.__timeOfDay(0.45)", wait: 2500 },
+    { name: 'ov_01_territory_top', eval: "window.__speed(1); window.__cam('top'); window.__overlay.setMode('territory')", wait: 3500 },
+    { name: 'ov_02_territory_wide', eval: "window.__cam('wide')", wait: 3500 },
+    { name: 'ov_03_vegetation', eval: "window.__cam('top'); window.__overlay.setMode('vegetation')", wait: 3500 },
+    { name: 'ov_04_fear', eval: "window.__overlay.setMode('fear')", wait: 3000 },
+    { name: 'ov_05_traits', eval: "window.__overlay.setMode('traits')", wait: 3000 },
+    { name: 'ov_06_traits_wide', eval: "window.__cam('wide')", wait: 3000 },
+  ],
 };
 
 const steps = SETS[set];
 if (!steps) { console.error('unknown set', set); process.exit(1); }
-const kill = setTimeout(() => { console.error('stills: hard timeout'); process.exit(2); }, 10 * 60 * 1000);
+const kill = setTimeout(() => { console.error('stills: hard timeout'); process.exit(2); }, 10 * 60 * 1000 + 2 * loadTimeout);
 const server = await createServer({ configFile: resolve('vite.config.ts'), server: { port: 5300 + Math.floor(Math.random() * 600), strictPort: false, hmr: false }, logLevel: 'error' });
 await server.listen();
 const base = server.resolvedUrls.local[0].replace(/\/$/, '');
@@ -44,8 +56,8 @@ try {
   const page = await browser.newPage({ viewport: { width: W, height: H } });
   page.on('pageerror', (e) => console.log('[page exception]', e.message.slice(0, 300)));
   page.on('console', (m) => { if (m.type() === 'error') console.log('[page error]', m.text().slice(0, 300)); });
-  await page.goto(base + '/index.html' + (query ? '?' + query : ''), { waitUntil: 'load', timeout: 90000 });
-  await page.waitForFunction(() => window.__ready === true, null, { timeout: 90000 });
+  await page.goto(base + '/index.html' + (query ? '?' + query : ''), { waitUntil: 'load', timeout: loadTimeout });
+  await page.waitForFunction(() => window.__ready === true, null, { timeout: loadTimeout });
   await page.waitForTimeout(1500);
   mkdirSync(out, { recursive: true });
   for (const s of steps) {

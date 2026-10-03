@@ -33,6 +33,12 @@ export const SCENARIOS: Scenario[] = [
     schedule: [{ tick: YEAR_TICKS, iv: { kind: 'drought', ticks: YEAR_TICKS * 2, severity: 0.85 } }],
   },
   {
+    id: 'dryyears', name: 'The dry years',
+    blurb: 'Drought comes in the second year, then returns every four years and lasts a year and a half.',
+    params: {},
+    schedule: [1, 5, 9, 13, 17, 21, 25, 29].map((y) => ({ tick: YEAR_TICKS * y, iv: { kind: 'drought' as const, ticks: YEAR_TICKS * 1.5, severity: 0.8 } })),
+  },
+  {
     id: 'cougars', name: 'Cougar country',
     blurb: 'Six cougars lie in wait in the groves along the creek: an ambush hunter working alongside the wolf packs.',
     params: { 'cougar.initial': 6 }, schedule: [],

@@ -3,10 +3,13 @@ import * as THREE from 'three';
 import { Engine } from './render/engine';
 import { GrassField } from './render/grass';
 import { AnimalLayer } from './render/animals';
+import { OverlayLayer } from './render/overlay';
 import { GameUI, type OverlayId, type ToolId } from './ui/ui';
+import { packName } from './ui/describe';
 import { generateWorld } from './sim/world';
 import { hashSeed } from './sim/rng';
 import { scenarioById } from './scenarios';
+import { challengeById } from './challenges';
 import { Director } from './director';
 import { AudioDirector } from './audio/audio';
 import { countNearby, nearWater01 } from './audio/inputs';
@@ -14,9 +17,11 @@ import { DAY_TICKS, Sp, type Intervention, type Snapshot } from './sim/types';
 import type { FromWorker, ToWorker } from './sim/worker';
 
 const q = new URLSearchParams(location.search);
-const seedStr = q.get('seed') ?? 'tallgrass';
+// a challenge brings its own world: ?challenge=knife overrides seed and scenario
+const challenge = challengeById(q.get('challenge'));
+const seedStr = challenge?.seed ?? q.get('seed') ?? 'tallgrass';
 const seed = /^\d+$/.test(seedStr) ? Number(seedStr) : hashSeed(seedStr);
-const scenario = scenarioById(q.get('scenario') ?? 'prairie');
+const scenario = scenarioById(challenge?.scenario ?? q.get('scenario') ?? 'prairie');
 
 const world = generateWorld(seed);
 const host = document.getElementById('app')!;
@@ -74,6 +79,8 @@ worker.onmessage = (e: MessageEvent<FromWorker>) => {
   pendingEvents = pendingEvents.concat(m.events);
   pendingHistory = pendingHistory.concat(m.history);
   if (m.veg) engine.setVeg(m.veg);
+  if (m.traitGrid) overlay.setTraitGrid(m.traitGrid);
+  overlay.setPacks(m.packs, m.packSerials.map(packName));
   engine.setEnv(m.env);
   if (m.tick !== lastTick) {
     const now = performance.now();
@@ -133,7 +140,7 @@ const ui = new GameUI(document.getElementById('ui')!, {
   setSpeed: (s) => { speed = s; send({ type: 'speed', speed: s }); },
   skipToEvent: () => send({ type: 'skip' }),
   armTool: (t) => { armed = t; ui.setArmedTool(t); host.style.cursor = t ? 'crosshair' : ''; },
-  applyTool: (t) => { const iv = toolIntervention(t); if (iv) send({ type: 'apply', iv }); },
+  applyTool: (t) => { const iv = toolIntervention(t); if (iv && ui.tryUseTool()) send({ type: 'apply', iv }); },
   follow: (id) => {
     following = id;
     if (id === null) engine.cam.follow(null);
@@ -144,15 +151,32 @@ const ui = new GameUI(document.getElementById('ui')!, {
   },
   select: (id) => select(id),
   flyTo: (x, y) => engine.cam.flyTo(x, y),
-  setOverlay: (o: OverlayId) => engine.setFearOverlay(o === 'fear' ? 0.85 : 0),
+  setOverlay: (o: OverlayId) => overlay.setMode(o),
   setCinematic: (on) => { following = null; director.setEnabled(on); },
   newWorld: (s, sc) => {
     const u = new URL(location.href);
+    u.searchParams.delete('challenge');
     u.searchParams.set('seed', s);
     u.searchParams.set('scenario', sc);
     location.href = u.toString();
   },
+  startChallenge: (id) => {
+    const u = new URL(location.href);
+    u.searchParams.delete('seed');
+    u.searchParams.delete('scenario');
+    u.searchParams.set('challenge', id);
+    location.href = u.toString();
+  },
 });
+
+ui.setChallenge(challenge);
+
+const overlay = new OverlayLayer(world.size, (x, z) => engine.groundHeight(x, z), engine.uniforms, {
+  labels: document.querySelector<HTMLElement>('.tg-ui') ?? document.body,
+  legend: document.querySelector<HTMLElement>('.tg-overlay') ?? document.body,
+});
+engine.scene.add(overlay.object3D);
+engine.excludeFromAO(overlay.object3D);
 
 function select(id: number | null): void {
   animals.setSelected(id);
@@ -176,7 +200,7 @@ canvas.addEventListener('pointerup', (e) => {
     const hit = groundHit(ray);
     if (hit) {
       const iv = toolIntervention(armed, hit.x, hit.z);
-      if (iv) send({ type: 'apply', iv });
+      if (iv && ui.tryUseTool()) send({ type: 'apply', iv });
     }
     armed = null;
     ui.setArmedTool(null);
@@ -209,6 +233,7 @@ let fpsAcc = 0, fpsN = 0;
 let audioFrame = 0;
 let nearbyCache = { bison: 0, wolf: 0, raven: 0, pronghorn: 0 };
 const w = window as unknown as Record<string, unknown>;
+w.__overlay = overlay;
 engine.onFrame((dt, t) => {
   const alpha = Math.min(1, (performance.now() - lastTickChange) / Math.max(16, tickInterval));
   // legs keep pace with how fast the sim actually moves animals (capped where gaits would alias)
@@ -216,12 +241,14 @@ engine.onFrame((dt, t) => {
   animals.update(dt, alpha, t);
   director.update(dt, pending ? { count: pending.count, ids: pending.ids, agents: pending.agents, carcassCount: pending.carcassCount, carcasses: pending.carcasses, dayFrac: pending.env.dayFrac } : null);
   grass.viewportHeight = engine.renderer.domElement.height;
+  overlay.update(dt, engine.camera, engine.renderer.domElement);
   grass.update(engine.camera, t, engine.env, sun);
   if (pending) {
     ui.update({
       tick: pending.tick, env: pending.env, pop: pending.pop, history: pendingHistory, events: pendingEvents,
       selected: pending.selected, speed: pending.speed, ticksPerSec: pending.ticksPerSec, seed: seedStr,
       scenario: scenario.id, following, story: pending.story, storyId: pending.storyId,
+      packs: pending.packs.length / 4,
     });
     if (pending.selectedGone && following !== null) { following = null; engine.cam.follow(null); }
     const cp = engine.camera.position; // three x = sim x, three z = sim y

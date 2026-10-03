@@ -1,10 +1,12 @@
 // Mock page for the game UI: concept art as the scene, a fake 30 Hz data driver, and ?state= presets for screenshots.
 //
 // Query: ?state=default|graph|graphhover|inspector|wolf|menu|overlay|tool|cinematic|night|noon|card|hidden
-//        story (live life story)|memorial (the animal dies)|evolution|evohover (the expanded graph on its Evolution tab)
+//        story (live life story)|memorial (the animal dies)|evolution|evohover
+//        challenge (Knife's edge running; &used=5 spends the budget)|challenge-won (Dry years, wins after a second) (the expanded graph on its Evolution tab)
 //        &speed=10  &species=3|6  &day=0.72  &seed=bluestem-4417  &w=1
 // Page contract: window.__ready = true after the first render (fonts loaded).
 import { GameUI } from '../src/ui/ui';
+import { challengeById } from '../src/challenges';
 import type { OverlayId, ToolId, UIActions, UIFrame } from '../src/ui/ui';
 import { DAY_TICKS, SEASON_TICKS, SPECIES_COUNT, TICKS_PER_SECOND, Weather, YEAR_TICKS } from '../src/sim/types';
 import type { EnvState } from '../src/sim/types';
@@ -205,6 +207,7 @@ const actions: UIActions = {
   },
   armTool: (t: ToolId | null) => log.push(`armTool ${t}`),
   applyTool: (t: ToolId) => {
+    if (!ui.tryUseTool()) return; // challenge budget, as main.ts does it
     log.push(`applyTool ${t}`);
     if (t === 'rain') pending.push({ tick, kind: 'rain', sp: -1, x: 0, y: 0, a: 600, b: 0 });
     if (t === 'drought') pending.push({ tick, kind: 'drought', sp: -1, x: 0, y: 0, a: 2400, b: 0.6 });
@@ -225,6 +228,9 @@ const actions: UIActions = {
   flyTo: (x, y) => log.push(`flyTo ${x},${y}`),
   setOverlay: (o: OverlayId) => log.push(`setOverlay ${o}`),
   setCinematic: (on) => log.push(`setCinematic ${on}`),
+  startChallenge: (id) => {
+    log.push(`startChallenge ${id}`);
+  },
   newWorld: (s, sc) => {
     log.push(`newWorld ${s} ${sc}`);
     seed = s;
@@ -237,6 +243,10 @@ const actions: UIActions = {
 
 ui = new GameUI(root, actions);
 window.__ui = ui;
+if (state === 'challenge' || state === 'challenge-won') {
+  ui.setChallenge(challengeById(state === 'challenge' ? 'knife' : 'dry'));
+  for (let i = 0; i < Number(q.get('used') ?? (state === 'challenge' ? 2 : 1)); i++) ui.tryUseTool();
+}
 if (state === 'inspector' || state === 'wolf' || state === 'story' || state === 'memorial' || state === 'cougar') selectedId = bisonDetail().id;
 
 // ---- driver -----------------------------------------------------------------------------------------------------
@@ -302,6 +312,7 @@ function frame(first: boolean): void {
     following,
     story: storyLive,
     storyId: selectedId ?? deadId ?? 0,
+    packs: 3,
   };
   ui.update(f);
 }

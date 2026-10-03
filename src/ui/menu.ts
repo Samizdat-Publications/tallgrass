@@ -1,5 +1,6 @@
 // Top right: the seed chip (click to copy) and the menu (scenarios, new world, keys).
 import { button, h, setText } from './dom';
+import { CHALLENGES } from '../challenges';
 import { NAMED_SEEDS, type NamedSeed } from '../seeds';
 import { icon } from './icons';
 import { SCENARIOS, type UIActions } from './types';
@@ -40,6 +41,7 @@ export class TopRight {
   private seedText: HTMLElement;
   private seedName: HTMLElement;
   private namedBtns = new Map<string, HTMLButtonElement>();
+  private challengeBtns = new Map<string, HTMLButtonElement>();
   private seedIcon: HTMLElement;
   private menuBtn: HTMLButtonElement;
   private menu: HTMLElement;
@@ -96,6 +98,18 @@ export class TopRight {
       scenarios.append(b);
     }
 
+    const challenges = h('div', { class: 'tg-menu-list' });
+    for (const c of CHALLENGES) {
+      const meta = `${c.years} years, ${c.maxTools === null ? 'any number of interventions' : c.maxTools === 1 ? 'one intervention' : `up to ${c.maxTools} interventions`}`;
+      const b = button(
+        { class: 'tg-sc', 'aria-pressed': 'false', onclick: () => this.startChallenge(c.id) },
+        h('span', { class: 'tg-sc-dot', 'aria-hidden': 'true' }),
+        h('span', { class: 'tg-sc-text' }, h('span', { class: 'tg-sc-name', text: c.name }), h('span', { class: 'tg-sc-blurb', text: c.blurb }), h('span', { class: 'tg-sc-meta', text: meta })),
+      );
+      this.challengeBtns.set(c.id, b);
+      challenges.append(b);
+    }
+
     const named = h('div', { class: 'tg-menu-list' });
     for (const n of NAMED_SEEDS) {
       const b = button(
@@ -115,6 +129,8 @@ export class TopRight {
       { class: 'tg-menu tg-glass', role: 'dialog', 'aria-label': 'Menu', hidden: true },
       h('h2', { class: 'tg-menu-h', text: 'Scenarios' }),
       scenarios,
+      h('h2', { class: 'tg-menu-h', text: 'Challenges' }),
+      challenges,
       h('h2', { class: 'tg-menu-h', text: 'Named worlds' }),
       named,
       h('h2', { class: 'tg-menu-h', text: 'New world' }),
@@ -186,6 +202,16 @@ export class TopRight {
     window.setTimeout(() => {
       if (!this.open) this.menu.hidden = true;
     }, 200);
+  }
+
+  private startChallenge(id: string): void {
+    this.close();
+    this.actions.startChallenge(id);
+  }
+
+  /** Mark the challenge that is running in the menu. */
+  setChallenge(id: string | null): void {
+    for (const [k, b] of this.challengeBtns) b.setAttribute('aria-pressed', k === id ? 'true' : 'false');
   }
 
   /** A named world always starts on the default scenario, which is what it was found on. */
