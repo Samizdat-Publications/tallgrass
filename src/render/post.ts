@@ -90,7 +90,7 @@ class FogPass extends Pass {
         uMist: { value: 0.0 },
         uMistFalloff: { value: 0.045 },
         uMistBase: { value: 0.0 },
-        uFogMax: { value: 0.97 },
+        uFogMax: { value: 0.94 },
         uSunDir: shared.sunDir,
         uSkyZenith: shared.skyZenith,
         uSkyMid: shared.skyMid,
@@ -122,7 +122,17 @@ class FogPass extends Pass {
           float dist = length(wvec);
           vec3 dir = wvec / dist;
 
-          float od = (dist * uHaze) * (dist * uHaze);
+          // Near-field haze thins with altitude (a drone looking down through thin air sees a clear valley); a fixed
+          // far term still melts the distant rim into the sky so the horizon is seamless at any height.
+          float yEnd = uCamPos.y + dir.y * dist;
+          float yMid = max(0.5 * (uCamPos.y + yEnd) - uMistBase, 0.0);
+          float alt = exp(-yMid / 230.0);
+          float sunAlign = max(dot(dir, uSunDir), 0.0);
+          float fwd = 1.0 + 1.6 * pow(sunAlign, 6.0) * (1.0 - smoothstep(0.1, 0.5, uSunDir.y));
+          float nearOd = (dist * uHaze * alt) * (dist * uHaze * alt) * fwd;
+          float dFar = dist / 2800.0;
+          float farOd = dFar * dFar * dFar;
+          float od = nearOd + farOd;
           float k = uMistFalloff;
           float y0 = uCamPos.y - uMistBase;
           float dy = dir.y;
@@ -134,7 +144,7 @@ class FogPass extends Pass {
           } else {
             mistOd = uMist * e0 * dist;
           }
-          mistOd = max(mistOd, 0.0);
+          mistOd = min(max(mistOd, 0.0), 0.9);
           float fog = min(1.0 - exp(-(od + mistOd)), uFogMax);
 
           vec3 fdir = normalize(vec3(dir.x, max(dir.y, 0.0) * 0.5 + 0.015, dir.z));
@@ -178,6 +188,8 @@ class GradePass extends Pass {
         uContrast: { value: 1.08 },
         uVignette: { value: 0.28 },
         uAspect: { value: 16 / 9 },
+        uLift: { value: new THREE.Color(0, 0, 0) },
+        uNight: { value: 0 },
       },
       vertexShader: FS_VERT,
       fragmentShader: /* glsl */ `
@@ -190,15 +202,23 @@ class GradePass extends Pass {
         uniform float uContrast;
         uniform float uVignette;
         uniform float uAspect;
+        uniform vec3 uLift;
+        uniform float uNight;
         void main() {
           vec4 c = texture2D(tDiffuse, vUv);
           vec3 col = c.rgb;
+          // lift the blacks softly (more where it is darkest) so shadows keep their color
+          float l0 = dot(col, vec3(0.2126, 0.7152, 0.0722));
+          col += uLift * (1.0 - smoothstep(0.0, 0.35, l0) * 0.7);
           float l = dot(col, vec3(0.2126, 0.7152, 0.0722));
           float sh = 1.0 - smoothstep(0.0, 0.5, l);
           float hi = smoothstep(0.3, 2.2, l);
           col *= mix(vec3(1.0), uShadowTint, sh) * mix(vec3(1.0), uHighTint, hi);
           float l2 = dot(col, vec3(0.2126, 0.7152, 0.0722));
           col = mix(vec3(l2), col, uSat);
+          // day for night: pull the palette toward silver-blue while keeping luminance
+          vec3 silver = vec3(l2) * vec3(0.80, 0.94, 1.22);
+          col = mix(col, silver + (col - vec3(l2)) * 0.25, uNight * 0.7);
           col = pow(max(col / 0.18, vec3(0.0)), vec3(uContrast)) * 0.18;
           vec2 q = (vUv - 0.5) * vec2(uAspect, 1.0) * 0.9;
           float v = smoothstep(0.35, 1.05, length(q));
@@ -340,6 +360,8 @@ export class PostFX {
     g.uSat.value = L.gradeSat;
     g.uContrast.value = L.gradeContrast;
     g.uVignette.value = L.vignette;
+    (g.uLift.value as THREE.Color).copy(L.gradeLift);
+    g.uNight.value = L.gradeNight;
     this.bloom.strength = (this.quality === 'high' ? 1 : 0.85) * L.bloom;
   }
 

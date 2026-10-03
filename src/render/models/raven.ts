@@ -75,10 +75,11 @@ export function buildRaven(): ModelDef {
   return {
     geometry,
     triangles: b.triangleCount,
-    coatPale: lin(0x2a2a2d),
-    coatDark: lin(0x060608),
+    coatPale: lin(0x34343a),
+    coatDark: lin(0x0b0b0e),
     bone: lin(0xd8d0bc),
     roughness: 0.5,
+    fill: 1.6,
     params: {
       ...DEFAULT_PARAMS,
       kind: 2,
@@ -88,7 +89,7 @@ export function buildRaven(): ModelDef {
       tailRest: 0, tailRun: 0, tailSway: 0.15,
       lieDrop: 0, deadDrop: 0.12,
       strideW: 0.5, strideG: 1.2, strideSpeedMax: 8,
-      length: 0.6, height: 0.35, ring: 0.6,
+      length: 0.6, height: 0.35, ring: 0.6, minPx: 9, boostLen: 1.2,
     },
   };
 }

@@ -66,6 +66,7 @@ export function buildRabbit(): ModelDef {
     coatDark: lin(0x5a4636),
     bone: lin(0xd8d0bc),
     roughness: 0.95,
+    fill: 1.5,
     params: {
       ...DEFAULT_PARAMS,
       kind: 1,
@@ -85,7 +86,7 @@ export function buildRabbit(): ModelDef {
       offT: [0.3, 0.3, 0.0, 0.0],
       offG: [0.3, 0.3, 0.0, 0.0],
       strideW: 0.5, strideG: 1.3, strideSpeedMax: 5,
-      length: 0.4, height: 0.3, ring: 0.4,
+      length: 0.4, height: 0.3, ring: 0.4, minPx: 3.5, boostLen: 0.4,
     },
   };
 }

@@ -1,10 +1,27 @@
 // Bottom center: pause, 1x, 10x, 100x, next event, with the sim rate. Plus the overlays dropdown to its right.
 import { button, h, setText } from './dom';
-import { fmtInt } from './describe';
+import { TICKS_PER_SECOND, YEAR_TICKS } from '../sim/types';
 import { icon } from './icons';
 import type { OverlayId, UIActions } from './types';
 
 const SPEEDS = [1, 10, 100];
+
+/** Plain-language pace of the valley's calendar: "1 year every 4 min", "1 year every 24 s", "1 year every 2.4 s". */
+export function paceText(ticksPerSec: number, speed: number): string {
+  let tps = ticksPerSec;
+  // within a few percent of the nominal rate, show the nominal one so the text does not flicker
+  const nominal = speed * TICKS_PER_SECOND;
+  if (nominal > 0 && Math.abs(tps - nominal) / nominal < 0.06) tps = nominal;
+  if (!(tps > 0)) return '';
+  const sec = YEAR_TICKS / tps;
+  if (sec >= 90) {
+    const m = sec / 60;
+    const t = Math.abs(m - Math.round(m)) < 0.05 || m >= 10 ? String(Math.round(m)) : m.toFixed(1);
+    return `1 year every ${t} min`;
+  }
+  if (sec >= 10) return `1 year every ${Math.round(sec)} s`;
+  return `1 year every ${sec.toFixed(1)} s`;
+}
 
 const OVERLAYS: { id: OverlayId; label: string; blurb: string }[] = [
   { id: 'none', label: 'No overlay', blurb: 'Just the prairie' },
@@ -65,7 +82,7 @@ export class TimeBar {
       h('span', { class: 'tg-tnext-text', text: 'Next event' }),
     );
     group.append(this.nextBtn);
-    this.rate = h('span', { class: 'tg-trate' });
+    this.rate = h('span', { class: 'tg-trate', title: 'How fast the valley calendar is running right now' });
     group.append(this.rate);
     this.el = group;
 
@@ -138,8 +155,7 @@ export class TimeBar {
     if (v === 0) text = 'paused';
     else if (v < 0) text = 'skipping ahead';
     else {
-      const t = ticksPerSec >= 200 ? Math.round(ticksPerSec / 10) * 10 : Math.round(ticksPerSec);
-      text = `${fmtInt(t)} ticks/s`;
+      text = paceText(ticksPerSec, v);
     }
     if (text !== this.lastRateText) {
       this.lastRateText = text;

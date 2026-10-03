@@ -221,6 +221,12 @@ export function cardRank(kind: string): number {
   }
 }
 
+/** Deterministic pick from a few phrasings, keyed on the event, so the same event always reads the same way. */
+function pick<T>(e: SimEvent, variants: T[], salt = 0): T {
+  const h = (Math.imul(Math.round(e.tick), 2654435761) ^ Math.imul(Math.round(e.a) + 7, 40503) ^ Math.imul(salt + 1, 977)) >>> 0;
+  return variants[h % variants.length];
+}
+
 /**
  * One plain sentence for the chronicle, plus a chapter card for the events that earn one.
  * Pure: depends only on the event.
@@ -237,21 +243,23 @@ export function describeEvent(e: SimEvent): EventText {
     case 'packFounded': {
       const name = packName(e.a);
       return {
-        sentence: `The ${name} pack is founded.`,
+        sentence: pick(e, [`The ${name} pack is founded.`, `A new pack, the ${name}, stakes out a range.`, `The ${name} pack claims its first territory.`]),
         card: e.tick > 100 && e.a % 3 === 0 ? { title: 'A new pack takes the ridge', subtitle: `The ${name} pack, year ${year}` } : undefined,
       };
     }
     case 'packLost': {
       const name = packName(e.a);
       return {
-        sentence: `The ${name} pack has broken up.`,
+        sentence: pick(e, [`The ${name} pack has broken up.`, `The ${name} pack falls apart.`, `The ${name} pack is no more.`]),
         card: { title: 'A pack falls silent', subtitle: `The ${name} pack, year ${year}` },
       };
     }
     case 'drought': {
       const long = e.a >= 1800;
       return {
-        sentence: long ? 'A long drought settles over the valley.' : 'A drought settles over the valley.',
+        sentence: long
+          ? pick(e, ['A long drought settles over the valley.', 'The rains fail, and a long drought begins.', 'The valley dries out under a long drought.'])
+          : pick(e, ['A drought settles over the valley.', 'A dry spell parches the valley.']),
         card: { title: long ? 'The long drought' : 'A dry spell', subtitle: when },
       };
     }
@@ -262,20 +270,25 @@ export function describeEvent(e: SimEvent): EventText {
       const where = `the ${region && region !== 'central' ? `${region} ` : ''}${noun}`;
       const sick = e.a > 0 ? `, and ${countWord(e.a)} fall ill` : '';
       return {
-        sentence: `Disease spreads through ${where}${sick}.`,
+        sentence: pick(e, [`Disease spreads through ${where}${sick}.`, `Sickness takes hold in ${where}${sick}.`, `A fever runs through ${where}${sick}.`]),
         card: { title: `Sickness in the ${noun}`, subtitle: when },
       };
     }
     case 'stampede': {
       const where = region && region !== 'central' ? `the ${region} plain` : 'the plain';
       return {
-        sentence: `A herd of ${e.a.toLocaleString('en-US')} bison stampedes across ${where}.`,
+        sentence: pick(e, [
+          `A herd of ${fmtInt(e.a)} bison stampedes across ${where}.`,
+          `Some ${fmtInt(e.a)} bison bolt across ${where}.`,
+          `Panic takes the herd, and ${fmtInt(e.a)} bison thunder across ${where}.`,
+          `Dust rises over ${where} as ${fmtInt(e.a)} bison break into a run.`,
+        ]),
         card: e.a >= 60 ? { title: 'Stampede on the plain', subtitle: when } : undefined,
       };
     }
     case 'extinct':
       return {
-        sentence: `The last ${sg} is gone.`,
+        sentence: pick(e, [`The last ${sg} is gone.`, `The last ${sg} has left the valley.`]),
         card: { title: `The last ${sg} is gone`, subtitle: when },
       };
     case 'introduced': {
@@ -298,7 +311,10 @@ export function describeEvent(e: SimEvent): EventText {
     }
     case 'fire':
       return {
-        sentence: region && region !== 'central' ? `A fire sweeps across the ${region} prairie.` : 'A fire breaks out on the prairie.',
+        sentence:
+          region && region !== 'central'
+            ? pick(e, [`A fire sweeps across the ${region} prairie.`, `Flames race through the ${region} grass.`])
+            : pick(e, ['A fire breaks out on the prairie.', 'Fire takes the dry grass.']),
         card: { title: 'Fire on the prairie', subtitle: when },
       };
     case 'plague': {
@@ -307,8 +323,19 @@ export function describeEvent(e: SimEvent): EventText {
     }
     case 'rain':
       return { sentence: 'Rain falls across the valley.' };
-    case 'elder':
-      return { sentence: `An elder ${sg}, ${ageText(e.a, e.sp)} old, still roams the valley.` };
+    case 'elder': {
+      {
+        const age = ageText(e.a, e.sp);
+        return {
+          sentence: pick(e, [
+            `An elder ${sg}, ${age} old, still roams the valley.`,
+            `At ${age}, one old ${sg} has outlived most of its kin.`,
+            `A ${sg} of ${age} is among the oldest in the valley.`,
+            `${cap(sg)} elder: ${age} old and still going.`,
+          ]),
+        };
+      }
+    }
     case 'firstKill': {
       const prey = e.a >= 0 && e.a < SINGULAR.length ? SINGULAR[e.a] : 'animal';
       return { sentence: `The valley sees its first kill: a wolf takes down a ${prey}.` };

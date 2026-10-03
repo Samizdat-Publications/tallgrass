@@ -4,7 +4,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { World } from '../sim/world';
-import { NOISE_GLSL, SharedUniforms, clamp, fbm2, hash2, injectTerrainShadow, smoothstep, vnoise2 } from './common';
+import { NOISE_GLSL, OCCLUDE_GLSL, SharedUniforms, clamp, fbm2, hash2, injectTerrainShadow, smoothstep, vnoise2 } from './common';
 
 const R0 = 6; // nominal crown radius in meters the unit crown is designed for
 const H0 = 14; // nominal tree height
@@ -25,28 +25,33 @@ interface CrownBuild {
   lumpCenters: THREE.Vector3[]; // in H units (bark space)
 }
 
-/** Crown in unit space: x,z in crown-radius units, y in height units. */
+/**
+ * Crown in unit space: x,z in crown-radius units, y in height units. Many small lumps spread through an oblate shell
+ * volume (not a few big balls): the leaf-cluster cut-out in the shader turns them into airy, scalloped foliage with
+ * gaps, and interior lumps are darker so the gaps read as depth.
+ */
 function buildCrown(seed: number, detail: number): CrownBuild {
   const rng = mulberry32(seed * 7919 + 13);
-  const lumps: { c: THREE.Vector3; rho: number }[] = [];
-  const cy0 = 0.66;
-  lumps.push({ c: new THREE.Vector3(0, 0.82 + rng() * 0.05, 0), rho: 0.52 + rng() * 0.1 });
-  const ring = 6 + Math.floor(rng() * 2);
-  for (let i = 0; i < ring; i++) {
-    const a = (i / ring) * Math.PI * 2 + rng() * 0.7;
-    const r = 0.5 + rng() * 0.22;
-    lumps.push({ c: new THREE.Vector3(Math.cos(a) * r, cy0 + (rng() - 0.35) * 0.16, Math.sin(a) * r), rho: 0.38 + rng() * 0.16 });
+  const lumps: { c: THREE.Vector3; rho: number; sx: number }[] = [];
+  const cy0 = 0.62, cyR = 0.28;
+  const N = 30 + Math.floor(rng() * 6);
+  for (let i = 0; i < N; i++) {
+    // random direction, radius biased toward the shell
+    let dx = rng() * 2 - 1, dy = rng() * 2 - 1, dz = rng() * 2 - 1;
+    const dl = Math.hypot(dx, dy, dz) || 1;
+    dx /= dl; dy /= dl; dz /= dl;
+    const rad = 0.38 + 0.62 * Math.pow(rng(), 0.55);
+    const yy = dy < 0 ? dy * 0.72 : dy;
+    lumps.push({
+      c: new THREE.Vector3(dx * rad * 0.9, cy0 + yy * rad * cyR, dz * rad * 0.9),
+      rho: 0.2 + rng() * 0.14,
+      sx: 0.85 + rng() * 0.4,
+    });
   }
-  const upper = 2 + Math.floor(rng() * 2);
-  for (let i = 0; i < upper; i++) {
-    const a = rng() * Math.PI * 2;
-    lumps.push({ c: new THREE.Vector3(Math.cos(a) * 0.3, 0.9 + rng() * 0.05, Math.sin(a) * 0.3), rho: 0.32 + rng() * 0.1 });
-  }
-  const low = 3;
-  for (let i = 0; i < low; i++) {
-    const a = rng() * Math.PI * 2;
-    const r = 0.62 + rng() * 0.22;
-    lumps.push({ c: new THREE.Vector3(Math.cos(a) * r, 0.52 + rng() * 0.06, Math.sin(a) * r), rho: 0.3 + rng() * 0.1 });
+  // a cap of small lumps on top so the crown has a rounded crest
+  for (let i = 0; i < 4; i++) {
+    const a = rng() * Math.PI * 2, r = rng() * 0.3;
+    lumps.push({ c: new THREE.Vector3(Math.cos(a) * r, 0.85 + rng() * 0.04, Math.sin(a) * r), rho: 0.2 + rng() * 0.1, sx: 1 });
   }
 
   const ico = new THREE.IcosahedronGeometry(1, detail);
@@ -59,17 +64,19 @@ function buildCrown(seed: number, detail: number): CrownBuild {
       dir.fromBufferAttribute(ip, v).normalize();
       const n1 = vnoise2(dir.x * 2.1 + dir.z * 1.3 + li * 7.1, dir.y * 2.3 - dir.z * 0.9, seed);
       const n2 = vnoise2(dir.x * 5.3 - dir.y * 2.1, dir.z * 5.1 + dir.y * 3.3 + li, seed + 5);
-      const r = L.rho * (1 + 0.24 * (n1 - 0.5) + 0.1 * (n2 - 0.5));
-      const px = L.c.x + dir.x * r, py = L.c.y + dir.y * r * (R0 / H0), pz = L.c.z + dir.z * r;
+      const r = L.rho * (1 + 0.3 * (n1 - 0.5) + 0.14 * (n2 - 0.5));
+      const px = L.c.x + dir.x * r * L.sx, py = L.c.y + dir.y * r * (R0 / H0) * 0.85, pz = L.c.z + dir.z * r / L.sx;
       pos.push(px, py, pz);
       Pw.set(px * R0, py * H0, pz * R0);
       cr.copy(Pw).sub(Cw);
       const dist = cr.length();
       cr.normalize();
-      nw.set(dir.x * 0.42 + cr.x * 0.58, dir.y * 0.42 + cr.y * 0.58 + 0.22, dir.z * 0.42 + cr.z * 0.58).normalize();
+      nw.set(dir.x * 0.35 + cr.x * 0.65, dir.y * 0.35 + cr.y * 0.65 + 0.2, dir.z * 0.35 + cr.z * 0.65).normalize();
       const nu = new THREE.Vector3(nw.x * R0, nw.y * H0, nw.z * R0).normalize();
       nrm.push(nu.x, nu.y, nu.z);
-      occ.push(clamp(0.18 + 0.5 * clamp(dist / (R0 * 0.95), 0, 1.2) + 0.38 * cr.y, 0, 1));
+      // interior and underside darker, sunlit outer top bright
+      const shell = clamp(dist / (R0 * 0.9), 0, 1.15);
+      occ.push(clamp(0.06 + 0.78 * Math.pow(shell, 1.5) + 0.3 * cr.y, 0.04, 1));
       lmp.push(((li * 0.6180339) % 1));
     }
   });
@@ -105,7 +112,7 @@ function buildBark(seed: number, lumpCenters: THREE.Vector3[], simple = false): 
   if (simple) {
     // distant trees: trunk plus a couple of limbs is all that shows through the crown
     for (let i = 0; i < 2; i++) {
-      const c = lumpCenters[1 + i * 3] ?? lumpCenters[0];
+      const c = lumpCenters[3 + i * 9] ?? lumpCenters[0];
       parts.push(limb(top, c.clone().lerp(top, 0.3), 0.016, 0.008, 4));
     }
     const m = mergeGeometries(parts, false)!;
@@ -113,7 +120,7 @@ function buildBark(seed: number, lumpCenters: THREE.Vector3[], simple = false): 
     return m;
   }
   lumpCenters.forEach((c, i) => {
-    if (i % 2 === 1 && i > 3) return;
+    if (i % 3 !== 0) return;
     const end = c.clone().lerp(top, 0.22);
     const mid = top.clone().lerp(end, 0.5).add(new THREE.Vector3((rng() - 0.5) * 0.04, 0.02, (rng() - 0.5) * 0.04));
     parts.push(limb(top, mid, 0.017, 0.011));
@@ -134,22 +141,27 @@ function buildShrubGeometry(detail: number): THREE.BufferGeometry {
   const ico = new THREE.IcosahedronGeometry(1, detail);
   const ip = ico.getAttribute('position');
   const pos: number[] = [], nrm: number[] = [], occ: number[] = [], lmp: number[] = [];
-  const lumps = [
-    { c: [0, 0.38, 0], r: 0.78 }, { c: [0.55, 0.28, 0.1], r: 0.55 }, { c: [-0.5, 0.3, -0.2], r: 0.58 },
-    { c: [0.1, 0.3, 0.55], r: 0.5 }, { c: [-0.1, 0.28, -0.55], r: 0.5 },
-  ];
+  // a low, irregular tangle: many small lumps spread wide, heights vary, none tall
+  const lumps: { c: number[]; r: number; sx: number }[] = [];
+  const N = 11;
+  for (let i = 0; i < N; i++) {
+    const a = rng() * Math.PI * 2;
+    const rr = Math.sqrt(rng()) * 0.95;
+    const h = 0.16 + 0.34 * (1 - rr) * (0.5 + rng() * 0.7);
+    lumps.push({ c: [Math.cos(a) * rr, h, Math.sin(a) * rr * 0.8], r: 0.32 + rng() * 0.26, sx: 0.8 + rng() * 0.6 });
+  }
   const dir = new THREE.Vector3(), Pn = new THREE.Vector3();
   lumps.forEach((L, li) => {
     for (let v = 0; v < ip.count; v++) {
       dir.fromBufferAttribute(ip, v).normalize();
       const n1 = vnoise2(dir.x * 2.4 + li * 3.7, dir.y * 2.2 + dir.z * 1.6, 77);
       const n2 = vnoise2(dir.x * 6.3, dir.z * 6.1 + dir.y * 4.0, 78);
-      const r = L.r * (1 + 0.22 * (n1 - 0.5) + 0.1 * (n2 - 0.5));
-      const px = L.c[0] + dir.x * r, py = L.c[1] + dir.y * r * 0.8, pz = L.c[2] + dir.z * r;
+      const r = L.r * (1 + 0.3 * (n1 - 0.5) + 0.14 * (n2 - 0.5));
+      const px = L.c[0] + dir.x * r * L.sx, py = L.c[1] + dir.y * r * 0.62, pz = L.c[2] + dir.z * r / L.sx;
       pos.push(px, Math.max(py, 0.0), pz);
-      Pn.set(px, py - 0.35, pz).normalize();
-      nrm.push(dir.x * 0.35 + Pn.x * 0.65, dir.y * 0.35 + Pn.y * 0.65 + 0.2, dir.z * 0.35 + Pn.z * 0.65);
-      occ.push(clamp(0.35 + 0.5 * Pn.y + rng() * 0.0, 0.15, 1));
+      Pn.set(px, py - 0.1, pz).normalize();
+      nrm.push(dir.x * 0.4 + Pn.x * 0.6, dir.y * 0.4 + Pn.y * 0.6 + 0.2, dir.z * 0.4 + Pn.z * 0.6);
+      occ.push(clamp(0.18 + 0.7 * Math.min(1, Math.hypot(px, pz) / 0.85) + 0.3 * Pn.y, 0.1, 1));
       lmp.push((li * 0.618) % 1);
     }
   });
@@ -191,16 +203,23 @@ function swayChunk(flutter: boolean): string {
   `;
 }
 
+const WORLDPOS_GLSL = /* glsl */ `
+vec3 tgFragWorld(){ return cameraPosition + transpose( mat3( viewMatrix ) ) * ( -vViewPosition ); }
+`;
+
 function foliageMaterial(shared: SharedUniforms, shrub: boolean): THREE.MeshStandardMaterial {
-  const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.82, metalness: 0 });
+  const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.86, metalness: 0 });
+  // soft cut-out: alpha-to-coverage gives smooth leaf edges on the MSAA scene target instead of screen-door discard
+  mat.alphaTest = 0.5;
+  mat.alphaToCoverage = true;
   mat.onBeforeCompile = (shader) => {
     injectTerrainShadow(shader, shared);
     const u = shader.uniforms;
     u.uTime = shared.time; u.uWind = shared.wind;
     u.uLeaf = shared.leafAmount; u.uLeafA = shared.leafColorA; u.uLeafB = shared.leafColorB;
     u.uLightDir = shared.lightDir; u.uLightColor = shared.lightColor;
-    u.uKeepBias = { value: shrub ? 0.5 : 0.0 };
     u.uSnow = shared.snow;
+    u.uOccCam = shared.occCam; u.uOccFocus = shared.occFocus; u.uOccParams = shared.occParams;
     shader.vertexShader = shader.vertexShader
       .replace(
         'void main() {',
@@ -208,6 +227,7 @@ function foliageMaterial(shared: SharedUniforms, shrub: boolean): THREE.MeshStan
       )
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvOcc = aOcc; vLump = aLump; vObj = position;')
       .replace('#include <project_vertex>', swayChunk(true));
+    const cell = shrub ? '0.62' : '1.2';
     shader.fragmentShader = shader.fragmentShader
       .replace(
         'void main() {',
@@ -219,10 +239,16 @@ function foliageMaterial(shared: SharedUniforms, shrub: boolean): THREE.MeshStan
         uniform vec3 uLeafB;
         uniform vec3 uLightDir;
         uniform vec3 uLightColor;
-        uniform float uKeepBias;
         uniform float uSnow;
         ${NOISE_GLSL}
-        float gTgLeafKeep = 1.0;
+        ${OCCLUDE_GLSL}
+        ${WORLDPOS_GLSL}
+        vec3 tgHash33(vec3 p){
+          p = fract(p * vec3(.1031, .1030, .0973));
+          p += dot(p, p.yxz + 33.33);
+          return fract((p.xxy + p.yxx) * p.zyx);
+        }
+        vec3 gTgPuff = vec3(0.0);
         void main() {`,
       )
       .replace(
@@ -231,25 +257,67 @@ function foliageMaterial(shared: SharedUniforms, shrub: boolean): THREE.MeshStan
         {
           gTgShadow = tgSampleTerrainShadow();
           vec3 inst = diffuseColor.rgb; // instance color encodes (brightness, hue shift, season phase)
-          vec3 wp = vObj * vec3(${R0.toFixed(1)}, ${H0.toFixed(1)}, ${R0.toFixed(1)});
-          float n1 = tgNoise3(wp * 1.1 + vLump * 17.0);
-          float n2 = tgNoise3(wp * 3.7 + 5.0);
-          float n3 = tgNoise3(wp * 9.0 + 11.0);
-          float cl = tgNoise3(wp * 0.85 + 7.0);
-          float cl2 = tgNoise3(wp * 2.1 + 19.0);
-          float clump = smoothstep(0.28, 0.72, cl * 0.62 + cl2 * 0.38);
-          float leafMix = clamp(0.5 + (n1 - 0.5) * 0.7 + (vLump - 0.5) * 0.5 + (inst.g - 0.5) * 0.7 + (clump - 0.5) * 0.5, 0.0, 1.0);
-          vec3 leaf = mix(uLeafA, uLeafB, leafMix);
-          leaf *= (0.42 + 0.85 * vOcc) * (0.5 + 0.75 * clump) * (0.84 + 0.32 * n2) * inst.r;
-          float trans = 4.0 * uLeaf * (1.0 - uLeaf);
-          float keep = clamp(uLeaf + (inst.b - 0.5) * 0.45 * trans + uKeepBias * (1.0 - uLeaf), 0.0, 1.0);
-          gTgLeafKeep = keep;
+          vec3 wpw = tgFragWorld();
+          float fdist = length( vViewPosition );
+          float lod = smoothstep( 60.0, 190.0, fdist );
+          float keep = clamp( uLeaf + ( inst.b - 0.5 ) * 0.5 * ( 4.0 * uLeaf * ( 1.0 - uLeaf ) ) ${shrub ? '+ 0.45 * ( 1.0 - uLeaf )' : ''}, 0.0, 1.0 );
           float rim = 1.0 - abs( dot( normalize( vNormal ), normalize( vViewPosition ) ) );
-          float hcut = n2 * 0.4 + n3 * 0.2 + cl * 0.4;
-          float thresh = keep * 1.22 - rim * rim * 0.85 - 0.05;
-          if ( hcut > thresh ) discard;
-          diffuseColor.rgb = leaf;
-          diffuseColor.rgb = mix( diffuseColor.rgb, vec3( 0.9, 0.93, 1.0 ), uSnow * 0.55 * smoothstep( 0.3, 0.9, vOcc ) );
+
+          // leaf clusters: 3D cellular pattern in world space (about ${cell} m cells)
+          float F1 = 9.0, F2 = 9.0;
+          vec3 cid = vec3( 0.0 ), crel = vec3( 0.0 );
+          float alive = 1.0, tone = 0.5, puff = 0.5, edgeD = 0.5;
+          if ( lod < 0.999 ) {
+            vec3 pc = wpw / ${cell};
+            vec3 ip = floor( pc );
+            vec3 fp = pc - ip;
+            for ( int k = -1; k <= 1; k++ ) {
+              for ( int j = -1; j <= 1; j++ ) {
+                for ( int i = -1; i <= 1; i++ ) {
+                  vec3 g = vec3( float( i ), float( j ), float( k ) );
+                  vec3 o = tgHash33( ip + g );
+                  vec3 rv = g + o - fp;
+                  float d = dot( rv, rv );
+                  if ( d < F1 ) { F2 = F1; F1 = d; cid = ip + g; crel = rv; }
+                  else if ( d < F2 ) { F2 = d; }
+                }
+              }
+            }
+            F1 = sqrt( F1 ); F2 = sqrt( F2 );
+            edgeD = F2 - F1;
+            float cr = tgHash31( cid + 3.7 );
+            float cr2 = tgHash31( cid + 17.3 );
+            tone = cr2;
+            puff = 1.0 - clamp( F1 * 1.25, 0.0, 1.0 );
+            // clusters drop out with the season; a few are always bare so the crown is never a solid mass
+            alive = step( cr, keep ) * ( 1.0 - step( ${shrub ? '0.8' : '0.9'}, cr2 ) * 0.9 );
+            gTgPuff = -crel;
+          }
+          float nrag = tgNoise3( wpw * 4.3 );
+          float holeThr = ${shrub ? '0.1' : '0.06'} + 0.26 * rim * rim;
+          float cover = smoothstep( 0.0, 0.06, edgeD + ( nrag - 0.5 ) * 0.16 - holeThr ) * alive;
+          // distance: fade the pattern out to the average so far canopies never shimmer
+          float avgCover = ${shrub ? '0.78' : '0.84'} * ( 0.1 + 0.9 * keep );
+          cover = mix( cover, avgCover, lod );
+          float fade = tgOcclusionFade( wpw );
+          diffuseColor.a = cover * fade;
+
+          float mixT = clamp( 0.5 + ( tone - 0.5 ) * 1.1 + ( inst.g - 0.5 ) * 0.5 + ( vLump - 0.5 ) * 0.2, 0.0, 1.0 );
+          vec3 leaf = mix( uLeafA, uLeafB, mixT );
+          float shade = 0.12 + 0.95 * pow( vOcc, 1.15 );
+          shade *= mix( 0.7 + 0.5 * puff, 1.0, lod );
+          leaf *= shade * ( 0.9 + 0.2 * tgNoise3( wpw * 2.6 ) ) * inst.r;
+          ${shrub ? 'leaf = mix( leaf, vec3( dot( leaf, vec3( 0.333 ) ) ) * vec3( 1.0, 0.98, 0.86 ) + vec3( 0.02, 0.018, 0.012 ), 0.62 );' : ''}
+          diffuseColor.rgb = mix( leaf, vec3( 0.9, 0.93, 1.0 ), uSnow * 0.5 * smoothstep( 0.3, 0.9, vOcc ) );
+        }`,
+      )
+      .replace(
+        '#include <normal_fragment_maps>',
+        `#include <normal_fragment_maps>
+        {
+          // each leaf cluster shades like its own little dome
+          float pl = dot( gTgPuff, gTgPuff );
+          if ( pl > 1e-4 ) normal = normalize( normal + mat3( viewMatrix ) * ( gTgPuff * ( 0.55 / sqrt( pl ) ) ) );
         }`,
       )
       .replace(
@@ -259,25 +327,28 @@ function foliageMaterial(shared: SharedUniforms, shrub: boolean): THREE.MeshStan
           vec3 Lv = normalize( mat3( viewMatrix ) * uLightDir );
           vec3 Vv = normalize( vViewPosition );
           float back = pow( max( dot( -Vv, Lv ), 0.0 ), 2.2 );
-          totalEmissiveRadiance += diffuseColor.rgb * uLightColor * back * 0.2 * gTgShadow * ( 0.35 + 0.65 * vOcc );
+          totalEmissiveRadiance += diffuseColor.rgb * uLightColor * back * 0.1 * gTgShadow * ( 0.3 + 0.7 * vOcc );
         }`,
       );
   };
-  mat.customProgramCacheKey = () => (shrub ? 'tg-shrub-v1' : 'tg-foliage-v1');
+  mat.customProgramCacheKey = () => (shrub ? 'tg-shrub-v2' : 'tg-foliage-v2');
   return mat;
 }
 
 function barkMaterial(shared: SharedUniforms): THREE.MeshStandardMaterial {
-  const mat = new THREE.MeshStandardMaterial({ color: new THREE.Color('#8a7864'), roughness: 0.96, metalness: 0 });
+  const mat = new THREE.MeshStandardMaterial({ color: new THREE.Color('#7e6e5c'), roughness: 0.96, metalness: 0 });
+  mat.alphaTest = 0.5;
+  mat.alphaToCoverage = true;
   mat.onBeforeCompile = (shader) => {
     injectTerrainShadow(shader, shared);
     shader.uniforms.uTime = shared.time; shader.uniforms.uWind = shared.wind;
+    shader.uniforms.uOccCam = shared.occCam; shader.uniforms.uOccFocus = shared.occFocus; shader.uniforms.uOccParams = shared.occParams;
     shader.vertexShader = shader.vertexShader
       .replace('void main() {', 'uniform float uTime;\nuniform vec3 uWind;\nvarying vec3 vBarkPos;\nvoid main() {')
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvBarkPos = position;')
       .replace('#include <project_vertex>', swayChunk(false));
     shader.fragmentShader = shader.fragmentShader
-      .replace('void main() {', `varying vec3 vBarkPos;\n${NOISE_GLSL}\nvoid main() {`)
+      .replace('void main() {', `varying vec3 vBarkPos;\n${NOISE_GLSL}\n${OCCLUDE_GLSL}\n${WORLDPOS_GLSL}\nvoid main() {`)
       .replace(
         '#include <color_fragment>',
         `#include <color_fragment>
@@ -289,10 +360,11 @@ function barkMaterial(shared: SharedUniforms): THREE.MeshStandardMaterial {
           diffuseColor.rgb *= (0.55 + 0.7 * fur) * (0.85 + 0.3 * fur2);
           diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.5, 0.55, 0.38), lichen * 0.35);
           diffuseColor.rgb *= 0.75 + 0.25 * smoothstep(0.0, 0.25, vBarkPos.y);
+          diffuseColor.a = tgOcclusionFade( tgFragWorld() );
         }`,
       );
   };
-  mat.customProgramCacheKey = () => 'tg-bark-v2';
+  mat.customProgramCacheKey = () => 'tg-bark-v3';
   return mat;
 }
 
@@ -385,8 +457,8 @@ export class Trees {
 
     const dummy = new THREE.Object3D();
     const col = new THREE.Color();
-    const crownDetails = [3, 2, 1];
-    const crownLimits = [55, 170, Infinity];
+    const crownDetails = [2, 1, 0];
+    const crownLimits = [60, 190, Infinity];
     for (let v = 0; v < VARIANTS; v++) {
       const mine = places.filter((_, i) => i % VARIANTS === v);
       const N = mine.length;
@@ -401,8 +473,8 @@ export class Trees {
         dummy.scale.set(p.h, p.h, p.h);
         dummy.updateMatrix();
         dummy.matrix.toArray(barkMats, i * 16);
-        const sw = 0.92 + hash2(i, v, 17) * 0.2;
-        dummy.scale.set(p.r * sw, p.h, p.r * sw * (0.92 + hash2(i, v, 19) * 0.16));
+        const sw = (0.92 + hash2(i, v, 17) * 0.2) * 0.8;
+        dummy.scale.set(p.r * sw, p.h * 0.94, p.r * sw * (0.92 + hash2(i, v, 19) * 0.16));
         dummy.updateMatrix();
         dummy.matrix.toArray(crownMats, i * 16);
         // (brightness, hue shift, season phase)
@@ -452,8 +524,8 @@ export class Trees {
         const y = heightAt(x, z) - 0.08;
         dummy.position.set(x, y, z);
         dummy.rotation.set(0, hash2(i, 7, 3) * Math.PI * 2, 0);
-        const sc = r * (0.9 + hash2(i, 8, 3) * 0.3);
-        dummy.scale.set(sc, sc * (0.75 + hash2(i, 9, 3) * 0.3), sc);
+        const sc = r * (0.9 + hash2(i, 8, 3) * 0.3) * 1.05;
+        dummy.scale.set(sc, sc * (0.5 + hash2(i, 9, 3) * 0.25), sc);
         dummy.updateMatrix();
         dummy.matrix.toArray(mats, i * 16);
         col.setRGB(0.8 + hash2(i, 10, 3) * 0.35, hash2(i, 11, 3), hash2(i, 12, 3));

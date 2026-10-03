@@ -102,6 +102,7 @@ export function buildCougar(): ModelDef {
     coatDark: lin(0x8c6238),
     bone: lin(0xd8d0bc),
     roughness: 0.9,
+    fill: 1.5,
     params: {
       ...DEFAULT_PARAMS,
       kind: 0,
@@ -118,7 +119,7 @@ export function buildCougar(): ModelDef {
       crouchDrop: 0.26,
       deadDrop: 0.36, deadHipF: 0.9, deadHipH: -0.6,
       strideW: 1.4, strideG: 4.8, strideSpeedMax: 15,
-      length: 1.3, height: 0.8, ring: 1.3,
+      length: 1.3, height: 0.8, ring: 1.3, minPx: 8, boostLen: 1.8,
     },
   };
 }

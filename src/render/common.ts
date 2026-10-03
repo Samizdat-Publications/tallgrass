@@ -52,10 +52,21 @@ export interface SharedUniforms {
   wet: U<number>;
   /** 0..1 strength of the fear-map debug overlay on the terrain. */
   fearOverlay: U<number>;
+  /** Mid-tone of living grass and of cured grass right now (linear), and how cured the field is 0..1. Same source as the grass blades. */
+  grassGreen: U<THREE.Color>;
+  grassDry: U<THREE.Color>;
+  cure: U<number>;
+  /** Canopy occlusion fade: camera position, the focus point being watched, and (inner radius, outer radius, strength). */
+  occCam: U<THREE.Vector3>;
+  occFocus: U<THREE.Vector3>;
+  occParams: U<THREE.Vector3>;
   // terrain data
   worldSize: U<number>;
   /** Hill shadow map for the active light: R = visibility 0..1, covers the 512 m world, 1 m texels. */
   terrainShadow: U<THREE.Texture | null>;
+  /** Coarser hill shadow map for the far ring: covers the square (x0, z0) .. (x0 + size, z0 + size) in farRect (x0, z0, size). */
+  terrainShadowFar: U<THREE.Texture | null>;
+  farRect: U<THREE.Vector3>;
   /** Terrain heights, R32F 257 x 257, nearest filtered (use tgHeightAt in GLSL). */
   heightTex: U<THREE.Texture | null>;
   vegTex: U<THREE.Texture | null>;
@@ -86,8 +97,14 @@ export function createSharedUniforms(worldSize: number): SharedUniforms {
     snow: { value: 0 },
     wet: { value: 0 },
     fearOverlay: { value: 0 },
+    grassGreen: c(), grassDry: c(), cure: { value: 0 },
+    occCam: { value: new THREE.Vector3() },
+    occFocus: { value: new THREE.Vector3() },
+    occParams: { value: new THREE.Vector3(2, 6, 0) },
     worldSize: { value: worldSize },
     terrainShadow: { value: null },
+    terrainShadowFar: { value: null },
+    farRect: { value: new THREE.Vector3(-768, -768, 2048) },
     heightTex: { value: null },
     vegTex: { value: null },
     staticTex: { value: null },
@@ -120,6 +137,27 @@ float tgFbm2(vec2 p){
   float a = 0.5, s = 0.0;
   for (int i = 0; i < 4; i++) { s += a * tgNoise2(p); p = p * 2.03 + vec2(17.1, 9.7); a *= 0.5; }
   return s / 0.9375;
+}
+`;
+
+/**
+ * Canopy occlusion fade. Returns 1 away from the watched line of sight and fades to 0 inside a tube around the segment from
+ * the camera to the focus point (only for fragments between them). Needs uniforms uOccCam, uOccFocus, uOccParams.
+ */
+export const OCCLUDE_GLSL = /* glsl */ `
+uniform vec3 uOccCam;
+uniform vec3 uOccFocus;
+uniform vec3 uOccParams;
+float tgOcclusionFade(vec3 wp){
+  if (uOccParams.z <= 0.001) return 1.0;
+  vec3 ab = uOccFocus - uOccCam;
+  float l2 = max(dot(ab, ab), 1e-3);
+  float t = dot(wp - uOccCam, ab) / l2;
+  float between = smoothstep(-0.02, 0.0, t) * (1.0 - smoothstep(0.93, 0.995, t));
+  vec3 q = uOccCam + ab * clamp(t, 0.0, 1.0);
+  float d = length(wp - q);
+  float hole = 1.0 - smoothstep(uOccParams.x, uOccParams.y, d);
+  return 1.0 - hole * between * uOccParams.z;
 }
 `;
 
@@ -171,6 +209,8 @@ export function injectTerrainShadow(
   shared: SharedUniforms,
 ): void {
   shader.uniforms.tTgShadow = shared.terrainShadow;
+  shader.uniforms.tTgShadowFar = shared.terrainShadowFar;
+  shader.uniforms.uTgFarRect = shared.farRect;
   shader.uniforms.uTgWorld = shared.worldSize;
   if (!shader.vertexShader.includes('vTgShadowXZ')) {
     shader.vertexShader = shader.vertexShader
@@ -185,13 +225,17 @@ export function injectTerrainShadow(
     .replace(
       'void main() {',
       `uniform sampler2D tTgShadow;
+      uniform sampler2D tTgShadowFar;
+      uniform vec3 uTgFarRect;
       uniform float uTgWorld;
       varying vec2 vTgShadowXZ;
       float gTgShadow = 1.0;
       float tgSampleTerrainShadow(){
         vec2 uv = vTgShadowXZ / uTgWorld;
         float inside = step(0.0, uv.x) * step(uv.x, 1.0) * step(0.0, uv.y) * step(uv.y, 1.0);
-        return mix(1.0, texture2D(tTgShadow, uv).r, inside);
+        vec2 fuv = (vTgShadowXZ - uTgFarRect.xy) / uTgFarRect.z;
+        float far = texture2D(tTgShadowFar, clamp(fuv, 0.0, 1.0)).r;
+        return mix(far, texture2D(tTgShadow, clamp(uv, 0.0, 1.0)).r, inside);
       }
       void main() {`,
     )

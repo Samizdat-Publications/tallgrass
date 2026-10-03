@@ -34,7 +34,7 @@ export class Vegetation {
     let land = 0;
     for (let c = 0; c < N2; c++) {
       this.soil[c] = w.soilBase[c];
-      this.grass[c] = w.capacity[c] * 0.8;
+      this.grass[c] = w.capacity[c] * 0.6;
       this.browseK[c] = w.water[c] ? 0 : 0.4 * w.capacity[c] / Math.max(0.3, 1 - 0.45 * w.cover[c]) + 0.6 * w.cover[c];
       this.browse[c] = this.browseK[c] * 0.8;
       if (!w.water[c]) land++;

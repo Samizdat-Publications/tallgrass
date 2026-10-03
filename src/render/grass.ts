@@ -68,9 +68,10 @@ const RING_EDGE = [14, 40, 90, 175]; // outer edge (m) of each level, measured w
 const FADE_START = 120;
 const FADE_END = 175;
 const HALF_DIST = 18; // D(d) = D0 / (1 + (d / HALF_DIST)^2)^DENS_POW
+const FLOWER_BASE = 0.012; // fraction of blades that are flowers at peak bloom, before stand clustering
 const DENS_POW = 0.8; // below 1 keeps the mid and far field dense enough to read as a field, not stipple
 const VERTEX_ROWS: number[][] = [
-  [0, 0.18, 0.4, 0.62, 0.8, 0.9],
+  [0, 0.18, 0.4, 0.62, 0.8, 0.9, 0.95],
   [0, 0.35, 0.7],
   [0, 0.55],
   [0],
@@ -93,27 +94,47 @@ type Level = {
 };
 
 // ---- Season palettes (sRGB) ---------------------------------------------------------------------------------
-// index = season keyframe 0 spring, 1 summer, 2 autumn, 3 winter. Each entry: base, mid, tip.
-const GREEN_KEYS: number[][] = [
-  [0x264d18, 0x5a8c2a, 0x94bc48],
-  [0x32561c, 0x72923a, 0xaebc4c],
-  [0x3a4a1c, 0x6e7a2c, 0xa09a44],
-  [0x44482a, 0x74763e, 0x9c9a5c],
+// season 0 spring start, 1 summer, 2 autumn, 3 winter, wrapping at 4. Keys are placed at half seasons so early
+// summer can be green, late summer golden and autumn russet. Each key holds base, mid, tip of the blade.
+type PalKey = [number, number, number, number]; // season, base, mid, tip (sRGB hex)
+// living grass: fresh spring green, blue-green summer tallgrass, olive late season, dull straw-green in winter
+const GREEN_KEYS: PalKey[] = [
+  [0.0, 0x2f5a1e, 0x6aa332, 0xa8d45a],
+  [0.5, 0x2a5420, 0x5e9a38, 0x9cc860],
+  [1.0, 0x234a2a, 0x4a8a4c, 0x88b87c],
+  [1.5, 0x2a4a26, 0x587f40, 0x93b062],
+  [2.0, 0x33452a, 0x66773a, 0x9aa05a],
+  [2.5, 0x3a4528, 0x6d703a, 0x9c9a58],
+  [3.0, 0x44482a, 0x74763e, 0x9c9a5c],
+  [3.5, 0x44482a, 0x74763e, 0x9c9a5c],
+  [4.0, 0x2f5a1e, 0x6aa332, 0xa8d45a],
 ];
-const DRY_KEYS: number[][] = [
-  [0x5e4620, 0x9a7a40, 0xc2a768],
-  [0x64400f, 0xbf7d1a, 0xe8a63a],
-  [0x552810, 0x9c5420, 0xd07e34],
-  [0x80704a, 0xbfae7e, 0xdccfa2],
+// cured grass: thatch, early straw-gold, concept-art gold, amber, russet, pale winter straw
+const DRY_KEYS: PalKey[] = [
+  [0.0, 0x5a4a28, 0x8f7a4a, 0xbba46a],
+  [0.5, 0x5e4c28, 0x97814a, 0xc2ab6e],
+  [1.0, 0x5e4a20, 0xa08838, 0xcfb25a],
+  [1.5, 0x6a4a1a, 0xbc8c34, 0xe6bc64],
+  [1.9, 0x70501c, 0xc9923a, 0xf0c470],
+  [2.3, 0x6a3c16, 0xb8742a, 0xe09a48],
+  [2.7, 0x5a2c12, 0xa4562a, 0xd07e3c],
+  [3.1, 0x80704a, 0xbfae7e, 0xdccfa2],
+  [3.6, 0x80704a, 0xbfae7e, 0xdccfa2],
+  [4.0, 0x5a4a28, 0x8f7a4a, 0xbba46a],
 ];
-// how cured (gold) the grass is across the year: [season, cure]
+// how cured the grass is across the year: [season, cure]
 const CURE_KEYS: [number, number][] = [
-  [0, 0.04], [0.5, 0.1], [1.0, 0.55], [1.4, 0.9], [2.0, 0.98], [3.0, 1.0], [3.5, 0.92], [3.8, 0.4], [4.0, 0.04],
+  [0, 0.03], [0.6, 0.06], [1.0, 0.12], [1.25, 0.24], [1.5, 0.6], [1.8, 0.92], [2.0, 1.0], [3.5, 1.0], [3.8, 0.5], [4.0, 0.03],
 ];
 // fraction of tall blades carrying a seed head
 const SEED_KEYS: [number, number][] = [
-  [0, 0.0], [0.8, 0.02], [1.2, 0.1], [2.0, 0.2], [3.0, 0.16], [3.6, 0.05], [4.0, 0.0],
+  [0, 0.0], [0.9, 0.0], [1.3, 0.04], [1.8, 0.12], [2.2, 0.18], [3.0, 0.14], [3.6, 0.04], [4.0, 0.0],
 ];
+
+function smooth01(t: number): number {
+  t = Math.max(0, Math.min(1, t));
+  return t * t * (3 - 2 * t);
+}
 
 function keyCurve(keys: [number, number][], s: number): number {
   const t = ((s % 4) + 4) % 4;
@@ -131,37 +152,61 @@ function keyCurve(keys: [number, number][], s: number): number {
 
 const _c0 = new THREE.Color();
 const _c1 = new THREE.Color();
-function seasonColor(keys: number[][], season: number, slot: number, out: THREE.Color): void {
-  const s = ((season % 4) + 4) % 4;
-  const k = Math.floor(s) % 4;
-  const f = s - Math.floor(s);
+function seasonColor(keys: PalKey[], season: number, slot: number, out: THREE.Color): void {
+  const t = ((season % 4) + 4) % 4;
+  let i = 0;
+  while (i < keys.length - 2 && t > keys[i + 1][0]) i++;
+  const a = keys[i], b = keys[i + 1];
+  const f = Math.max(0, Math.min(1, (t - a[0]) / (b[0] - a[0])));
   const e = f * f * (3 - 2 * f);
-  _c0.setHex(keys[k][slot]);
-  _c1.setHex(keys[(k + 1) % 4][slot]);
+  _c0.setHex(a[slot + 1]);
+  _c1.setHex(b[slot + 1]);
   out.copy(_c0).lerp(_c1, e);
 }
 
 const _gt = new THREE.Color();
 /**
- * Mid-tone color of the grass at a spot (linear working space), using the same season and moisture logic as the
- * blade shader. Handy for a terrain shader or a distant-field tint so the ground under and beyond the blades
- * matches them. bio and burn are 0..1.
+ * Mid-tone color of the grass at a spot (linear working space), using the same season, moisture and upland logic
+ * as the blade shader. Use it for the terrain under and beyond the blades so the ground matches them: ridges and
+ * upper slopes (low moisture) come out drier and more russet. bio is 0..1 biomass (R of the veg texture).
  */
 export function grassTint(season: number, moisture: number, bio: number, out: THREE.Color): THREE.Color {
   const cure = keyCurve(CURE_KEYS, season);
   const f = Math.max(0, Math.min(1, (bio - 0.06) / 0.36));
   const stub = 1 - f * f * (3 - 2 * f);
-  const dry = Math.max(0, Math.min(1, cure + (0.55 - moisture) * 1.1 + stub * 0.55));
+  const um = Math.max(0, Math.min(1, (moisture - 0.4) / 0.26));
+  const up = 1 - um * um * (3 - 2 * um);
+  const dry = Math.max(0, Math.min(1, cure + (0.55 - moisture) * 1.1 + stub * 0.55 + 0.3 * up));
   seasonColor(GREEN_KEYS, season, 1, out);
   seasonColor(DRY_KEYS, season, 1, _gt);
-  return out.lerp(_gt, dry);
+  out.lerp(_gt, dry);
+  // ridge grass (little bluestem) turns russet
+  out.r *= 1 + 0.08 * up * dry;
+  out.g *= 1 - 0.07 * up * dry;
+  out.b *= 1 - 0.16 * up * dry;
+  return out;
 }
 
 // ---- Wind / patch noise texture ------------------------------------------------------------------------------
-function makeNoiseTexture(): THREE.DataTexture {
-  const S = 256;
+type NoiseLayers = [number, number][][];
+// small tile: gust bands, flutter and blade-scale clumps (period of one tile is short, so never use it for large features)
+const SMALL_LAYERS: NoiseLayers = [
+  [[4, 0.5], [8, 0.3], [16, 0.2]],
+  [[6, 0.5], [12, 0.3], [24, 0.2]],
+  [[3, 0.6], [6, 0.3], [12, 0.1]],
+  [[10, 0.5], [20, 0.3], [40, 0.2]],
+];
+// big tile: one period is the whole 512 m world, so patches, swaths and flower stands never visibly repeat
+const BIG_LAYERS: NoiseLayers = [
+  [[3, 0.55], [6, 0.3], [12, 0.15]],
+  [[8, 0.5], [16, 0.3], [32, 0.2]],
+  [[16, 0.5], [32, 0.3], [64, 0.2]],
+  [[24, 0.5], [48, 0.3], [96, 0.2]],
+];
+
+function makeNoiseTexture(S: number, layers: NoiseLayers, seed0: number): THREE.DataTexture {
   const data = new Uint8Array(S * S * 4);
-  let seed = 0x1234abcd;
+  let seed = seed0;
   const rnd = () => {
     seed = (seed + 0x6d2b79f5) | 0;
     let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
@@ -183,12 +228,6 @@ function makeNoiseTexture(): THREE.DataTexture {
       return (a + (b - a) * tx) * (1 - ty) + (c + (d - c) * tx) * ty;
     };
   };
-  const layers: [number, number][][] = [
-    [[4, 0.5], [8, 0.3], [16, 0.2]],
-    [[6, 0.5], [12, 0.3], [24, 0.2]],
-    [[3, 0.6], [6, 0.3], [12, 0.1]],
-    [[10, 0.5], [20, 0.3], [40, 0.2]],
-  ];
   for (let ch = 0; ch < 4; ch++) {
     const octs = layers[ch].map(([L, w]) => ({ f: periodic(L), w }));
     const vals = new Float32Array(S * S);
@@ -231,6 +270,8 @@ uniform sampler2D uVeg;
 uniform sampler2D uStat0;
 uniform sampler2D uStat1;
 uniform sampler2D uWind;
+uniform sampler2D uBig;
+uniform vec4 uFlower;
 uniform sampler2D uTgShadow;
 uniform vec4 uWorld;   // size, n, cell, hn
 uniform float uTime;
@@ -256,6 +297,7 @@ varying vec4 vP0;
 varying vec4 vP1;
 varying vec4 vP2;
 varying float vTS;
+varying vec4 vP3;
 
 uint pcg(uint v) {
   uint s = v * 747796405u + 2891336453u;
@@ -294,7 +336,7 @@ vec4 vegAt(vec2 p) {
 void cullBlade() {
   gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
   vUv = vec2(0.0); vN = vec3(0.0, 1.0, 0.0); vNg = vec3(0.0, 1.0, 0.0); vWP = vec3(0.0);
-  vP0 = vec4(0.0); vP1 = vec4(0.0); vP2 = vec4(0.0); vTS = 1.0;
+  vP0 = vec4(0.0); vP1 = vec4(0.0); vP2 = vec4(0.0); vP3 = vec4(0.0); vTS = 1.0;
 }
 
 void main() {
@@ -333,18 +375,35 @@ void main() {
   vec4 veg = vegAt(p);
   vec4 st0 = texture(uStat0, fuv);
   vec4 st1 = texture(uStat1, fuv);
-  vec4 nz1 = texture(uWind, p * (1.0 / 97.0));
-  vec4 nz2 = texture(uWind, p * (1.0 / 29.0) + 0.37);
-  float patch1 = nz1.b;
-  float patch2 = nz2.a;
 
-  float bio = clamp(veg.r * (0.9 + 0.2 * patch2), 0.0, 1.0);
+  // ---- organic structure. All of it comes from the big noise tile whose period is the whole world (nothing
+  // repeats), through a domain warp and a slowly wandering flow angle, so there are no fixed rows or grids.
+  vec2 pn = p * (1.0 / 512.0);
+  float patch1 = texture(uBig, pn + 0.37).g;  // 16 to 64 m patches
+  vec2 pw = p + (vec2(texture(uBig, pn + 0.11).r, texture(uBig, pn + 0.58).r) - 0.5) * 70.0;
+  float flowAng = (texture(uBig, pw * (1.0 / 512.0) + 0.77).r - 0.5) * 4.4;
+  vec2 wd = uWindDir;
+  float windAng = atan(wd.y, wd.x);
+  vec2 fd = vec2(cos(windAng + flowAng), sin(windAng + flowAng));
+  vec2 pq = vec2(dot(pw, fd), dot(pw, vec2(-fd.y, fd.x)));
+  float streak = texture(uBig, vec2(pq.x * 0.0025, pq.y * 0.0045) + 0.2).b;  // swaths about 2:1, 4 to 15 m wide
+  float sFade = 1.0 - 0.72 * smoothstep(22.0, 95.0, dist);
+  float swath = 0.5 + (streak - 0.5) * sFade;
+  vec2 pt = vec2(pw.x * 0.8 + pw.y * 0.6, pw.y * 0.8 - pw.x * 0.6);
+  float tus = texture(uWind, pt * (1.0 / 34.0) + 0.5).a;  // tussocks, 1 to 3 m
+  float tusC = 0.5 + (tus - 0.5) * (1.0 - 0.6 * smoothstep(40.0, 120.0, dist));
+
+  float bio = clamp(veg.r * (0.9 + 0.2 * texture(uBig, pn * 1.7 + 0.5).a), 0.0, 1.0);
   float burn = smoothstep(0.04, 0.55, veg.b);
   float bioEff = max(bio, burn * 0.12);
   float cover = st0.b;
   float water = st0.a;
   float moist = st1.r;
-  float pres = smoothstep(0.015, 0.26, bioEff) * (1.0 - 0.72 * cover) * (1.0 - smoothstep(0.3, 0.7, water)) * (1.0 - 0.5 * burn);
+  // ridges and upper slopes: short, drier, russet, but still a continuous sward rather than sand
+  float slopeM = length(st0.rg * 2.0 - 1.0);
+  float ridge = max(1.0 - smoothstep(0.40, 0.66, moist), 0.8 * smoothstep(0.22, 0.5, slopeM));
+  float pres = smoothstep(0.015, 0.14, bioEff) * (1.0 - 0.72 * cover) * (1.0 - smoothstep(0.3, 0.7, water)) * (1.0 - 0.5 * burn);
+  pres *= mix(0.55, 1.0, smoothstep(0.28, 0.62, tusC)) * (1.0 - 0.18 * ridge);
   if (rThin >= keepD * pres) { cullBlade(); return; }
 
   float gy = terrainH(p);
@@ -355,49 +414,72 @@ void main() {
   float rA = u01(h4), rB = u01(h5), rC = u01(h6);
   float rD = u01(pcg(h6 + 1u)), rE = u01(pcg(h6 + 2u)), rF = u01(pcg(h6 + 3u));
 
+  // ---- wildflowers: a few percent of blades, in stands, by season (uFlower = coneflower, yarrow, goldenrod, amount)
+  float fType = 0.0;
+  float fTone = 0.8 + 0.4 * u01(pcg(h6 + 5u));
+#if LEVEL < 3
+  {
+    float fAmt = uFlower.w * (1.0 - smoothstep(55.0, 115.0, dist)) * (1.0 - burn) * smoothstep(0.2, 0.5, bio);
+    if (fAmt > 0.0) {
+      float fPatch = texture(uBig, pn * 1.3 + 0.83).g;
+      float fMask = 0.12 + 1.9 * smoothstep(0.52, 0.8, fPatch);
+      float pF = FLOWERBASE * fAmt * fMask * (1.0 - 0.6 * ridge);
+      if (u01(pcg(h6 + 4u)) < pF) {
+        float tot = uFlower.x + uFlower.y + uFlower.z;
+        float tsel = fract(texture(uBig, pn * 1.1 + 0.29).r * 3.1 + 0.3 * u01(pcg(h6 + 6u))) * tot;
+        fType = tsel < uFlower.x ? 1.0 : (tsel < uFlower.x + uFlower.y ? 2.0 : 3.0);
+      }
+    }
+  }
+#endif
+
   // ---- size
   float hfrac = 0.07 + 0.93 * smoothstep(0.0, 0.85, bioEff);
-  float H = uMaxH * hfrac * (0.70 + 0.55 * rA) * (0.88 + 0.24 * patch1) * (1.0 - 0.38 * cover);
+  hfrac = max(hfrac, 0.3 * smoothstep(0.02, 0.16, bioEff));
+  hfrac *= 1.0 - 0.32 * ridge;
+  float H = uMaxH * hfrac * (0.70 + 0.55 * rA) * (0.88 + 0.24 * patch1) * (0.85 + 0.3 * tusC) * (1.0 - 0.38 * cover);
   H = mix(H, 0.05 + 0.07 * rA, burn);
   H *= 1.0 - 0.85 * smoothstep(uDens.w * 0.8, uDens.w, dist);
   float seedFlag = 0.0;
 #if LEVEL == 0
-  seedFlag = step(rB, uSeedFrac) * step(0.45, bio) * (1.0 - burn);
+  seedFlag = step(rB, uSeedFrac) * step(0.45, bio) * (1.0 - burn) * step(fType, 0.5);
 #endif
   H *= 1.0 + 0.14 * seedFlag;
+  if (fType > 0.5) H *= 1.08 + 0.22 * rD;
   float wScale = min(pow(max(1.0, uDens.x / max(dens, 1e-3)), 0.8), 36.0);
   float Wd = uBladeW * (0.75 + 0.5 * rC) * wScale;
   Wd = max(Wd, dist * uPixW);
 
-  // ---- wind: advected anisotropic noise in the wind frame
-  vec2 wd = uWindDir;
+  // ---- wind: advected anisotropic noise in the wind frame (the traveling gust bands)
   vec2 wp = vec2(dot(p, wd), dot(p, vec2(-wd.y, wd.x)));
   float g1 = texture(uWind, vec2(wp.x * 0.022 - uTime * 0.16, wp.y * 0.0075 + 0.37)).r;
   float g2 = texture(uWind, vec2(wp.x * 0.061 - uTime * 0.34, wp.y * 0.021 + 0.71)).g;
   float g0 = texture(uWind, vec2(wp.x * 0.0071 - uTime * 0.05, wp.y * 0.0031 + 0.13)).r;
   float gust = smoothstep(0.3, 0.7, 0.5 * g1 + 0.3 * g2 + 0.2 * g0);
 
-  // combing streaks: noise stretched along the wind, thin across it
-  float warpN = texture(uWind, p * (1.0 / 170.0) + 0.21).b;
-  float wc = wp.y + (warpN - 0.5) * 16.0;
-  float comb = 0.65 * texture(uWind, vec2(wp.x * 0.0045 + 0.2, wc * 0.085 + 0.6)).a
-             + 0.35 * texture(uWind, vec2(wp.x * 0.011 + 0.5, wc * 0.22 + 0.1)).g;
+  float ws = uWindStr * uWindGain;
+  float wsc = clamp(ws, 0.0, 1.0);
   float stiff = 0.75 + 0.5 * rD;
   float restLean = (0.05 + 0.3 * rE * rE) * mix(1.0, 0.35, smoothstep(30.0, 100.0, dist));
-  float windAng = atan(wd.y, wd.x);
-  float yaw = windAng + (rF - 0.5) * 3.14159265 * (2.0 - 1.5 * clamp(uWindStr * uWindGain, 0.0, 1.0));
+  // resting lean follows the wandering flow angle, much more so when the air is calm
+  float yaw = windAng + flowAng * 0.55 * (1.0 - 0.6 * wsc) + (rF - 0.5) * 3.14159265 * (2.0 - 1.5 * wsc);
   vec2 restDir = vec2(cos(yaw), sin(yaw));
-  float ws = uWindStr * uWindGain;
-  float phiWind = (0.2 + 0.75 * gust) * ws * 1.5 / stiff * (0.7 + 0.6 * comb);
+  float phiWind = (0.2 + 0.75 * gust) * ws * 1.5 / stiff * (0.8 + 0.5 * swath);
   float fl = sin(uTime * (2.3 + 3.2 * rD) + rA * 6.2831853 + wp.x * 0.9);
   float fl2 = sin(uTime * (3.1 + 2.7 * rE) + rB * 6.2831853 + wp.y * 0.7);
   vec2 lean = restDir * restLean + wd * (phiWind + fl * (0.025 + 0.11 * gust) * ws)
             + vec2(-wd.y, wd.x) * fl2 * (0.02 + 0.05 * gust) * ws;
+  if (fType > 0.5) lean *= 0.8;
   float phi = max(length(lean), 1e-4);
   vec2 dir = lean / phi;
 
   // ---- blade centerline: length preserving arc
-  float v = position.y;
+  float vg = position.y;
+  float v = vg;
+#if LEVEL == 0
+  // coneflower and yarrow: squeeze the top rows together so the head is a compact disc at the stem tip
+  if (fType > 0.5 && fType < 2.5) v = vg <= 0.62 ? vg * 1.4435 : (vg <= 0.8 ? 0.895 + (vg - 0.62) * 0.1389 : 0.92 + (vg - 0.8) * 0.4);
+#endif
   float side = position.x;
   float s = phi * v;
   float arcH = phi > 0.002 ? (1.0 - cos(s)) / phi : 0.5 * phi * v * v;
@@ -406,35 +488,49 @@ void main() {
   vec3 tang = normalize(vec3(dir.x * sin(s), cos(s), dir.y * sin(s)));
   vec3 Wf = vec3(-dir.y, 0.0, dir.x);
 
-  float prof = pow(clamp((1.0 - v) * 1.8, 0.0, 1.0), 0.75);
+  float prof = pow(clamp((1.0 - vg) * 1.8, 0.0, 1.0), 0.75);
 #if LEVEL == 0
-  if (seedFlag > 0.5) prof = mix(0.3, 1.5, smoothstep(0.82, 0.9, v)) * (1.0 - step(0.95, v));
+  if (seedFlag > 0.5) prof = mix(0.3, 1.5, smoothstep(0.82, 0.9, vg)) * (1.0 - step(0.95, vg));
 #endif
   float wv = Wd * prof;
+  if (fType > 0.5) {
+#if LEVEL == 0
+    float headW = fType < 1.5 ? 0.1 : (fType < 2.5 ? 0.11 : 0.07);
+    float hK = fType > 2.5 ? smoothstep(0.62, 0.8, vg) * (1.0 - 0.55 * smoothstep(0.85, 0.95, vg)) : step(0.79, vg);
+    hK *= 1.0 - step(0.99, vg);
+    wv = (0.0075 + headW * hK) * min(wScale, 3.0);
+#else
+    wv = Wd * prof * 1.5;
+#endif
+  }
 
   // edge-on blades: widen in screen space so they do not vanish
   vec2 vdir = normalize(root.xz - uCam.xz + vec2(1e-4));
   float facing = abs(dot(dir, vdir));
   float edgeOn = 1.0 - smoothstep(0.08, 0.7, facing);
   vec3 camRight = normalize(vec3(viewMatrix[0][0], 0.0, viewMatrix[2][0]) + vec3(1e-5));
+  // flower heads turn to face the camera (flat quads would vanish edge-on)
+  vec3 Wr = Wf;
+  if (fType > 0.5) Wr = normalize(mix(Wf, camRight, 0.92 * smoothstep(0.55, 0.8, vg)));
 
-  vec3 wp3 = centre + Wf * (side * 0.5 * wv) + camRight * (side * 0.5 * wv * 0.9 * edgeOn);
+  vec3 wp3 = centre + Wr * (side * 0.5 * wv) + camRight * (side * 0.5 * wv * 0.9 * edgeOn * (fType > 0.5 ? 0.0 : 1.0));
 
-  vec3 Nb = normalize(cross(tang, Wf));
-  Nb = normalize(Nb + Wf * (side * 0.4));
+  vec3 Nb = normalize(cross(tang, Wr));
+  Nb = normalize(Nb + Wr * (side * 0.4));
 
   vec3 Ng = normalize(vec3(-(st0.r * 2.0 - 1.0), 1.0, -(st0.g * 2.0 - 1.0)));
 
   float stub = 1.0 - smoothstep(0.06, 0.42, bio);
-  float dry = uCure + (0.55 - moist) * uMoistK - st1.g * 0.28 + (patch1 - 0.5) * 0.3 + (rC - 0.5) * 0.22 + stub * 0.55;
+  float dry = uCure + (0.55 - moist) * uMoistK - st1.g * 0.28 + (patch1 - 0.5) * 0.3 + (rC - 0.5) * 0.22 + stub * 0.55 + 0.3 * ridge;
 
-  vUv = vec2(side, v);
+  vUv = vec2(side, vg);
   vN = Nb;
   vNg = Ng;
   vWP = wp3;
   vP0 = vec4(clamp(dry, 0.0, 1.0), rD, rE, seedFlag);
   vP1 = vec4(bio, gust, burn, stub);
-  vP2 = vec4(rA, dist, comb, patch1);
+  vP2 = vec4(rA, dist, swath, patch1);
+  vP3 = vec4(fType, fTone, tusC, ridge);
 
   vec4 mvPosition = viewMatrix * vec4(wp3, 1.0);
   gl_Position = projectionMatrix * mvPosition;
@@ -471,6 +567,10 @@ uniform vec3 uDryB;
 uniform vec3 uDryM;
 uniform vec3 uDryT;
 uniform vec3 uSeedCol;
+uniform vec3 uFlCone;
+uniform vec3 uFlConeC;
+uniform vec3 uFlYarrow;
+uniform vec3 uFlGold;
 uniform vec3 uAsh;
 uniform vec3 uStubble;
 uniform vec3 uAmbSky;
@@ -484,6 +584,7 @@ varying vec4 vP0;
 varying vec4 vP1;
 varying vec4 vP2;
 varying float vTS;
+varying vec4 vP3;
 
 // Never let a zero-length or NaN input escape: every normalize in this shader goes through here.
 vec3 sn(vec3 v) { return v * inversesqrt(max(dot(v, v), 1e-12)); }
@@ -511,18 +612,61 @@ void main() {
   float stub = vP1.w;
 
   // ---- albedo
+  float fType = vP3.x;
+  float tusC = vP3.z;
+  float ridge = vP3.w;
   vec3 aGreen = grad3(uGreenB, uGreenM, uGreenT, v);
   vec3 aDry = grad3(uDryB, uDryM, uDryT, v);
   vec3 albedo = mix(aGreen, aDry, dry);
   albedo *= 0.8 + 0.4 * bright;
-  float cb = smoothstep(0.12, 0.88, vP2.z);
-  albedo *= mix(0.5, 1.32, cb) * (0.86 + 0.28 * vP2.w);
-  albedo = mix(albedo * vec3(1.05, 0.84, 0.66), albedo, smoothstep(0.0, 0.6, cb));
+  // broad swaths (already faded out with distance), patches and tussocks: gentle, never a regular pattern
+  albedo *= 1.0 + 0.55 * (vP2.z - 0.5);
+  albedo *= 0.9 + 0.2 * vP2.w;
+  albedo *= 0.9 + 0.2 * smoothstep(0.2, 0.8, tusC);
+  // ridge grass reads russet and a little paler (little bluestem)
+  albedo *= mix(vec3(1.0), vec3(1.07, 0.93, 0.8), ridge * dry * 0.75);
   albedo *= 1.0 + 0.1 * smoothstep(0.15, 0.0, abs(sideX)) - 0.12 * smoothstep(0.6, 1.0, abs(sideX));
   albedo *= vec3(1.0 + 0.14 * (hue - 0.5), 1.0, 1.0 - 0.3 * (hue - 0.5));
   albedo = mix(albedo, uStubble * (0.7 + 0.6 * bright), 0.85 * stub);
-  float seedTip = seed * smoothstep(0.76, 0.86, v);
-  albedo = mix(albedo, uSeedCol * (0.8 + 0.4 * bright), seedTip * 0.85);
+  // seed heads: pale green-straw while the grass is green, tan once it has cured
+  float seedTip = seed * smoothstep(0.82, 0.9, v);
+  vec3 seedC = mix(aGreen * 1.35 + vec3(0.02, 0.02, 0.0), uSeedCol * (0.8 + 0.4 * bright), smoothstep(0.25, 0.7, dry));
+  albedo = mix(albedo, seedC, seedTip * 0.85);
+  if (fType > 0.5) {
+    float tone = vP3.y;
+#if LEVEL == 0
+    if (fType < 2.5) {
+      // coneflower and yarrow heads: carve a round flower out of the head quad (rows .8 to .95)
+      if (v < 0.79) {
+        // the calyx funnel between stem and head: keep only a thin stem down the middle
+        float wvm = 0.0075 + (fType < 1.5 ? 0.1 : 0.11) * clamp((v - 0.62) / 0.18, 0.0, 1.0);
+        if (abs(sideX) * wvm * 0.5 > 0.0042) discard;
+      } else {
+        vec2 e = vec2(sideX, ((v - 0.8) / 0.15 - 0.5) * 2.0);
+        float r = length(e);
+        float a = atan(e.y, e.x);
+        if (fType < 1.5) {
+          if (r > 0.9 + 0.1 * cos(a * 9.0)) discard;
+          float cone = 1.0 - smoothstep(0.3, 0.4, r);
+          vec3 petal = mix(uFlCone * 0.8, uFlCone * 1.15, smoothstep(0.35, 0.9, r));
+          albedo = mix(petal, uFlConeC * (0.8 + 0.5 * (e.y * -0.5 + 0.5)), cone) * tone;
+        } else {
+          if (r > 0.86 + 0.1 * sin(a * 7.0 + 1.3) + 0.06 * sin(a * 13.0)) discard;
+          float dots = 0.94 + 0.06 * sin(e.x * 21.0 + e.y * 7.0) * sin(e.y * 19.0 - e.x * 5.0);
+          albedo = mix(uFlYarrow, uFlYarrow * vec3(1.0, 0.96, 0.78), smoothstep(0.1, 0.0, r)) * dots * tone;
+        }
+      }
+    } else if (v > 0.62) {
+      // goldenrod: a narrow, lumpy plume
+      float y = (v - 0.62) / 0.38;
+      float hw = (0.25 + 0.75 * smoothstep(0.0, 0.25, y)) * (1.0 - smoothstep(0.5, 1.0, y)) * (0.78 + 0.22 * sin(y * 34.0 + sideX * 3.0));
+      if (abs(sideX) > hw) discard;
+      albedo = mix(uFlGold * 0.75, uFlGold * 1.1, smoothstep(0.0, 0.6, y)) * tone;
+    }
+#else
+    albedo = mix(albedo, (fType < 1.5 ? uFlCone : (fType < 2.5 ? uFlYarrow : uFlGold)) * tone, smoothstep(0.3, 0.7, v));
+#endif
+  }
   albedo = mix(albedo, uAsh, burn);
 
   // ---- lighting
@@ -583,6 +727,7 @@ void main() {
     else if (uDebug < 6.5) col = vec3(shadow);
     else if (uDebug < 7.5) col = vec3(gust);
     else if (uDebug < 8.5) col = vec3(vP2.z);
+    else if (uDebug > 9.5) col = vec3(seed, fType / 3.0, dry);
     else col = (LEVEL == 0 ? vec3(1.0, 0.1, 0.1) : LEVEL == 1 ? vec3(0.1, 1.0, 0.1) : LEVEL == 2 ? vec3(0.1, 0.3, 1.0) : vec3(1.0, 1.0, 0.1)) * (0.4 + 0.6 * v);
   }
   // belt and braces: the scene target is half float and bloom smears any NaN or Inf over the whole frame.
@@ -629,6 +774,7 @@ export class GrassField {
   private stat0: THREE.DataTexture;
   private stat1: THREE.DataTexture;
   private noiseTex: THREE.DataTexture;
+  private bigNoiseTex: THREE.DataTexture;
   private terrainShadowU: { value: THREE.Texture | null } | null = null;
   private whiteTex: THREE.DataTexture;
   private frameNo = 0;
@@ -648,7 +794,8 @@ export class GrassField {
 
     this.heightTex = this.makeHeightTexture();
     [this.stat0, this.stat1] = this.makeStaticTextures();
-    this.noiseTex = makeNoiseTexture();
+    this.noiseTex = makeNoiseTexture(256, SMALL_LAYERS, 0x1234abcd);
+    this.bigNoiseTex = makeNoiseTexture(512, BIG_LAYERS, 0x5eed1e55);
     this.whiteTex = new THREE.DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1, THREE.RGBAFormat, THREE.UnsignedByteType);
     this.whiteTex.needsUpdate = true;
     this.terrainShadowU = opts.terrainShadow ?? null;
@@ -665,6 +812,8 @@ export class GrassField {
       uStat0: { value: this.stat0 },
       uStat1: { value: this.stat1 },
       uWind: { value: this.noiseTex },
+      uBig: { value: this.bigNoiseTex },
+      uFlower: { value: new THREE.Vector4(0, 0, 0, 0) },
       uTgShadow: { value: this.whiteTex },
       uWorld: { value: new THREE.Vector4(world.size, world.n, world.cell, world.hn) },
       uTime: { value: 0 },
@@ -697,6 +846,10 @@ export class GrassField {
       uDryM: { value: new THREE.Color() },
       uDryT: { value: new THREE.Color() },
       uSeedCol: { value: new THREE.Color(0xd9b46a) },
+      uFlCone: { value: new THREE.Color(0xb8559a) },
+      uFlConeC: { value: new THREE.Color(0x8a3d14) },
+      uFlYarrow: { value: new THREE.Color(0xf0eadb) },
+      uFlGold: { value: new THREE.Color(0xf0b81c) },
       uAsh: { value: new THREE.Color(0x0b0a09) },
       uStubble: { value: new THREE.Color(0x6a4e2c) },
       uAmbSky: { value: this.ambientSky },
@@ -794,6 +947,7 @@ export class GrassField {
         CELLSZ: cs.toFixed(1),
         MAXDENS: maxDens.toFixed(3),
         DENSPOW: DENS_POW.toFixed(2),
+        FLOWERBASE: FLOWER_BASE.toFixed(4),
         HAS_NORMAL: '',
       },
     });
@@ -905,6 +1059,13 @@ export class GrassField {
     seasonColor(DRY_KEYS, env.season, 2, u.uDryT.value);
     u.uCure.value = keyCurve(CURE_KEYS, env.season);
     u.uSeedFrac.value = keyCurve(SEED_KEYS, env.season);
+    {
+      const sn = ((env.season % 4) + 4) % 4;
+      const bump = (a: number, b: number, c: number) => (sn <= a || sn >= c ? 0 : sn < b ? smooth01((sn - a) / (b - a)) : smooth01((c - sn) / (c - b)));
+      const cone = bump(0.55, 1.1, 1.75), yarrow = bump(0.45, 1.0, 1.65), gold = bump(1.35, 1.9, 2.7);
+      const fv = u.uFlower.value as THREE.Vector4;
+      fv.set(cone, yarrow, gold, Math.min(1, Math.max(cone, yarrow, gold)));
+    }
 
     // hill shadows: use the engine's horizon map when it exists, plain white (no shadow) otherwise
     if (!this.terrainShadowU && (this.frameNo++ & 31) === 0) this.terrainShadowU = this.findTerrainShadow();
@@ -1036,6 +1197,7 @@ export class GrassField {
     this.stat0.dispose();
     this.stat1.dispose();
     this.noiseTex.dispose();
+    this.bigNoiseTex.dispose();
     this.cellTex.dispose();
     this.whiteTex.dispose();
   }

@@ -3,7 +3,7 @@
 //
 // Per-instance inputs (InstancedBufferAttribute, vec4):
 //   aGait = (gait phase 0..1, speed m/s [-1 marks a carcass], head-down weight | flap amount | carcass remaining, lie weight)
-//   aLook = (coat 0..1, per-animal seed 0..1, crouch | wing fold, selected 0/1)
+//   aLook = (coat 0..1, per-animal seed 0..1, crouch | wing fold, selected + sick: floor() = selected 0/1, fract() = sickness 0..0.98)
 import * as THREE from 'three';
 import type { AnimParams, ModelDef } from './types';
 
@@ -30,6 +30,8 @@ function defines(p: AnimParams): string {
     `#define HOCK_K ${f(p.hockK)}`,
     `#define OFF_W ${v4(p.offW)}`, `#define OFF_T ${v4(p.offT)}`, `#define OFF_G ${v4(p.offG)}`,
     `#define FLAP_HZ ${f(p.flapHz)}`,
+    `#define MIN_PX ${f(p.minPx)}`,
+    `#define BODY_LEN ${f(p.boostLen)}`,
   ].join('\n');
 }
 
@@ -42,6 +44,8 @@ attribute vec3 aPivot2;
 attribute vec4 aGait;
 attribute vec4 aLook;
 uniform float uTime;
+uniform vec3 uCamPos;
+uniform float uPxK;
 
 void tgRotZ(inout vec3 p, inout vec3 n, vec3 c, float a) {
   float cs = cos(a), sn = sin(a);
@@ -67,6 +71,7 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
   float spd = aGait.y;
   bool dead = spd < -0.5;
   float seed = aLook.y;
+  float sick = dead ? 0.0 : fract(aLook.w);
   float lie = dead ? 0.0 : aGait.w;
   float crouch = dead ? 0.0 : aLook.z;
 #if KIND == 2
@@ -76,7 +81,7 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
 #endif
   float ph = aGait.x;
   float cyc = TG_TAU * ph;
-  float t = uTime;
+  float t = uTime * (1.0 - 0.5 * sick);
 
   // gait weights from speed
   float s1 = smoothstep(TROT0, TROT1, spd);
@@ -136,7 +141,7 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
     float nod = (wWalk + wTrot) * NOD_W * sin(2.0 * cyc + 1.0) + wGal * NOD_G * sin(cyc + 2.0);
     float chew = dn * 0.05 * sin(t * 7.0 + seed * 20.0);
     float yaw = LOOK_YAW * sin(t * 0.45 + seed * 13.0) * (1.0 - dn) * (1.0 - wGal) * (1.0 - lie * 0.5);
-    float ang = -HEAD_DN * dn + nod + chew - 0.45 * crouchBody;
+    float ang = -HEAD_DN * dn + nod + chew - 0.45 * crouchBody - 0.5 * sick * (1.0 - 0.5 * dn);
     ang = mix(ang, 0.15, lie * 0.7);
     if (dead) { ang = -0.55; yaw = 0.25; }
     tgRotY(p, n, aPivot, yaw);
@@ -180,6 +185,12 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
     p.y = p.y * k;
     p.xz *= mix(0.8, 1.0, r);
   }
+
+  // distance readability: keep every animal at least MIN_PX pixels long (on a 900 px tall viewport), growing gently
+  vec3 ip = vec3(instanceMatrix[3]);
+  float isc = length(vec3(instanceMatrix[0]));
+  float px = BODY_LEN * isc * uPxK / max(length(uCamPos - ip), 1.0);
+  p *= clamp(MIN_PX / max(px, 0.01), 1.0, 7.0);
 }
 `;
 
@@ -201,12 +212,15 @@ void tgShade() {
     float r = aGait.z;
     col *= 0.7;
     vec3 flesh = vec3(0.22, 0.035, 0.03);
-    float fleshW = smoothstep(0.62, 0.38, r) * 0.85;
-    float boneW = smoothstep(0.3, 0.06, r);
+    float fleshW = (1.0 - smoothstep(0.38, 0.62, r)) * 0.85;
+    float boneW = (1.0 - smoothstep(0.06, 0.3, r));
     col = mix(mix(col, flesh, fleshW), uBone, boneW);
   }
+  float sick = dead ? 0.0 : fract(aLook.w);
+  float luma = dot(col, vec3(0.2126, 0.7152, 0.0722));
+  col = mix(col, vec3(luma) * vec3(0.9, 0.97, 0.9) + vec3(0.012, 0.014, 0.012), 0.6 * sick);
   vTgColor = col;
-  vTgSel = aLook.w;
+  vTgSel = floor(aLook.w + 0.001);
 }
 `;
 
@@ -215,24 +229,39 @@ export interface AnimalMaterials {
   depth: THREE.MeshDepthMaterial;
 }
 
-export function makeAnimalMaterials(sp: number, def: ModelDef, uTime: { value: number }): AnimalMaterials {
+/** Uniform objects shared by every species material (and the depth materials). */
+export interface AnimalShared {
+  uTime: { value: number };
+  /** Main camera position (world), updated from onBeforeRender. */
+  uCamPos: { value: THREE.Vector3 };
+  /** Pixels per meter at 1 m distance for a 900 px tall viewport. */
+  uPxK: { value: number };
+}
+
+export function makeAnimalMaterials(sp: number, def: ModelDef, shared: AnimalShared): AnimalMaterials {
   const defs = defines(def.params);
   const material = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: def.roughness, metalness: 0 });
   material.onBeforeCompile = (shader) => {
-    shader.uniforms.uTime = uTime;
+    shader.uniforms.uTime = shared.uTime;
+    shader.uniforms.uCamPos = shared.uCamPos;
+    shader.uniforms.uPxK = shared.uPxK;
     shader.uniforms.uCoatPale = { value: new THREE.Vector3(...def.coatPale) };
     shader.uniforms.uCoatDark = { value: new THREE.Vector3(...def.coatDark) };
     shader.uniforms.uBone = { value: new THREE.Vector3(...def.bone) };
+    shader.uniforms.uFill = { value: def.fill };
+    material.userData.shader = shader; // exposed for live tuning from the console
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', `#include <common>\n${defs}\n${COMMON_DECL}\n${VERT_SHADE_DECL}`)
       .replace(
         '#include <beginnormal_vertex>',
-        '#include <beginnormal_vertex>\n vec3 tgP = position;\n tgAnimate(tgP, objectNormal);\n tgShade();',
+        `#include <beginnormal_vertex>\n vec3 tgP = position;\n tgAnimate(tgP, objectNormal);\n tgShade();`,
       )
       .replace('#include <begin_vertex>', 'vec3 transformed = tgP;');
     shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', '#include <common>\nvarying vec3 vTgColor;\nvarying float vTgSel;')
+      .replace('#include <common>', `#include <common>\nvarying vec3 vTgColor;\nvarying float vTgSel;\nuniform float uFill;`)
       .replace('#include <color_fragment>', 'diffuseColor.rgb *= vTgColor;')
+      // stronger sky fill so the shaded side keeps form instead of going black
+      .replace('#include <lights_fragment_end>', `#include <lights_fragment_end>\n reflectedLight.indirectDiffuse *= uFill;`)
       .replace(
         '#include <emissivemap_fragment>',
         `#include <emissivemap_fragment>
@@ -244,10 +273,12 @@ export function makeAnimalMaterials(sp: number, def: ModelDef, uTime: { value: n
 
   const depth = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking });
   depth.onBeforeCompile = (shader) => {
-    shader.uniforms.uTime = uTime;
+    shader.uniforms.uTime = shared.uTime;
+    shader.uniforms.uCamPos = shared.uCamPos;
+    shader.uniforms.uPxK = shared.uPxK;
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', `#include <common>\n${defs}\n${COMMON_DECL}`)
-      .replace('#include <begin_vertex>', 'vec3 tgP = position;\n vec3 tgN = vec3(0.0, 1.0, 0.0);\n tgAnimate(tgP, tgN);\n vec3 transformed = tgP;');
+      .replace('#include <begin_vertex>', `vec3 tgP = position;\n vec3 tgN = vec3(0.0, 1.0, 0.0);\n tgAnimate(tgP, tgN);\n vec3 transformed = tgP;`);
   };
   depth.customProgramCacheKey = () => `tg-animal-depth-${sp}`;
   return { material, depth };

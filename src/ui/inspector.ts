@@ -45,7 +45,7 @@ export class Inspector {
   private activity: HTMLElement;
   private chips: HTMLElement;
   private bars = new Map<string, BarRef>();
-  private gauges: { dot: HTMLElement; tick: HTMLElement }[] = [];
+  private gauges: { dot: HTMLElement; tick: HTMLElement; val: HTMLElement }[] = [];
   private stats: HTMLElement;
   private followBtn: HTMLButtonElement;
   private followLabel: HTMLElement;
@@ -74,9 +74,12 @@ export class Inspector {
     for (const t of TRAITS) {
       const dot = h('span', { class: 'tg-gauge-dot' });
       const tick = h('span', { class: 'tg-gauge-tick' });
+      const val = h('span', { class: 'tg-gauge-val' });
       const gauge = h('span', { class: 'tg-gauge-track' }, tick, dot);
-      traits.append(h('div', { class: 'tg-gauge', title: t.title }, h('span', { class: 'tg-gauge-label', text: t.label }), gauge));
-      this.gauges.push({ dot, tick });
+      traits.append(
+        h('div', { class: 'tg-gauge', title: t.title }, h('div', { class: 'tg-gauge-top' }, h('span', { class: 'tg-gauge-label', text: t.label }), val), gauge),
+      );
+      this.gauges.push({ dot, tick, val });
     }
 
     this.followLabel = h('span', { text: 'Follow' });
@@ -101,6 +104,7 @@ export class Inspector {
       this.chips,
       bars,
       traits,
+      h('p', { class: 'tg-insp-note', text: 'Dot: this animal. Tick: where the founders started.' }),
       this.stats,
       h('div', { class: 'tg-insp-actions' }, this.followBtn, closeBtn),
     );
@@ -163,8 +167,9 @@ export class Inspector {
       const g = this.gauges[i];
       g.dot.style.left = `${(f(v) * 100).toFixed(1)}%`;
       g.tick.style.left = `${(f(t.base(d.sp)) * 100).toFixed(1)}%`;
+      setText(g.val, v.toFixed(2));
       const parent = g.dot.parentElement?.parentElement;
-      if (parent) parent.title = `${t.title}: ${v.toFixed(2)}${t.key === 'coat' ? '' : ' of average'}`;
+      if (parent) parent.title = `${t.title}: ${v.toFixed(2)}. The tick is where the founders started (${t.base(d.sp).toFixed(2)}).`;
     });
     this.lastKey = '';
   }

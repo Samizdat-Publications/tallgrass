@@ -40,13 +40,15 @@ export interface SpeciesParams {
   camo: number;
   /** 0 = grazer (grass only), 1 = browser (forbs and shrubs first, grass at half value). */
   diet: number;
+  /** Juveniles younger than this lie hidden in the grass while their mother grazes nearby (0 = never). */
+  hideAge: number;
 }
 
 const base = (o: Partial<SpeciesParams>): SpeciesParams => ({
   maxAge: 3000, matureAge: 500, gestation: 150, birthCooldown: 400, litter: 1,
   walkSpeed: 1.4, runSpeed: 9, stamina: 120, sight: 35, metabolism: 1 / 1200, thirst: 1 / 900,
   bite: 0.006, foodValue: 0.42, meat: 1, toughness: 1, initial: 0, herdRadius: 12,
-  wariness: 0.4, defense: 0, camo: 0.5, diet: 0,
+  wariness: 0.4, defense: 0, camo: 0.5, diet: 0, hideAge: 0,
   ...o,
 });
 
@@ -63,6 +65,7 @@ export interface Params {
   trampleRun: number;
   trampleWalk: number;
   grazeMin: number;
+  migrateBelow: number;
   // fear
   fearKill: number;
   fearKillRadius: number;
@@ -89,6 +92,7 @@ export interface Params {
   wolfTestGiveUp: number;
   wolfStrife: number;
   wolfScentHerd: number;
+  wolfSmallGame: number;
   ravenNestSites: number;
   // carcasses
   carcassRot: number;
@@ -110,13 +114,13 @@ export function defaultParams(): Params {
   species[Sp.Bison] = base({
     maxAge: 3600, matureAge: 600, gestation: 200, birthCooldown: 380, litter: 1.0,
     walkSpeed: 1.5, runSpeed: 10, stamina: 140, sight: 38, metabolism: 1 / 1300, thirst: 1 / 1500,
-    bite: 0.0065, foodValue: 0.42, meat: 7, toughness: 2.4, initial: 500, herdRadius: 14,
+    bite: 0.0065, foodValue: 0.55, meat: 7, toughness: 2.4, initial: 800, herdRadius: 14,
     wariness: 0.4, defense: 0.6, camo: 0.25,
   });
   species[Sp.Wolf] = base({
     maxAge: 9600, matureAge: 1200, gestation: 0, birthCooldown: 0, litter: 4.5,
     walkSpeed: 2.2, runSpeed: 12.5, stamina: 110, sight: 60, metabolism: 1 / 950, thirst: 1 / 1600,
-    meat: 1.5, toughness: 1.4, initial: 36, herdRadius: 18,
+    meat: 1.5, toughness: 1.4, initial: 45, herdRadius: 18,
   });
   species[Sp.Raven] = base({
     maxAge: 7200, matureAge: 600, gestation: 120, birthCooldown: 1400, litter: 2,
@@ -127,8 +131,8 @@ export function defaultParams(): Params {
   species[Sp.Deer] = base({
     maxAge: 3000, matureAge: 420, gestation: 150, birthCooldown: 400, litter: 1.4,
     walkSpeed: 1.7, runSpeed: 15.5, stamina: 170, sight: 55, metabolism: 1 / 1300, thirst: 1 / 2200,
-    bite: 0.0052, foodValue: 0.42, meat: 2.2, toughness: 0.75, initial: 160, herdRadius: 12,
-    wariness: 0.85, defense: 0.08, camo: 0.6, diet: 1,
+    bite: 0.0052, foodValue: 0.55, meat: 2.2, toughness: 0.75, initial: 350, herdRadius: 12,
+    wariness: 0.85, defense: 0.08, camo: 0.6, diet: 1, hideAge: 170,
   });
   species[Sp.Rabbit] = base({ initial: 0 });
   species[Sp.Cougar] = base({ initial: 0 });
@@ -144,6 +148,7 @@ export function defaultParams(): Params {
     trampleRun: 0.0015,
     trampleWalk: 0.0002,
     grazeMin: 0.12,
+    migrateBelow: 0.2,
     fearKill: 0.7,
     fearKillRadius: 22,
     fearPredatorStamp: 0.0008,
@@ -158,7 +163,7 @@ export function defaultParams(): Params {
     wolfEatRate: 0.012,
     wolfPackStoreShare: 0.45,
     wolfPackMax: 7,
-    wolfDenMinDist: 180,
+    wolfDenMinDist: 200,
     wolfTerritory: 100,
     wolfPupDenAge: 450,
     wolfInjuryChance: 0.01,
@@ -167,7 +172,8 @@ export function defaultParams(): Params {
     wolfTestGiveUp: 0.05,
     wolfStrife: 0.002,
     wolfScentHerd: 12,
-    ravenNestSites: 160,
+    wolfSmallGame: 1.1,
+    ravenNestSites: 320,
     carcassRot: 0.0009,
     carcassSoil: 0.05,
     diseaseBeta: 0.03,

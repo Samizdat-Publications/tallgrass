@@ -5,7 +5,12 @@ import { POSITIONAL_TOOLS, type ToolId, type UIActions } from './types';
 
 interface ToolDef {
   id: ToolId;
+  /** The short word that sits in the rail beside the icon. */
+  short: string;
+  /** The fuller name shown in the slide-out. */
   label: string;
+  /** Species the tool is about: tints its icon so the animal tools are told apart at a glance. */
+  species?: number;
   hint: string;
   armedHint: string;
   danger?: boolean;
@@ -14,14 +19,14 @@ interface ToolDef {
 }
 
 export const TOOL_DEFS: ToolDef[] = [
-  { id: 'rain', label: 'Call rain', hint: 'Rain falls across the valley', armedHint: '', group: 0 },
-  { id: 'drought', label: 'Bring drought', hint: 'The rains fail for a time', armedHint: '', group: 0 },
-  { id: 'fire', label: 'Start a fire', hint: 'Pick a spot on the ground', armedHint: 'Click the ground. Esc cancels', danger: true, group: 1 },
-  { id: 'plague', label: 'Spread plague', hint: 'Sickness runs through the herds', armedHint: '', danger: true, group: 1 },
-  { id: 'cull', label: 'Cull the herd', hint: 'Thins out the bison', armedHint: '', danger: true, group: 1 },
-  { id: 'addWolves', label: 'Bring in wolves', hint: 'Pick a spot on the ground', armedHint: 'Click the ground. Esc cancels', group: 2 },
-  { id: 'addBison', label: 'Bring in bison', hint: 'Pick a spot on the ground', armedHint: 'Click the ground. Esc cancels', group: 2 },
-  { id: 'removeWolves', label: 'Remove the wolves', hint: 'Every wolf leaves the valley', armedHint: '', group: 2 },
+  { id: 'rain', short: 'Rain', label: 'Call rain', hint: 'Rain falls across the valley', armedHint: '', group: 0 },
+  { id: 'drought', short: 'Drought', label: 'Bring drought', hint: 'The rains fail for a time', armedHint: '', group: 0 },
+  { id: 'fire', short: 'Fire', label: 'Start a fire', hint: 'Pick a spot on the ground', armedHint: 'Click the ground. Esc cancels', danger: true, group: 1 },
+  { id: 'plague', short: 'Plague', label: 'Spread plague', hint: 'Sickness runs through the herds', armedHint: '', danger: true, group: 1 },
+  { id: 'cull', short: 'Cull', label: 'Cull the herd', hint: 'Thins out the bison', armedHint: '', danger: true, group: 1 },
+  { id: 'addWolves', short: 'Add wolves', species: 1, label: 'Bring in wolves', hint: 'Pick a spot on the ground', armedHint: 'Click the ground. Esc cancels', group: 2 },
+  { id: 'addBison', short: 'Add bison', species: 0, label: 'Bring in bison', hint: 'Pick a spot on the ground', armedHint: 'Click the ground. Esc cancels', group: 2 },
+  { id: 'removeWolves', short: 'Remove wolves', species: 1, label: 'Remove the wolves', hint: 'Every wolf leaves the valley', armedHint: '', group: 2 },
 ];
 
 export class ToolRail {
@@ -39,13 +44,15 @@ export class ToolRail {
       }
       const btn = button(
         {
-          class: `tg-tool tg-glass tg-leaf${t.danger ? ' is-danger' : ''}`,
+          class: `tg-tool tg-glass tg-leaf${t.danger ? ' is-danger' : ''}${t.species !== undefined ? ' is-species' : ''}`,
+          style: t.species !== undefined ? `--tc:var(--sp-${t.species})` : undefined,
           'aria-label': t.label,
           'aria-pressed': POSITIONAL_TOOLS.has(t.id) ? 'false' : undefined,
           dataset: { tool: t.id },
-          html: icon(t.id, 22),
           onclick: () => this.press(t),
         },
+        h('span', { class: 'tg-tool-ic', html: icon(t.id, 20) }),
+        h('span', { class: 'tg-tool-text', text: t.short }),
       );
       const hint = h('span', { class: 'tg-tool-hint', text: t.hint });
       const label = h('span', { class: 'tg-tool-label tg-glass' }, h('span', { class: 'tg-tool-name', text: t.label }), hint);

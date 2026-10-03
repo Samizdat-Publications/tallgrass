@@ -3,7 +3,7 @@ import { Rng } from './rng';
 import { DAY_TICKS, EnvState, SEASON_TICKS, Weather, YEAR_TICKS } from './types';
 
 /** The world opens on a late-summer morning: golden grass, low sun. */
-export const START_SEASON = 1.45;
+export const START_SEASON = 1.8;
 export const START_DAY = 0.27;
 
 export class Environment {

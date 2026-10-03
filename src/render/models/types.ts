@@ -67,6 +67,10 @@ export interface AnimParams {
   height: number;
   /** Radius of the selection ring (m). */
   ring: number;
+  /** Minimum on-screen length in pixels (on a 900 px tall viewport) before the animal is gently scaled up with distance. */
+  minPx: number;
+  /** Model length (m) used for that screen-size estimate. */
+  boostLen: number;
 }
 
 export interface ModelDef {
@@ -78,6 +82,8 @@ export interface ModelDef {
   /** Carcass bone colour, linear. */
   bone: [number, number, number];
   roughness: number;
+  /** Multiplier on the hemisphere (sky) fill light for this species. */
+  fill: number;
   triangles: number;
 }
 
@@ -126,4 +132,6 @@ export const DEFAULT_PARAMS: AnimParams = {
   length: 3,
   height: 1.8,
   ring: 2.2,
+  minPx: 9,
+  boostLen: 3,
 };

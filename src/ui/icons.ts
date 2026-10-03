@@ -30,7 +30,7 @@ export const ICONS: Record<string, string> = {
     '<circle cx="12" cy="12" r="6.6"/>' +
     '<path d="M12 2.6v5M12 16.4v5M2.6 12h5M16.4 12h5"/><path d="M12 12h.01"/>',
   addWolves: WOLF_HEAD + '<path d="M19.2 2.2v4.4M17 4.4h4.4"/>',
-  removeWolves: WOLF_HEAD + '<path d="M17 4.4h4.4"/>',
+  removeWolves: WOLF_HEAD + '<path d="M3.2 3.2l17.6 17.6"/>',
   addBison: BISON_HEAD + '<path d="M19.2 2.2v4.4M17 4.4h4.4"/>',
 
   pause: '<path d="M8.6 5.8v12.4M15.4 5.8v12.4" stroke-width="2.4"/>',

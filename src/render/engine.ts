@@ -19,6 +19,7 @@ import { Sky, computeAtmosphere, createLighting, Lighting, Smoothed } from './sk
 import { Trees } from './trees';
 import { PostFX, Quality } from './post';
 import { DroneCamera, CameraPreset } from './camera';
+import { grassTint } from './grass';
 
 export type { Quality } from './post';
 export { injectTerrainShadow } from './common';
@@ -32,12 +33,12 @@ interface SeasonKey {
   s: number; lush: string; cured: string; stub: string; soil: string; gH: number; gL: number; leaf: number; lA: string; lB: string;
 }
 const SEASONS: SeasonKey[] = [
-  { s: 0.0, lush: '#6f9138', cured: '#a99a5a', stub: '#9a8a55', soil: '#5e4630', gH: 0.85, gL: 1.0, leaf: 0.45, lA: '#86a23a', lB: '#a8b744' },
-  { s: 0.5, lush: '#63852f', cured: '#b09b52', stub: '#9c8a52', soil: '#5e4630', gH: 0.9, gL: 1.0, leaf: 0.85, lA: '#6d9232', lB: '#8fa83a' },
-  { s: 1.0, lush: '#6f8a30', cured: '#c8963e', stub: '#a88542', soil: '#664a30', gH: 0.1, gL: 0.82, leaf: 1.0, lA: '#475c22', lB: '#788c30' },
-  { s: 1.5, lush: '#738833', cured: '#c58b37', stub: '#a68244', soil: '#664a30', gH: 0.06, gL: 0.66, leaf: 1.0, lA: '#4c6024', lB: '#80922f' },
-  { s: 2.0, lush: '#88863a', cured: '#b9772e', stub: '#a07a44', soil: '#5e4632', gH: 0.08, gL: 0.42, leaf: 0.9, lA: '#b8962a', lB: '#d08c24' },
-  { s: 2.5, lush: '#8a7a35', cured: '#a8662a', stub: '#98703e', soil: '#5a4230', gH: 0.05, gL: 0.26, leaf: 0.42, lA: '#b97a20', lB: '#a65c1c' },
+  { s: 0.0, lush: '#6f9138', cured: '#a99a5a', stub: '#8f7d4c', soil: '#5e4630', gH: 0.85, gL: 1.0, leaf: 0.45, lA: '#6e7f38', lB: '#8d9a42' },
+  { s: 0.5, lush: '#63852f', cured: '#b09b52', stub: '#8f7d4c', soil: '#5e4630', gH: 0.9, gL: 1.0, leaf: 0.85, lA: '#55692c', lB: '#76863a' },
+  { s: 1.0, lush: '#6f8a30', cured: '#c58b37', stub: '#8e7a46', soil: '#664a30', gH: 0.1, gL: 0.82, leaf: 1.0, lA: '#3d4d24', lB: '#667432' },
+  { s: 1.5, lush: '#738833', cured: '#c58b37', stub: '#8e7a46', soil: '#664a30', gH: 0.06, gL: 0.66, leaf: 1.0, lA: '#43512a', lB: '#707c34' },
+  { s: 2.0, lush: '#88863a', cured: '#b9772e', stub: '#8c7240', soil: '#5e4632', gH: 0.08, gL: 0.42, leaf: 0.9, lA: '#8f7a26', lB: '#b08424' },
+  { s: 2.5, lush: '#8a7a35', cured: '#a8662a', stub: '#86683c', soil: '#5a4230', gH: 0.05, gL: 0.26, leaf: 0.42, lA: '#9a6a22', lB: '#8c5420' },
   { s: 3.0, lush: '#8d8a62', cured: '#b9a77c', stub: '#a89a74', soil: '#584a3c', gH: 0.05, gL: 0.16, leaf: 0.08, lA: '#6a5238', lB: '#7a6040' },
   { s: 3.5, lush: '#8d8f66', cured: '#b5a57e', stub: '#a59876', soil: '#584a3c', gH: 0.1, gL: 0.3, leaf: 0.1, lA: '#6a5238', lB: '#7a6040' },
 ];
@@ -46,6 +47,23 @@ const SEASON_COLORS = SEASONS.map((k) => ({
   lA: new THREE.Color(k.lA), lB: new THREE.Color(k.lB),
 }));
 const ROCK_COLOR = new THREE.Color('#8d7f6a');
+
+/** Copy of the blade layer's cure curve (grass.ts CURE_KEYS): how cured the prairie is across the year. */
+const CURE_KEYS: [number, number][] = [
+  [0, 0.03], [0.6, 0.06], [1.0, 0.12], [1.25, 0.24], [1.5, 0.6], [1.8, 0.92], [2.0, 1.0], [3.5, 1.0], [3.8, 0.5], [4.0, 0.03],
+];
+function keyCurve(keys: [number, number][], s: number): number {
+  const t = ((s % 4) + 4) % 4;
+  for (let i = 0; i < keys.length - 1; i++) {
+    const [a, va] = keys[i];
+    const [b, vb] = keys[i + 1];
+    if (t >= a && t <= b) {
+      const f = (t - a) / (b - a);
+      return va + (vb - va) * f * f * (3 - 2 * f);
+    }
+  }
+  return keys[keys.length - 1][1];
+}
 
 export interface EngineOptions {
   quality?: Quality;
@@ -89,6 +107,9 @@ export class Engine {
   private lastNear = 0;
   private shadowRange = 300;
   private firstFrame = true;
+  private _focus = new THREE.Vector3();
+  /** Fade tree canopies and trunks out of the line between the camera and the point it watches (default on). */
+  occlusionFade = true;
 
   constructor(parent: HTMLElement, world: World, opts: EngineOptions = {}) {
     this.world = world;
@@ -351,6 +372,16 @@ export class Engine {
     this.sky.follow(this.camera);
     this.trees.update(this.camera.position);
 
+    // canopy occlusion fade: keep the watched point visible when close in (follow cam, herd framing, low views)
+    {
+      const dist = this.cam.distance;
+      const focus = this.cam.getFocus(this._focus);
+      u.occCam.value.copy(this.camera.position);
+      u.occFocus.value.set(focus.x, focus.y + 0.5, focus.z);
+      const r = clamp(dist * 0.045, 1.6, 6);
+      u.occParams.value.set(r * 0.6, r * 1.7, this.occlusionFade ? 1 - smoothstep(110, 175, dist) : 0);
+    }
+
     this.terrain.updateShadow(this.renderer, u.lightDir.value);
     this.post.apply(L);
   }
@@ -372,5 +403,13 @@ export class Engine {
     u.greenHigh.value = lerp(a.gH, b.gH, t);
     u.greenLow.value = lerp(a.gL, b.gL, t);
     u.leafAmount.value = lerp(a.leaf, b.leaf, t);
+
+    // terrain grass color = the blade layer's own palette (probes into grassTint, see grass.ts), so ground and blades match
+    const cure = keyCurve(CURE_KEYS, s);
+    u.cure.value = cure;
+    grassTint(s, 1.5, 1.0, u.grassGreen.value);
+    grassTint(s, 0.0, 0.0, u.grassDry.value);
+    // undo the ridge tint that grassTint bakes into the dry probe (the terrain shader re-applies it per fragment)
+    u.grassDry.value.r /= 1.08; u.grassDry.value.g /= 0.93; u.grassDry.value.b /= 0.84;
   }
 }

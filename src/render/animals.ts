@@ -5,13 +5,15 @@
 // from two vec4 instance attributes. Snapshots arrive at 10 to 60 Hz; positions and headings are interpolated
 // between the previous and current snapshot by id.
 import * as THREE from 'three';
-import { AGENT_STRIDE, CARCASS_STRIDE, SPECIES_COUNT, Sp, St } from '../sim/types';
+import { AGENT_STRIDE, CARCASS_STRIDE, F_INFECTED, SPECIES_COUNT, Sp, St } from '../sim/types';
 import type { Snapshot } from '../sim/types';
 import { sampleHeight } from '../sim/world';
 import type { World } from '../sim/world';
 import { getModel } from './models';
 import type { AnimParams, ModelDef } from './models';
 import { makeAnimalMaterials } from './models/shader';
+import type { AnimalShared } from './models/shader';
+import { Dust, KillSites, SceneLit } from './models/fx';
 
 const INITIAL_CAPACITY = [2048, 512, 512, 1024, 1024, 128]; // by species id
 
@@ -22,6 +24,16 @@ const wrapPi = (a: number): number => {
   return a - Math.PI;
 };
 const hash01 = (n: number): number => (Math.imul(n | 0, 0x9e3779b1) >>> 8) / 16777216;
+
+/** Dust kicked up by fast movers: [min speed m/s, puffs per second per m/s over the minimum, puff size m, alpha]. */
+const DUST: Array<[number, number, number, number] | null> = [
+  [5, 0.9, 1.9, 0.2], // bison
+  [5, 0.8, 1.1, 0.17], // wolf
+  null, // raven
+  [6, 0.5, 1.1, 0.16], // pronghorn
+  null, // rabbit
+  [5, 0.6, 1.1, 0.16], // cougar
+];
 
 function strideFreq(p: AnimParams, spd: number): number {
   if (spd < 0.05) return 0;
@@ -48,7 +60,10 @@ class Batch {
   /** x, y, z, radius per instance, world space, for picking. */
   centers = new Float32Array(0);
 
-  constructor(sp: number, def: ModelDef, material: THREE.MeshStandardMaterial, depth: THREE.MeshDepthMaterial, parent: THREE.Object3D, cap: number) {
+  private shared: AnimalShared;
+
+  constructor(sp: number, def: ModelDef, material: THREE.MeshStandardMaterial, depth: THREE.MeshDepthMaterial, parent: THREE.Object3D, cap: number, shared: AnimalShared) {
+    this.shared = shared;
     this.sp = sp;
     this.def = def;
     this.material = material;
@@ -80,6 +95,14 @@ class Batch {
     mesh.frustumCulled = false;
     mesh.count = 0;
     mesh.name = 'animals-' + this.sp;
+    const sh = this.shared;
+    mesh.onBeforeRender = (_r, _s, camera) => {
+      // the min-screen-size boost in the vertex shader needs the viewing camera (not the shadow camera)
+      if ((camera as THREE.PerspectiveCamera).isPerspectiveCamera) {
+        sh.uCamPos.value.setFromMatrixPosition(camera.matrixWorld);
+        sh.uPxK.value = 900 / (2 * Math.tan(((camera as THREE.PerspectiveCamera).fov * Math.PI) / 360));
+      }
+    };
     this.geometry = g;
     this.mesh = mesh;
     this.capacity = cap;
@@ -107,6 +130,8 @@ class Slots {
   flap = new Float32Array(this.cap);
   bank = new Float32Array(this.cap);
   pitch = new Float32Array(this.cap);
+  sick = new Float32Array(this.cap);
+  dust = new Float32Array(this.cap);
   fresh = new Uint8Array(this.cap);
   stamp = new Uint32Array(this.cap);
   map = new Map<number, number>();
@@ -133,6 +158,8 @@ class Slots {
     this.flap = g(this.flap, Float32Array);
     this.bank = g(this.bank, Float32Array);
     this.pitch = g(this.pitch, Float32Array);
+    this.sick = g(this.sick, Float32Array);
+    this.dust = g(this.dust, Float32Array);
     this.fresh = g(this.fresh, Uint8Array);
     this.stamp = g(this.stamp, Uint32Array);
     this.cap = n;
@@ -143,12 +170,16 @@ export class AnimalLayer {
   readonly object3D = new THREE.Group();
   /** Sim speed multiplier (1 = real time, 0 = paused). Scales gait frequency so legs match visible speed. */
   timeScale = 1;
-  /** Per species visual size multiplier by species id (readability boost for small animals: wolf 1.35 (the concept art wolves read at ~0.65 of a bison), raven 1.3, rabbit 1.2, cougar 1.05). */
-  readonly speciesScale: number[] = [1, 1.35, 1.3, 1, 1.2, 1.05];
+  /** Per species visual size multiplier by species id (readability boost for small animals: wolf 1.35 (the concept art wolves read at ~0.65 of a bison), raven 1.7 (circling ravens are the "kill here" tell), rabbit 1.2, cougar 1.05). */
+  readonly speciesScale: number[] = [1, 1.35, 1.7, 1, 1.2, 1.05];
 
   private world: World;
   private batches: Batch[] = [];
   private uTime = { value: 0 };
+  private shared: AnimalShared = { uTime: this.uTime, uCamPos: { value: new THREE.Vector3(256, 400, 256) }, uPxK: { value: 900 / (2 * Math.tan((45 * Math.PI) / 360)) } };
+  private lit = new SceneLit();
+  private dust: Dust;
+  private kills: KillSites;
   private slots = new Slots();
   private gen = 0;
 
@@ -178,9 +209,12 @@ export class AnimalLayer {
     this.object3D.name = 'AnimalLayer';
     for (let sp = 0; sp < SPECIES_COUNT; sp++) {
       const def = getModel(sp);
-      const { material, depth } = makeAnimalMaterials(sp, def, this.uTime);
-      this.batches.push(new Batch(sp, def, material, depth, this.object3D, INITIAL_CAPACITY[sp]));
+      const { material, depth } = makeAnimalMaterials(sp, def, this.shared);
+      this.batches.push(new Batch(sp, def, material, depth, this.object3D, INITIAL_CAPACITY[sp], this.shared));
     }
+    this.kills = new KillSites(world, this.lit);
+    this.dust = new Dust(this.lit);
+    this.object3D.add(this.kills.mesh, this.dust.mesh);
 
     // Selection ring: a soft glowing ring that hugs the terrain under the selected animal.
     const N = 24;
@@ -198,6 +232,8 @@ export class AnimalLayer {
     this.ring.renderOrder = 50;
     this.ring.visible = false;
     this.ring.name = 'selection-ring';
+    this.ring.onBeforeRender = (_r, scene) => { if (scene.overrideMaterial) this.ringGeo.setDrawRange(0, 0); };
+    this.ring.onAfterRender = () => this.ringGeo.setDrawRange(0, Infinity);
     this.object3D.add(this.ring);
   }
 
@@ -236,6 +272,8 @@ export class AnimalLayer {
         S.map.set(id, slot);
         S.fresh[slot] = 1;
         S.phase[slot] = hash01(id * 7 + 3);
+        S.sick[slot] = 0;
+        S.dust[slot] = 0;
       }
       S.stamp[slot] = this.gen;
       this.currSlot[i] = slot;
@@ -256,6 +294,7 @@ export class AnimalLayer {
       if (sp >= 0 && sp < SPECIES_COUNT) this.carcassCounts[sp]++;
     }
     for (let sp = 0; sp < SPECIES_COUNT; sp++) this.batches[sp].ensure(this.counts[sp] + this.carcassCounts[sp], this.object3D);
+    this.kills.setSnapshot(snap);
   }
 
   // ---------------------------------------------------------------------------------------------------------
@@ -281,6 +320,10 @@ export class AnimalLayer {
     const snapDt = this.snapDt;
     const sel = this.selectedId;
     this.selInfo.found = false;
+    const kSick = 1 - Math.exp(-dt / 2.5);
+    const running = this.timeScale > 0 ? dt : 0;
+    this.dust.update(running);
+    const dustRate = Math.min(this.timeScale, 3);
 
     for (const b of this.batches) {
       b.count = 0;
@@ -345,8 +388,11 @@ export class AnimalLayer {
       S.lie[slot] += (lieT - S.lie[slot]) * kLie;
       S.crouch[slot] += (crT - S.crouch[slot]) * kCrouch;
       S.flap[slot] += (flapT - S.flap[slot]) * kHead;
+      const sickT = (A[o + 8] | 0) & F_INFECTED ? 0.98 : 0;
+      S.sick[slot] += (sickT - S.sick[slot]) * kSick;
+      const sickK = S.sick[slot];
       const spdS = S.spd[slot];
-      S.phase[slot] = (S.phase[slot] + dt * strideFreq(pr, spdS)) % 1;
+      S.phase[slot] = (S.phase[slot] + dt * strideFreq(pr, spdS) * (1 - 0.3 * sickK)) % 1;
 
       // pose on the terrain
       const vs = sc * this.speciesScale[sp];
@@ -381,6 +427,27 @@ export class AnimalLayer {
       }
       this.writeInstance(b, x, y, z, ch, sh, pitch, roll, vs);
 
+      // dust kicked up by fast movers
+      const dp = DUST[sp];
+      if (dp && dustRate > 0 && spdS > dp[0] && (state === St.Run || state === St.Flee || state === St.Chase)) {
+        S.dust[slot] += dt * dp[1] * (spdS - dp[0]) * dustRate;
+        let guard = 2;
+        while (S.dust[slot] >= 1 && guard-- > 0) {
+          S.dust[slot] -= 1;
+          const ci = Math.min(world.n - 1, Math.max(0, Math.floor(x / cell))), cj = Math.min(world.n - 1, Math.max(0, Math.floor(z / cell)));
+          if (world.water[cj * world.n + ci]) continue;
+          const back = -0.3 * pr.length * vs, side = (Math.random() - 0.5) * 0.35 * pr.length * vs;
+          const px = x + ch * back - sh * side, pz = z + sh * back + ch * side;
+          const drift = -0.1 * spdS;
+          this.dust.emit(
+            px, sampleHeight(H, hn, cell, px, pz) + 0.15, pz,
+            ch * drift + (Math.random() - 0.5) * 0.9, 0.3 + Math.random() * 0.5, sh * drift + (Math.random() - 0.5) * 0.9,
+            dp[2] * vs * (0.75 + 0.5 * Math.random()), 1.3 + Math.random() * 1.0, dp[3] * (0.7 + 0.6 * Math.random()), Math.random(),
+          );
+        }
+        if (S.dust[slot] > 1) S.dust[slot] = 1;
+      }
+
       const k = b.count - 1;
       b.ids[k] = id;
       const gp = k * 4;
@@ -393,7 +460,7 @@ export class AnimalLayer {
       look[gp] = clamp(coat, 0, 1);
       look[gp + 1] = hash01(id);
       look[gp + 2] = S.crouch[slot];
-      look[gp + 3] = id === sel ? 1 : 0;
+      look[gp + 3] = (id === sel ? 1 : 0) + sickK;
       // pick sphere
       const c = k * 4;
       const cy = y + (sp === Sp.Raven ? 0.15 * vs : pr.height * 0.5 * vs);
@@ -575,6 +642,8 @@ export class AnimalLayer {
       b.material.dispose();
       b.depth.dispose();
     }
+    this.dust.dispose();
+    this.kills.dispose();
     this.ringGeo.dispose();
     this.ringMat.map?.dispose();
     this.ringMat.dispose();

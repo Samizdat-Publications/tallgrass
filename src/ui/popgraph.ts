@@ -37,7 +37,8 @@ export class PopGraph {
 
   // view state
   private expanded = false;
-  private log = false;
+  /** Log scale by default: predators and ravens are a tenth of the bison and vanish on a linear axis. */
+  private log = true;
   private on: boolean[] = Array.from({ length: SPECIES_COUNT }, () => true);
   private visible: number[] = [];
   private cells: Cell[] = [];
@@ -66,7 +67,7 @@ export class PopGraph {
       class: 'tg-btn tg-pop-log',
       text: 'Log',
       title: 'Logarithmic scale (L)',
-      'aria-pressed': 'false',
+      'aria-pressed': 'true',
       onclick: () => this.toggleLog(),
     });
     this.expandBtn = button({
@@ -377,12 +378,16 @@ export class PopGraph {
     let max = 1;
     for (const sp of this.visible) if (this.on[sp]) for (let i = 0; i < n; i++) if (this.pops[sp][i] > max) max = this.pops[sp][i];
     let Y: (v: number) => number;
-    const yTicks: { v: number; label: string }[] = [];
+    const yTicks: { v: number; label: string; minor?: boolean }[] = [];
     if (this.log) {
-      const hi = Math.max(1, Math.ceil(Math.log10(max * 1.05)));
+      // the top of the axis hugs the data instead of jumping to the next power of ten
+      const hi = Math.max(1.3, Math.log10(max * 1.15));
       const lo = -0.3;
       Y = (v) => P.b - ((Math.log10(Math.max(v, 0.5)) - lo) / (hi - lo)) * ph;
-      for (let k = 0; k <= hi; k++) yTicks.push({ v: Math.pow(10, k), label: fmtInt(Math.pow(10, k)) });
+      for (let k = 0; k <= Math.floor(hi); k++) {
+        yTicks.push({ v: Math.pow(10, k), label: fmtInt(Math.pow(10, k)) });
+        for (const m of [2, 5]) if (m * Math.pow(10, k) <= Math.pow(10, hi)) yTicks.push({ v: m * Math.pow(10, k), label: '', minor: true });
+      }
     } else {
       const step = niceStep(max, 4);
       const top = Math.ceil((max * 1.04) / step) * step;
@@ -395,13 +400,15 @@ export class PopGraph {
     g.textAlign = 'right';
     for (const t of yTicks) {
       const y = Math.round(Y(t.v)) + 0.5;
-      g.strokeStyle = 'rgba(239,230,208,0.09)';
+      g.strokeStyle = t.minor ? 'rgba(239,230,208,0.04)' : 'rgba(239,230,208,0.09)';
       g.beginPath();
       g.moveTo(P.l, y);
       g.lineTo(P.r, y);
       g.stroke();
-      g.fillStyle = PAPER_DIM;
-      g.fillText(t.label, P.l - 8 * u, y);
+      if (!t.minor) {
+        g.fillStyle = PAPER_DIM;
+        g.fillText(t.label, P.l - 8 * u, y);
+      }
     }
     if (this.log) {
       g.fillStyle = PAPER_DIM;

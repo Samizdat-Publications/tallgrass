@@ -47,9 +47,21 @@ let pending: Extract<FromWorker, { type: 'snap' }> | null = null;
 let pendingEvents: Extract<FromWorker, { type: 'snap' }>['events'] = [];
 let pendingHistory: Extract<FromWorker, { type: 'snap' }>['history'] = [];
 
+let skipping = false;
+let skipEvents: Extract<FromWorker, { type: 'snap' }>['events'] = [];
+
 worker.onmessage = (e: MessageEvent<FromWorker>) => {
   const m = e.data;
   if (m.type !== 'snap') return;
+  // "Next event": collect what happened during the skip, then cut the camera to it
+  if (m.speed === -1) { skipping = true; skipEvents = skipEvents.concat(m.events); }
+  else if (skipping) {
+    skipping = false;
+    const evs = skipEvents.concat(m.events).filter((ev) => ev.x !== 0 || ev.y !== 0);
+    skipEvents = [];
+    const ev = evs[evs.length - 1];
+    if (ev) { engine.cam.follow(null); following = null; engine.cam.flyTo(ev.x, ev.y, 150, 28); }
+  }
   // keep events and history from every message even if frames skip some
   pendingEvents = pendingEvents.concat(m.events);
   pendingHistory = pendingHistory.concat(m.history);

@@ -20,16 +20,16 @@ Wildlife documentaries put restrained titles over footage: a location slate, cha
 | `--gold` | `#D9B65C` | the single accent: active control, selection ring, focus |
 | `--ember` | `#E0763C` | danger tools only (fire, plague, cull) |
 
-Species (lines, chips, and dots; picked to read on smoked glass and to match the animals' look in the scene):
-| Species | Hex |
-|---|---|
-| Bison | `#C98B55` (hide amber) |
-| Wolf | `#A9BDCF` (slate frost) |
-| Raven | `#D9D3C7` (bone) |
-| Pronghorn | `#E5B865` |
-| Rabbit | `#A8977F` |
-| Cougar | `#D88456` |
-| Grass | `#93B36B` (sage) |
+Species (lines, chips, and dots; four clearly separate hues so no two lines in a chart can be mistaken for each other, all light enough to read on smoked glass):
+| Species | Hex | Name |
+|---|---|---|
+| Bison | `#CF8B4E` | hide amber-brown |
+| Wolf | `#7FA8D6` | slate blue |
+| Raven | `#A892DA` | violet ink |
+| Pronghorn | `#86C3A4` | mint sage |
+| Rabbit | `#D7C29A` | sand |
+| Cougar | `#D27A8C` | rose |
+| Grass | `#93B36B` | sage (faint secondary axis only) |
 
 ### Type
 - **Alegreya** (serif, literary, calligraphic italics): chapter cards, the location slate, animal names in the inspector, chronicle entries. Narrative voice.
@@ -69,17 +69,18 @@ Species (lines, chips, and dots; picked to read on smoked glass and to match the
 ```
 - **Top left, location slate:** place and year in Alegreya 20 px, then season, time of day, and weather in 14 px `--paper-dim`. No panel, just text with a soft shadow, like a documentary slate.
 - **Top right:** seed chip (click to copy the shareable seed code) and a menu button (scenarios, named seeds, new world, help, settings).
-- **Left rail, god tools:** a vertical column of round icon buttons (36 px). The label slides out on hover or focus. Danger tools use `--ember` icons. Picking a tool arms it: the cursor becomes a ground reticle sized to its radius, and clicking the terrain applies it. Global tools (drought, rain) apply instantly. `Esc` disarms.
+- **Left rail, god tools:** a vertical column of 36 px pills, each an icon plus a short word that is always visible (Rain, Drought, Fire, Plague, Cull, Add wolves, Add bison, Remove wolves). Animal tools take their species color so wolves and bison are told apart at a glance. A longer hint slides out on hover or focus. Below 900 px wide the pills shrink to round icon buttons. Danger tools use `--ember` icons. Picking a tool arms it: the cursor becomes a ground reticle sized to its radius, and clicking the terrain applies it. Global tools (drought, rain) apply instantly. `Esc` disarms.
 - **Right, chronicle:** a narrow column (280 px) of chronicle entries, newest on top, each one line of Alegreya with the year in `--paper-dim`. Click an entry to fly the camera to it. Collapses to a single "chronicle" tab.
-- **Bottom left, population:** a strip panel (440 x 92 px) with one sparkline per species plus the current count. Click `[^]` (or `G`) to expand it to 640 x 300 px: a full chart over the whole history with species toggles, a log-scale toggle, and grass on a faint secondary axis. A vertical marker shows each chronicle event.
-- **Bottom center, time:** pause, 1x, 10x, 100x, and next event. The active speed button fills with `--gold`. Show the current speed and sim rate in small text.
-- **Bottom right, inspector (appears on selection):** the animal is named like a documentary caption: species, sex, and age ("Bison cow, 6 years"), plus its lineage ("generation 212, daughter of #18233"). Bars for energy, water, and stamina; current activity in plain words ("grazing", "fleeing a wolf"); traits as small horizontal gauges against the species mean; kills and offspring; buttons to follow (`F`) and to watch its life story (documentary mode). Close with `Esc`.
+- **Bottom left, population:** a strip panel (440 x 92 px) with one sparkline per species plus the current count. Click `[^]` (or `G`) to expand it to 640 x 300 px: a full chart over the whole history with species toggles, a log-scale toggle (on by default, so predators and ravens do not flatten against the axis; `L` flips it), and grass on a faint secondary axis. A vertical marker shows each chronicle event.
+- **Bottom center, time:** pause, 1x, 10x, 100x, and next event. The active speed button fills with `--gold`. Show the pace of the calendar in plain words in small text ("1 year every 24 s"), never ticks.
+- **Bottom right, inspector (appears on selection):** the animal is named like a documentary caption: species, sex, and age ("Bison cow, 6 years"), plus its lineage ("generation 212, daughter of #18233"). Bars for energy, water, and stamina; current activity in plain words ("grazing", "fleeing a wolf"); traits as small horizontal gauges with the number beside each (the dot is this animal, a tick marks where the founders started); kills and offspring; buttons to follow (`F`) and to watch its life story (documentary mode). Close with `Esc`.
 - **Overlays menu (bottom right of the time bar):** vegetation, fear, territories, trait heatmap. Only one is active at a time.
 - **Cinematic mode (`C`):** hides all UI, slowly drifts the camera, adds thin letterbox bars, and still shows chapter cards.
 
 ## Copy
 - Name things by what the player sees: "Start a fire", not "Ignite cell". "Bring in wolves", not "Introduce species 1".
 - Chapter card titles are short noun phrases: "The long drought", "A new pack on the ridge", "The last wolf", "Wolves return", "Stampede at the creek".
+- The chronicle thins repetitive events (one stampede per two years unless it is much bigger, one elder per species per three years, one outbreak per species per year and a half) and varies the wording, so predator-prey drama is not buried.
 - Chronicle entries are one plain sentence: "A drought settles over the valley." "The Ridge pack is founded." "Plague spreads through the eastern herd."
 
 ## Accessibility and quality floor

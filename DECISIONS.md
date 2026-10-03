@@ -29,3 +29,18 @@ One line each: decision | why | alternative rejected.
 **Why not WebGPU now:** no adapter in the verification run. WebGL2 is proven on this machine. Revisit only if a feature needs compute.
 **Why not Unity / custom C++:** editor friction and licensing for CLI-only work; writing an engine.
 **Consequences:** determinism is guaranteed within one JS engine (V8 in both Node and Chrome); cross-engine Math.* differences are accepted and documented. Visual ceiling is lower than native, so the art direction leans on light, color, wind, and composition rather than raw geometry.
+
+## Simulation and balance decisions (01:30 to 03:40)
+- Time scale: 1x = 10 ticks/s, 0.15 s of motion per tick (a gentle 1.5x time-lapse), year = 2400 ticks, day = 800 ticks | 1,000 bison generations must fit in minutes of headless time per seed | real-time animals (lifespans of hours).
+- Wolves eat only from kills (natural deaths go to ravens and soil) | otherwise carrion from old-age deaths feeds wolves for free and they never hunt | letting wolves scavenge everything.
+- Prey age structure: healthy adults in a herd are hard to kill, wolves "test" and break off, calves near a healthy mother are shielded | without it wolves crash the herd in 2 years | flat kill odds.
+- Pronghorn added early as a second prey with a different niche (browse first, grass at 60%) | prey switching and niche partitioning; with a shared grass diet they drove bison extinct | delaying them to the depth phase.
+- Wolf packs bud (pair plus yearlings) into free territory near prey, vacancies are filled from neighbors, remnant packs merge | single dispersers almost always died | individual dispersal.
+- Inter-pack strife mortality, mostly for trespassers | the documented top natural cause of wolf death in Yellowstone; gives wolves a density ceiling | hard population cap.
+- Scent-based prey detection scales with herd size | removes omniscient search, so sparse prey get a refuge (type III) | perfect knowledge of every herd in range.
+- Wolves hunt small game when no herds are scented (keeps them alive, not breeding) | prevents wolf extinction after prey crashes without pinning prey | immigration from outside the valley (kept as a parameter, default off).
+- Herds migrate toward greener pasture using a coarse 16 m map when their patch is spent | herds were starving beside green grass | longer local search only.
+- Pronghorn fawns hide in the grass while the doe grazes nearby | the real recruitment refuge of pronghorn; fawns were being eaten to extinction | lower wolf success overall.
+- Bison food value 0.42 -> 0.55 | bison were barely viable even without wolves (38% of time grazing) | more grass.
+- Visual sun lingers near sunrise and sunset (GOLDEN_LINGER 0.55) and peaks lower | owner's golden-hour north star | constant-rate sun.
+- World opens in late summer (season 1.8), golden; early summer is visibly greener | owner wants the golden concept look; the critic wanted seasons to read | green midsummer opening.

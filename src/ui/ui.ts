@@ -12,6 +12,7 @@ import type { SimEvent } from '../sim/sim';
 import { ChapterCard } from './chapter';
 import { Chronicle, type ChronicleEntry } from './chronicle';
 import { cardRank, describeEvent, yearOfTick } from './describe';
+import { FeedFilter } from './feed';
 import { h } from './dom';
 import { Inspector } from './inspector';
 import { TopRight } from './menu';
@@ -64,7 +65,7 @@ export class GameUI {
   private cinematic = false;
   private lastCardAt = -1e9;
   private queued: QueuedCard | null = null;
-  private lastElder = new Map<number, number>();
+  private feed = new FeedFilter();
   private keyDown: (e: KeyboardEvent) => void;
   private keyUp: (e: KeyboardEvent) => void;
 
@@ -173,7 +174,7 @@ export class GameUI {
     this.chron.clear();
     this.chapterCard.clear();
     this.queued = null;
-    this.lastElder.clear();
+    this.feed.reset();
     this.lastCardAt = performance.now() - CARD_COOLDOWN_MS + 2500; // let the world settle before the first card
   }
 
@@ -188,12 +189,8 @@ export class GameUI {
 
     for (const e of events) {
       if ((e.kind === 'packLost' || e.kind === 'packFounded') && flash.has(e.a)) continue;
-      // "elder" fires a lot: one per species per year is plenty for a chronicle
-      if (e.kind === 'elder') {
-        const y = yearOfTick(e.tick);
-        if (this.lastElder.get(e.sp) === y) continue;
-        this.lastElder.set(e.sp, y);
-      }
+      // the sim reports more stampedes and elders than anyone wants to read: thin them out
+      if (!this.feed.accept(e)) continue;
       const d = describeEvent(e);
       const major = !!d.card;
       entries.push({ tick: e.tick, year: yearOfTick(e.tick), sentence: d.sentence, x: e.x, y: e.y, sp: e.sp, major });

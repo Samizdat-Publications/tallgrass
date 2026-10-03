@@ -12,11 +12,12 @@ export function buildPronghorn(): ModelDef {
   const toWhite = (k: number, w: number): Paint => [mix(k, white, w), mix(k, white * 0.97, w), mix(k, white * 0.9, w), 1 - w];
 
   const bodyPaint: PaintFn = (p, n) => {
-    const belly = smooth(-0.1, -0.6, n[1]);
-    const rump = smooth(-0.3, -0.5, p[0]);
-    const flank = smooth(0.25, 0.75, n[1]);
-    const saddle = 1 - 0.15 * flank;
-    return toWhite(saddle, Math.max(belly, rump * 0.9));
+    const belly = smooth(0.05, -0.45, n[1]);
+    const lowFlank = smooth(0.77, 0.68, p[1]) * smooth(-0.5, -0.25, p[0]) * (1 - smooth(0.35, 0.55, p[0]) * 0.6);
+    const rump = smooth(-0.2, -0.36, p[0]);
+    const flank = smooth(0.25, 0.8, n[1]);
+    const saddle = 1 - 0.28 * flank;
+    return toWhite(saddle, Math.min(1, Math.max(belly, lowFlank, rump)));
   };
   b.addTube({
     part: PART.BODY, sides: 12, paint: bodyPaint,
@@ -106,10 +107,11 @@ export function buildPronghorn(): ModelDef {
   return {
     geometry,
     triangles: b.triangleCount,
-    coatPale: lin(0xc58a4c),
-    coatDark: lin(0x7a4526),
+    coatPale: lin(0xb86f3c),
+    coatDark: lin(0x7a3b1f),
     bone: lin(0xd8d0bc),
     roughness: 0.9,
+    fill: 1.5,
     params: {
       ...DEFAULT_PARAMS,
       kind: 0,
@@ -126,7 +128,7 @@ export function buildPronghorn(): ModelDef {
       crouchDrop: 0.1,
       deadDrop: 0.38, deadHipF: 0.9, deadHipH: -0.6,
       strideW: 1.4, strideG: 5.6, strideSpeedMax: 22,
-      length: 1.4, height: 1.2, ring: 1.0,
+      length: 1.4, height: 1.2, ring: 1.0, minPx: 8, boostLen: 1.4,
     },
   };
 }

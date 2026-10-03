@@ -10,6 +10,10 @@ import {
 } from './common';
 
 const SHADOW_RES = 256;
+const FAR_RES = 256;
+const EXT_CELL = 8;
+const FAR_ORIGIN = -768;
+const FAR_SIZE = 2048;
 
 /**
  * Render heights: the sim's creek bed profile ignores the terrain beside it, so the creek can sit above lowland
@@ -109,9 +113,12 @@ export class Terrain {
   readonly heightTex: THREE.DataTexture;
   readonly staticTex: THREE.DataTexture;
   readonly shadowRT: THREE.WebGLRenderTarget;
+  readonly shadowFarRT: THREE.WebGLRenderTarget;
+  private extHeightTex!: THREE.DataTexture;
   private shadowQuad: FullScreenQuad;
   private shadowMat: THREE.ShaderMaterial;
   private lastLight = new THREE.Vector3(9, 9, 9);
+  private lastLightFar = new THREE.Vector3(9, 9, 9);
   private world: World;
   /**
    * Height of the rendered terrain surface at any world position, including outside the playable 512 m square.
@@ -199,19 +206,47 @@ export class Terrain {
     this.mesh.name = 'terrain';
     this.material = this.mesh.material as THREE.MeshStandardMaterial;
 
-    // ---- horizon shadow pass
-    this.shadowRT = new THREE.WebGLRenderTarget(SHADOW_RES, SHADOW_RES, {
-      minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, depthBuffer: false, type: THREE.UnsignedByteType,
-    });
-    this.shadowRT.texture.wrapS = this.shadowRT.texture.wrapT = THREE.ClampToEdgeWrapping;
-    this.shadowRT.texture.name = 'terrain.shadow';
+    // ---- extended heights for hill shadows beyond the playable square (8 m cells over FAR_SIZE)
+    {
+      const en = FAR_SIZE / EXT_CELL;
+      const ext = new Float32Array(en * en);
+      for (let j = 0; j < en; j++) {
+        for (let i = 0; i < en; i++) ext[j * en + i] = this.heightFn(FAR_ORIGIN + i * EXT_CELL, FAR_ORIGIN + j * EXT_CELL);
+      }
+      this.extHeightTex = new THREE.DataTexture(ext, en, en, THREE.RedFormat, THREE.FloatType);
+      this.extHeightTex.minFilter = this.extHeightTex.magFilter = THREE.NearestFilter;
+      this.extHeightTex.generateMipmaps = false;
+      this.extHeightTex.needsUpdate = true;
+      this.extHeightTex.name = 'terrain.extHeight';
+    }
+
+    // ---- horizon shadow passes: one at 2 m over the world, one at 8 m over the far ring, same blockers
+    const mkRT = (res: number, name: string) => {
+      const rt = new THREE.WebGLRenderTarget(res, res, {
+        minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, depthBuffer: false, type: THREE.UnsignedByteType,
+      });
+      rt.texture.wrapS = rt.texture.wrapT = THREE.ClampToEdgeWrapping;
+      rt.texture.name = name;
+      return rt;
+    };
+    this.shadowRT = mkRT(SHADOW_RES, 'terrain.shadow');
+    this.shadowFarRT = mkRT(FAR_RES, 'terrain.shadowFar');
     shared.terrainShadow.value = this.shadowRT.texture;
+    shared.terrainShadowFar.value = this.shadowFarRT.texture;
+    shared.farRect.value.set(FAR_ORIGIN, FAR_ORIGIN, FAR_SIZE);
     this.shadowMat = new THREE.ShaderMaterial({
       uniforms: {
         tHeight: { value: this.heightTex },
+        tExt: { value: this.extHeightTex },
         uCell: { value: cell },
         uHN: { value: hn },
         uWorld: { value: size },
+        uRect: { value: new THREE.Vector3(0, 0, size) },
+        uT0: { value: 1.5 },
+        uGrow: { value: 1.095 },
+        uExtCell: { value: EXT_CELL },
+        uExtN: { value: FAR_SIZE / EXT_CELL },
+        uExtOrigin: { value: FAR_ORIGIN },
         uLightDir: { value: new THREE.Vector3(0, 1, 0) },
       },
       vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }',
@@ -219,26 +254,47 @@ export class Terrain {
         precision highp float;
         varying vec2 vUv;
         uniform float uWorld;
+        uniform vec3 uRect;
+        uniform float uT0;
+        uniform float uGrow;
         uniform vec3 uLightDir;
+        uniform sampler2D tExt;
+        uniform float uExtCell;
+        uniform float uExtN;
+        uniform float uExtOrigin;
         ${HEIGHT_GLSL}
+        float extHeightAt(vec2 xz){
+          vec2 f = clamp((xz - vec2(uExtOrigin)) / uExtCell, vec2(0.0), vec2(uExtN - 1.001));
+          ivec2 i0 = ivec2(floor(f));
+          vec2 t = f - vec2(i0);
+          float a = texelFetch(tExt, i0, 0).r;
+          float b = texelFetch(tExt, i0 + ivec2(1, 0), 0).r;
+          float c = texelFetch(tExt, i0 + ivec2(0, 1), 0).r;
+          float d = texelFetch(tExt, i0 + ivec2(1, 1), 0).r;
+          return mix(mix(a, b, t.x), mix(c, d, t.x), t.y);
+        }
+        float blockerH(vec2 p){
+          bool inside = p.x >= 0.0 && p.y >= 0.0 && p.x <= uWorld && p.y <= uWorld;
+          return inside ? tgHeightAt(p) : extHeightAt(p);
+        }
         void main(){
-          vec2 xz = vUv * uWorld;
-          float h0 = tgHeightAt(xz) + 0.35;
+          vec2 xz = uRect.xy + vUv * uRect.z;
+          float h0 = blockerH(xz) + 0.35;
           vec2 d2 = uLightDir.xz;
           float len = length(d2);
           float vis = 1.0;
           if (len > 1e-4) {
             d2 /= len;
             float tanEl = uLightDir.y / len;
-            float t = 1.5;
+            float t = uT0;
             for (int i = 0; i < 64; i++) {
               vec2 p = xz + d2 * t;
-              if (p.x < 0.0 || p.y < 0.0 || p.x > uWorld || p.y > uWorld) break;
               float hr = h0 + tanEl * t;
-              float hit = tgHeightAt(p) - hr;
+              float hit = blockerH(p) - hr;
               float w = 0.4 + t * 0.035;
               vis = min(vis, clamp(0.5 - 0.5 * hit / w, 0.0, 1.0));
-              t *= 1.095;
+              t *= uGrow;
+              if (t > 2600.0) break;
             }
           }
           gl_FragColor = vec4(vis, vis, vis, 1.0);
@@ -248,14 +304,33 @@ export class Terrain {
     this.shadowQuad = new FullScreenQuad(this.shadowMat);
   }
 
-  /** Recompute the horizon shadow map when the key light direction moved enough. */
+  /** Recompute the horizon shadow maps when the key light direction moved enough. */
   updateShadow(renderer: THREE.WebGLRenderer, lightDir: THREE.Vector3, force = false): void {
-    if (!force && this.lastLight.distanceToSquared(lightDir) < 2e-6) return;
-    this.lastLight.copy(lightDir);
-    (this.shadowMat.uniforms.uLightDir.value as THREE.Vector3).copy(lightDir);
+    const u = this.shadowMat.uniforms;
     const prev = renderer.getRenderTarget();
-    renderer.setRenderTarget(this.shadowRT);
-    this.shadowQuad.render(renderer);
+    if (force || this.lastLight.distanceToSquared(lightDir) > 2e-6) {
+      this.lastLight.copy(lightDir);
+      (u.uLightDir.value as THREE.Vector3).copy(lightDir);
+      (u.uRect.value as THREE.Vector3).set(0, 0, this.world.size);
+      u.uT0.value = 1.5;
+      u.uGrow.value = 1.095;
+      renderer.setRenderTarget(this.shadowRT);
+      this.shadowQuad.render(renderer);
+    }
+    // the far ring changes slowly on screen, so refresh it less often
+    if (force || this.lastLightFar.distanceToSquared(lightDir) > 1.5e-5) {
+      this.lastLightFar.copy(lightDir);
+      (u.uLightDir.value as THREE.Vector3).copy(lightDir);
+      (u.uRect.value as THREE.Vector3).set(FAR_ORIGIN, FAR_ORIGIN, FAR_SIZE);
+      u.uT0.value = 6;
+      u.uGrow.value = 1.125;
+      renderer.setRenderTarget(this.shadowFarRT);
+      this.shadowQuad.render(renderer);
+      // restore the inner pass parameters for the next inner update
+      (u.uRect.value as THREE.Vector3).set(0, 0, this.world.size);
+      u.uT0.value = 1.5;
+      u.uGrow.value = 1.095;
+    }
     renderer.setRenderTarget(prev);
   }
 
@@ -358,8 +433,9 @@ export class Terrain {
       u.uStubble = sh.stubble;
       u.uSoil = sh.soil;
       u.uRock = sh.rock;
-      u.uGreenHigh = sh.greenHigh;
-      u.uGreenLow = sh.greenLow;
+      u.uGrassGreen = sh.grassGreen;
+      u.uGrassDry = sh.grassDry;
+      u.uCure = sh.cure;
       u.uFrost = sh.frost;
       u.uSnow = sh.snow;
       u.uWet = sh.wet;
@@ -388,7 +464,7 @@ export class Terrain {
             vec3 tgv = vTgWorld - cameraPosition;
             float tgd = length(tgv);
             float tgGraze = smoothstep(0.04, 0.3, max(-tgv.y / tgd, 0.0));
-            float k = (1.0 - smoothstep(25.0, 170.0, tgd)) * 0.34 * mix(0.2, 1.0, tgGraze);
+            float k = (1.0 - smoothstep(25.0, 140.0, tgd)) * 0.16 * mix(0.2, 1.0, tgGraze);
             if (k > 0.001) {
               vec2 e = vec2(0.4, 0.0);
               float h0 = tgStreakH(vTgWorld.xz);
@@ -400,7 +476,7 @@ export class Terrain {
           }`,
         );
     };
-    mat.customProgramCacheKey = () => 'tallgrass-terrain-v1';
+    mat.customProgramCacheKey = () => 'tallgrass-terrain-v2';
 
     const mesh = new THREE.Mesh(geo, mat);
     mesh.castShadow = false;
@@ -415,6 +491,8 @@ export class Terrain {
     this.heightTex.dispose();
     this.staticTex.dispose();
     this.shadowRT.dispose();
+    this.shadowFarRT.dispose();
+    this.extHeightTex.dispose();
     this.shadowMat.dispose();
     this.shadowQuad.dispose();
   }
@@ -428,13 +506,12 @@ uniform float uTime;
 uniform vec3 uWind;
 uniform vec3 uLightDir;
 uniform vec3 uLightColor;
-uniform vec3 uGrassLush;
-uniform vec3 uGrassCured;
+uniform vec3 uGrassGreen;
+uniform vec3 uGrassDry;
+uniform float uCure;
 uniform vec3 uStubble;
 uniform vec3 uSoil;
 uniform vec3 uRock;
-uniform float uGreenHigh;
-uniform float uGreenLow;
 uniform float uFrost;
 uniform float uSnow;
 uniform float uWet;
@@ -455,19 +532,11 @@ float tgStreakH(vec2 xz){
 vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
   vec2 xz = wp.xz;
   vec2 cuv = clamp(xz / uWorldSize, 0.0, 1.0);
-  vec2 outv = xz - clamp(xz, vec2(0.0), vec2(uWorldSize));
-  float fo = smoothstep(0.0, 80.0, length(outv));
-  vec4 veg = texture2D(tVeg, cuv);
-  vec4 st = texture2D(tStatic, cuv);
-  float bio = mix(veg.r, 0.62, fo);
-  float fert = mix(veg.g, 0.6, fo);
-  float burn = veg.b * (1.0 - fo);
-  float fear = veg.a * (1.0 - fo);
-  float moist = mix(st.r, 0.34, fo);
-  float cover = st.g * (1.0 - fo);
-  float wd = mix(st.a * 64.0, 90.0, smoothstep(0.0, 8.0, length(outv)));
-
-  float slopeG = sqrt(max(1.0 - nrm.y * nrm.y, 0.0)) / max(nrm.y, 0.05);
+  // signed distance to the playable square (negative inside); the data-driven look dissolves into a continuing
+  // far-field look across the edge so no rectangle shows from any angle
+  vec2 qd = abs(xz - 0.5 * uWorldSize) - 0.5 * uWorldSize;
+  float sd = max(qd.x, qd.y);
+  float edgeW = smoothstep(-52.0, 44.0, sd);
 
   float lodFine = 1.0 - smoothstep(70.0, 320.0, dist);
   float lodMid = 1.0 - smoothstep(300.0, 1100.0, dist);
@@ -475,57 +544,70 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
   float nB = tgFbm2(xz * 0.045 + 11.0);
   float nC = mix(0.5, tgNoise2(xz * 1.9), lodFine);
   float nD = tgNoise2(xz * 0.011 + 3.0);
+  float nE = tgFbm2(xz * 0.0065 + 31.0);
 
-  // wind-combed streaks that flow along the wind, bending with a slow domain warp
+  vec4 veg = texture2D(tVeg, cuv);
+  vec4 st = texture2D(tStatic, cuv);
+  float bio = mix(veg.r, 0.42 + 0.42 * nE, edgeW);
+  float fert = mix(veg.g, 0.6, edgeW);
+  float burn = veg.b * (1.0 - edgeW);
+  float fear = veg.a * (1.0 - edgeW);
+  float moist = mix(st.r, 0.24 + 0.42 * nE, edgeW);
+  float cover = st.g * (1.0 - edgeW);
+  float wd = mix(st.a * 64.0, 90.0, edgeW);
+
+  float slopeG = sqrt(max(1.0 - nrm.y * nrm.y, 0.0)) / max(nrm.y, 0.05);
+
+  // wind-combed texture along the wind (kept soft: it must read as grass from above, never as plough rows)
   vec2 wdir = uWind.xy;
   vec2 sp = vec2(dot(xz, wdir), dot(xz, vec2(-wdir.y, wdir.x)));
-  sp.x += 22.0 * tgNoise2(xz * 0.013) + 10.0 * tgNoise2(xz * 0.04 + 5.0) + 6.0 * nD;
-  sp.y += 5.0 * tgNoise2(xz * 0.03 + 9.0);
-  // streaks read as combed grass from above but as ploughed rows at grazing angles, so fade them near the horizon
+  sp.x += 26.0 * tgNoise2(xz * 0.013) + 12.0 * tgNoise2(xz * 0.04 + 5.0) + 6.0 * nD;
+  sp.y += 9.0 * tgNoise2(xz * 0.03 + 9.0) + 4.0 * tgNoise2(xz * 0.11 + 2.0);
   float graze = smoothstep(0.04, 0.3, max(-rayDir.y, 0.0));
   float lodStreak = 1.0 - smoothstep(180.0, 700.0, dist);
-  float streakFine = mix(0.5, tgNoise2(vec2(sp.x * 0.05, sp.y * 0.95)), lodFine);
-  float streakMid = mix(0.5, tgNoise2(vec2(sp.x * 0.022, sp.y * 0.24)), lodStreak);
+  float streakMid = mix(0.5, tgNoise2(vec2(sp.x * 0.022, sp.y * 0.16)), lodStreak);
   float streakFar = tgNoise2(vec2(sp.x * 0.004, sp.y * 0.03) + nD * 2.0);
-  float streakUltra = mix(0.5, tgNoise2(vec2(sp.x * 0.32, sp.y * 5.0)) * 0.6 + tgNoise2(vec2(sp.x * 0.9, sp.y * 11.0)) * 0.4, 1.0 - smoothstep(6.0, 45.0, dist));
-  float streak = streakFine * 0.26 + streakMid * 0.36 + streakFar * 0.28 + (streakUltra - 0.5) * 0.5 + 0.1;
-  // rolling wind waves of light and dark
+  float streakFine = mix(0.5, tgNoise2(vec2(sp.x * 0.06, sp.y * 0.5)), lodFine);
+  float streak = streakFine * 0.25 + streakMid * 0.4 + streakFar * 0.35;
   float wave = tgNoise2(vec2(sp.x * 0.026 - uTime * (0.07 + 0.15 * uWind.z), sp.y * 0.011));
   wave = wave * 0.65 + 0.35 * tgNoise2(vec2(sp.x * 0.06 - uTime * (0.1 + 0.2 * uWind.z), sp.y * 0.03));
 
+  // grass color from the same palette and logic as the blade layer: lowland and moist spots stay green longer,
+  // upland ridges cure first and go russet; short (grazed or thin) grass reads as dry stubble, not bare sand
+  float f = clamp((bio - 0.06) / 0.36, 0.0, 1.0);
+  float stubA = 1.0 - f * f * (3.0 - 2.0 * f);
+  float um = clamp((moist - 0.4) / 0.26, 0.0, 1.0);
+  float up = 1.0 - um * um * (3.0 - 2.0 * um);
   float riparian = 1.0 - smoothstep(6.0, 34.0, wd);
-  float lowland = smoothstep(0.5, 0.85, moist * 0.7 + 0.75 * riparian + 0.15 * (fert - 0.5) + (nB - 0.5) * 0.3);
-  float green = clamp(mix(uGreenHigh, uGreenLow, lowland) + (nB - 0.5) * 0.25, 0.0, 1.0);
-
-  float cov = smoothstep(0.05, 0.5, bio + (nA - 0.5) * 0.24 + (nC - 0.5) * 0.08);
-  gTgGrass = cov;
-
-  vec3 grassCol = mix(uGrassCured, uGrassLush, green);
-  grassCol *= 0.8 + 0.42 * nA;
-  grassCol *= 1.0 + (streak - 0.5) * 1.1 * mix(0.25, 1.0, graze);
-  grassCol *= 1.0 + (wave - 0.5) * 0.32 * (0.35 + uWind.z) * cov;
-  // swaths of pale straw, ochre and sage so the dry prairie never reads as one flat color
+  float dry = clamp(uCure + (0.55 - moist) * 1.1 + stubA * 0.55 + 0.3 * up + (nB - 0.5) * 0.24 - 0.45 * riparian, 0.0, 1.0);
+  vec3 grassCol = mix(uGrassGreen, uGrassDry, dry) * vec3(1.0 + 0.08 * up * dry, 1.0 - 0.07 * up * dry, 1.0 - 0.16 * up * dry);
+  grassCol *= 0.84 + 0.32 * nA;
+  grassCol *= 1.0 + (streak - 0.5) * 0.55 * mix(0.3, 1.0, graze);
+  grassCol *= 1.0 + (wave - 0.5) * 0.26 * (0.35 + uWind.z);
+  // swaths of pale straw and deeper ochre so the dry prairie never reads as one flat color
   float swath = tgFbm2(xz * 0.016 + 21.0);
-  grassCol = mix(grassCol, grassCol * vec3(1.22, 1.12, 0.8), (1.0 - green) * smoothstep(0.45, 0.72, swath));
-  grassCol = mix(grassCol, grassCol * vec3(0.84, 0.72, 0.52), (1.0 - green) * smoothstep(0.58, 0.3, swath) * 0.9);
-  grassCol = mix(grassCol, uGrassLush * vec3(1.05, 1.0, 0.85) * (0.75 + 0.5 * nA), smoothstep(0.66, 0.86, tgFbm2(xz * 0.03 + 55.0)) * 0.55 * cov);
+  grassCol = mix(grassCol, grassCol * vec3(1.12, 1.07, 0.88), dry * smoothstep(0.45, 0.72, swath));
+  grassCol = mix(grassCol, grassCol * vec3(0.88, 0.8, 0.66), dry * smoothstep(0.58, 0.3, swath) * 0.8);
 
-  vec3 stub = mix(uSoil, uStubble * (0.78 + 0.45 * nA), smoothstep(0.0, 0.07, bio + (nC - 0.5) * 0.04));
-  vec3 col = mix(stub, grassCol, cov);
+  // short grass: a little of the soil shows through, darker and earthier, never light sand
+  float soilShow = smoothstep(0.1, 0.0, bio + (nC - 0.5) * 0.05);
+  vec3 shortGrass = mix(grassCol, grassCol * vec3(0.9, 0.84, 0.74) + uSoil * 0.12, stubA * 0.5);
+  vec3 col = mix(shortGrass, uSoil * (0.8 + 0.5 * nA), soilShow * 0.85);
+  gTgGrass = 1.0 - soilShow;
 
-  // rock outcrops on steep ground
-  float rock = smoothstep(0.46, 0.9, slopeG + (nA - 0.5) * 0.32 + (nD - 0.5) * 0.25);
+  // rock only on truly steep faces, and only partly
+  float rock = smoothstep(0.78, 1.25, slopeG + (nA - 0.5) * 0.3 + (nD - 0.5) * 0.25);
   vec3 rockCol = uRock * (0.7 + 0.6 * nC) * (0.85 + 0.3 * nB);
-  col = mix(col, rockCol, rock * 0.92);
+  col = mix(col, rockCol, rock * 0.7);
 
   // damp banks, mud at the waterline
-  float damp = (1.0 - smoothstep(0.0, 7.0, wd)) * (0.6 + 0.4 * nA);
-  col = mix(col, col * vec3(0.5, 0.45, 0.38), damp * 0.55);
-  float mud = 1.0 - smoothstep(0.0, 2.6, wd);
-  col = mix(col, vec3(0.18, 0.14, 0.10) * (0.8 + 0.4 * nC), mud * 0.8);
+  float damp = (1.0 - smoothstep(0.0, 9.0, wd)) * (0.6 + 0.4 * nA);
+  col = mix(col, col * vec3(0.52, 0.47, 0.38), damp * 0.5);
+  float mud = 1.0 - smoothstep(0.0, 3.4, wd + (nC - 0.5) * 1.6);
+  col = mix(col, vec3(0.2, 0.16, 0.115) * (0.8 + 0.4 * nC), mud * 0.82);
 
   // under tree and shrub cover: cooler, darker, leaf litter
-  col = mix(col, col * vec3(0.5, 0.55, 0.38) * (0.8 + 0.4 * nC), cover * 0.55);
+  col = mix(col, col * vec3(0.55, 0.58, 0.4) * (0.8 + 0.4 * nC), cover * 0.5);
 
   // burn: charcoal, ash, live embers
   float charAmt = smoothstep(0.1, 0.34, burn);
@@ -534,9 +616,10 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
   col = mix(col, vec3(0.022, 0.02, 0.018) * (0.7 + 0.9 * nA), charAmt * 0.95);
   float ember = smoothstep(0.78, 1.0, burn) * (0.35 + 0.65 * tgNoise2(xz * 0.8 + uTime * 0.4));
 
-  // winter: frost lingers in shade, snow whitens everything flat
+  // winter: frost is a thin cold bloom in the shade, never a snow blanket; snow only when it is snowing
   float shadeAmt = 1.0 - ts;
-  col = mix(col, vec3(0.74, 0.8, 0.88), uFrost * (0.18 + 0.4 * shadeAmt) * (1.0 - charAmt));
+  float frost = uFrost * (0.1 + 0.3 * shadeAmt) * (1.0 - charAmt);
+  col = mix(col, col * vec3(0.9, 0.97, 1.08) + vec3(0.035, 0.045, 0.06), frost);
   float snowAmt = uSnow * (1.0 - rock * 0.7) * (1.0 - charAmt * 0.6) * smoothstep(0.3, 0.9, nrm.y);
   col = mix(col, vec3(0.9, 0.93, 0.98) * (0.94 + 0.06 * nC), snowAmt);
 
@@ -547,7 +630,7 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
   // looking toward a low sun makes standing grass glow: forward scattering through the blades
   float fwd = max(dot(rayDir, uLightDir), 0.0);
   float lowSun = 1.0 - smoothstep(0.1, 0.65, uLightDir.y);
-  float glow = pow(fwd, 3.0) * (0.35 + 0.65 * lowSun) * cov * (1.0 - rock) * (1.0 - snowAmt) * ts * (1.0 - uWet);
+  float glow = pow(fwd, 3.0) * (0.35 + 0.65 * lowSun) * gTgGrass * (1.0 - rock) * (1.0 - snowAmt) * ts * (1.0 - uWet);
   gTgEmis = col * uLightColor * glow * 0.1;
   gTgEmis += vec3(2.4, 0.7, 0.12) * ember * charAmt;
 
