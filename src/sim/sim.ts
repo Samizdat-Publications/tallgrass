@@ -106,6 +106,7 @@ export class Sim implements SimLike {
   events: SimEvent[] = [];
   /** Counters since the last sample() call. */
   private cKills = 0;
+  private cKillsDeer = 0;
   private cChases = 0;
   private cGiveUps = 0;
   private cBirths = new Int32Array(SPECIES_COUNT);
@@ -184,6 +185,15 @@ export class Sim implements SimLike {
       const count = h === herds - 1 ? left : Math.round(P[Sp.Bison].initial / herds);
       left -= count;
       for (let k = 0; k < count; k++) this.spawnAdult(Sp.Bison, hx + this.rng.range(-20, 20), hy + this.rng.range(-20, 20));
+    }
+    // pronghorn in small bands
+    const bands = 5;
+    let pl = P[Sp.Deer].initial;
+    for (let h = 0; h < bands && pl > 0; h++) {
+      const [hx, hy] = this.goodSpot(0.4);
+      const count = h === bands - 1 ? pl : Math.round(P[Sp.Deer].initial / bands);
+      pl -= count;
+      for (let k = 0; k < count; k++) this.spawnAdult(Sp.Deer, hx + this.rng.range(-12, 12), hy + this.rng.range(-12, 12));
     }
     // wolves in packs
     const wolves = P[Sp.Wolf].initial;
@@ -322,7 +332,7 @@ export class Sim implements SimLike {
     for (let i = 0; i < a.hi; i++) {
       if (!a.alive[i]) continue;
       const s = a.sp[i];
-      if (s === Sp.Bison) {
+      if (s === Sp.Bison || s === Sp.Deer) {
         if (((i + t) & 3) === 0) this.thinkHerbivore(i, P[s]);
         this.moveGround(i, P[s]);
         this.liveHerbivore(i, P[s]);
@@ -365,6 +375,8 @@ export class Sim implements SimLike {
         this.sniffPrey(pk, this.p.wolfTerritory * (hungry ? 1.5 : 1.2));
         if (this.packSize[pk] > this.p.wolfPackMax) this.disperse(pk);
         else if (this.packSize[pk] <= 2 && (this.packAlphaF[pk] < 0 || this.packAlphaM[pk] < 0)) this.mergeRemnant(pk);
+        else if (this.packAlphaF[pk] < 0) this.fillVacancy(pk, 0);
+        else if (this.packAlphaM[pk] < 0) this.fillVacancy(pk, 1);
       }
     }
     // wolves breed once a year, at the start of spring
@@ -392,7 +404,7 @@ export class Sim implements SimLike {
     }
   }
 
-  /** An oversized pack sends a young breeding pair off to found a pack in open ground. */
+  /** An oversized pack buds: a young breeding pair plus up to two yearlings found a pack near prey in open ground. */
   private disperse(pk: number): void {
     const a = this.a;
     const mature = this.p.species[Sp.Wolf].matureAge;
@@ -403,16 +415,66 @@ export class Sim implements SimLike {
       if (i === this.packAlphaF[pk] || i === this.packAlphaM[pk]) continue;
       if (a.male[i]) { if (m < 0 || a.age[i] < a.age[m]) m = i; } else if (f < 0 || a.age[i] < a.age[f]) f = i;
     }
-    if (m < 0 || f < 0) return;
-    const site = this.findDenSite();
-    if (!site) return;
+    if (m < 0 || f < 0) { dbg(m < 0 && f < 0 ? 'disp_noadults' : m < 0 ? 'disp_nomale' : 'disp_nofemale'); return; }
+    const site = this.bestDenSite();
+    if (!site) { dbg('disp_nosite'); return; }
     const np = this.newPack(site[0], site[1]);
     if (np < 0) return;
-    a.pack[m] = np; a.pack[f] = np;
-    a.target[m] = -1; a.target[f] = -1;
+    dbg('disp_ok');
+    const take = (i: number) => { a.pack[i] = np; a.target[i] = -1; a.energy[i] = Math.max(a.energy[i], 0.75); };
+    take(m); take(f);
+    let extra = 0;
+    for (let k = 0; k < this.predN && extra < 2; k++) {
+      const i = this.predList[k];
+      if (!a.alive[i] || a.pack[i] !== pk || i === this.packAlphaF[pk] || i === this.packAlphaM[pk]) continue;
+      if (a.age[i] < mature * 0.6) continue;
+      take(i);
+      extra++;
+    }
     this.packAlphaM[np] = m;
     this.packAlphaF[np] = f;
-    this.packStore[np] = 0.3;
+    this.packStore[np] = 0.6;
+  }
+
+  /** A pack without a breeder of one sex takes in a non-breeding adult of that sex from another pack. */
+  private fillVacancy(pk: number, male: number): void {
+    const a = this.a;
+    const mature = this.p.species[Sp.Wolf].matureAge;
+    let best = -1, bd = 1e9;
+    for (let k = 0; k < this.predN; k++) {
+      const i = this.predList[k];
+      if (!a.alive[i] || a.sp[i] !== Sp.Wolf || a.male[i] !== male || a.age[i] < mature) continue;
+      const q = a.pack[i];
+      if (q === pk) continue;
+      if (q >= 0 && (this.packAlphaF[q] === i || this.packAlphaM[q] === i)) continue;
+      const d = Math.hypot(a.x[i] - this.packDenX[pk], a.y[i] - this.packDenY[pk]);
+      if (d < bd) { bd = d; best = i; }
+    }
+    if (best < 0) return;
+    dbg('vacancy_filled');
+    a.pack[best] = pk;
+    a.target[best] = -1;
+    if (male) this.packAlphaM[pk] = best; else this.packAlphaF[pk] = best;
+  }
+
+  /** The free den site (spaced from other dens) with the most prey within a territory's reach. */
+  private bestDenSite(): [number, number] | null {
+    const g = this.prey, nb = g.nb, bs = g.bs;
+    const R = this.p.wolfTerritory;
+    let best: [number, number] | null = null, bestV = -1;
+    for (let k = 0; k < 30; k++) {
+      const site = this.findDenSite();
+      if (!site) continue;
+      const rb = Math.ceil(R / bs);
+      const bx = (site[0] / bs) | 0, by = (site[1] / bs) | 0;
+      let v = 0;
+      for (let yy = by - rb; yy <= by + rb; yy++) {
+        if (yy < 0 || yy >= nb) continue;
+        for (let xx = bx - rb; xx <= bx + rb; xx++) if (xx >= 0 && xx < nb) v += g.counts[yy * nb + xx];
+      }
+      if (v > bestV) { bestV = v; best = site; }
+    }
+    return best;
   }
 
   /** A pack shrunk to one or two wolves with no breeding pair folds into the nearest pack with room. */
@@ -425,6 +487,7 @@ export class Sim implements SimLike {
       if (d < bd) { bd = d; best = q; }
     }
     if (best < 0) return;
+    dbg('merge');
     for (let k = 0; k < this.predN; k++) {
       const i = this.predList[k];
       if (a.alive[i] && a.pack[i] === pk) a.pack[i] = best;
@@ -735,7 +798,7 @@ export class Sim implements SimLike {
           if (d > (hunting ? sight * 0.75 : eff)) continue;
           const bold = a.genes[o + G_BOLD];
           // big grazers stand their ground against wolves that aren't hunting unless they come very close
-          if (!hunting && !stalking && d > eff * (0.4 - 0.15 * bold)) continue;
+          if (!hunting && !stalking && d > eff * (P.wariness - 0.15 * bold)) continue;
           if (stalking && d > eff * 0.6) continue;
           // in risky ground (high fear) the herd is on edge and notices more
           const pd = hunting ? 0.95 : Math.min(0.95, p.detectBase * (1 - d / (eff + 1)) * (stalking ? 0.8 * (1 + p.fearVigilance * fearHere) : 1));
@@ -744,7 +807,7 @@ export class Sim implements SimLike {
         }
       }
     }
-    if (threat >= 0 && a.hydration[i] < 0.12 && !(a.state[threat] === St.Chase && threatD < 12)) threat = -1;
+    if (threat >= 0 && a.hydration[i] < 0.2 && !(a.state[threat] === St.Chase && threatD < 12)) threat = -1;
     if (threat >= 0) {
       const dx = x - a.x[threat], dy = y - a.y[threat];
       const d = Math.sqrt(dx * dx + dy * dy) + 0.01;
@@ -767,7 +830,7 @@ export class Sim implements SimLike {
     const herd = a.genes[o + G_HERD];
     if (n > 0) { cx /= n; cy /= n; avx /= n; avy /= n; }
     const c = this.veg.cellAt(x, y);
-    if (a.flee[i] > 0 && a.hydration[i] < 0.12 && threat < 0) a.flee[i] = 0;
+    if (a.flee[i] > 0 && a.hydration[i] < 0.2 && threat < 0) a.flee[i] = 0;
     if (a.flee[i] > 0) {
       const run = P.runSpeed * spdGene * (a.stamina[i] > 0.08 ? 1 : 0.45) * (a.infected[i] > 0 ? 0.8 : 1) * (juvenile ? 0.85 : 1);
       dvx = a.fleeX[i] * run + sepx * 2;
@@ -786,7 +849,8 @@ export class Sim implements SimLike {
     } else {
       const mother = a.mother[i];
       const followMom = juvenile && a.same(mother, a.motherId[i]);
-      const gHere = this.veg.grass[c];
+      const browser = P.diet > 0;
+      const gHere = browser ? (this.veg.browse[c] > 0.03 ? this.veg.browse[c] * 1.6 + this.veg.grass[c] * 0.3 : 0) : this.veg.grass[c];
       if (followMom && Math.hypot(a.x[mother] - x, a.y[mother] - y) > 4) {
         const dx = a.x[mother] - x, dy = a.y[mother] - y;
         const d = Math.sqrt(dx * dx + dy * dy);
@@ -807,7 +871,7 @@ export class Sim implements SimLike {
         let bestS = -1e9, bdx = 0, bdy = 0;
         const hereS = gHere - p.fearWeight * fearHere;
         const base = a.heading[i];
-        const grazing = gHere > p.grazeMin && fearHere < 0.55;
+        const grazing = gHere > p.grazeMin && fearHere < 0.8;
         const r0 = grazing ? 4 : 8, r1 = grazing ? 4 : 20;
         for (let k = 0; k < 8; k++) {
           const ang = base + (k / 8) * Math.PI * 2;
@@ -817,7 +881,8 @@ export class Sim implements SimLike {
             if (sx < 3 || sy < 3 || sx > this.world.size - 3 || sy > this.world.size - 3) continue;
             const sc = this.veg.cellAt(sx, sy);
             if (this.world.water[sc]) continue;
-            const score = this.veg.grass[sc] - p.fearWeight * this.veg.fear[sc] - 0.004 * this.prey.counts[this.prey.bucketOf(sx, sy)] + (k === 0 ? 0.03 : 0) + rng.next() * 0.02;
+            const food = browser ? this.veg.browse[sc] * 1.6 + this.veg.grass[sc] * 0.35 : this.veg.grass[sc];
+            const score = food - p.fearWeight * this.veg.fear[sc] - 0.004 * this.prey.counts[this.prey.bucketOf(sx, sy)] + (k === 0 ? 0.03 : 0) + rng.next() * 0.02;
             if (score > bestS) { bestS = score; bdx = ux; bdy = uy; }
           }
         }
@@ -854,17 +919,34 @@ export class Sim implements SimLike {
       const c = this.veg.cellAt(a.x[i], a.y[i]);
       const juvenile = a.age[i] < P.matureAge;
       const want = P.bite * Math.sqrt(a.genes[i * NG + G_SIZE]) * (juvenile ? 0.55 : 1);
-      const g = this.veg.grass[c];
-      const bite = g < want ? g : want;
-      this.veg.grass[c] = g - bite;
-      a.energy[i] = Math.min(1, a.energy[i] + bite * P.foodValue);
+      if (P.diet > 0) {
+        // browsers take forbs and shrubs first, then grass at half value
+        const bw = this.veg.browse[c];
+        const b1 = bw < want ? bw : want;
+        this.veg.browse[c] = bw - b1;
+        let gain = b1 * P.foodValue;
+        if (b1 < want) {
+          const g = this.veg.grass[c];
+          const b2 = Math.min(g, want - b1);
+          this.veg.grass[c] = g - b2;
+          gain += b2 * P.foodValue * 0.6;
+        }
+        a.energy[i] = Math.min(1, a.energy[i] + gain);
+      } else {
+        const g = this.veg.grass[c];
+        const bite = g < want ? g : want;
+        this.veg.grass[c] = g - bite;
+        a.energy[i] = Math.min(1, a.energy[i] + bite * P.foodValue);
+      }
     }
     // calves nurse while close to their mother
     if (a.age[i] < P.matureAge * 0.5) {
       const m = a.mother[i];
       if (a.same(m, a.motherId[i]) && Math.abs(a.x[m] - a.x[i]) < 5 && Math.abs(a.y[m] - a.y[i]) < 5 && a.energy[m] > 0.3) {
-        a.energy[i] = Math.min(1, a.energy[i] + 0.0009);
-        a.energy[m] -= 0.001;
+        // milk costs the mother a share of what she can eat, so small species aren't overdrawn by twins
+        const milk = 0.26 * P.bite * P.foodValue;
+        a.energy[i] = Math.min(1, a.energy[i] + milk * 0.9);
+        a.energy[m] -= milk;
         a.hydration[i] = Math.min(1, a.hydration[i] + 0.001);
       }
     }
@@ -962,7 +1044,7 @@ export class Sim implements SimLike {
             const dd = Math.sqrt(dx * dx + dy * dy);
             if (dd > sight) continue;
             const Pj = this.p.species[a.sp[j]];
-            const camo = 0.25; // bison are too big to hide well
+            const camo = Pj.camo;
             const contrast = Math.abs((1 - a.genes[j * NG + G_COAT]) * 0.75 + 0.1 - this.groundB);
             if (dd > sight * (1 - camo * (1 - (0.6 + 0.8 * contrast)))) continue;
             const young = a.age[j] < Pj.matureAge ? 2.6 : 1;
@@ -971,7 +1053,10 @@ export class Sim implements SimLike {
             if (opportunist && (dd > 25 || (young === 1 && old === 1 && a.energy[j] > 0.35 && a.infected[j] === 0))) continue;
             const weak = 1.7 - a.energy[j] + (a.infected[j] > 0 ? 0.6 : 0);
             const lone = 1.6 / (1 + 0.12 * crowd);
-            const score = (young * old * weak * lone) / (Pj.toughness * a.genes[j * NG + G_SIZE]) / (dd + 15);
+            // can I actually catch it? fast prey only pays when it's young, sick or tired
+            const preySpeed = Pj.runSpeed * a.genes[j * NG + G_SPEED] * (young > 1 ? 0.75 : 1) * (a.stamina[j] > 0.1 ? 1 : 0.5) * (a.infected[j] > 0 ? 0.8 : 1);
+            const catchable = Math.min(1, (P.runSpeed * spdGene) / preySpeed);
+            const score = (young * old * weak * lone * catchable * catchable) / (Pj.toughness * a.genes[j * NG + G_SIZE]) / (dd + 15);
             if (score > bestS) { bestS = score; best = j; }
           }
         }
@@ -989,7 +1074,7 @@ export class Sim implements SimLike {
       const tx = a.x[tgt], ty = a.y[tgt];
       const dx = tx - x, dy = ty - y, dd = Math.sqrt(dx * dx + dy * dy) + 0.01;
       const fromDen = Math.hypot(tx - denX, ty - denY);
-      if ((pk >= 0 && fromDen > p.wolfTerritory * (a.energy[i] < 0.5 ? 3 : 1.5)) || dd > 90) {
+      if ((pk >= 0 && fromDen > p.wolfTerritory * (a.energy[i] < 0.5 ? 3 : 2)) || dd > 90) {
         dbg(dd > 90 ? 'end_far' : 'end_territory');
         // too far from home or lost the trail
         a.target[i] = -1;
@@ -1127,7 +1212,7 @@ export class Sim implements SimLike {
           const condition = 0.4 + 1.2 * et * et;
           // herd defense: adults packed together stand their ground; a calf beside a healthy mother is shielded
           const guards = this.guardsNear(t, isYoung);
-          const defense = isYoung ? (guards > 0 ? 2 : 1) : 1 + 0.6 * Math.min(5, guards);
+          const defense = isYoung ? (guards > 0 ? 1 + Pt.defense * 1.7 : 1) : 1 + Pt.defense * Math.min(5, guards);
           const resist = Pt.toughness * a.genes[t * NG + G_SIZE] * young * condition * defense * (a.infected[t] > 0 ? 0.7 : 1);
           const pk2 = p.wolfKillChance * a.genes[i * NG + G_SIZE] * (1 + 0.45 * Math.min(4, helpers)) / resist;
           dbg('attack_roll');
@@ -1143,6 +1228,7 @@ export class Sim implements SimLike {
             this.totalKills++;
             if (!this.firstKillLogged) { this.firstKillLogged = true; this.event('firstKill', Sp.Wolf, a.x[t], a.y[t], a.sp[t], 0); }
             this.veg.stamp(this.veg.fear, a.x[t], a.y[t], p.fearKillRadius, p.fearKill, 1);
+            if (a.sp[t] === Sp.Deer) this.cKillsDeer++;
             this.die(t, 'killed');
             a.target[i] = -1;
             if (pk >= 0) this.packTarget[pk] = -1;
@@ -1364,6 +1450,7 @@ export class Sim implements SimLike {
     const row: Record<string, number> = { tick: this.tick, year: this.tick / YEAR_TICKS };
     for (let s = 0; s < SPECIES_COUNT; s++) row['pop_' + SPECIES_KEYS[s]] = pops[s];
     row.grass_mean = this.veg.meanGrass();
+    row.browse_mean = this.veg.meanOf(this.veg.browse);
     row.soil_mean = this.veg.meanOf(this.veg.soil);
     row.fear_mean = this.veg.meanOf(this.veg.fear);
     // generation depth and trait means
@@ -1382,14 +1469,18 @@ export class Sim implements SimLike {
     }
     row.gen_bison = pops[Sp.Bison] ? gsum[Sp.Bison] / pops[Sp.Bison] : 0;
     row.gen_wolf = pops[Sp.Wolf] ? gsum[Sp.Wolf] / pops[Sp.Wolf] : 0;
+    row.gen_pronghorn = pops[Sp.Deer] ? gsum[Sp.Deer] / pops[Sp.Deer] : 0;
     const traits: [number, number][] = [[Sp.Bison, G_SPEED], [Sp.Bison, G_SIZE], [Sp.Bison, G_COAT], [Sp.Bison, G_SIGHT], [Sp.Bison, G_HERD],
-      [Sp.Wolf, G_SPEED], [Sp.Wolf, G_SIZE], [Sp.Wolf, G_COAT], [Sp.Wolf, G_SIGHT]];
+      [Sp.Wolf, G_SPEED], [Sp.Wolf, G_SIZE], [Sp.Wolf, G_COAT], [Sp.Wolf, G_SIGHT], [Sp.Deer, G_SPEED], [Sp.Deer, G_COAT]];
     for (const [s, g] of traits) {
       row[`trait_${SPECIES_KEYS[s]}_${GENE_NAMES[g]}`] = pops[s] ? tsum[s * NG + g] / pops[s] : NaN;
     }
     row.juv_bison = juvBison;
     row.infected_bison = infBison;
     row.kills = this.cKills;
+    row.kills_pronghorn = this.cKillsDeer;
+    row.births_pronghorn = this.cBirths[Sp.Deer];
+    row.starved_pronghorn = this.cStarve[Sp.Deer];
     row.chases = this.cChases;
     row.giveups = this.cGiveUps;
     row.births_bison = this.cBirths[Sp.Bison];
@@ -1408,6 +1499,7 @@ export class Sim implements SimLike {
     row.carcasses = this.cN;
     row.drought = this.env.droughtTicks > 0 ? 1 : 0;
     this.cKills = 0;
+    this.cKillsDeer = 0;
     this.cChases = 0;
     this.cGiveUps = 0;
     this.cBirths.fill(0);

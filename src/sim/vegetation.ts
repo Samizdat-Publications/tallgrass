@@ -11,6 +11,9 @@ export class Vegetation {
   readonly n: number;
   readonly cell: number;
   grass: Float32Array;
+  /** Forbs and shrub browse (pronghorn food), 0..~0.8. */
+  browse: Float32Array;
+  browseK: Float32Array;
   soil: Float32Array;
   fear: Float32Array;
   /** 0 none; (0, 1] ash fading; > 1 burning (value - 1 = remaining burn fraction). */
@@ -23,6 +26,8 @@ export class Vegetation {
     this.cell = w.cell;
     const N2 = w.n * w.n;
     this.grass = new Float32Array(N2);
+    this.browse = new Float32Array(N2);
+    this.browseK = new Float32Array(N2);
     this.soil = new Float32Array(N2);
     this.fear = new Float32Array(N2);
     this.burn = new Float32Array(N2);
@@ -30,6 +35,8 @@ export class Vegetation {
     for (let c = 0; c < N2; c++) {
       this.soil[c] = w.soilBase[c];
       this.grass[c] = w.capacity[c] * 0.8;
+      this.browseK[c] = w.water[c] ? 0 : 0.4 * w.capacity[c] / Math.max(0.3, 1 - 0.45 * w.cover[c]) + 0.6 * w.cover[c];
+      this.browse[c] = this.browseK[c] * 0.8;
       if (!w.water[c]) land++;
     }
     this.landCells = land;
@@ -94,6 +101,13 @@ export class Vegetation {
         if (g > K) g -= (g - K) * 0.004 * dt;
         if (g < 0) g = 0;
         grass[c] = g;
+        // forbs and browse regrow more slowly and burn with the grass
+        let bw = this.browse[c];
+        const BK = this.browseK[c];
+        if (b > 1) bw *= 0.5;
+        bw += dt * (rGrow * 0.85 * moist * bw * (1 - bw / (BK + 1e-6)) + seed * BK);
+        if (dormant) bw -= dt * p.winterDieback * 0.5 * bw;
+        this.browse[c] = bw < 0 ? 0 : bw;
         // overgrazing wears soil down; healthy grass slowly restores it
         if (g < 0.08 * K + 0.01) soil[c] = Math.max(0.12, soil[c] - p.soilDegrade * dt);
         else soil[c] += (w.soilBase[c] - soil[c]) * p.soilRecover * dt;

@@ -32,12 +32,21 @@ export interface SpeciesParams {
   initial: number;
   /** Social radius for herd/pack cohesion in meters. */
   herdRadius: number;
+  /** How far (fraction of sight) a non-hunting predator may come before this prey bolts. */
+  wariness: number;
+  /** Kill-resistance added per healthy adult herd-mate nearby. */
+  defense: number;
+  /** 0..1 how much coat camouflage matters for being spotted. */
+  camo: number;
+  /** 0 = grazer (grass only), 1 = browser (forbs and shrubs first, grass at half value). */
+  diet: number;
 }
 
 const base = (o: Partial<SpeciesParams>): SpeciesParams => ({
   maxAge: 3000, matureAge: 500, gestation: 150, birthCooldown: 400, litter: 1,
   walkSpeed: 1.4, runSpeed: 9, stamina: 120, sight: 35, metabolism: 1 / 1200, thirst: 1 / 900,
   bite: 0.006, foodValue: 0.42, meat: 1, toughness: 1, initial: 0, herdRadius: 12,
+  wariness: 0.4, defense: 0, camo: 0.5, diet: 0,
   ...o,
 });
 
@@ -100,6 +109,7 @@ export function defaultParams(): Params {
     maxAge: 3600, matureAge: 600, gestation: 200, birthCooldown: 380, litter: 1.0,
     walkSpeed: 1.5, runSpeed: 10, stamina: 140, sight: 38, metabolism: 1 / 1300, thirst: 1 / 1500,
     bite: 0.0065, foodValue: 0.42, meat: 7, toughness: 2.4, initial: 500, herdRadius: 14,
+    wariness: 0.4, defense: 0.6, camo: 0.25,
   });
   species[Sp.Wolf] = base({
     maxAge: 9600, matureAge: 1200, gestation: 0, birthCooldown: 0, litter: 4.5,
@@ -111,7 +121,13 @@ export function defaultParams(): Params {
     walkSpeed: 7, runSpeed: 11, stamina: 1e9, sight: 130, metabolism: 1 / 900, thirst: 0,
     meat: 0, toughness: 0.2, initial: 30, herdRadius: 40,
   });
-  species[Sp.Deer] = base({ initial: 0 });
+  // pronghorn: fast, wary, light, fecund; outruns a healthy wolf, so wolves take fawns, the sick and the tired
+  species[Sp.Deer] = base({
+    maxAge: 3000, matureAge: 420, gestation: 150, birthCooldown: 400, litter: 1.4,
+    walkSpeed: 1.7, runSpeed: 15.5, stamina: 170, sight: 55, metabolism: 1 / 1300, thirst: 1 / 2200,
+    bite: 0.0052, foodValue: 0.42, meat: 2.2, toughness: 0.75, initial: 160, herdRadius: 12,
+    wariness: 0.85, defense: 0.08, camo: 0.6, diet: 1,
+  });
   species[Sp.Rabbit] = base({ initial: 0 });
   species[Sp.Cougar] = base({ initial: 0 });
   return {
@@ -128,7 +144,7 @@ export function defaultParams(): Params {
     grazeMin: 0.12,
     fearKill: 0.7,
     fearKillRadius: 22,
-    fearPredatorStamp: 0.004,
+    fearPredatorStamp: 0.0008,
     fearDecay: 0.00035,
     fearWeight: 0.9,
     detectBase: 0.35,
