@@ -694,10 +694,25 @@ export class Sim implements SimLike {
 
   private moveGround(i: number, P: SpeciesParams): void {
     const a = this.a;
-    const accel = a.state[i] === St.Flee || a.state[i] === St.Chase ? 0.3 : 0.15;
-    let vx = a.vx[i] + (a.dvx[i] - a.vx[i]) * accel;
-    let vy = a.vy[i] + (a.dvy[i] - a.vy[i]) * accel;
-    let sp = Math.sqrt(vx * vx + vy * vy);
+    const st = a.state[i];
+    const urgent = st === St.Flee || st === St.Chase || st === St.Stalk;
+    const accel = urgent ? 0.3 : 0.15;
+    // animals move where they face: speed eases toward the desired speed, and the body turns toward the
+    // desired direction at a limited rate (no sideways sliding; nudges from herd-mates become turns)
+    const dvx = a.dvx[i], dvy = a.dvy[i];
+    const dsp = Math.sqrt(dvx * dvx + dvy * dvy);
+    let sp = Math.sqrt(a.vx[i] * a.vx[i] + a.vy[i] * a.vy[i]);
+    sp += (dsp - sp) * accel;
+    if (dsp > 0.04) {
+      let dh = Math.atan2(dvy, dvx) - a.heading[i];
+      if (dh > Math.PI) dh -= Math.PI * 2; else if (dh < -Math.PI) dh += Math.PI * 2;
+      const maxTurn = (urgent ? 0.2 : 0.09) * (sp < 0.6 ? 2 : 1);
+      a.heading[i] += dh > maxTurn ? maxTurn : dh < -maxTurn ? -maxTurn : dh;
+      // you can't sprint around a hairpin
+      if (dh > 1.3 || dh < -1.3) sp *= 0.9;
+    }
+    let vx = Math.cos(a.heading[i]) * sp;
+    let vy = Math.sin(a.heading[i]) * sp;
     // stamina: sprinting drains, everything else recovers
     const sprinting = sp > P.walkSpeed * 2.2;
     if (sprinting) {
@@ -719,7 +734,7 @@ export class Sim implements SimLike {
     if (y < 2) { y = 2; vy = Math.abs(vy); } else if (y > w.size - 2) { y = w.size - 2; vy = -Math.abs(vy); }
     a.x[i] = x; a.y[i] = y; a.vx[i] = vx; a.vy[i] = vy;
     sp = Math.sqrt(vx * vx + vy * vy);
-    if (sp > 0.08) a.heading[i] = Math.atan2(vy, vx);
+    if (sp > 0.08 && (vx !== 0 || vy !== 0)) a.heading[i] = Math.atan2(vy, vx);
     // trampling wears the grass: stampede paths stay visible
     if (sp > 4) this.veg.grass[c] = Math.max(0, this.veg.grass[c] - this.p.trampleRun);
     else if (sp > 0.8) this.veg.grass[c] = Math.max(0, this.veg.grass[c] - this.p.trampleWalk);
@@ -799,10 +814,11 @@ export class Sim implements SimLike {
           n++;
           cx += a.x[j]; cy += a.y[j];
           avx += a.vx[j]; avy += a.vy[j];
-          if (d2 < 5) {
+          if (d2 < 7) {
+            // keep a body length apart, a little more when running
             const d = Math.sqrt(d2) + 0.01;
-            sepx -= dx / d * (2.3 - d);
-            sepy -= dy / d * (2.3 - d);
+            sepx -= dx / d * (2.7 - d);
+            sepy -= dy / d * (2.7 - d);
           }
           if (a.flee[j] > 18) { alarm++; alx += a.fleeX[j]; aly += a.fleeY[j]; if (a.flee[j] > maxFlee) maxFlee = a.flee[j]; }
           if (a.infected[j] > 0 && d2 < 16) infNear++;

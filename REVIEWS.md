@@ -15,3 +15,15 @@ Scores: Visual 5, Readability 3, Life 5, Ecosystem 2, UI 6, Keep watching 3.
 | 8 | Chronicle spam | FIX | UI builder + lead | Sim: stampede cooldown and threshold up, elder events rarer. UI: dedupe, cooldowns, weight toward predator-prey drama. |
 | 9 | Water looks like a canal | FIX (lower priority) | renderer builder | Softer banks, depth color, reedy margins. |
 | 10 | UI colors, graph scale, labels | FIX | UI builder | Distinct species colors, log scale by default, labeled tool icons, plain-language speed text. |
+
+## Round 2 (06:20, Gemini video critique of a 99 s reel) -> `review/round-02/reel.gemini.md`
+Model: gemini-3.1-pro-preview. Scores: Visual 5, Readability 8 (was 3), Life and motion 2, Ecosystem 4, UI 9 (was 6), Keep watching 3.
+
+| # | Issue | Triage | Owner | Notes |
+|---|---|---|---|---|
+| 1 | Animals skate; bodies don't face travel; gait not synced | FIX | lead | Sim: velocity now follows heading with a turn-rate limit (no sideways sliding). Main: leg animation follows real sim speed (cap 12x, was 4x). |
+| 2 | Stampede herds clip into one blob | FIX | lead + animals builder | Separation radius 2.3 -> 2.7 m. Check the far-distance minimum-size scaling isn't fattening close herds. |
+| 3 | Ground texture repetition, "golf course" | FIX | renderer builder | Macro variation in terrain far-field (dirt, green swales, rocks), no tiling. |
+| 4 | Snow pops in and out in one frame | FIX | renderer builder | Snow cover accumulates and melts over seconds of sim time. |
+| 5 | Rigid follow camera | FIX | renderer builder | Deadzone and softer catch-up. |
+| (lead) | Director films empty vistas; night still dim; hard straight edge at 01:37 | FIX | lead + renderer builder | Vista shots must contain animals; edge reported to the renderer builder. |

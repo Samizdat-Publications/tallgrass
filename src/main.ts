@@ -211,7 +211,8 @@ let nearbyCache = { bison: 0, wolf: 0, raven: 0, pronghorn: 0 };
 const w = window as unknown as Record<string, unknown>;
 engine.onFrame((dt, t) => {
   const alpha = Math.min(1, (performance.now() - lastTickChange) / Math.max(16, tickInterval));
-  animals.timeScale = speed > 0 ? Math.min(speed, 4) : 0;
+  // legs keep pace with how fast the sim actually moves animals (capped where gaits would alias)
+  animals.timeScale = speed > 0 ? Math.min(speed, 12) : 0;
   animals.update(dt, alpha, t);
   director.update(dt, pending ? { count: pending.count, ids: pending.ids, agents: pending.agents, carcassCount: pending.carcassCount, carcasses: pending.carcasses, dayFrac: pending.env.dayFrac } : null);
   grass.viewportHeight = engine.renderer.domElement.height;

@@ -129,7 +129,7 @@ export class Director {
     // the biggest herd
     if (!this.recent('herd')) {
       const herd = this.biggestHerd(f, Sp.Bison);
-      if (herd) cands.push({ kind: 'herd', id: null, x: herd[0], y: herd[1], dist: 110 + r() * 60, pitch: 18 + r() * 10, yaw: r() * 360, hold: 22 });
+      if (herd) cands.push({ kind: 'herd', id: null, x: herd[0], y: herd[1], dist: 65 + r() * 45, pitch: 16 + r() * 10, yaw: r() * 360, hold: 20 });
     }
     // a wolf pack on the move
     if (!this.recent('wolves')) {
@@ -144,7 +144,9 @@ export class Director {
     }
     // a vista every so often
     if (!this.recent('vista')) {
-      cands.push({ kind: 'vista', id: null, x: this.worldSize * (0.3 + r() * 0.4), y: this.worldSize * (0.3 + r() * 0.4), dist: 320 + r() * 120, pitch: 17 + r() * 8, yaw: r() * 360, hold: 20 });
+      // a vista still has life in it: the valley seen from behind a herd
+      const h = this.biggestHerd(f, Sp.Bison) ?? [this.worldSize / 2, this.worldSize / 2];
+      cands.push({ kind: 'vista', id: null, x: h[0], y: h[1], dist: 230 + r() * 90, pitch: 14 + r() * 8, yaw: r() * 360, hold: 18 });
     }
     return cands[Math.floor(r() * cands.length)] ?? { kind: 'vista', id: null, x: this.worldSize / 2, y: this.worldSize / 2, dist: 380, pitch: 20, yaw: 0, hold: 20 };
   }
