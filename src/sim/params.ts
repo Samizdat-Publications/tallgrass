@@ -79,6 +79,11 @@ export interface Params {
   wolfRareHalf: number;
   /** 1 = founders start part-way through pregnancy or cooldown instead of all ready to breed. 0 = off. */
   founderDesync: number;
+  /** A pack needs at least this much meat stored from kills to breed (0 = any). */
+  wolfBreedStore: number;
+  /** Litter size factor = base + span x (larder fill, 0..1). v4: 0.6 + 0.5. */
+  wolfLitterBase: number;
+  wolfLitterSpan: number;
   // fear
   fearKill: number;
   fearKillRadius: number;
@@ -186,6 +191,9 @@ export function defaultParams(): Params {
     herdCohesion: 6,
     wolfRareHalf: 0,
     founderDesync: 0,
+    wolfBreedStore: 0,
+    wolfLitterBase: 0.6,
+    wolfLitterSpan: 0.5,
     fearKill: 0.7,
     fearKillRadius: 22,
     fearPredatorStamp: 0.0008,

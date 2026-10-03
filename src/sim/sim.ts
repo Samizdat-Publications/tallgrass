@@ -448,7 +448,9 @@ export class Sim implements SimLike {
         if (a.energy[f] < 0.3) continue;
         const crowd = this.packSize[pk] >= this.p.wolfPackMax + 3;
         if (crowd) continue;
-        let litter = Math.round(P.litter * a.genes[f * NG + G_LITTER] * (0.6 + 0.5 * Math.min(1, this.packStore[pk])) + (this.rng.next() - 0.5) * 2);
+        // a pack only raises pups on meat from real kills: no larder, no litter
+        if (this.packStore[pk] < this.p.wolfBreedStore) continue;
+        let litter = Math.round(P.litter * a.genes[f * NG + G_LITTER] * (this.p.wolfLitterBase + this.p.wolfLitterSpan * Math.min(1, this.packStore[pk])) + (this.rng.next() - 0.5) * 2);
         litter = Math.max(1, Math.min(8, litter));
         for (let k = 0; k < litter; k++) {
           const c = this.birth(f, m, Sp.Wolf, this.packDenX[pk] + this.rng.range(-3, 3), this.packDenY[pk] + this.rng.range(-3, 3));
