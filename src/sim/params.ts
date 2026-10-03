@@ -115,13 +115,13 @@ export function defaultParams(): Params {
   species[Sp.Bison] = base({
     maxAge: 3600, matureAge: 600, gestation: 200, birthCooldown: 380, litter: 1.0,
     walkSpeed: 1.5, runSpeed: 10, stamina: 140, sight: 38, metabolism: 1 / 1300, thirst: 1 / 1500,
-    bite: 0.0065, foodValue: 0.55, meat: 7, toughness: 2.4, initial: 800, herdRadius: 14,
+    bite: 0.0065, foodValue: 0.55, meat: 7, toughness: 3.6, initial: 800, herdRadius: 14,
     wariness: 0.4, defense: 0.6, camo: 0.25,
   });
   species[Sp.Wolf] = base({
     maxAge: 9600, matureAge: 1200, gestation: 0, birthCooldown: 0, litter: 4.5,
-    walkSpeed: 2.2, runSpeed: 12.5, stamina: 110, sight: 60, metabolism: 1 / 950, thirst: 1 / 1600,
-    meat: 1.5, toughness: 1.4, initial: 45, herdRadius: 18,
+    walkSpeed: 2.2, runSpeed: 12.5, stamina: 150, sight: 60, metabolism: 1 / 950, thirst: 1 / 1600,
+    meat: 1.5, toughness: 1.4, initial: 32, herdRadius: 18,
   });
   species[Sp.Raven] = base({
     maxAge: 7200, matureAge: 600, gestation: 120, birthCooldown: 1400, litter: 2,
@@ -131,7 +131,7 @@ export function defaultParams(): Params {
   // pronghorn: fast, wary, light, fecund; outruns a healthy wolf, so wolves take fawns, the sick and the tired
   species[Sp.Deer] = base({
     maxAge: 3000, matureAge: 420, gestation: 150, birthCooldown: 400, litter: 1.4,
-    walkSpeed: 1.7, runSpeed: 15.5, stamina: 170, sight: 55, metabolism: 1 / 1300, thirst: 1 / 2200,
+    walkSpeed: 1.7, runSpeed: 15.5, stamina: 90, sight: 55, metabolism: 1 / 1300, thirst: 1 / 2200,
     bite: 0.0052, foodValue: 0.55, meat: 2.2, toughness: 0.75, initial: 350, herdRadius: 12,
     wariness: 0.85, defense: 0.08, camo: 0.6, diet: 1, hideAge: 170,
   });

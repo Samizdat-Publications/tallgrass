@@ -218,7 +218,7 @@ void tgShade() {
   }
   float sick = dead ? 0.0 : fract(aLook.w);
   float luma = dot(col, vec3(0.2126, 0.7152, 0.0722));
-  col = mix(col, vec3(luma) * vec3(0.9, 0.97, 0.9) + vec3(0.012, 0.014, 0.012), 0.6 * sick);
+  col = mix(col, vec3(luma * 1.1) * vec3(0.96, 0.97, 0.95) + vec3(0.015), 0.5 * sick);
   vTgColor = col;
   vTgSel = floor(aLook.w + 0.001);
 }

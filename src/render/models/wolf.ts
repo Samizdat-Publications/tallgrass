@@ -13,7 +13,7 @@ export function buildWolf(): ModelDef {
     const belly = smooth(-0.05, -0.55, n[1]);
     const saddle = smooth(0.2, 0.85, n[1]) * smooth(-0.5, -0.05, p[0]) * (1 - smooth(0.3, 0.55, p[0]));
     const k = 1 - 0.55 * saddle;
-    return [mix(k, 1.3, belly), mix(k, 1.32, belly), mix(k, 1.34, belly), 1];
+    return [mix(k, 1.22, belly), mix(k, 1.2, belly), mix(k, 1.16, belly), 1];
   };
 
   // Lean torso with a deep chest and tucked waist: [x, yCenter, up, down, side]
@@ -61,7 +61,7 @@ export function buildWolf(): ModelDef {
   // Long legs (+z right); gloves of lighter fur, dark paws.
   const legPaint: PaintFn = (p) => {
     if (p[1] < 0.045) return [pawCol[0], pawCol[1], pawCol[2], 0.3];
-    return [1.15, 1.15, 1.18, 1];
+    return [1.1, 1.1, 1.1, 1];
   };
   b.addPair(
     {
@@ -108,11 +108,11 @@ export function buildWolf(): ModelDef {
   return {
     geometry,
     triangles: b.triangleCount,
-    coatPale: lin(0xb4bbc6),
-    coatDark: lin(0x535965),
+    coatPale: lin(0xa3a6aa),
+    coatDark: lin(0x4a4d53),
     bone: lin(0xd8d0bc),
     roughness: 0.92,
-    fill: 1.5,
+    fill: 1.2,
     params: {
       ...DEFAULT_PARAMS,
       kind: 0,

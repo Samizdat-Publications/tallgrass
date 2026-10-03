@@ -171,8 +171,10 @@ uniform vec3 uSunGlow;
 vec3 tgSkyBase(vec3 d){
   float up = clamp(d.y, 0.0, 1.0);
   vec3 col = mix(uSkyMid, uSkyZenith, smoothstep(0.03, 0.9, up));
-  col = mix(uSkyHorizon, col, smoothstep(0.0, 0.40, up));
   float mu = clamp(dot(d, uSunDir), 0.0, 1.0);
+  // the horizon is warm toward the sun and cooler (lavender-blue) away from it, like the belt of Venus at dusk
+  vec3 horC = mix(uSkyHorizon, uSkyMid * 1.08 + vec3(0.015), 0.5 * (1.0 - clamp(mu * 1.7, 0.0, 1.0)));
+  col = mix(horC, col, smoothstep(0.0, 0.40, up));
   float h = 1.0 - up;
   float glow = 0.22 * pow(mu, 3.0) + 0.5 * pow(mu, 14.0) + 1.1 * pow(mu, 90.0);
   col += uSunGlow * glow * (0.35 + 0.65 * h * h);
@@ -232,10 +234,13 @@ export function injectTerrainShadow(
       float gTgShadow = 1.0;
       float tgSampleTerrainShadow(){
         vec2 uv = vTgShadowXZ / uTgWorld;
-        float inside = step(0.0, uv.x) * step(uv.x, 1.0) * step(0.0, uv.y) * step(uv.y, 1.0);
+        vec2 qd = abs(vTgShadowXZ - 0.5 * uTgWorld) - 0.5 * uTgWorld;
+        float sd = max(qd.x, qd.y);
+        // blend the two maps across the border so there is no seam at the edge of the playable square
+        float wIn = 1.0 - smoothstep(-14.0, 26.0, sd);
         vec2 fuv = (vTgShadowXZ - uTgFarRect.xy) / uTgFarRect.z;
         float far = texture2D(tTgShadowFar, clamp(fuv, 0.0, 1.0)).r;
-        return mix(far, texture2D(tTgShadow, clamp(uv, 0.0, 1.0)).r, inside);
+        return mix(far, texture2D(tTgShadow, clamp(uv, 0.0, 1.0)).r, wIn);
       }
       void main() {`,
     )
@@ -246,6 +251,21 @@ export function injectTerrainShadow(
         .replace(/getDirectionalLightInfo\( directionalLight, directLight \);/g, 'getDirectionalLightInfo( directionalLight, directLight ); directLight.color *= gTgShadow;')
         .replace(/^/, 'gTgShadow = tgSampleTerrainShadow();\n'),
     );
+}
+
+/**
+ * Final-output scrub for lit materials: a NaN or Inf in one HDR pixel spreads through bloom and blacks out the whole frame
+ * (varyings interpolated outside thin triangles under MSAA are the usual cause). Call on the fragment source in onBeforeCompile.
+ */
+export function injectSafeOutput(fragmentShader: string): string {
+  return fragmentShader
+    .replace('void main() {', `vec3 tgSafeOut( vec3 c ) {
+  // min/max return the non-NaN operand on the GPU, so this also turns a stray NaN into 0 (isnan() is folded away by the compiler)
+  return min( max( c, vec3( 0.0 ) ), vec3( 64.0 ) );
+}
+void main() {`)
+    .replace('#include <opaque_fragment>', `outgoingLight = tgSafeOut( outgoingLight );
+#include <opaque_fragment>`);
 }
 
 export function clamp(v: number, a: number, b: number): number { return v < a ? a : v > b ? b : v; }

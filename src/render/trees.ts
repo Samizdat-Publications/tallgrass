@@ -4,7 +4,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { World } from '../sim/world';
-import { NOISE_GLSL, OCCLUDE_GLSL, SharedUniforms, clamp, fbm2, hash2, injectTerrainShadow, smoothstep, vnoise2 } from './common';
+import { NOISE_GLSL, OCCLUDE_GLSL, SharedUniforms, clamp, fbm2, hash2, injectSafeOutput, injectTerrainShadow, smoothstep, vnoise2 } from './common';
 
 const R0 = 6; // nominal crown radius in meters the unit crown is designed for
 const H0 = 14; // nominal tree height
@@ -33,8 +33,8 @@ interface CrownBuild {
 function buildCrown(seed: number, detail: number): CrownBuild {
   const rng = mulberry32(seed * 7919 + 13);
   const lumps: { c: THREE.Vector3; rho: number; sx: number }[] = [];
-  const cy0 = 0.62, cyR = 0.28;
-  const N = 30 + Math.floor(rng() * 6);
+  const cy0 = 0.58, cyR = 0.3;
+  const N = 46 + Math.floor(rng() * 8);
   for (let i = 0; i < N; i++) {
     // random direction, radius biased toward the shell
     let dx = rng() * 2 - 1, dy = rng() * 2 - 1, dz = rng() * 2 - 1;
@@ -44,7 +44,7 @@ function buildCrown(seed: number, detail: number): CrownBuild {
     const yy = dy < 0 ? dy * 0.72 : dy;
     lumps.push({
       c: new THREE.Vector3(dx * rad * 0.9, cy0 + yy * rad * cyR, dz * rad * 0.9),
-      rho: 0.2 + rng() * 0.14,
+      rho: 0.15 + rng() * 0.12,
       sx: 0.85 + rng() * 0.4,
     });
   }
@@ -106,8 +106,8 @@ function buildBark(seed: number, lumpCenters: THREE.Vector3[], simple = false): 
   const parts: THREE.BufferGeometry[] = [];
   const topY = 0.46;
   const bend = new THREE.Vector3((rng() - 0.5) * 0.03, 0, (rng() - 0.5) * 0.03);
-  parts.push(limb(new THREE.Vector3(0, -0.02, 0), new THREE.Vector3(bend.x, 0.12, bend.z), 0.046, 0.032, 7));
-  parts.push(limb(new THREE.Vector3(bend.x, 0.1, bend.z), new THREE.Vector3(bend.x * 1.6, topY, bend.z * 1.6), 0.0325, 0.02, 7));
+  parts.push(limb(new THREE.Vector3(0, -0.02, 0), new THREE.Vector3(bend.x, 0.12, bend.z), 0.04, 0.03, 7));
+  parts.push(limb(new THREE.Vector3(bend.x, 0.1, bend.z), new THREE.Vector3(bend.x * 1.6, topY, bend.z * 1.6), 0.03, 0.018, 7));
   const top = new THREE.Vector3(bend.x * 1.6, topY, bend.z * 1.6);
   if (simple) {
     // distant trees: trunk plus a couple of limbs is all that shows through the crown
@@ -227,7 +227,7 @@ function foliageMaterial(shared: SharedUniforms, shrub: boolean): THREE.MeshStan
       )
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvOcc = aOcc; vLump = aLump; vObj = position;')
       .replace('#include <project_vertex>', swayChunk(true));
-    const cell = shrub ? '0.62' : '1.2';
+    const cell = shrub ? '0.5' : '0.85';
     shader.fragmentShader = shader.fragmentShader
       .replace(
         'void main() {',
@@ -243,6 +243,7 @@ function foliageMaterial(shared: SharedUniforms, shrub: boolean): THREE.MeshStan
         ${NOISE_GLSL}
         ${OCCLUDE_GLSL}
         ${WORLDPOS_GLSL}
+        vec3 tgSafeNorm( vec3 v ){ return v * inversesqrt( max( dot( v, v ), 1e-10 ) ); }
         vec3 tgHash33(vec3 p){
           p = fract(p * vec3(.1031, .1030, .0973));
           p += dot(p, p.yxz + 33.33);
@@ -261,21 +262,21 @@ function foliageMaterial(shared: SharedUniforms, shrub: boolean): THREE.MeshStan
           float fdist = length( vViewPosition );
           float lod = smoothstep( 60.0, 190.0, fdist );
           float keep = clamp( uLeaf + ( inst.b - 0.5 ) * 0.5 * ( 4.0 * uLeaf * ( 1.0 - uLeaf ) ) ${shrub ? '+ 0.45 * ( 1.0 - uLeaf )' : ''}, 0.0, 1.0 );
-          float rim = 1.0 - abs( dot( normalize( vNormal ), normalize( vViewPosition ) ) );
+          float rim = 1.0 - abs( dot( tgSafeNorm( vNormal ), tgSafeNorm( vViewPosition ) ) );
 
-          // leaf clusters: 3D cellular pattern in world space (about ${cell} m cells)
+          // leaf clusters: 3D cellular pattern in world space (about ${cell} m cells, 8-cell neighborhood)
           float F1 = 9.0, F2 = 9.0;
           vec3 cid = vec3( 0.0 ), crel = vec3( 0.0 );
           float alive = 1.0, tone = 0.5, puff = 0.5, edgeD = 0.5;
           if ( lod < 0.999 ) {
-            vec3 pc = wpw / ${cell};
+            vec3 pc = wpw / ${cell} - 0.5;
             vec3 ip = floor( pc );
             vec3 fp = pc - ip;
-            for ( int k = -1; k <= 1; k++ ) {
-              for ( int j = -1; j <= 1; j++ ) {
-                for ( int i = -1; i <= 1; i++ ) {
+            for ( int k = 0; k <= 1; k++ ) {
+              for ( int j = 0; j <= 1; j++ ) {
+                for ( int i = 0; i <= 1; i++ ) {
                   vec3 g = vec3( float( i ), float( j ), float( k ) );
-                  vec3 o = tgHash33( ip + g );
+                  vec3 o = 0.15 + 0.7 * tgHash33( ip + g );
                   vec3 rv = g + o - fp;
                   float d = dot( rv, rv );
                   if ( d < F1 ) { F2 = F1; F1 = d; cid = ip + g; crel = rv; }
@@ -293,8 +294,10 @@ function foliageMaterial(shared: SharedUniforms, shrub: boolean): THREE.MeshStan
             alive = step( cr, keep ) * ( 1.0 - step( ${shrub ? '0.8' : '0.9'}, cr2 ) * 0.9 );
             gTgPuff = -crel;
           }
-          float nrag = tgNoise3( wpw * 4.3 );
-          float holeThr = ${shrub ? '0.1' : '0.06'} + 0.26 * rim * rim;
+          float nrag = tgNoise3( wpw * 6.5 ) * 0.6 + tgNoise3( wpw * 13.0 ) * 0.4;
+          float occC = clamp( vOcc, 0.0, 1.0 );
+          // gaps open up in the interior and underside (where it is dark anyway); the sunlit outer shell stays full
+          float holeThr = ${shrub ? '0.03' : '0.012'} + 0.1 * rim * rim + ${shrub ? '0.04' : '0.2'} * ( 1.0 - occC );
           float cover = smoothstep( 0.0, 0.06, edgeD + ( nrag - 0.5 ) * 0.16 - holeThr ) * alive;
           // distance: fade the pattern out to the average so far canopies never shimmer
           float avgCover = ${shrub ? '0.78' : '0.84'} * ( 0.1 + 0.9 * keep );
@@ -304,34 +307,39 @@ function foliageMaterial(shared: SharedUniforms, shrub: boolean): THREE.MeshStan
 
           float mixT = clamp( 0.5 + ( tone - 0.5 ) * 1.1 + ( inst.g - 0.5 ) * 0.5 + ( vLump - 0.5 ) * 0.2, 0.0, 1.0 );
           vec3 leaf = mix( uLeafA, uLeafB, mixT );
-          float shade = 0.12 + 0.95 * pow( vOcc, 1.15 );
+          // vOcc is interpolated per MSAA pixel center and can overshoot at silhouette pixels: clamp before any pow
+          float occ = clamp( vOcc, 0.0, 1.0 );
+          float shade = 0.12 + 0.95 * pow( occ, 1.15 );
           shade *= mix( 0.7 + 0.5 * puff, 1.0, lod );
-          leaf *= shade * ( 0.9 + 0.2 * tgNoise3( wpw * 2.6 ) ) * inst.r;
+          leaf *= shade * ( 0.84 + 0.2 * tgNoise3( wpw * 2.6 ) + 0.16 * tgNoise3( wpw * 9.0 ) ) * inst.r;
           ${shrub ? 'leaf = mix( leaf, vec3( dot( leaf, vec3( 0.333 ) ) ) * vec3( 1.0, 0.98, 0.86 ) + vec3( 0.02, 0.018, 0.012 ), 0.62 );' : ''}
-          diffuseColor.rgb = mix( leaf, vec3( 0.9, 0.93, 1.0 ), uSnow * 0.5 * smoothstep( 0.3, 0.9, vOcc ) );
+          diffuseColor.rgb = mix( leaf, vec3( 0.9, 0.93, 1.0 ), uSnow * 0.5 * smoothstep( 0.3, 0.9, occ ) );
         }`,
       )
+      .replace('#include <normal_fragment_begin>', `#include <normal_fragment_begin>
+if ( !( dot( normal, normal ) > 0.25 ) ) normal = vec3( 0.0, 1.0, 0.0 );`)
       .replace(
         '#include <normal_fragment_maps>',
         `#include <normal_fragment_maps>
         {
           // each leaf cluster shades like its own little dome
           float pl = dot( gTgPuff, gTgPuff );
-          if ( pl > 1e-4 ) normal = normalize( normal + mat3( viewMatrix ) * ( gTgPuff * ( 0.55 / sqrt( pl ) ) ) );
+          if ( pl > 1e-4 ) normal = tgSafeNorm( normal + mat3( viewMatrix ) * ( gTgPuff * ( 0.3 * inversesqrt( pl ) ) ) );
         }`,
       )
       .replace(
         '#include <emissivemap_fragment>',
         `#include <emissivemap_fragment>
         {
-          vec3 Lv = normalize( mat3( viewMatrix ) * uLightDir );
-          vec3 Vv = normalize( vViewPosition );
+          vec3 Lv = tgSafeNorm( mat3( viewMatrix ) * uLightDir );
+          vec3 Vv = tgSafeNorm( vViewPosition );
           float back = pow( max( dot( -Vv, Lv ), 0.0 ), 2.2 );
-          totalEmissiveRadiance += diffuseColor.rgb * uLightColor * back * 0.1 * gTgShadow * ( 0.3 + 0.7 * vOcc );
+          totalEmissiveRadiance += diffuseColor.rgb * uLightColor * back * 0.1 * gTgShadow * ( 0.3 + 0.7 * clamp( vOcc, 0.0, 1.0 ) );
         }`,
       );
+    shader.fragmentShader = injectSafeOutput( shader.fragmentShader );
   };
-  mat.customProgramCacheKey = () => (shrub ? 'tg-shrub-v2' : 'tg-foliage-v2');
+  mat.customProgramCacheKey = () => (shrub ? 'tg-shrub-v3' : 'tg-foliage-v3');
   return mat;
 }
 
@@ -363,8 +371,9 @@ function barkMaterial(shared: SharedUniforms): THREE.MeshStandardMaterial {
           diffuseColor.a = tgOcclusionFade( tgFragWorld() );
         }`,
       );
+    shader.fragmentShader = injectSafeOutput( shader.fragmentShader );
   };
-  mat.customProgramCacheKey = () => 'tg-bark-v3';
+  mat.customProgramCacheKey = () => 'tg-bark-v4';
   return mat;
 }
 

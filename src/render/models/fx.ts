@@ -10,32 +10,36 @@ import type { World } from '../../sim/world';
 /** Finds the scene's key light and hemisphere light and boils them down to one ambient-ish RGB for unlit sprites. */
 export class SceneLit {
   readonly value = new THREE.Vector3(0.6, 0.55, 0.45);
-  private sun: THREE.DirectionalLight | null = null;
+  private sun: (THREE.Light & { target?: THREE.Object3D }) | null = null;
   private hemi: THREE.HemisphereLight | null = null;
   private tmp = new THREE.Vector3();
 
   probe(scene: THREE.Object3D): void {
     if (!this.sun || !this.hemi) {
       for (const c of scene.children) {
-        if ((c as THREE.DirectionalLight).isDirectionalLight && !this.sun) this.sun = c as THREE.DirectionalLight;
+        const l = c as THREE.Light & { isSunLight?: boolean; isDirectionalLight?: boolean; target?: THREE.Object3D };
+        // the engine uses three's SunLight (no target, direction = position); a plain DirectionalLight works too
+        if ((l.isSunLight || l.isDirectionalLight) && !this.sun) this.sun = l;
         if ((c as THREE.HemisphereLight).isHemisphereLight && !this.hemi) this.hemi = c as THREE.HemisphereLight;
       }
     }
     const v = this.value.set(0, 0, 0);
     if (this.sun) {
-      const d = this.tmp.copy(this.sun.position).sub(this.sun.target.position).normalize();
-      const k = this.sun.intensity * Math.min(1, Math.max(0.12, d.y * 1.3)) * 0.16;
+      const d = this.tmp.copy(this.sun.position);
+      if (this.sun.target) d.sub(this.sun.target.position);
+      d.normalize();
+      const k = this.sun.intensity * Math.min(1, Math.max(0.12, d.y * 1.3)) * 0.2;
       v.x += this.sun.color.r * k;
       v.y += this.sun.color.g * k;
       v.z += this.sun.color.b * k;
     }
     if (this.hemi) {
-      const k = this.hemi.intensity * 0.3;
+      const k = this.hemi.intensity * 0.7;
       v.x += (this.hemi.color.r * 0.6 + this.hemi.groundColor.r * 0.4) * k;
       v.y += (this.hemi.color.g * 0.6 + this.hemi.groundColor.g * 0.4) * k;
       v.z += (this.hemi.color.b * 0.6 + this.hemi.groundColor.b * 0.4) * k;
     }
-    v.x = Math.min(1.6, v.x); v.y = Math.min(1.6, v.y); v.z = Math.min(1.6, v.z);
+    v.x = Math.min(1.8, v.x); v.y = Math.min(1.8, v.y); v.z = Math.min(1.8, v.z);
   }
 }
 
@@ -59,7 +63,7 @@ export class Dust {
   /** Dust clock: real seconds, frozen while the sim is paused. */
   now = 0;
   private uNow = { value: 0 };
-  private uColor = { value: new THREE.Vector3(0.66, 0.52, 0.36) };
+  private uColor = { value: new THREE.Vector3(0.82, 0.56, 0.3) };
   private lit: SceneLit;
 
   constructor(lit: SceneLit) {
@@ -95,7 +99,7 @@ export class Dust {
           vec3 pos = aP.xyz + aV.xyz * age * drag;
           pos.y += 0.55 * age * (1.0 - 0.6 * u);
           float size = aV.w * (0.55 + 1.7 * pow(u, 0.55));
-          size *= clamp(distance(cameraPosition, pos) / 130.0, 1.0, 3.2); // stay readable from the wide view
+          size *= clamp(distance(cameraPosition, pos) / 130.0, 1.0, 2.4); // stay readable from the wide view
           vec4 mv = viewMatrix * vec4(pos, 1.0);
           float c = cos(aQ.y * 6.2831 + u * 0.8), s = sin(aQ.y * 6.2831 + u * 0.8);
           vec2 q = vec2(position.x * c - position.y * s, position.x * s + position.y * c);
@@ -103,7 +107,7 @@ export class Dust {
           gl_Position = projectionMatrix * mv;
           vUv = position.xy * 2.0;
           vSeed = aQ.y;
-          vAlpha = aQ.z * smoothstep(0.0, 0.1, u) * pow(1.0 - u, 1.6);
+          vAlpha = aQ.z * smoothstep(0.0, 0.08, u) * pow(1.0 - u, 1.25);
         }`,
       fragmentShader: /* glsl */ `
         precision highp float;
@@ -112,11 +116,11 @@ export class Dust {
         void main() {
           float r = length(vUv);
           float ang = atan(vUv.y, vUv.x);
-          r *= 1.0 + 0.22 * sin(ang * 3.0 + vSeed * 40.0) + 0.12 * sin(ang * 5.0 - vSeed * 17.0);
-          float a = 1.0 - smoothstep(0.15, 1.0, r);
-          a *= a;
+          r *= 1.0 + 0.12 * sin(ang * 3.0 + vSeed * 40.0) + 0.07 * sin(ang * 5.0 - vSeed * 17.0);
+          float a = 1.0 - smoothstep(0.0, 1.0, r);
+          a = a * a * (0.6 + 0.4 * a);
           if (a * vAlpha < 0.002) discard;
-          vec3 col = uColor * uLit * (0.85 + 0.3 * (1.0 - r));
+          vec3 col = uColor * max(uLit, vec3(0.1)) * (0.85 + 0.3 * (1.0 - r));
           gl_FragColor = vec4(col, a * vAlpha);
         }`,
     });
@@ -207,16 +211,17 @@ export class KillSites {
           float n = vn(uv * 3.2 + vInfo.w * 31.0) * 0.6 + vn(uv * 8.0 + vInfo.w * 7.0) * 0.4;
           float edge = r + (n - 0.5) * 0.65;
           float a = 1.0 - smoothstep(0.45, 1.0, edge);
+          a *= smoothstep(0.12, 0.4, r); // leave the carcass itself clear
           float rem = vInfo.z;
-          a *= 0.55 + 0.4 * rem;
+          a *= 0.7 + 0.3 * rem;
           if (a < 0.003) discard;
           // dark stain in the middle, trampled dirt toward the rim, a few pale bone flecks late in the carcass's life
-          vec3 stain = vec3(0.075, 0.032, 0.022);
-          vec3 dirt = vec3(0.17, 0.115, 0.07);
+          vec3 stain = vec3(0.035, 0.022, 0.018);
+          vec3 dirt = vec3(0.1, 0.075, 0.052);
           vec3 col = mix(stain, dirt, smoothstep(0.1, 0.8, edge) * 0.9);
           float fleck = step(0.93, h21(floor(uv * 14.0 + vInfo.w * 50.0))) * (1.0 - smoothstep(0.1, 0.5, rem)) * (1.0 - smoothstep(0.2, 0.7, r));
           col = mix(col, vec3(0.45, 0.42, 0.36), fleck);
-          gl_FragColor = vec4(col * uLit * 1.4, a);
+          gl_FragColor = vec4(col * min(uLit, vec3(1.0)), a * 0.85);
         }`,
     });
     this.mesh = new THREE.Mesh(this.geo, mat);
@@ -279,7 +284,7 @@ export class KillSites {
             const o = (c * V + j * (G + 1) + i) * 3;
             const x = cx + u * R, z = cz + v * R;
             P[o] = x;
-            P[o + 1] = sampleHeight(w.height, w.hn, w.cell, x, z) + 0.12;
+            P[o + 1] = sampleHeight(w.height, w.hn, w.cell, x, z) + 0.5; // rides on the grass canopy so it is visible from above
             P[o + 2] = z;
             const q = (c * V + j * (G + 1) + i) * 4;
             I[q] = u; I[q + 1] = v; I[q + 3] = seed;
@@ -302,6 +307,131 @@ export class KillSites {
     }
     this.mesh.visible = n > 0;
   }
+
+  dispose(): void {
+    this.geo.dispose();
+    (this.mesh.material as THREE.Material).dispose();
+  }
+}
+
+// ---------------------------------------------------------------------------------------------------------
+// Distance markers
+
+/** [r, g, b, size in px on a 900 px tall viewport, max alpha] per species id. Linear-ish colors chosen for contrast on golden grass. */
+const MARKER: Array<[number, number, number, number, number] | null> = [
+  [0.1, 0.055, 0.035, 5.5, 0.62], // bison: dark umber
+  [0.92, 0.95, 1.0, 7.0, 0.8], // wolf: pale halo so packs read
+  [0.02, 0.02, 0.03, 4.5, 0.55], // raven: black speck
+  [0.95, 0.82, 0.62, 4.0, 0.38], // pronghorn: warm rump flash
+  null, // rabbit
+  [0.95, 0.55, 0.18, 6.5, 0.75], // cougar: tawny
+];
+
+/**
+ * Soft species-colored dots that fade in only when the camera is far from an animal, so herds, packs and ravens
+ * still read from the high drone view without a UI. Fully hidden inside ~170 m, full strength past ~330 m.
+ */
+export class Markers {
+  readonly mesh: THREE.Mesh;
+  private geo: THREE.InstancedBufferGeometry;
+  private cap = 4096;
+  private p = new Float32Array(this.cap * 4); // x, y, z, size px
+  private c = new Float32Array(this.cap * 4); // r, g, b, max alpha
+  private attrP: THREE.InstancedBufferAttribute;
+  private attrC: THREE.InstancedBufferAttribute;
+  private n = 0;
+  private uView = { value: new THREE.Vector2(1600, 900) };
+  private uNear = { value: 170 };
+  private uFar = { value: 330 };
+  private uBright = { value: 1 };
+  private lit = new SceneLit();
+
+  constructor() {
+    const quad = new THREE.PlaneGeometry(1, 1);
+    this.geo = new THREE.InstancedBufferGeometry();
+    this.geo.setAttribute('position', quad.getAttribute('position'));
+    this.geo.setIndex(quad.getIndex());
+    this.attrP = new THREE.InstancedBufferAttribute(this.p, 4).setUsage(THREE.DynamicDrawUsage);
+    this.attrC = new THREE.InstancedBufferAttribute(this.c, 4).setUsage(THREE.DynamicDrawUsage);
+    this.geo.setAttribute('aP', this.attrP);
+    this.geo.setAttribute('aC', this.attrC);
+    this.geo.instanceCount = 0;
+    const mat = new THREE.ShaderMaterial({
+      transparent: true, depthWrite: false, depthTest: true, fog: false,
+      uniforms: { uView: this.uView, uNear: this.uNear, uFar: this.uFar, uBright: this.uBright },
+      vertexShader: /* glsl */ `
+        attribute vec4 aP; attribute vec4 aC;
+        uniform vec2 uView; uniform float uNear; uniform float uFar;
+        varying vec2 vUv; varying vec4 vCol;
+        uniform float uBright;
+        void main() {
+          float dist = distance(cameraPosition, aP.xyz);
+          float fade = smoothstep(uNear, uFar, dist);
+          vUv = position.xy * 2.0;
+          vCol = vec4(aC.rgb * uBright, aC.a * fade);
+          vec4 clip = projectionMatrix * viewMatrix * vec4(aP.xyz + vec3(0.0, 0.6, 0.0), 1.0);
+          float px = aP.w * uView.y / 900.0;
+          clip.xy += position.xy * px * 2.0 / uView * clip.w;
+          if (fade <= 0.001) clip = vec4(2.0, 2.0, 2.0, 1.0);
+          gl_Position = clip;
+        }`,
+      fragmentShader: /* glsl */ `
+        precision highp float;
+        varying vec2 vUv; varying vec4 vCol;
+        void main() {
+          float r = length(vUv);
+          float a = 1.0 - smoothstep(0.35, 1.0, r);
+          if (a * vCol.a < 0.004) discard;
+          gl_FragColor = vec4(vCol.rgb, a * vCol.a);
+        }`,
+    });
+    this.mesh = new THREE.Mesh(this.geo, mat);
+    this.mesh.frustumCulled = false;
+    this.mesh.renderOrder = 25;
+    this.mesh.name = 'markers';
+    this.mesh.onBeforeRender = (r, scene) => {
+      const s = r.getDrawingBufferSize(this.tmpV);
+      this.uView.value.copy(s);
+      this.lit.probe(scene);
+      const lv = this.lit.value;
+      this.uBright.value = Math.min(1, Math.max(0.3, 0.3 + 0.7 * ((lv.x + lv.y + lv.z) / 3 / 0.7)));
+      if (scene.overrideMaterial) this.geo.instanceCount = 0;
+      else this.geo.instanceCount = this.n;
+    };
+    this.mesh.onAfterRender = () => { this.geo.instanceCount = this.n; };
+  }
+  private tmpV = new THREE.Vector2();
+
+  begin(): void { this.n = 0; }
+
+  add(sp: number, x: number, y: number, z: number, scale: number): void {
+    const m = MARKER[sp];
+    if (!m) return;
+    if (this.n >= this.cap) this.grow();
+    const o = this.n++ * 4;
+    this.p[o] = x; this.p[o + 1] = y; this.p[o + 2] = z; this.p[o + 3] = m[3] * Math.sqrt(Math.min(1.4, Math.max(0.5, scale)));
+    this.c[o] = m[0]; this.c[o + 1] = m[1]; this.c[o + 2] = m[2]; this.c[o + 3] = m[4];
+  }
+
+  private grow(): void {
+    const cap = this.cap * 2;
+    const p = new Float32Array(cap * 4); p.set(this.p);
+    const c = new Float32Array(cap * 4); c.set(this.c);
+    this.p = p; this.c = c; this.cap = cap;
+    this.attrP = new THREE.InstancedBufferAttribute(p, 4).setUsage(THREE.DynamicDrawUsage);
+    this.attrC = new THREE.InstancedBufferAttribute(c, 4).setUsage(THREE.DynamicDrawUsage);
+    this.geo.setAttribute('aP', this.attrP);
+    this.geo.setAttribute('aC', this.attrC);
+  }
+
+  end(): void {
+    this.geo.instanceCount = this.n;
+    this.attrP.clearUpdateRanges(); this.attrP.addUpdateRange(0, this.n * 4); this.attrP.needsUpdate = true;
+    this.attrC.clearUpdateRanges(); this.attrC.addUpdateRange(0, this.n * 4); this.attrC.needsUpdate = true;
+  }
+
+  /** Distance range (m) over which dots fade in. */
+  setRange(near: number, far: number): void { this.uNear.value = near; this.uFar.value = far; }
 
   dispose(): void {
     this.geo.dispose();

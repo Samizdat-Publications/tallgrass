@@ -8,6 +8,8 @@ import { generateWorld } from './sim/world';
 import { hashSeed } from './sim/rng';
 import { scenarioById } from './scenarios';
 import { Director } from './director';
+import { AudioDirector } from './audio/audio';
+import { countNearby, nearWater01 } from './audio/inputs';
 import { DAY_TICKS, Sp, type Intervention, type Snapshot } from './sim/types';
 import type { FromWorker, ToWorker } from './sim/worker';
 
@@ -32,6 +34,10 @@ const animals = new AnimalLayer(renderWorld);
 engine.scene.add(animals.object3D);
 engine.cam.preset((q.get('cam') as 'wide' | 'low' | 'top' | null) ?? 'wide', true);
 const director = new Director(engine.cam, (id, out) => animals.getPosition(id, out), world.size);
+// sound starts itself on the first click or key press (browser autoplay rules)
+const audio = new AudioDirector();
+void audio.load();
+window.addEventListener('keydown', (e) => { if (e.key === 'm' || e.key === 'M') audio.setMuted(!audio.muted); });
 
 // ------------------------------------------------------------------ worker
 
@@ -200,6 +206,8 @@ function groundHit(r: THREE.Raycaster): THREE.Vector3 | null {
 
 const sun = { dir: engine.uniforms.lightDir.value, color: engine.uniforms.lightColor.value };
 let fpsAcc = 0, fpsN = 0;
+let audioFrame = 0;
+let nearbyCache = { bison: 0, wolf: 0, raven: 0, pronghorn: 0 };
 const w = window as unknown as Record<string, unknown>;
 engine.onFrame((dt, t) => {
   const alpha = Math.min(1, (performance.now() - lastTickChange) / Math.max(16, tickInterval));
@@ -215,6 +223,12 @@ engine.onFrame((dt, t) => {
       scenario: scenario.id, following,
     });
     if (pending.selectedGone && following !== null) { following = null; engine.cam.follow(null); }
+    const cp = engine.camera.position; // three x = sim x, three z = sim y
+    const camHeight = Math.max(0, cp.y - engine.groundHeight(cp.x, cp.z));
+    audioFrame++;
+    if ((audioFrame & 3) === 0) nearbyCache = countNearby(pending.agents, pending.count, cp.x, cp.z, 250);
+    audio.update(dt, { env: pending.env, camX: cp.x, camY: cp.z, camHeight, speed: pending.speed, nearby: nearbyCache, nearWater: nearWater01(world, cp.x, cp.z) });
+    if (!skipping) for (const ev of pendingEvents) if (ev.x !== 0 || ev.y !== 0) audio.onEvent(ev, Math.hypot(ev.x - cp.x, ev.y - cp.z, camHeight));
     pendingEvents = [];
     pendingHistory = [];
   }
@@ -236,6 +250,7 @@ w.__animals = animals;
 w.__grass = grass;
 w.__snap = () => pending;
 w.__director = director;
+w.__audio = audio;
 w.__followId = (id: number | null) => {
   following = id;
   if (id === null) { engine.cam.follow(null); return; }

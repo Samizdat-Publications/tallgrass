@@ -13,7 +13,7 @@ import { getModel } from './models';
 import type { AnimParams, ModelDef } from './models';
 import { makeAnimalMaterials } from './models/shader';
 import type { AnimalShared } from './models/shader';
-import { Dust, KillSites, SceneLit } from './models/fx';
+import { Dust, KillSites, Markers, SceneLit } from './models/fx';
 
 const INITIAL_CAPACITY = [2048, 512, 512, 1024, 1024, 128]; // by species id
 
@@ -27,12 +27,12 @@ const hash01 = (n: number): number => (Math.imul(n | 0, 0x9e3779b1) >>> 8) / 167
 
 /** Dust kicked up by fast movers: [min speed m/s, puffs per second per m/s over the minimum, puff size m, alpha]. */
 const DUST: Array<[number, number, number, number] | null> = [
-  [5, 0.9, 1.9, 0.2], // bison
-  [5, 0.8, 1.1, 0.17], // wolf
+  [4.5, 1.8, 3.4, 0.34], // bison
+  [4.5, 1.4, 1.8, 0.3], // wolf
   null, // raven
-  [6, 0.5, 1.1, 0.16], // pronghorn
+  [5, 1.0, 2.0, 0.28], // pronghorn
   null, // rabbit
-  [5, 0.6, 1.1, 0.16], // cougar
+  [4.5, 1.0, 1.9, 0.28], // cougar
 ];
 
 function strideFreq(p: AnimParams, spd: number): number {
@@ -180,6 +180,7 @@ export class AnimalLayer {
   private lit = new SceneLit();
   private dust: Dust;
   private kills: KillSites;
+  private markers: Markers;
   private slots = new Slots();
   private gen = 0;
 
@@ -214,7 +215,8 @@ export class AnimalLayer {
     }
     this.kills = new KillSites(world, this.lit);
     this.dust = new Dust(this.lit);
-    this.object3D.add(this.kills.mesh, this.dust.mesh);
+    this.markers = new Markers();
+    this.object3D.add(this.kills.mesh, this.dust.mesh, this.markers.mesh);
 
     // Selection ring: a soft glowing ring that hugs the terrain under the selected animal.
     const N = 24;
@@ -323,6 +325,7 @@ export class AnimalLayer {
     const kSick = 1 - Math.exp(-dt / 2.5);
     const running = this.timeScale > 0 ? dt : 0;
     this.dust.update(running);
+    this.markers.begin();
     const dustRate = Math.min(this.timeScale, 3);
 
     for (const b of this.batches) {
@@ -427,6 +430,8 @@ export class AnimalLayer {
       }
       this.writeInstance(b, x, y, z, ch, sh, pitch, roll, vs);
 
+      this.markers.add(sp, x, y + (sp === Sp.Raven ? 0.3 : pr.height * 0.6 * vs), z, vs);
+
       // dust kicked up by fast movers
       const dp = DUST[sp];
       if (dp && dustRate > 0 && spdS > dp[0] && (state === St.Run || state === St.Flee || state === St.Chase)) {
@@ -442,7 +447,7 @@ export class AnimalLayer {
           this.dust.emit(
             px, sampleHeight(H, hn, cell, px, pz) + 0.15, pz,
             ch * drift + (Math.random() - 0.5) * 0.9, 0.3 + Math.random() * 0.5, sh * drift + (Math.random() - 0.5) * 0.9,
-            dp[2] * vs * (0.75 + 0.5 * Math.random()), 1.3 + Math.random() * 1.0, dp[3] * (0.7 + 0.6 * Math.random()), Math.random(),
+            dp[2] * vs * (0.75 + 0.5 * Math.random()), 1.8 + Math.random() * 1.4, dp[3] * (0.7 + 0.6 * Math.random()), Math.random(),
           );
         }
         if (S.dust[slot] > 1) S.dust[slot] = 1;
@@ -493,7 +498,7 @@ export class AnimalLayer {
       const hF = sampleHeight(H, hn, cell, x + ch * hl, z + sh * hl);
       const hB = sampleHeight(H, hn, cell, x - ch * hl, z - sh * hl);
       const pitch = Math.atan2(hF - hB, 2 * hl);
-      this.writeInstance(b, x, ground, z, ch, sh, pitch, 0, 1);
+      this.writeInstance(b, x, ground + 0.22, z, ch, sh, pitch, 0, 1);
       const k = b.count - 1;
       const gp = k * 4;
       const gait = b.gait.array as Float32Array;
@@ -522,6 +527,7 @@ export class AnimalLayer {
         a.needsUpdate = true;
       }
     }
+    this.markers.end();
     this.updateRing();
   }
 
@@ -642,6 +648,7 @@ export class AnimalLayer {
       b.material.dispose();
       b.depth.dispose();
     }
+    this.markers.dispose();
     this.dust.dispose();
     this.kills.dispose();
     this.ringGeo.dispose();

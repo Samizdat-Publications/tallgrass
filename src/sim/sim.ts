@@ -526,9 +526,11 @@ export class Sim implements SimLike {
   /** Healthy adult herd-mates within 8 m of a prey animal (for a calf: is its mother close and fit). */
   private guardsNear(t: number, isYoung: boolean): number {
     const a = this.a;
+    // calves count their mother double: she stands over them
+    let bonus = 0;
     if (isYoung) {
       const m = a.mother[t];
-      return a.same(m, a.motherId[t]) && Math.abs(a.x[m] - a.x[t]) < 5 && Math.abs(a.y[m] - a.y[t]) < 5 && a.energy[m] > 0.45 ? 1 : 0;
+      bonus = a.same(m, a.motherId[t]) && Math.abs(a.x[m] - a.x[t]) < 5 && Math.abs(a.y[m] - a.y[t]) < 5 && a.energy[m] > 0.45 ? 1 : 0;
     }
     const g = this.prey, nb = g.nb, bs = g.bs;
     const x = a.x[t], y = a.y[t], s = a.sp[t];
@@ -548,7 +550,7 @@ export class Sim implements SimLike {
         }
       }
     }
-    return n;
+    return n + bonus;
   }
 
   private refreshCoarse(): void {
@@ -622,7 +624,7 @@ export class Sim implements SimLike {
       const fg = useMate ? a.mateGenes[mother * NG + g] : a.genes[fatherSlot * NG + g];
       let v = this.rng.next() < 0.5 ? mg : fg;
       v += this.rng.normal() * mut * (g === G_COAT ? 0.7 : 1);
-      a.genes[c * NG + g] = clampGene(g, v);
+      a.genes[c * NG + g] = g === G_COAT ? clampCoat(sp, v) : clampGene(g, v);
     }
     a.children[mother]++;
     if (!useMate && fatherSlot >= 0) a.children[fatherSlot]++;
@@ -728,12 +730,15 @@ export class Sim implements SimLike {
     const o = i * NG;
     const size = a.genes[o + G_SIZE], spd = a.genes[o + G_SPEED], sight = a.genes[o + G_SIGHT];
     const v = Math.sqrt(a.vx[i] * a.vx[i] + a.vy[i] * a.vy[i]);
-    const activity = a.state[i] === St.Rest ? 0.7 : v > P.walkSpeed * 2.2 ? 1.8 : v > 0.3 ? 1.05 : 0.9;
-    let m = P.metabolism * Math.pow(size, 0.75) * (0.75 + 0.25 * spd * spd) * (0.9 + 0.1 * sight) * activity;
+    // reserves scale with mass and burn with mass^0.75, so in normalized energy a big animal drains slower;
+    // a fast build costs most while actually sprinting; keen sight costs a little all the time
+    const running = v > P.walkSpeed * 2.2;
+    const activity = a.state[i] === St.Rest ? 0.7 : running ? 1.8 : v > 0.3 ? 1.05 : 0.9;
+    let m = P.metabolism * Math.pow(size, -0.25) * (0.98 + 0.02 * spd * spd) * (0.98 + 0.02 * sight) * activity;
     if (a.infected[i] > 0) m *= this.p.diseaseMetab;
     if (a.age[i] < P.matureAge) m *= 0.75;
-    // cold costs extra
-    m *= 1 + 0.25 * (1 - this.env.state.warmth);
+    // cold costs extra, much more for a small bird
+    m *= 1 + (a.sp[i] === Sp.Raven ? 0.5 : 0.25) * (1 - this.env.state.warmth);
     return m;
   }
 
@@ -994,7 +999,9 @@ export class Sim implements SimLike {
     if (a.state[i] === St.Graze) {
       const c = this.veg.cellAt(a.x[i], a.y[i]);
       const juvenile = a.age[i] < P.matureAge;
-      const want = P.bite * Math.sqrt(a.genes[i * NG + G_SIZE]) * (juvenile ? 0.55 : 1);
+      const sz = a.genes[i * NG + G_SIZE];
+      const want = P.bite * Math.pow(sz, 0.75) * (juvenile ? 0.55 : 1);
+      const perMass = 1 / sz; // energy is normalized to body reserves
       if (P.diet > 0) {
         // browsers take forbs and shrubs first, then grass at half value
         const bw = this.veg.browse[c];
@@ -1007,12 +1014,12 @@ export class Sim implements SimLike {
           this.veg.grass[c] = g - b2;
           gain += b2 * P.foodValue * 0.6;
         }
-        a.energy[i] = Math.min(1, a.energy[i] + gain);
+        a.energy[i] = Math.min(1, a.energy[i] + gain * perMass);
       } else {
         const g = this.veg.grass[c];
         const bite = g < want ? g : want;
         this.veg.grass[c] = g - bite;
-        a.energy[i] = Math.min(1, a.energy[i] + bite * P.foodValue);
+        a.energy[i] = Math.min(1, a.energy[i] + bite * P.foodValue * perMass);
       }
     }
     // calves nurse while close to their mother
@@ -1297,7 +1304,8 @@ export class Sim implements SimLike {
           const condition = 0.4 + 1.2 * et * et;
           // herd defense: adults packed together stand their ground; a calf beside a healthy mother is shielded
           const guards = this.guardsNear(t, isYoung);
-          const defense = isYoung ? (guards > 0 ? 1 + Pt.defense : 1) : 1 + Pt.defense * Math.min(5, guards);
+          // a herd that circles up around its calves protects them as well as its adults
+          const defense = 1 + Pt.defense * Math.min(5, guards);
           const resist = Pt.toughness * a.genes[t * NG + G_SIZE] * young * condition * defense * (a.infected[t] > 0 ? 0.7 : 1);
           const pk2 = p.wolfKillChance * a.genes[i * NG + G_SIZE] * (1 + 0.45 * Math.min(4, helpers)) / resist;
           dbg('attack_roll');
@@ -1679,6 +1687,13 @@ export class Sim implements SimLike {
       pop: Int32Array.from(this.populations()),
     };
   }
+}
+
+/** Coat darkness stays within a species' believable range (bison stay dark, wolves stay pale). */
+const COAT_RANGE: [number, number][] = [[0.62, 1], [0.05, 0.65], [0.85, 1], [0.2, 0.8], [0.2, 0.8], [0.15, 0.6]];
+function clampCoat(sp: number, v: number): number {
+  const [lo, hi] = COAT_RANGE[sp] ?? [0, 1];
+  return v < lo ? lo : v > hi ? hi : v;
 }
 
 function clampGene(g: number, v: number): number {

@@ -156,11 +156,33 @@ export function blobRings(c: V3, rx: number, ry: number, rz: number, n = 6): Rin
   return rings;
 }
 
-/** Torso-style rings along X from explicit rows: [x, yCenter, up, down, side, sq?]. u = Y, s = Z. */
-export function torsoRings(rows: Array<[number, number, number, number, number, number?]>, z = 0): Ring[] {
-  return rows.map(([x, yc, up, down, side, sq]) => ({
-    c: [x, yc, z], u: [0, 1, 0], s: [0, 0, 1], up, down, side, sq,
-  }));
+/**
+ * Torso-style rings along X from explicit rows: [x, yCenter, up, down, side, sq?]. u = Y, s = Z.
+ * Rows are Catmull-Rom subdivided (`sub` samples per span) so vertex-colour markings blend smoothly.
+ */
+export function torsoRings(rows: Array<[number, number, number, number, number, number?]>, z = 0, sub = 2): Ring[] {
+  const n = rows.length;
+  const out: Ring[] = [];
+  const at = (i: number) => rows[Math.max(0, Math.min(n - 1, i))];
+  const cr = (a: number, b: number, c: number, d: number, t: number) =>
+    0.5 * (2 * b + (-a + c) * t + (2 * a - 5 * b + 4 * c - d) * t * t + (-a + 3 * b - 3 * c + d) * t * t * t);
+  const emit = (r: [number, number, number, number, number, number?]) =>
+    out.push({ c: [r[0], r[1], z], u: [0, 1, 0], s: [0, 0, 1], up: r[2], down: r[3], side: r[4], sq: r[5] });
+  for (let i = 0; i < n - 1; i++) {
+    const p0 = at(i - 1), p1 = at(i), p2 = at(i + 1), p3 = at(i + 2);
+    for (let k = 0; k < sub; k++) {
+      const t = k / sub;
+      if (k === 0) { emit(p1); continue; }
+      const f = (j: number) => {
+        const v = cr(p0[j] as number, p1[j] as number, p2[j] as number, p3[j] as number, t);
+        return j >= 2 ? Math.max(0, v) : v; // radii stay non-negative; x and y centre may be anything
+      };
+      // keep the pole rings (zero radius) exact at both ends
+      emit([f(0), f(1), f(2), f(3), f(4), p1[5]]);
+    }
+  }
+  emit(rows[n - 1]);
+  return out;
 }
 
 export class MeshBuilder {

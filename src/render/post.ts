@@ -29,7 +29,7 @@ class ScenePass extends Pass {
     this.copy = new THREE.ShaderMaterial({
       uniforms: { tDiffuse: { value: null } },
       vertexShader: CopyShader.vertexShader,
-      fragmentShader: CopyShader.fragmentShader.replace('opacity * texel', 'texel'),
+      fragmentShader: CopyShader.fragmentShader.replace('gl_FragColor = opacity * texel;', 'gl_FragColor = vec4( min( max( texel.rgb, vec3( 0.0 ) ), vec3( 128.0 ) ), 1.0 );'),
       depthTest: false, depthWrite: false,
     });
     this.quad = new FullScreenQuad(this.copy);
@@ -217,8 +217,8 @@ class GradePass extends Pass {
           float l2 = dot(col, vec3(0.2126, 0.7152, 0.0722));
           col = mix(vec3(l2), col, uSat);
           // day for night: pull the palette toward silver-blue while keeping luminance
-          vec3 silver = vec3(l2) * vec3(0.80, 0.94, 1.22);
-          col = mix(col, silver + (col - vec3(l2)) * 0.25, uNight * 0.7);
+          vec3 silver = vec3(l2) * vec3(0.62, 1.0, 1.06);
+          col = mix(col, silver + (col - vec3(l2)) * 0.22, uNight * 0.94);
           col = pow(max(col / 0.18, vec3(0.0)), vec3(uContrast)) * 0.18;
           vec2 q = (vUv - 0.5) * vec2(uAspect, 1.0) * 0.9;
           float v = smoothstep(0.35, 1.05, length(q));

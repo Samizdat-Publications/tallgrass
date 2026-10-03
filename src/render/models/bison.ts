@@ -16,7 +16,7 @@ export function buildBison(): ModelDef {
     const belly = mix(1, 0.6, smooth(-0.1, -0.8, n[1]));
     const w = Math.min(1, front * (0.45 + 0.55 * high));
     const top = smooth(0.2, 0.9, n[1]) * smooth(0.0, 0.5, p[0]) * 0.25;
-    return [(1 + (1.4 + top) * w) * belly, (1 + (1.1 + top) * w) * belly, (1 + 0.35 * w) * belly, 1];
+    return [(1 + (1.7 + top) * w) * belly, (1 + (1.35 + top) * w) * belly, (1 + 0.55 * w) * belly, 1];
   };
 
   // Torso with the signature shoulder hump: [x, yCenter, up, down, side]
@@ -143,8 +143,8 @@ export function buildBison(): ModelDef {
   return {
     geometry,
     triangles: b.triangleCount,
-    coatPale: lin(0x755c48),
-    coatDark: lin(0x2e241f),
+    coatPale: lin(0x86695a),
+    coatDark: lin(0x36291f),
     bone: lin(0xd4cbb0),
     roughness: 0.95,
     fill: 2.2,

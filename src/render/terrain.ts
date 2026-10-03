@@ -6,7 +6,7 @@ import { FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
 import type { World } from '../sim/world';
 import { sampleHeight } from '../sim/world';
 import {
-  HEIGHT_GLSL, NOISE_GLSL, SharedUniforms, clamp, fbm2, injectTerrainShadow, smoothstep,
+  HEIGHT_GLSL, NOISE_GLSL, SharedUniforms, clamp, fbm2, injectSafeOutput, injectTerrainShadow, smoothstep, vnoise2,
 } from './common';
 
 const SHADOW_RES = 256;
@@ -25,7 +25,11 @@ function shapeCreek(world: World): { height: Float32Array; creekDist: Float32Arr
   const { n, hn, cell, creek } = world;
   const out = Float32Array.from(world.height);
   const nc = creek.length / 2;
-  const R = 15, W = 4.6;
+  const R = 15;
+  // cumulative arc length along the centerline, so width and bank height can vary with distance downstream
+  const arc = new Float32Array(nc);
+  for (let k = 1; k < nc; k++) arc[k] = arc[k - 1] + Math.hypot(creek[2 * k] - creek[2 * k - 2], creek[2 * k + 1] - creek[2 * k - 1]);
+  const arcAt = new Float32Array(hn * hn);
   const dC = new Float32Array(hn * hn).fill(1e9);
   const px = new Float32Array(hn * hn);
   const pz = new Float32Array(hn * hn);
@@ -43,7 +47,7 @@ function shapeCreek(world: World): { height: Float32Array; creekDist: Float32Arr
         const qx = ax + dx * t, qz = az + dz * t;
         const d = Math.hypot(x - qx, z - qz);
         const v = j * hn + i;
-        if (d < dC[v]) { dC[v] = d; px[v] = qx; pz[v] = qz; }
+        if (d < dC[v]) { dC[v] = d; px[v] = qx; pz[v] = qz; arcAt[v] = arc[k] + t * Math.sqrt(l2); }
       }
     }
   }
@@ -70,12 +74,16 @@ function shapeCreek(world: World): { height: Float32Array; creekDist: Float32Arr
     if (Number.isNaN(sv)) continue;
     const sim = world.height[v];
     let h: number;
+    const along = arcAt[v];
+    // channel half-width wanders 3.0 to 5.6 m and the bank height varies, so the creek never reads as a straight canal
+    const W = 3.0 + 2.6 * vnoise2(along * 0.028, 3.7, 5);
+    const bankH = 0.28 + 0.42 * vnoise2(along * 0.06 + 9.0, 1.3, 9);
     if (d < W) {
       const u = d / W;
-      h = sv - 0.55 * (1 - u * u);
+      h = sv - 0.5 * (1 - u * u);
     } else {
-      const hb = sv + 0.5 * smoothstep(W, W + 2.2, d);
-      const j = smoothstep(W + 2.2, R, d);
+      const hb = sv + bankH * smoothstep(W, W + 3.0, d);
+      const j = smoothstep(W + 3.0, R, d);
       h = hb * (1 - j) + sim * j;
     }
     out[v] = h;
@@ -139,8 +147,18 @@ export class Terrain {
 
     // ---- render heights: smooth creek channel and banks (see shapeCreek)
     const shaped = shapeCreek(world);
-    this.renderHeight = shaped.height;
     this.creekDist = shaped.creekDist;
+    // the sim's valley bowl ends in a sharp rim crest right at the border, which frames the playable square from above.
+    // Ease the last 50 m of ground toward a smoothed version so the rim rolls into the far ring.
+    const blurred = boxBlur(boxBlur(shaped.height, hn, 20), hn, 20);
+    this.renderHeight = Float32Array.from(shaped.height);
+    for (let j = 0; j < hn; j++) {
+      for (let i = 0; i < hn; i++) {
+        const dEdge = Math.min(i, j, hn - 1 - i, hn - 1 - j) * cell;
+        const w = smoothstep(50, 0, dEdge);
+        if (w > 0) this.renderHeight[j * hn + i] = shaped.height[j * hn + i] * (1 - w) + blurred[j * hn + i] * w;
+      }
+    }
     const rh = this.renderHeight;
 
     // ---- data textures
@@ -172,7 +190,6 @@ export class Terrain {
     const S = size;
     // Beyond the playable square the boundary profile (rim, creek gap) is blurred and faded into a rim baseline
     // so nothing gets extruded outward as a straight canyon, then the rim keeps rising and rolls into hazy hills.
-    const blurred = boxBlur(boxBlur(rh, hn, 20), hn, 20);
     let rimSum = 0, rimCount = 0;
     for (let i = 0; i < hn; i++) {
       rimSum += blurred[i] + blurred[(hn - 1) * hn + i] + blurred[i * hn] + blurred[i * hn + hn - 1];
@@ -188,7 +205,7 @@ export class Terrain {
       const d = Math.hypot(dx, dz);
       const hb = sampleHeight(blurred, hn, cell, cx, cz);
       const m = smoothstep(0, 220, d);
-      const base = hb * (1 - m) + (rimBase + 5) * m + (h - hb) * Math.exp(-d / 14);
+      const base = hb * (1 - m) + (rimBase + 5) * m + (h - hb) * Math.exp(-d / 38);
       const gain = 0.2 * L * (1 - Math.exp(-d / L));
       const ramp = smoothstep(0, 220, d);
       const far = smoothstep(150, 2600, d);
@@ -196,9 +213,11 @@ export class Terrain {
       const big = fbm2(x * 0.0021 + 7.3, z * 0.0021 - 3.1, 4, 11);
       const mid = fbm2(x * 0.0075 - 2.2, z * 0.0075 + 8.4, 3, 29);
       const near = fbm2(x * 0.02 + 1.7, z * 0.02 - 6.1, 3, 41);
-      const midA = 1 - smoothstep(220, 520, d);
-      const nearA = 1 - smoothstep(40, 130, d);
-      return base + gain + ramp * (6 + 24 * big + 12 * mid * midA + 5 * near * nearA) + far * (20 + 90 * big) + d * 0.008;
+      // relief at the scales the valley itself has (about 130 m and 50 m hills) starts right at the border, so the far ring
+      // continues the valley instead of looking like a smooth plateau around a bumpy square
+      const midA = (1 - smoothstep(260, 620, d)) * smoothstep(0, 50, d);
+      const nearA = (1 - smoothstep(60, 170, d)) * smoothstep(0, 22, d);
+      return base + gain + ramp * (6 + 24 * big) + 16 * (mid - 0.5) * midA + 9 * (near - 0.5) * nearA + far * (20 + 90 * big) + d * 0.008;
     };
 
     this.heightAt = (x: number, z: number) => (this.axis ? this.meshHeight(x, z) : this.heightFn(x, z));
@@ -273,13 +292,26 @@ export class Terrain {
           float d = texelFetch(tExt, i0 + ivec2(1, 1), 0).r;
           return mix(mix(a, b, t.x), mix(c, d, t.x), t.y);
         }
-        float blockerH(vec2 p){
+        float outsideDist(vec2 p){
+          vec2 q = max(vec2(0.0) - p, p - vec2(uWorld));
+          return max(max(q.x, q.y), 0.0);
+        }
+        // Blockers: the valley rim and the first stretch of the far ring cast shadows into the valley; far hills only
+        // shade other far terrain (a valley point sees the far ring as a skyline, never as a shadow caster).
+        float blockerH(vec2 p, float wStart){
           bool inside = p.x >= 0.0 && p.y >= 0.0 && p.x <= uWorld && p.y <= uWorld;
-          return inside ? tgHeightAt(p) : extHeightAt(p);
+          float hIn = tgHeightAt(p);
+          float h = extHeightAt(p);
+          float he = tgHeightAt(clamp(p, vec2(0.0), vec2(uWorld)));
+          h = mix(h, he + (h - he) * 0.45, 1.0 - wStart);
+          float cut = smoothstep(140.0, 260.0, outsideDist(p)) * (1.0 - wStart);
+          float hOut = mix(h, -50.0, cut);
+          return inside ? hIn : hOut;
         }
         void main(){
           vec2 xz = uRect.xy + vUv * uRect.z;
-          float h0 = blockerH(xz) + 0.35;
+          float wStart = smoothstep(80.0, 260.0, outsideDist(xz));
+          float h0 = blockerH(xz, 1.0) + 0.35;
           vec2 d2 = uLightDir.xz;
           float len = length(d2);
           float vis = 1.0;
@@ -290,7 +322,7 @@ export class Terrain {
             for (int i = 0; i < 64; i++) {
               vec2 p = xz + d2 * t;
               float hr = h0 + tanEl * t;
-              float hit = blockerH(p) - hr;
+              float hit = blockerH(p, wStart) - hr;
               float w = 0.4 + t * 0.035;
               vis = min(vis, clamp(0.5 - 0.5 * hit / w, 0.0, 1.0));
               t *= uGrow;
@@ -475,8 +507,9 @@ export class Terrain {
             }
           }`,
         );
+      shader.fragmentShader = injectSafeOutput( shader.fragmentShader );
     };
-    mat.customProgramCacheKey = () => 'tallgrass-terrain-v2';
+    mat.customProgramCacheKey = () => 'tallgrass-terrain-v3';
 
     const mesh = new THREE.Mesh(geo, mat);
     mesh.castShadow = false;
@@ -548,11 +581,11 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
 
   vec4 veg = texture2D(tVeg, cuv);
   vec4 st = texture2D(tStatic, cuv);
-  float bio = mix(veg.r, 0.42 + 0.42 * nE, edgeW);
+  float bio = mix(veg.r, 0.5 + 0.35 * nE, edgeW);
   float fert = mix(veg.g, 0.6, edgeW);
   float burn = veg.b * (1.0 - edgeW);
   float fear = veg.a * (1.0 - edgeW);
-  float moist = mix(st.r, 0.24 + 0.42 * nE, edgeW);
+  float moist = mix(st.r, 0.52 + 0.5 * (nE - 0.5) - 0.12 * smoothstep(15.0, 90.0, wp.y), edgeW);
   float cover = st.g * (1.0 - edgeW);
   float wd = mix(st.a * 64.0, 90.0, edgeW);
 
@@ -581,6 +614,9 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
   float riparian = 1.0 - smoothstep(6.0, 34.0, wd);
   float dry = clamp(uCure + (0.55 - moist) * 1.1 + stubA * 0.55 + 0.3 * up + (nB - 0.5) * 0.24 - 0.45 * riparian, 0.0, 1.0);
   vec3 grassCol = mix(uGrassGreen, uGrassDry, dry) * vec3(1.0 + 0.08 * up * dry, 1.0 - 0.07 * up * dry, 1.0 - 0.16 * up * dry);
+  // the blades add their own shading; the far-field ground is the canopy average: slightly olive and a little less saturated
+  grassCol *= vec3(1.04, 1.01, 0.86);
+  grassCol = mix(vec3(dot(grassCol, vec3(0.3333))), grassCol, 0.8);
   grassCol *= 0.84 + 0.32 * nA;
   grassCol *= 1.0 + (streak - 0.5) * 0.55 * mix(0.3, 1.0, graze);
   grassCol *= 1.0 + (wave - 0.5) * 0.26 * (0.35 + uWind.z);

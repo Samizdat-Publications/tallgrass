@@ -161,14 +161,14 @@ export class Water {
         ${HEIGHT_GLSL}
 
         float rippleH(vec2 p, vec2 dir, float spd, float dist) {
-          vec2 perp = vec2(-dir.y, dir.x);
-          vec2 q = vec2(dot(p, dir) - uTime * spd, dot(p, perp));
-          // large swell is always there so distant water still mottles; finer octaves fade before they alias
-          float wm = 1.0 - smoothstep(60.0, 260.0, dist);
-          float wf = 1.0 - smoothstep(25.0, 110.0, dist);
-          return tgNoise2(q * vec2(0.11, 0.34) + 7.0) * 1.1
-               + tgNoise2(q * vec2(0.8, 2.4)) * 0.55 * wm + tgNoise2(q * vec2(2.0, 5.5) + 13.0) * 0.3 * wm
-               + tgNoise2(q * vec2(4.6, 10.0) + 31.0) * 0.15 * wf;
+          // slow drifting swell plus soft warped ripples; fine octaves fade before they alias, nothing is stretched into streaks
+          vec2 q = p - dir * (uTime * spd);
+          float wm = 1.0 - smoothstep(50.0, 220.0, dist);
+          float wf = 1.0 - smoothstep(20.0, 90.0, dist);
+          float a = tgNoise2(q * 0.22 + 7.0);
+          float b = tgNoise2(q * 0.8 + vec2(a * 2.0, a * 1.3) + 13.0);
+          float c = tgNoise2(q * 2.1 + vec2(b * 1.5) + vec2(uTime * 0.05, 0.0) + 31.0);
+          return a * 1.0 + b * 0.5 * wm + c * 0.18 * wf;
         }
 
         void main() {
@@ -177,7 +177,7 @@ export class Water {
           if (depth < 0.0) discard;
 
           vec3 toCam = cameraPosition - vWorld;
-          float dist = length(toCam);
+          float dist = max(length(toCam), 1e-3);
           vec3 V = toCam / dist;
 
           float flowLen = length(vFlow);
@@ -188,42 +188,44 @@ export class Water {
           float h0 = rippleH(p, dir, spd, dist);
           float hx = rippleH(p + vec2(e, 0.0), dir, spd, dist);
           float hz = rippleH(p + vec2(0.0, e), dir, spd, dist);
-          float rough = 0.45 + 0.55 * min(1.0, flowLen + uWind.z * 0.8);
-          vec3 N = normalize(vec3((h0 - hx) / e * 0.1 * rough, 1.0, (h0 - hz) / e * 0.1 * rough));
+          float far = smoothstep(140.0, 900.0, dist);
+          float rough = (0.45 + 0.55 * min(1.0, flowLen + uWind.z * 0.8)) * (1.0 - 0.75 * far);
+          vec3 N = normalize(vec3((h0 - hx) / e * 0.07 * rough, 1.0, (h0 - hz) / e * 0.07 * rough));
 
           vec3 R = reflect(-V, N);
           R.y = abs(R.y);
           float cosT = clamp(dot(N, V), 0.0, 1.0);
-          float F = clamp(0.07 + 0.93 * pow(1.0 - cosT, 4.0), 0.0, 1.0);
+          float F = clamp(0.045 + 0.955 * pow(1.0 - cosT, 5.0), 0.0, 1.0);
 
-          vec3 sky = tgSkyBase(normalize(vec3(R.x, max(R.y, 0.22), R.z)));
-          float shadow = texture2D(tShadow, vWorld.xz / uWorld).r;
+          float shadow = texture2D(tShadow, clamp(vWorld.xz / uWorld, 0.0, 1.0)).r;
+          float edgeDark = smoothstep(0.02, 0.4, depth);
+          // the reflected sky, darkened toward the banks where trees and grass crowd the water
+          vec3 sky = tgSkyBase(normalize(vec3(R.x, max(R.y, 0.3), R.z)));
+          // the reflection carries some of the dark olive of the banks and trees, more toward the edges
+          sky = mix(sky * vec3(0.5, 0.58, 0.46), sky * 0.95, edgeDark);
 
-          // sun glint: tight lobe on the rippled surface plus a broad sheen near the sun
+          // sun/moon glitter: a broad continuous sheen plus a soft hot core, never single sparkles
           float rd = max(dot(R, uLightDir), 0.0);
-          vec3 glint = uLightColor * (pow(rd, 900.0) * 6.0 + pow(rd, 120.0) * 0.5 + pow(rd, 10.0) * 0.06) * shadow;
-          glint *= (1.0 - uOvercast * 0.8);
+          vec3 glint = uLightColor * (pow(rd, 260.0) * 1.5 + pow(rd, 36.0) * 0.12 + pow(rd, 5.0) * 0.012) * shadow;
+          glint *= (1.0 - uOvercast * 0.8) * mix(0.45, 1.0, edgeDark);
 
-          // body color: bed seen through shallow water fading to deep teal
-          vec3 absorb = 1.0 - exp(-depth * vec3(1.9, 0.95, 0.55));
-          vec3 bed = vec3(0.13, 0.11, 0.08);
-          vec3 deepC = vec3(0.018, 0.085, 0.12);
+          // body: muddy silt in the shallows fading to dark olive-teal where it is deeper
+          float silt = 0.5 + 0.5 * tgNoise2(p * 0.33 + vec2(uTime * 0.03, 0.0));
+          vec3 siltC = vec3(0.075, 0.085, 0.06);
+          vec3 deepC = vec3(0.018, 0.065, 0.075);
+          float k = 1.0 - exp(-depth * (1.5 + 1.3 * silt));
           float amb = (uSkyMid.r + uSkyMid.g + uSkyMid.b) * 0.3;
-          vec3 bodyLight = vec3(amb) * 1.2 + uLightColor * 0.1 * shadow;
-          vec3 body = mix(bed, deepC, absorb) * bodyLight;
+          vec3 body = mix(siltC, deepC, k) * (vec3(amb) * 1.1 + uLightColor * 0.09 * shadow);
 
           vec3 col = mix(body, sky, F) + glint;
 
-          float clearA = 1.0 - exp(-depth * 2.6);
-          float alpha = max(clearA * 0.92, F);
-          alpha *= smoothstep(0.0, 0.06, depth);
+          float alpha = max(1.0 - exp(-depth * 3.0), F * 0.9) * 0.97;
+          alpha *= smoothstep(0.0, 0.09, depth);
+          // the creek dissolves into mud before the edge of the world instead of stopping at a hard line
+          float edgeW = min(min(p.x, uWorld - p.x), min(p.y, uWorld - p.y));
+          alpha *= smoothstep(0.0, 20.0, edgeW);
 
-          // faint foam / wet lip at the waterline
-          float foam = (1.0 - smoothstep(0.015, 0.14, depth)) * (0.4 + 0.6 * tgNoise2(p * 3.0 + uTime * 0.25));
-          col = mix(col, vec3(0.78, 0.83, 0.88) * (amb * 1.6 + 0.25), foam * 0.35);
-          alpha = max(alpha, foam * 0.45 * smoothstep(0.0, 0.02, depth));
-
-          gl_FragColor = vec4(col, clamp(alpha, 0.0, 1.0));
+          gl_FragColor = vec4(min(max(col, vec3(0.0)), vec3(64.0)), clamp(alpha, 0.0, 1.0));
         }`,
       transparent: true,
       depthWrite: true,
