@@ -14,7 +14,7 @@
 | typescript | 7.0.2 | project-local | installed |
 | tsx | 4.23.15 | project-local | installed |
 | playwright | 1.63.0 | project-local, browsers in `%LOCALAPPDATA%\ms-playwright` (chromium-1243 already present) | OK, see GPU notes |
-| wrangler | 4.147.0 | project-local (`npx wrangler`) | `whoami` OK, logged in via OAuth (owner's personal Cloudflare account) |
+| wrangler | 4.147.0 | project-local (`npx wrangler`) | `whoami` OK (owner's personal Cloudflare account). Placeholder deploy OK: `npx wrangler deploy --name tallgrass --assets <dir> --compatibility-date 2026-10-01` -> https://tallgrass.stewartgregerson.workers.dev |
 | git | 2.53.0 | | OK |
 | gh | 2.97.0 | logged in as `Samizdat-Publications` (scopes: repo, workflow, gist, read:org) | OK |
 | ffmpeg | 9.0.2 (gyan.dev full build) | WinGet link on PATH | OK, already installed (no install needed) |
