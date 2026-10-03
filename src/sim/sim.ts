@@ -359,6 +359,8 @@ export class Sim implements SimLike {
     const a = this.a;
     for (let pk = 0; pk < MAX_PACKS; pk++) {
       if (!this.packAlive[pk]) continue;
+      // a pack budded earlier in this same loop has no members counted yet: leave it be until next tick
+      if (this.packFounded[pk] === this.tick) continue;
       if (this.packSize[pk] === 0) {
         this.packAlive[pk] = 0;
         this.event('packLost', Sp.Wolf, this.packDenX[pk], this.packDenY[pk], this.packSerial[pk], this.tick - this.packFounded[pk]);
@@ -378,7 +380,7 @@ export class Sim implements SimLike {
       if ((this.tick + pk) % 20 === 0) {
         const hungry = this.packEnergy[pk] / this.packSize[pk] < 0.55;
         this.sniffPrey(pk, this.p.wolfTerritory * (hungry ? 1.5 : 1.2));
-        if (this.packSize[pk] > this.p.wolfPackMax) this.disperse(pk);
+        if (this.packSize[pk] > this.p.wolfPackMax && this.packStore[pk] > 0.8) this.disperse(pk);
         else if (this.packSize[pk] <= 2 && (this.packAlphaF[pk] < 0 || this.packAlphaM[pk] < 0)) this.mergeRemnant(pk);
         else if (this.packAlphaF[pk] < 0) this.fillVacancy(pk, 0);
         else if (this.packAlphaM[pk] < 0) this.fillVacancy(pk, 1);
@@ -402,7 +404,7 @@ export class Sim implements SimLike {
           a.energy[c] = 0.8;
         }
         // a big, well-fed pack can raise a second litter from another female
-        if (this.packSize[pk] >= 6 && this.packStore[pk] > 1.2) {
+        if (this.packSize[pk] >= 6 && this.packStore[pk] > 3) {
           let f2 = -1;
           for (let k = 0; k < this.predN; k++) {
             const i = this.predList[k];
@@ -558,6 +560,8 @@ export class Sim implements SimLike {
         if (cnt === 0) continue;
         const wx = (xx + 0.5) * bs, wy = (yy + 0.5) * bs;
         if (Math.hypot(wx - dx0, wy - dy0) > range) continue;
+        // big herds are easy to scent; a few scattered animals mostly go unnoticed (a refuge for sparse prey)
+        if (this.rng.next() > 1 - Math.exp(-cnt / this.p.wolfScentHerd)) continue;
         const v = cnt / (Math.hypot(wx - cx, wy - cy) + 50);
         if (v > best) { best = v; bxw = wx; byw = wy; }
       }
@@ -1234,7 +1238,7 @@ export class Sim implements SimLike {
           const condition = 0.4 + 1.2 * et * et;
           // herd defense: adults packed together stand their ground; a calf beside a healthy mother is shielded
           const guards = this.guardsNear(t, isYoung);
-          const defense = isYoung ? (guards > 0 ? 1 + Pt.defense * 1.7 : 1) : 1 + Pt.defense * Math.min(5, guards);
+          const defense = isYoung ? (guards > 0 ? 1 + Pt.defense : 1) : 1 + Pt.defense * Math.min(5, guards);
           const resist = Pt.toughness * a.genes[t * NG + G_SIZE] * young * condition * defense * (a.infected[t] > 0 ? 0.7 : 1);
           const pk2 = p.wolfKillChance * a.genes[i * NG + G_SIZE] * (1 + 0.45 * Math.min(4, helpers)) / resist;
           dbg('attack_roll');
@@ -1308,7 +1312,8 @@ export class Sim implements SimLike {
     if (k >= 0) {
       const dx = this.cX[k] - x, dy = this.cY[k] - y, d = Math.sqrt(dx * dx + dy * dy) + 0.01;
       if (a.energy[i] < 0.9) {
-        if (d < 2.5 && a.alt[i] < 1) { state = St.Eat; a.timer[i] = k; }
+        a.timer[i] = k;
+        if (d < 2.5 && a.alt[i] < 1) { state = St.Eat; }
         else { dvx = (dx / d) * fly; dvy = (dy / d) * fly; state = St.Fly; }
       } else {
         // sated: circle above the kill (the classic tell)
@@ -1340,6 +1345,7 @@ export class Sim implements SimLike {
         a.state[c] = St.Fly;
       }
     }
+    if (k < 0) a.timer[i] = -1;
     a.dvx[i] = dvx; a.dvy[i] = dvy; a.state[i] = state;
   }
 
@@ -1360,8 +1366,10 @@ export class Sim implements SimLike {
       a.vx[i] *= 0.5; a.vy[i] *= 0.5;
       a.alt[i] = Math.max(0, a.alt[i] - 0.4);
     } else {
-      const k = a.energy[i] < 0.9 ? this.nearestCarcass(a.x[i], a.y[i], 4) : -1;
-      const targetAlt = k >= 0 ? 0 : 22 + (a.id[i] % 9) * 2.5;
+      // descend only onto the carcass chosen while thinking (no per-tick scan of every carcass)
+      const k = a.energy[i] < 0.9 ? a.timer[i] : -1;
+      const near = k >= 0 && k < this.cN && Math.abs(this.cX[k] - a.x[i]) < 4 && Math.abs(this.cY[k] - a.y[i]) < 4;
+      const targetAlt = near ? 0 : 22 + (a.id[i] % 9) * 2.5;
       a.alt[i] += (targetAlt - a.alt[i]) * 0.03;
       a.vx[i] += (a.dvx[i] - a.vx[i]) * 0.08;
       a.vy[i] += (a.dvy[i] - a.vy[i]) * 0.08;

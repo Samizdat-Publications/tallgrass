@@ -22,6 +22,11 @@ import type { EnvState } from '../sim/types';
 
 export interface GrassOptions {
   quality?: 'high' | 'medium';
+  /**
+   * The engine's hill-shadow uniform (engine.uniforms.terrainShadow: R = visibility 0..1 over the whole world).
+   * Optional: if omitted, the field looks for it on the scene (the water material shares it) at runtime.
+   */
+  terrainShadow?: { value: THREE.Texture | null };
 }
 
 export interface GrassSun {
@@ -49,6 +54,8 @@ export interface GrassParams {
   windGain: number;
   /** How much the base of the grass darkens (0 none, 1 strong). */
   baseOcclusion: number;
+  /** Warm bounce fill from the surrounding sunlit field, as a fraction of the sun diffuse (lifts shadowed grass). */
+  bounce: number;
   /** Color saturation of the grass (1 = as authored). Raise to compensate for desaturating tone mappers. */
   saturation: number;
   /** Debug view: 0 off, 1 albedo, 2 diffuse, 3 translucency, 4 ambient, 5 specular, 6 shadow, 7 gust, 8 combing noise, 9 LOD level colors. */
@@ -60,7 +67,8 @@ const CELL_SIZE = [4, 8, 16, 32];
 const RING_EDGE = [14, 40, 90, 175]; // outer edge (m) of each level, measured with the shared distance metric
 const FADE_START = 120;
 const FADE_END = 175;
-const HALF_DIST = 18; // D(d) = D0 / (1 + (d / HALF_DIST)^2)
+const HALF_DIST = 18; // D(d) = D0 / (1 + (d / HALF_DIST)^2)^DENS_POW
+const DENS_POW = 0.8; // below 1 keeps the mid and far field dense enough to read as a field, not stipple
 const VERTEX_ROWS: number[][] = [
   [0, 0.18, 0.4, 0.62, 0.8, 0.9],
   [0, 0.35, 0.7],
@@ -223,6 +231,7 @@ uniform sampler2D uVeg;
 uniform sampler2D uStat0;
 uniform sampler2D uStat1;
 uniform sampler2D uWind;
+uniform sampler2D uTgShadow;
 uniform vec4 uWorld;   // size, n, cell, hn
 uniform float uTime;
 uniform vec2 uWindDir;
@@ -246,6 +255,7 @@ varying vec3 vWP;
 varying vec4 vP0;
 varying vec4 vP1;
 varying vec4 vP2;
+varying float vTS;
 
 uint pcg(uint v) {
   uint s = v * 747796405u + 2891336453u;
@@ -262,7 +272,9 @@ float terrainH(vec2 p) {
   float b = texelFetch(uHeightTex, i + ivec2(1, 0), 0).r;
   float c = texelFetch(uHeightTex, i + ivec2(0, 1), 0).r;
   float d = texelFetch(uHeightTex, i + ivec2(1, 1), 0).r;
-  return mix(mix(a, b, t.x), mix(c, d, t.x), t.y);
+  // same triangulation as the terrain mesh ((a, c, b) and (b, c, d)) so blades sit exactly on the drawn surface
+  return (t.x + t.y <= 1.0) ? a + (b - a) * t.x + (c - a) * t.y
+                            : d + (c - d) * (1.0 - t.x) + (b - d) * (1.0 - t.y);
 }
 
 vec4 vegAt(vec2 p) {
@@ -282,7 +294,7 @@ vec4 vegAt(vec2 p) {
 void cullBlade() {
   gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
   vUv = vec2(0.0); vN = vec3(0.0, 1.0, 0.0); vNg = vec3(0.0, 1.0, 0.0); vWP = vec3(0.0);
-  vP0 = vec4(0.0); vP1 = vec4(0.0); vP2 = vec4(0.0);
+  vP0 = vec4(0.0); vP1 = vec4(0.0); vP2 = vec4(0.0); vTS = 1.0;
 }
 
 void main() {
@@ -312,7 +324,7 @@ void main() {
   float ringLo = uRing[LEVEL - 1];
 #endif
   float ringHi = uRing[LEVEL];
-  float dens = uDens.x / (1.0 + (dist / uDens.y) * (dist / uDens.y));
+  float dens = uDens.x / pow(1.0 + (dist / uDens.y) * (dist / uDens.y), DENSPOW);
   dens *= 1.0 - smoothstep(uDens.z, uDens.w, dist);
   float keepD = dens / MAXDENS;
   if (dist < ringLo || dist >= ringHi || rThin >= keepD) { cullBlade(); return; }
@@ -336,6 +348,8 @@ void main() {
   if (rThin >= keepD * pres) { cullBlade(); return; }
 
   float gy = terrainH(p);
+  // hill shadow from the engine's horizon map (R = visibility), sampled once per blade at its root
+  vTS = texture(uTgShadow, clamp(p / uWorld.x, vec2(0.0), vec2(1.0))).r;
   vec3 root = vec3(p.x, gy - 0.03, p.y);
 
   float rA = u01(h4), rB = u01(h5), rC = u01(h6);
@@ -449,6 +463,7 @@ uniform float uWindStr;
 uniform float uAO;
 uniform float uDebug;
 uniform float uSat;
+uniform float uBounce;
 uniform vec3 uGreenB;
 uniform vec3 uGreenM;
 uniform vec3 uGreenT;
@@ -468,17 +483,24 @@ varying vec3 vWP;
 varying vec4 vP0;
 varying vec4 vP1;
 varying vec4 vP2;
+varying float vTS;
+
+// Never let a zero-length or NaN input escape: every normalize in this shader goes through here.
+vec3 sn(vec3 v) { return v * inversesqrt(max(dot(v, v), 1e-12)); }
 
 vec3 grad3(vec3 b, vec3 m, vec3 t, float v) {
   return mix(mix(b, m, smoothstep(0.0, 0.5, v)), t, smoothstep(0.4, 1.0, v));
 }
 
 void main() {
-  vec3 V = normalize(cameraPosition - vWP);
-  vec3 Nb = normalize(vN);
+  vec3 V = sn(cameraPosition - vWP);
+  vec3 Nb = sn(vN);
   vec3 Nf = dot(Nb, V) >= 0.0 ? Nb : -Nb;
-  vec3 Ng = normalize(vNg);
-  float v = vUv.y;
+  vec3 Ng = sn(vNg);
+  // MSAA interpolates at the pixel centre, which can sit outside a sliver of a blade: v and side leave their ranges
+  // (pow of a negative number was the NaN that blacked out the whole HDR frame), so clamp them.
+  float v = clamp(vUv.y, 0.0, 1.0);
+  float sideX = clamp(vUv.x, -1.0, 1.0);
   float dry = vP0.x;
   float bright = vP0.y;
   float hue = vP0.z;
@@ -496,7 +518,7 @@ void main() {
   float cb = smoothstep(0.12, 0.88, vP2.z);
   albedo *= mix(0.5, 1.32, cb) * (0.86 + 0.28 * vP2.w);
   albedo = mix(albedo * vec3(1.05, 0.84, 0.66), albedo, smoothstep(0.0, 0.6, cb));
-  albedo *= 1.0 + 0.1 * smoothstep(0.15, 0.0, abs(vUv.x)) - 0.12 * smoothstep(0.6, 1.0, abs(vUv.x));
+  albedo *= 1.0 + 0.1 * smoothstep(0.15, 0.0, abs(sideX)) - 0.12 * smoothstep(0.6, 1.0, abs(sideX));
   albedo *= vec3(1.0 + 0.14 * (hue - 0.5), 1.0, 1.0 - 0.3 * (hue - 0.5));
   albedo = mix(albedo, uStubble * (0.7 + 0.6 * bright), 0.85 * stub);
   float seedTip = seed * smoothstep(0.76, 0.86, v);
@@ -504,24 +526,27 @@ void main() {
   albedo = mix(albedo, uAsh, burn);
 
   // ---- lighting
-  vec3 L = normalize(uSunDir);
-  float shadow = getShadowMask();
-  vec3 Nl = normalize(mix(Nf, Ng, 0.4));
+  vec3 L = sn(uSunDir);
+  float shadow = getShadowMask() * clamp(vTS, 0.0, 1.0);
+  // a slope turned away from the sun shades the blades standing on it (they are only a metre tall), which the
+  // horizon map does not cover
+  shadow *= smoothstep(-0.12, 0.12, dot(Ng, L));
+  vec3 Nl = sn(mix(Nf, Ng, 0.4));
   float ndl = dot(Nl, L);
   float wrap = saturate(ndl * 0.8 + 0.2);
   vec3 diffuse = albedo * uSunColor * wrap * RECIPROCAL_PI * shadow;
 
   float canopyT = mix(0.35, 1.0, smoothstep(0.0, 0.8, vP2.x));
   float backFace = saturate(dot(-Nf, L));
-  float fwd = pow(saturate(dot(-V, L)), 3.0);
-  float transK = pow(backFace, 1.5) * (0.2 + 0.8 * fwd) * (0.12 + 0.88 * pow(v, 1.3)) * (0.55 + 0.9 * bright);
-  vec3 trans = pow(albedo, vec3(0.8)) * uSunColor * transK * uTrans * shadow * RECIPROCAL_PI;
+  float fwd = pow(clamp(dot(-V, L), 0.0, 1.0), 3.0);
+  float transK = pow(max(backFace, 0.0), 1.5) * (0.2 + 0.8 * fwd) * (0.12 + 0.88 * pow(max(v, 0.0), 1.3)) * (0.55 + 0.9 * max(bright, 0.0));
+  vec3 trans = pow(max(albedo, vec3(0.0)), vec3(0.8)) * uSunColor * transK * uTrans * shadow * RECIPROCAL_PI;
   trans *= mix(1.0, canopyT, 0.8);
 
-  vec3 Namb = normalize(mix(Nf, vec3(0.0, 1.0, 0.0), 0.6));
+  vec3 Namb = sn(mix(Nf, vec3(0.0, 1.0, 0.0), 0.6));
   vec3 irr = ambientLightColor;
 #if NUM_HEMI_LIGHTS > 0
-  vec3 Nv = normalize((viewMatrix * vec4(Namb, 0.0)).xyz);
+  vec3 Nv = sn((viewMatrix * vec4(Namb, 0.0)).xyz);
   #pragma unroll_loop_start
   for (int i = 0; i < NUM_HEMI_LIGHTS; i++) {
     irr += getHemisphereLightIrradiance(hemisphereLights[i], Nv);
@@ -536,11 +561,13 @@ void main() {
   // shorter blades sit under taller ones: darker overall, which gives the field its light and dark structure
   float canopy = mix(1.0, mix(0.45, 1.0, smoothstep(0.0, 0.75, vP2.x)), 0.25 + 0.6 * aoDist);
   ao *= canopy;
+  irr += uSunColor * uBounce * (0.5 + 0.5 * clamp(L.y, 0.0, 1.0));
   vec3 ambient = albedo * irr * RECIPROCAL_PI * ao;
 
-  vec3 Hh = normalize(L + V);
-  vec3 Ns = normalize(mix(Nf, Ng, 0.25));
-  float sp = pow(saturate(dot(Ns, Hh)), 48.0) * 0.55 + pow(saturate(dot(Ns, Hh)), 8.0) * 0.08;
+  vec3 Hh = sn(L + V);
+  vec3 Ns = sn(mix(Nf, Ng, 0.25));
+  float nh = clamp(dot(Ns, Hh), 0.0, 1.0);
+  float sp = pow(nh, 48.0) * 0.55 + pow(nh, 8.0) * 0.08;
   vec3 spec = uSunColor * sp * uSpec * smoothstep(0.3, 1.0, v) * shadow * RECIPROCAL_PI * 1.6 * (1.0 - smoothstep(15.0, 90.0, vP2.y));
 
   vec3 col = ambient + (diffuse + trans) * mix(1.0, ao, 0.75) + spec * canopy;
@@ -558,6 +585,9 @@ void main() {
     else if (uDebug < 8.5) col = vec3(vP2.z);
     else col = (LEVEL == 0 ? vec3(1.0, 0.1, 0.1) : LEVEL == 1 ? vec3(0.1, 1.0, 0.1) : LEVEL == 2 ? vec3(0.1, 0.3, 1.0) : vec3(1.0, 1.0, 0.1)) * (0.4 + 0.6 * v);
   }
+  // belt and braces: the scene target is half float and bloom smears any NaN or Inf over the whole frame.
+  // min/max drop a NaN operand on D3D, so this also scrubs NaN.
+  col = min(max(col, vec3(0.0)), vec3(64.0));
   gl_FragColor = vec4(col, 1.0);
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
@@ -577,6 +607,7 @@ export class GrassField {
     bladeWidth: 0.014,
     windGain: 1,
     baseOcclusion: 0.22,
+    bounce: 0.07,
     saturation: 1,
     debug: 0,
   };
@@ -598,6 +629,9 @@ export class GrassField {
   private stat0: THREE.DataTexture;
   private stat1: THREE.DataTexture;
   private noiseTex: THREE.DataTexture;
+  private terrainShadowU: { value: THREE.Texture | null } | null = null;
+  private whiteTex: THREE.DataTexture;
+  private frameNo = 0;
   private vegVersion = -1;
   private lastVegRebuild = -1e9;
   private frustum = new THREE.Frustum();
@@ -615,6 +649,9 @@ export class GrassField {
     this.heightTex = this.makeHeightTexture();
     [this.stat0, this.stat1] = this.makeStaticTextures();
     this.noiseTex = makeNoiseTexture();
+    this.whiteTex = new THREE.DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1, THREE.RGBAFormat, THREE.UnsignedByteType);
+    this.whiteTex.needsUpdate = true;
+    this.terrainShadowU = opts.terrainShadow ?? null;
     this.cellData = new Float32Array(MAX_CELLS_PER_LEVEL * 4 * 4);
     this.cellTex = new THREE.DataTexture(this.cellData, MAX_CELLS_PER_LEVEL, 4, THREE.RGBAFormat, THREE.FloatType);
     this.cellTex.minFilter = this.cellTex.magFilter = THREE.NearestFilter;
@@ -628,6 +665,7 @@ export class GrassField {
       uStat0: { value: this.stat0 },
       uStat1: { value: this.stat1 },
       uWind: { value: this.noiseTex },
+      uTgShadow: { value: this.whiteTex },
       uWorld: { value: new THREE.Vector4(world.size, world.n, world.cell, world.hn) },
       uTime: { value: 0 },
       uWindDir: { value: new THREE.Vector2(1, 0) },
@@ -651,6 +689,7 @@ export class GrassField {
       uAO: { value: 0.22 },
       uDebug: { value: 0 },
       uSat: { value: 1 },
+      uBounce: { value: 0.07 },
       uGreenB: { value: new THREE.Color() },
       uGreenM: { value: new THREE.Color() },
       uGreenT: { value: new THREE.Color() },
@@ -720,7 +759,7 @@ export class GrassField {
     const cs = CELL_SIZE[l];
     const nc = Math.round(w.size / cs);
     const innerD = l === 0 ? 0 : RING_EDGE[l - 1];
-    const demand = this.d0 / (1 + (innerD / HALF_DIST) ** 2);
+    const demand = this.d0 / (1 + (innerD / HALF_DIST) ** 2) ** DENS_POW;
     const grid = Math.ceil(Math.sqrt(demand * cs * cs));
     const blades = grid * grid;
     const maxDens = blades / (cs * cs);
@@ -754,6 +793,7 @@ export class GrassField {
         NBLADE: blades,
         CELLSZ: cs.toFixed(1),
         MAXDENS: maxDens.toFixed(3),
+        DENSPOW: DENS_POW.toFixed(2),
         HAS_NORMAL: '',
       },
     });
@@ -837,7 +877,7 @@ export class GrassField {
     const tx = fx - i, ty = fy - j;
     const hn = w.hn, h = w.height;
     const a = h[j * hn + i], b = h[j * hn + i + 1], c = h[(j + 1) * hn + i], d = h[(j + 1) * hn + i + 1];
-    return (a + (b - a) * tx) * (1 - ty) + (c + (d - c) * tx) * ty;
+    return tx + ty <= 1 ? a + (b - a) * tx + (c - a) * ty : d + (c - d) * (1 - tx) + (b - d) * (1 - ty);
   }
 
   // ---- per frame
@@ -866,6 +906,10 @@ export class GrassField {
     u.uCure.value = keyCurve(CURE_KEYS, env.season);
     u.uSeedFrac.value = keyCurve(SEED_KEYS, env.season);
 
+    // hill shadows: use the engine's horizon map when it exists, plain white (no shadow) otherwise
+    if (!this.terrainShadowU && (this.frameNo++ & 31) === 0) this.terrainShadowU = this.findTerrainShadow();
+    u.uTgShadow.value = this.terrainShadowU?.value ?? this.whiteTex;
+
     u.uTime.value = timeSec;
     u.uWindDir.value.set(Math.cos(env.windDir), Math.sin(env.windDir));
     u.uWindStr.value = env.windStrength;
@@ -880,6 +924,7 @@ export class GrassField {
     u.uAO.value = 1 - P.baseOcclusion;
     u.uDebug.value = P.debug;
     u.uSat.value = P.saturation;
+    u.uBounce.value = P.bounce;
 
     u.uSunDir.value.copy(sun.dir).normalize();
     u.uSunColor.value.copy(sun.color).multiplyScalar(P.lightScale);
@@ -919,6 +964,25 @@ export class GrassField {
     this.stats.vertices = verts;
     this.stats.expectedBlades = expected;
     this.cellTex.needsUpdate = true;
+  }
+
+  /** Share the horizon-shadow uniform with the rest of the scene (the water material holds the same object). */
+  private findTerrainShadow(): { value: THREE.Texture | null } | null {
+    let root: THREE.Object3D = this.object3D;
+    while (root.parent) root = root.parent;
+    let found: { value: THREE.Texture | null } | null = null;
+    root.traverse((o) => {
+      if (found) return;
+      const m = (o as THREE.Mesh).material as THREE.ShaderMaterial | undefined;
+      const t = m && !Array.isArray(m) ? m.uniforms?.tShadow : undefined;
+      if (t && t.value && (t.value as THREE.Texture).name === 'terrain.shadow') found = t as { value: THREE.Texture | null };
+    });
+    return found;
+  }
+
+  /** Point the field at the engine's terrain shadow uniform explicitly (engine.uniforms.terrainShadow). */
+  setTerrainShadow(u: { value: THREE.Texture | null } | null): void {
+    this.terrainShadowU = u;
   }
 
   private selectCells(l: number, cam: THREE.Vector3, camDy: number): number {
@@ -973,5 +1037,6 @@ export class GrassField {
     this.stat1.dispose();
     this.noiseTex.dispose();
     this.cellTex.dispose();
+    this.whiteTex.dispose();
   }
 }

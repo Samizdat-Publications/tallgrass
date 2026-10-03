@@ -88,6 +88,7 @@ export interface Params {
   wolfOpportunism: number;
   wolfTestGiveUp: number;
   wolfStrife: number;
+  wolfScentHerd: number;
   ravenNestSites: number;
   // carcasses
   carcassRot: number;
@@ -113,7 +114,7 @@ export function defaultParams(): Params {
     wariness: 0.4, defense: 0.6, camo: 0.25,
   });
   species[Sp.Wolf] = base({
-    maxAge: 9600, matureAge: 1200, gestation: 0, birthCooldown: 0, litter: 5.2,
+    maxAge: 9600, matureAge: 1200, gestation: 0, birthCooldown: 0, litter: 4.5,
     walkSpeed: 2.2, runSpeed: 12.5, stamina: 110, sight: 60, metabolism: 1 / 950, thirst: 1 / 1600,
     meat: 1.5, toughness: 1.4, initial: 36, herdRadius: 18,
   });
@@ -153,18 +154,19 @@ export function defaultParams(): Params {
     alarmContagion: 0.75,
     fearVigilance: 2.5,
     wolfHuntHunger: 0.62,
-    wolfKillChance: 0.25,
+    wolfKillChance: 0.3,
     wolfEatRate: 0.012,
     wolfPackStoreShare: 0.45,
     wolfPackMax: 7,
-    wolfDenMinDist: 140,
-    wolfTerritory: 80,
+    wolfDenMinDist: 180,
+    wolfTerritory: 100,
     wolfPupDenAge: 450,
     wolfInjuryChance: 0.01,
     wolfImmigration: 0,
-    wolfOpportunism: 0.15,
-    wolfTestGiveUp: 0.08,
+    wolfOpportunism: 0.25,
+    wolfTestGiveUp: 0.05,
     wolfStrife: 0.002,
+    wolfScentHerd: 12,
     ravenNestSites: 160,
     carcassRot: 0.0009,
     carcassSoil: 0.05,

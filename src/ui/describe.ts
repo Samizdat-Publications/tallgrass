@@ -133,18 +133,33 @@ export function regionWord(x: number, y: number): string {
 // ages and captions
 // ---------------------------------------------------------------------------------------------------------
 
-/** Age in ticks to "6 years" / "1.4 years" (one decimal under 2 years). */
-export function ageText(ticks: number): string {
-  const y = ticks / YEAR_TICKS;
+/** Biological lifespans in years, by species id. Sim time is compressed, so ages are shown on this scale. */
+export const LIFESPAN_YEARS = [20, 12, 15, 12, 5, 14];
+/** Sim lifespans in ticks (src/sim/params.ts), used where only a species id is known (the "elder" event). */
+export const MAX_AGE_TICKS = [3600, 9600, 7200, 3000, 3000, 3000];
+
+/** An age in ticks on the biological scale: age / maxAge * the species' real lifespan. */
+export function bioYears(ageTicks: number, sp: number, maxAgeTicks?: number): number {
+  const max = maxAgeTicks && maxAgeTicks > 0 ? maxAgeTicks : MAX_AGE_TICKS[sp] ?? 3000;
+  return (ageTicks / max) * (LIFESPAN_YEARS[sp] ?? 10);
+}
+
+/** "6 years", "1.4 years", "1 year": whole years from 2 up, one decimal below. */
+export function yearsText(y: number): string {
   if (y < 2) {
-    const t = y.toFixed(1);
+    const t = Math.max(0, y).toFixed(1);
     return t === '1.0' ? '1 year' : `${t} years`;
   }
-  return `${Math.floor(y)} years`;
+  return `${Math.round(y)} years`;
+}
+
+/** Age in ticks to a biological age string for the species. */
+export function ageText(ageTicks: number, sp: number, maxAgeTicks?: number): string {
+  return yearsText(bioYears(ageTicks, sp, maxAgeTicks));
 }
 
 /** Documentary caption: "Bison cow, 6 years". */
-export function animalCaption(sp: number, male: boolean, age: number, matureAge: number, alpha = false): string {
+export function animalCaption(sp: number, male: boolean, age: number, matureAge: number, alpha = false, maxAge?: number): string {
   const juvenile = age < matureAge;
   const S = speciesName(sp);
   let name: string;
@@ -157,7 +172,7 @@ export function animalCaption(sp: number, male: boolean, age: number, matureAge:
     case 5: name = juvenile ? 'Cougar cub' : male ? 'Male cougar' : 'Female cougar'; break;
     default: name = S;
   }
-  return `${name}, ${ageText(age)}`;
+  return `${name}, ${ageText(age, sp, maxAge)}`;
 }
 
 /** "Generation 12, daughter of #18233" (or the founders' line). */
@@ -293,7 +308,7 @@ export function describeEvent(e: SimEvent): EventText {
     case 'rain':
       return { sentence: 'Rain falls across the valley.' };
     case 'elder':
-      return { sentence: `An elder ${sg}, ${ageText(e.a)} old, still roams the valley.` };
+      return { sentence: `An elder ${sg}, ${ageText(e.a, e.sp)} old, still roams the valley.` };
     case 'firstKill': {
       const prey = e.a >= 0 && e.a < SINGULAR.length ? SINGULAR[e.a] : 'animal';
       return { sentence: `The valley sees its first kill: a wolf takes down a ${prey}.` };
@@ -303,11 +318,6 @@ export function describeEvent(e: SimEvent): EventText {
     default:
       return { sentence: 'Something stirs in the valley.' };
   }
-}
-
-/** Whether the event has a position the camera can fly to. */
-export function hasPosition(e: SimEvent): boolean {
-  return e.x !== 0 || e.y !== 0;
 }
 
 /** Format a count for display: 1,234. */

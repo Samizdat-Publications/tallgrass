@@ -170,7 +170,7 @@ export class Inspector {
   }
 
   private refresh(d: AnimalDetail): void {
-    setText(this.caption, animalCaption(d.sp, d.male, d.age, d.matureAge, d.alpha));
+    setText(this.caption, animalCaption(d.sp, d.male, d.age, d.matureAge, d.alpha, d.maxAge));
     setText(this.activity, capFirst(activityPhrase(d.sp, d.state)));
 
     // chips: pack, alpha, pregnant, infected

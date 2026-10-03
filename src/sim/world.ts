@@ -252,10 +252,11 @@ export function generateWorld(seed: number, size = WORLD_SIZE, n = GRID_N): Worl
     if (water[c]) continue;
     const wd = waterDist[c];
     const grove = noise.fbm(x / 45 + 100, y / 45 + 100, 3);
+    // trees hug the water like the concept art; the open prairie stays open
     let p = 0;
     if (wd > 3 && wd < 26) p = 0.55 + grove;
-    else if (wd < 70) p = 0.15 * (grove - 0.15) * 4 * moisture[c];
-    else p = 0.06 * Math.max(0, grove - 0.35) * 6 * moisture[c];
+    else if (wd < 55) p = 0.06 * (grove - 0.15) * 4 * moisture[c];
+    else p = 0.012 * Math.max(0, grove - 0.4) * 6 * moisture[c];
     if (slope[c] > 0.45) p *= 0.2;
     if (rng.next() < p) {
       const th = rng.range(9, 17) * (wd < 26 ? 1 : 0.75);
@@ -267,10 +268,11 @@ export function generateWorld(seed: number, size = WORLD_SIZE, n = GRID_N): Worl
     const c = cellIndex(x, y, n, cell);
     if (water[c]) continue;
     const s = noise2.fbm(x / 35 - 50, y / 35 + 20, 3);
-    let p = 0.25 * Math.max(0, s + 0.1) * 3;
-    if (waterDist[c] < 40) p += 0.25;
-    if (slope[c] > 0.3) p += 0.2; // draws and hillsides get brush
-    if (rng.next() < p * 0.6) shrubs.push(x, y, rng.range(1.2, 2.6));
+    // brush gathers in draws, on steep ground and near water rather than dotting the open plain
+    let p = 0.12 * Math.max(0, s - 0.05) * 3;
+    if (waterDist[c] < 30) p += 0.3;
+    if (slope[c] > 0.3) p += 0.25;
+    if (rng.next() < p * 0.5) shrubs.push(x, y, rng.range(1.2, 2.6));
   }
   const splat = (x: number, y: number, r: number, amt: number) => {
     const i0 = Math.max(0, Math.floor((x - r) / cell)), i1 = Math.min(n - 1, Math.floor((x + r) / cell));

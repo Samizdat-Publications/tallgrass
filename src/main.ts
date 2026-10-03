@@ -7,7 +7,7 @@ import { GameUI, type OverlayId, type ToolId } from './ui/ui';
 import { generateWorld } from './sim/world';
 import { hashSeed } from './sim/rng';
 import { scenarioById } from './scenarios';
-import { Sp, type Intervention, type Snapshot } from './sim/types';
+import { DAY_TICKS, Sp, type Intervention, type Snapshot } from './sim/types';
 import type { FromWorker, ToWorker } from './sim/worker';
 
 const q = new URLSearchParams(location.search);
@@ -219,3 +219,26 @@ w.__focusHerd = () => { if (pending) focusHerd(pending.agents, pending.count, tr
 w.__select = select;
 w.__animals = animals;
 w.__grass = grass;
+w.__snap = () => pending;
+w.__followId = (id: number | null) => {
+  following = id;
+  if (id === null) { engine.cam.follow(null); return; }
+  const v = new THREE.Vector3();
+  engine.cam.follow(() => (animals.getPosition(id, v) ? { x: v.x, y: v.z } : null));
+};
+/** Advance the sim (synchronously in the worker) to the next time the day reaches `frac`. */
+w.__timeOfDay = (frac: number) => {
+  if (!pending) return;
+  const ticks = Math.round((((frac - pending.env.dayFrac) % 1) + 1) % 1 * DAY_TICKS);
+  if (ticks > 0) send({ type: 'step', ticks });
+};
+/** Find agents in the latest snapshot: species and optional state filter; returns ids. */
+w.__find = (sp: number, state?: number) => {
+  const out: number[] = [];
+  if (!pending) return out;
+  for (let k = 0; k < pending.count; k++) {
+    const o = k * 12;
+    if (pending.agents[o] === sp && (state === undefined || pending.agents[o + 7] === state)) out.push(pending.ids[k]);
+  }
+  return out;
+};

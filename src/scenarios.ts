@@ -39,6 +39,10 @@ export const SCENARIOS: Scenario[] = [
   },
 ];
 
+/** The UI menu uses a few different ids for the same scenarios. */
+const ALIASES: Record<string, string> = { baseline: 'prairie', plenty: 'island' };
+
 export function scenarioById(id: string): Scenario {
-  return SCENARIOS.find((s) => s.id === id) ?? SCENARIOS[0];
+  const key = ALIASES[id] ?? id;
+  return SCENARIOS.find((s) => s.id === key) ?? SCENARIOS[0];
 }

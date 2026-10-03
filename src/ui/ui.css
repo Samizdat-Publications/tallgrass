@@ -398,6 +398,7 @@
 
 /* ---- left rail: god tools ------------------------------------------------------------------------------------ */
 .tg-rail {
+  --tool: calc(36 * var(--u));
   position: absolute;
   left: var(--m);
   top: calc(var(--m) + 84 * var(--u));
@@ -406,13 +407,20 @@
   gap: calc(8 * var(--u));
   pointer-events: none;
 }
+@media (max-height: 700px) {
+  .tg-rail {
+    --tool: calc(32 * var(--u));
+    top: calc(var(--m) + 70 * var(--u));
+    gap: calc(5 * var(--u));
+  }
+}
 .tg-rail-gap {
-  height: calc(6 * var(--u));
+  height: calc(4 * var(--u));
 }
 .tg-toolwrap {
   position: relative;
-  width: calc(36 * var(--u));
-  height: calc(36 * var(--u));
+  width: var(--tool);
+  height: var(--tool);
 }
 .tg-tool {
   width: 100%;
@@ -669,6 +677,9 @@ button.tg-ent-b:hover {
   overflow: hidden;
   transition: width 0.26s var(--ease), height 0.26s var(--ease), left 0.26s var(--ease), opacity 0.35s var(--ease), visibility 0s linear 0s;
 }
+.tg-pop[data-cols='2'] {
+  --cols: 2;
+}
 .tg-pop[data-rows='2'] {
   height: calc(146 * var(--u));
 }
@@ -777,7 +788,7 @@ button.tg-ent-b:hover {
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(var(--cols, 3), 1fr);
   grid-auto-rows: 1fr;
   column-gap: calc(20 * var(--u));
   row-gap: calc(6 * var(--u));

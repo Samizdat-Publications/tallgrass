@@ -97,7 +97,7 @@ export interface Snapshot {
 
 /** Ticks per second of real time at 1x speed. */
 export const TICKS_PER_SECOND = 10;
-export const DAY_TICKS = 400;
+export const DAY_TICKS = 800;
 export const SEASON_TICKS = 600;
 export const YEAR_TICKS = 2400;
 

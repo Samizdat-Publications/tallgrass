@@ -32,6 +32,8 @@ const CARD_COOLDOWN_MS = 8000;
 const CARD_HOLD_MS = 20000;
 /** Events the graph marks with a line (the rest would only add noise). */
 const MARK_KINDS = new Set(['drought', 'droughtEnd', 'outbreak', 'stampede', 'extinct', 'introduced', 'removed', 'culled', 'fire', 'plague']);
+/** Packs that lasted fewer ticks than this are left out of the chronicle altogether. */
+const FLASH_PACK_TICKS = 300;
 /** Events older than this many ticks when they arrive (a backgrounded tab, a bulk fill) never earn a card. */
 const STALE_TICKS = 600;
 
@@ -43,7 +45,6 @@ interface QueuedCard {
 }
 
 export class GameUI {
-  private root: HTMLElement;
   private ui: HTMLElement;
   private slate = new Slate();
   private tools: ToolRail;
@@ -68,7 +69,6 @@ export class GameUI {
   private keyUp: (e: KeyboardEvent) => void;
 
   constructor(root: HTMLElement, private actions: UIActions) {
-    this.root = root;
     this.tools = new ToolRail(actions);
     this.time = new TimeBar(actions);
     this.chron = new Chronicle((x, y) => actions.flyTo(x, y));
@@ -182,7 +182,12 @@ export class GameUI {
     const markers: Marker[] = [];
     let best: { title: string; subtitle: string; rank: number } | null = null;
 
+    // A pack that is founded and lost within a blink is a dispersal that never took: it is not news.
+    const flash = new Set<number>();
+    for (const e of events) if (e.kind === 'packLost' && e.b < FLASH_PACK_TICKS) flash.add(e.a);
+
     for (const e of events) {
+      if ((e.kind === 'packLost' || e.kind === 'packFounded') && flash.has(e.a)) continue;
       // "elder" fires a lot: one per species per year is plenty for a chronicle
       if (e.kind === 'elder') {
         const y = yearOfTick(e.tick);

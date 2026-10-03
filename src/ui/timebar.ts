@@ -22,7 +22,8 @@ export class TimeBar {
   private nextBtn: HTMLButtonElement;
   private rate: HTMLElement;
 
-  private shown = 1;
+  /** -99 = nothing drawn yet, so the very first frame always renders the active state. */
+  private shown = -99;
   private lastRunSpeed = 1;
   private optimistic: { v: number; until: number } | null = null;
   private lastRateText = '';

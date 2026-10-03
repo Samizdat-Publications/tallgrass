@@ -53,7 +53,6 @@ export class PopGraph {
   private chart: HTMLCanvasElement;
   private tip: HTMLElement;
   private chipsEl: HTMLElement;
-  private chipBtns: HTMLButtonElement[] = [];
   private logBtn: HTMLButtonElement;
   private expandBtn: HTMLButtonElement;
   private sub: HTMLElement;
@@ -198,11 +197,14 @@ export class PopGraph {
       this.cells.push({ sp, el, count, canvas, lastText: '' });
       this.cellsEl.append(el);
     }
-    this.el.dataset.rows = String(Math.max(1, Math.ceil(vis.length / 3)));
+    // 1 to 3 species sit in one row of three, 4 make a tidy 2 x 2, 5 and 6 make two rows of three
+    const cols = vis.length === 4 ? 2 : 3;
+    this.el.dataset.cols = String(cols);
+    this.el.dataset.rows = String(Math.max(1, Math.ceil(vis.length / cols)));
 
     // species chips for the expanded chart
     this.chipsEl.replaceChildren();
-    this.chipBtns = vis.map((sp) => {
+    for (const sp of vis) {
       const b = button(
         {
           class: 'tg-chip tg-chip-btn',
@@ -219,8 +221,7 @@ export class PopGraph {
         SPECIES_NAMES[sp],
       );
       this.chipsEl.append(b);
-      return b;
-    });
+    }
     this.dirty = true;
   }
 

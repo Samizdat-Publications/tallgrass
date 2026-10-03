@@ -27,6 +27,8 @@ export class Chronicle {
   private collapsed = false;
   private unread = 0;
   private empty: HTMLElement;
+  /** The first batch after a (re)start is history, not news: it never counts as unread. */
+  private quietNext = true;
 
   constructor(private flyTo: (x: number, y: number) => void) {
     this.list = h('div', { class: 'tg-chron-list', role: 'list' });
@@ -72,6 +74,7 @@ export class Chronicle {
     this.nodes = [];
     this.unread = 0;
     this.renderBadge();
+    this.quietNext = true;
     this.empty.style.display = '';
   }
 
@@ -89,10 +92,11 @@ export class Chronicle {
     while (this.entries.length > MAX_ENTRIES) this.entries.shift();
     while (this.nodes.length > MAX_VISIBLE) this.nodes.shift()?.remove();
     this.refreshYears();
-    if (this.collapsed) {
+    if (this.collapsed && !this.quietNext) {
       this.unread += items.length;
       this.renderBadge();
     }
+    this.quietNext = false;
   }
 
   private renderBadge(): void {
