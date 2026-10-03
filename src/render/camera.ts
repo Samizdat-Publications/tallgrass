@@ -99,6 +99,11 @@ export class DroneCamera {
 
   isCinematic(): boolean { return this.cinematic; }
 
+  /** A slow, steady orbit while time is fast-forwarding and nobody is steering (0 = off), in radians per second. */
+  idleDrift = 0;
+  private lastInputT = -1e9;
+  private clockT = 0;
+
   preset(name: CameraPreset, snap = false): void {
     const c = this.opt.worldSize / 2;
     const sunAz = this.opt.sunAzimuth ? this.opt.sunAzimuth() : 1.6;
@@ -185,6 +190,11 @@ export class DroneCamera {
       }
     }
 
+    this.clockT += dt;
+    if (this.idleDrift > 0 && !this.cinematic && !this.follower && this.clockT - this.lastInputT > 6) {
+      // ease in over a few seconds so the pan never starts with a jolt
+      g.yaw += dt * this.idleDrift * Math.min(1, (this.clockT - this.lastInputT - 6) / 4);
+    }
     if (this.cinematic) {
       this.cinT += dt;
       g.yaw += dt * 0.035;
@@ -263,6 +273,7 @@ export class DroneCamera {
   private userInput(cancelFollow: boolean): void {
     this.rate = 11;
     if (cancelFollow && this.follower) this.follower = null;
+    this.lastInputT = this.clockT;
     this.onUserInput?.();
   }
 

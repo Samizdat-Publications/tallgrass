@@ -46,3 +46,22 @@ Gemini video: Visual 4, Readability 7, Life and motion 2, Ecosystem 4, UI 8, Kee
 | 10 | Raven sawtooth at a ceiling | DEFER | lead | Nest-site cap still binds; revisit with v5. |
 | 11 | UI: chronicle too tall, log graph squashes, territory label contrast, speed readout vs actual rate, trait bars look like sliders | FIX | UI builder | |
 | 12 | Trees and grass don't move (Gemini) | REJECT (mostly) | - | Grass does sway; at drone height it doesn't read. Tree sway is a cheap add for the renderer builder if time allows. |
+
+## Round 4 (18:30, stills + v5 charts, blind critic) -> `review/round-04/critique.md`; video -> `review/round-04-video/reel.gemini.md`
+Stills critic: Visual 6, Readability 4, Life 5, Ecosystem 5 (was 4), UI 6, Keep watching 5.
+Gemini video: Visual 4, Readability 8, Life and motion 1, Ecosystem 6 (was 4), UI 9, Keep watching 3.
+
+| # | Issue | Triage | Owner | Notes |
+|---|---|---|---|---|
+| 1 | Animals illegible at the default wide camera; motion doesn't read ("sliding statues") | FIX (top) | animals builder | Frames show wolves about 20 px tall in drone shots: legs can't read. Whole-body motion scaled with distance (bounding, bob, head pump), minimum on-screen size, distinct value per species, turn smoothing and banking, a kill lunge and topple, stampede dust. |
+| 2 | Graphs flat; wolves don't lag prey; ravens capped | FIX (v6) | lead | v6X (prey-scaled wolf capacity) gives wolf-prey correlation 0.63 at a 1-year lag. Raven cap relaxation hurt persistence in two screens (rejected for now). Slow climate cycles (wet and dry runs of years) to be screened. |
+| 3 | Evolution: herding and sight collapse | FIX (v6) | lead | loneIndividual keeps herding at 0.99 at year 40 (was sliding to 0.8); litter caps stop fecundity drift. |
+| 4 | Births year-round; no spring pulse | FIX (screen) | lead | Seasonal conception window so calves arrive in spring; screen for stability. |
+| 5 | Muddy wide shots, snow blobs, crater ponds, square world | FIX | renderer builder | Trees first (also Gemini #7), then ponds and snow edges. |
+| 6 | Trees: lollipops, poles, smudges | FIX | renderer builder | Sent at 18:25. |
+| 7 | Too many animals in too small a valley | PARTLY FIXED | lead | v5 equilibrium is about 450 bison (v4 1,200); the opening still starts at 800 and booms. Start nearer equilibrium. |
+| 8 | Shocks leave the herd bigger | EXPLAIN + FIX | lead | Shock lands during the first-century evolution climb; 300-year shock suite planned; litter caps reduce the climb. |
+| 9 | UI: unlabeled glyphs, graph scale, pronghorn green on green, title cards over the action, white rings | FIX | UI builder + animals builder | Expanded graph as small multiples (one row per species), pronghorn color, lower-third title cards, rail labels visible on first view. Rings: animals builder. |
+| 10 | Story moments not staged; founders have no story | FIX | UI + lead | Founder backstory line; director prefers animals with something happening. |
+| G3 | Turning on a pivot (Gemini) | FIX | animals builder | Render-side heading smoothing and banking. |
+| G6 | Static camera during fast-forward (Gemini) | FIX | lead | Idle drift at 10x and 100x. |

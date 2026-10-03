@@ -258,6 +258,8 @@ engine.onFrame((dt, t) => {
   const alpha = Math.min(1, (performance.now() - lastTickChange) / Math.max(16, tickInterval));
   // legs keep pace with how fast the sim actually moves animals (capped where gaits would alias)
   animals.timeScale = speed > 0 ? Math.min(speed, 12) : 0;
+  // years flying by: let the camera drift slowly instead of sitting like a security camera
+  engine.cam.idleDrift = speed >= 10 ? 0.025 : 0;
   animals.update(dt, alpha, t);
   director.update(dt, pending ? { count: pending.count, ids: pending.ids, agents: pending.agents, carcassCount: pending.carcassCount, carcasses: pending.carcasses, dayFrac: pending.env.dayFrac } : null);
   grass.viewportHeight = engine.renderer.domElement.height;
