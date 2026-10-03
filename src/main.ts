@@ -7,6 +7,7 @@ import { GameUI, type OverlayId, type ToolId } from './ui/ui';
 import { generateWorld } from './sim/world';
 import { hashSeed } from './sim/rng';
 import { scenarioById } from './scenarios';
+import { Director } from './director';
 import { DAY_TICKS, Sp, type Intervention, type Snapshot } from './sim/types';
 import type { FromWorker, ToWorker } from './sim/worker';
 
@@ -30,6 +31,7 @@ if (q.get('grass') === '0') grass.object3D.visible = false;
 const animals = new AnimalLayer(renderWorld);
 engine.scene.add(animals.object3D);
 engine.cam.preset((q.get('cam') as 'wide' | 'low' | 'top' | null) ?? 'wide', true);
+const director = new Director(engine.cam, (id, out) => animals.getPosition(id, out), world.size);
 
 // ------------------------------------------------------------------ worker
 
@@ -137,7 +139,7 @@ const ui = new GameUI(document.getElementById('ui')!, {
   select: (id) => select(id),
   flyTo: (x, y) => engine.cam.flyTo(x, y),
   setOverlay: (o: OverlayId) => engine.setFearOverlay(o === 'fear' ? 0.85 : 0),
-  setCinematic: (on) => engine.cam.setCinematic(on),
+  setCinematic: (on) => { following = null; director.setEnabled(on); },
   newWorld: (s, sc) => {
     const u = new URL(location.href);
     u.searchParams.set('seed', s);
@@ -203,6 +205,7 @@ engine.onFrame((dt, t) => {
   const alpha = Math.min(1, (performance.now() - lastTickChange) / Math.max(16, tickInterval));
   animals.timeScale = speed > 0 ? Math.min(speed, 4) : 0;
   animals.update(dt, alpha, t);
+  director.update(dt, pending ? { count: pending.count, ids: pending.ids, agents: pending.agents, carcassCount: pending.carcassCount, carcasses: pending.carcasses, dayFrac: pending.env.dayFrac } : null);
   grass.viewportHeight = engine.renderer.domElement.height;
   grass.update(engine.camera, t, engine.env, sun);
   if (pending) {
@@ -232,6 +235,7 @@ w.__select = select;
 w.__animals = animals;
 w.__grass = grass;
 w.__snap = () => pending;
+w.__director = director;
 w.__followId = (id: number | null) => {
   following = id;
   if (id === null) { engine.cam.follow(null); return; }

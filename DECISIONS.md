@@ -44,3 +44,5 @@ One line each: decision | why | alternative rejected.
 - Bison food value 0.42 -> 0.55 | bison were barely viable even without wolves (38% of time grazing) | more grass.
 - Visual sun lingers near sunrise and sunset (GOLDEN_LINGER 0.55) and peaks lower | owner's golden-hour north star | constant-rate sun.
 - World opens in late summer (season 1.8), golden; early summer is visibly greener | owner wants the golden concept look; the critic wanted seasons to read | green midsummer opening.
+- 04:30 The first acceptance run (frozen f1d6e2c) is CPU-starved by builders' browsers (156 ticks/s per worker); it will stop at its 110-minute cap with ~12 seeds x ~500 generations. Keep it as a partial data point; rerun the full 20 seeds x 1000 generations on the faster live code once builders are idle | reporting partial evidence honestly beats a late full run | killing it now (loses 50 min of data).
+- 04:30 Perf: herbivores think every 6 ticks (was 4), herd scan caps at 40 neighbors, vegetation updates in 16 row passes (was 8) | ~25-40% faster sim for long runs and 100x play | keeping the finer cadence.

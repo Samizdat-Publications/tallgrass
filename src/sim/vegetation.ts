@@ -5,7 +5,7 @@ import { Rng } from './rng';
 import { World } from './world';
 
 /** Rows are updated in STRIDE interleaved passes, so each cell advances by dt = STRIDE ticks. */
-export const STRIDE = 8;
+export const STRIDE = 16;
 
 export class Vegetation {
   readonly n: number;
@@ -131,7 +131,7 @@ export class Vegetation {
       const len = k < 4 ? 1 : Math.SQRT2;
       const align = (di * wx + dj * wy) / len;
       const dry = 1 - 0.6 * this.w.moisture[c];
-      const pr = 0.22 * seasonDry * dry * Math.min(1, fuel * 1.6) * Math.max(0.15, 1 + 1.8 * windS * align) / len;
+      const pr = Math.min(0.95, 0.22 * (STRIDE / 8) * seasonDry * dry * Math.min(1, fuel * 1.6) * Math.max(0.15, 1 + 1.8 * windS * align) / len);
       if (this.rng.next() < pr) this.burn[c] = 2;
     }
   }

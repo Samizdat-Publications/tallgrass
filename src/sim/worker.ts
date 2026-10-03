@@ -1,5 +1,5 @@
 // Web Worker host for the simulation. The main thread only renders and sends commands.
-import { NG, GENE_NAMES } from './agents';
+import { NG, GENE_NAMES, G_COAT, G_SIZE, G_SPEED } from './agents';
 import { Sim, SimEvent } from './sim';
 import { Intervention, SPECIES_COUNT, TICKS_PER_SECOND } from './types';
 
@@ -42,7 +42,16 @@ export interface HistoryRow {
   tick: number;
   pop: number[];
   grass: number;
+  /** Mean heritable traits, see TRAIT_SERIES for the order (NaN when the species is absent). */
+  traits?: number[];
 }
+
+/** Trait series recorded in history rows: [species, gene index, label]. */
+export const TRAIT_SERIES: [number, number, string][] = [
+  [0, G_SPEED, 'Bison speed'], [0, G_SIZE, 'Bison size'], [0, G_COAT, 'Bison coat darkness'],
+  [1, G_SPEED, 'Wolf speed'], [1, G_SIZE, 'Wolf size'], [1, G_COAT, 'Wolf coat darkness'],
+  [3, G_SPEED, 'Pronghorn speed'], [3, G_COAT, 'Pronghorn coat darkness'],
+];
 
 export type FromWorker =
   | { type: 'ready'; seed: number }
@@ -112,7 +121,19 @@ function record(): void {
   while (schedule.length && sim.tick >= schedule[0].tick) sim.apply(schedule.shift()!.iv);
   if (sim.tick % HISTORY_EVERY === 0) {
     const pop = sim.populations();
-    history.push({ tick: sim.tick, pop, grass: sim.veg.meanGrass() });
+    const a = sim.a;
+    const sums = new Float64Array(TRAIT_SERIES.length);
+    const counts = new Int32Array(TRAIT_SERIES.length);
+    for (let i = 0; i < a.hi; i++) {
+      if (!a.alive[i]) continue;
+      for (let k = 0; k < TRAIT_SERIES.length; k++) {
+        if (a.sp[i] !== TRAIT_SERIES[k][0]) continue;
+        sums[k] += a.genes[i * NG + TRAIT_SERIES[k][1]];
+        counts[k]++;
+      }
+    }
+    const traits = Array.from(sums, (s, k) => (counts[k] ? s / counts[k] : NaN));
+    history.push({ tick: sim.tick, pop, grass: sim.veg.meanGrass(), traits });
   }
 }
 

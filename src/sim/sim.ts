@@ -343,7 +343,7 @@ export class Sim implements SimLike {
       if (!a.alive[i]) continue;
       const s = a.sp[i];
       if (s === Sp.Bison || s === Sp.Deer) {
-        if (((i + t) & 3) === 0) this.thinkHerbivore(i, P[s]);
+        if ((i + t) % 6 === 0) this.thinkHerbivore(i, P[s]);
         this.moveGround(i, P[s]);
         this.liveHerbivore(i, P[s]);
       } else if (s === Sp.Wolf) {
@@ -789,6 +789,8 @@ export class Sim implements SimLike {
           const dx = a.x[j] - x, dy = a.y[j] - y;
           const d2 = dx * dx + dy * dy;
           if (d2 > hr2) continue;
+          // a herd animal tracks its nearest few dozen neighbors, not the whole crowd
+          if (n >= 40 && d2 > 9) continue;
           n++;
           cx += a.x[j]; cy += a.y[j];
           avx += a.vx[j]; avy += a.vy[j];
@@ -890,7 +892,7 @@ export class Sim implements SimLike {
     } else if (a.hydration[i] < 0.3 || (a.state[i] === St.Drink && a.hydration[i] < 0.97)) {
       if (this.world.waterDist[c] < 3) {
         state = St.Drink;
-        a.hydration[i] = Math.min(1, a.hydration[i] + 0.06);
+        a.hydration[i] = Math.min(1, a.hydration[i] + 0.09);
       } else {
         const hurry = a.hydration[i] < 0.15 ? 2.2 : 1.4;
         dvx = this.waterGX[c] * walk * hurry + sepx;
