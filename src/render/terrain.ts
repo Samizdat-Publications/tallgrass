@@ -176,10 +176,9 @@ export class Terrain {
         const dE = Math.min(dX, dZ);
         const w = smoothstep(60, 0, dE);
         if (w <= 0) continue;
-        // tangent of the nearest edge: left/right edges run along z, top/bottom along x; corners use both
-        const wx = dX < dZ ? 0 : 1, wz = dX < dZ ? 1 : 0;
-        const nearCorner = Math.max(dX, dZ) < 60 ? 0.5 : 0;
-        const L = nearCorner > 0 ? 0.5 * (Lx[j * hn + i] + Lz[j * hn + i]) : wz * Lz[j * hn + i] + wx * Lx[j * hn + i];
+        // tangent of the nearest edge, blended continuously: left/right edges run along z (Lz), top/bottom along x (Lx)
+        const wz = smoothstep(-30, 30, dZ - dX);
+        const L = wz * Lz[j * hn + i] + (1 - wz) * Lx[j * hn + i];
         this.renderHeight[j * hn + i] = shaped.height[j * hn + i] * (1 - w) + L * w;
       }
     }
@@ -711,12 +710,27 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
   // under tree and shrub cover: cooler, darker, leaf litter
   col = mix(col, col * vec3(0.55, 0.58, 0.4) * (0.8 + 0.4 * nC), cover * 0.5);
 
-  // burn: charcoal, ash, live embers
-  float charAmt = smoothstep(0.1, 0.34, burn);
-  float ashAmt = smoothstep(0.0, 0.08, burn) * (1.0 - charAmt);
-  col = mix(col, vec3(0.5, 0.49, 0.47) * (0.8 + 0.4 * nA), ashAmt * 0.65);
-  col = mix(col, vec3(0.022, 0.02, 0.018) * (0.7 + 0.9 * nA), charAmt * 0.95);
-  float ember = smoothstep(0.78, 1.0, burn) * (0.35 + 0.65 * tgNoise2(xz * 0.8 + uTime * 0.4));
+  // ---- burn scar: ragged charcoal and ash grey-brown, a scorched halo, a glowing ember front, and regrowth
+  // veg.b: 1.0 = burning now, then 0.78 fresh ash decaying to 0 over a year (the engine also fades it as grass regrows)
+  float rag = tgNoise2(xz * 0.9) * 0.5 + tgNoise2(xz * 2.3 + 7.0) * 0.3 + tgNoise2(xz * 5.7 + 3.0) * 0.2;
+  float bR = burn + (rag - 0.5) * 0.8 * smoothstep(0.0, 0.12, burn);
+  float scar = smoothstep(0.12, 0.3, bR);
+  float scorch = smoothstep(0.0, 0.16, bR) * (1.0 - scar);
+  float fresh = smoothstep(0.3, 0.76, burn);
+  vec3 charC = vec3(0.05, 0.043, 0.037);
+  vec3 ashC = vec3(0.34, 0.325, 0.3);
+  float ashPatch = smoothstep(0.35, 0.7, tgFbm2(xz * 0.35 + 19.0));
+  float ashMix = clamp(ashPatch * (0.3 + 0.6 * (1.0 - fresh)) + 0.32 * (1.0 - fresh) + 0.1 * (nC - 0.5), 0.0, 1.0);
+  vec3 scarCol = mix(charC, ashC, ashMix) * (0.72 + 0.5 * nC) * (0.85 + 0.3 * nA);
+  scarCol = mix(scarCol, uSoil * 0.9 + vec3(0.03), (1.0 - fresh) * 0.55);
+  col = mix(col, col * vec3(0.5, 0.4, 0.3), scorch * 0.7);
+  col = mix(col, scarCol, scar);
+  gTgGrass *= (1.0 - scar);
+  float charAmt = scar;
+  // embers: only the burning front (v = 1.0) glows, flickering, with a warm halo spilling a little onto the scorched ground
+  float flick = 0.55 + 0.45 * tgNoise2(xz * 1.3 + uTime * 1.7) + 0.25 * tgNoise2(xz * 4.1 - uTime * 2.9);
+  float ember = smoothstep(0.86, 1.0, bR) * flick;
+  float emberHalo = smoothstep(0.55, 0.95, bR) * (0.4 + 0.6 * flick);
 
   // winter: frost is a thin cold bloom in the shade, never a snow blanket; snow only when it is snowing
   float shadeAmt = 1.0 - ts;
@@ -737,7 +751,7 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
   float lowSun = 1.0 - smoothstep(0.1, 0.65, uLightDir.y);
   float glow = pow(fwd, 3.0) * (0.35 + 0.65 * lowSun) * gTgGrass * (1.0 - rock) * (1.0 - snowAmt) * ts * (1.0 - uWet);
   gTgEmis = col * uLightColor * glow * 0.1;
-  gTgEmis += vec3(2.4, 0.7, 0.12) * ember * charAmt;
+  gTgEmis += vec3(3.4, 0.95, 0.15) * ember + vec3(1.1, 0.22, 0.03) * emberHalo * 0.5;
 
   if (uFear > 0.001) {
     col = mix(col, vec3(0.85, 0.05, 0.04), fear * uFear * 0.7);

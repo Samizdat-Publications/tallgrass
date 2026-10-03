@@ -111,7 +111,7 @@ export class GameUI {
     }
     if (f.events.length) this.handleEvents(f.events, now, f.tick);
     this.pop.update(now, f.pop);
-    this.inspector.update(f.selected, f.following);
+    this.inspector.update(f.selected, f.following, f.story, f.storyId);
     this.top.setWorld(f.seed, f.scenario);
     this.flushQueuedCard(now);
   }
@@ -287,6 +287,8 @@ export class GameUI {
     } else if (this.tools.armedTool) {
       this.tools.setArmed(null);
       this.actions.armTool(null);
+    } else if (this.inspector.isMemorial) {
+      this.inspector.close();
     } else if (this.selectedId !== null) {
       this.actions.select(null);
     } else if (this.cinematic) {

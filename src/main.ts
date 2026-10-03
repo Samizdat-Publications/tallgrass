@@ -221,7 +221,7 @@ engine.onFrame((dt, t) => {
     ui.update({
       tick: pending.tick, env: pending.env, pop: pending.pop, history: pendingHistory, events: pendingEvents,
       selected: pending.selected, speed: pending.speed, ticksPerSec: pending.ticksPerSec, seed: seedStr,
-      scenario: scenario.id, following,
+      scenario: scenario.id, following, story: pending.story, storyId: pending.storyId,
     });
     if (pending.selectedGone && following !== null) { following = null; engine.cam.follow(null); }
     const cp = engine.camera.position; // three x = sim x, three z = sim y

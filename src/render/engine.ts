@@ -18,6 +18,7 @@ import { Water } from './water';
 import { Sky, computeAtmosphere, createLighting, Lighting, Smoothed } from './sky';
 import { Trees } from './trees';
 import { PostFX, Quality } from './post';
+import { Smoke } from './smoke';
 import { DroneCamera, CameraPreset } from './camera';
 import { grassTint } from './grass';
 
@@ -88,6 +89,7 @@ export class Engine {
   readonly water: Water;
   readonly trees: Trees;
   readonly sky: Sky;
+  readonly smoke: Smoke;
   readonly post: PostFX;
   readonly lighting: Lighting = createLighting();
 
@@ -155,6 +157,7 @@ export class Engine {
     this.water = new Water(world, this.uniforms, this.terrain.creekDist);
     this.trees = new Trees(world, this.uniforms, this.terrain.heightAt);
     this.sky = new Sky(this.uniforms);
+    this.smoke = new Smoke(world, this.uniforms, this.terrain.heightAt);
 
     this.sun = new SunLight(0xffffff, 1);
     this.sun.castShadow = true;
@@ -166,10 +169,10 @@ export class Engine {
     this.sun.shadow.radius = 2;
     this.hemi = new THREE.HemisphereLight(0xffffff, 0x886644, 1);
 
-    this.scene.add(this.sky.mesh, this.terrain.mesh, this.water.mesh, this.trees.group, this.sun, this.hemi);
+    this.scene.add(this.sky.mesh, this.terrain.mesh, this.water.mesh, this.trees.group, this.smoke.mesh, this.sun, this.hemi);
 
     this.post = new PostFX(renderer, this.scene, this.camera, this.uniforms);
-    this.post.aoExclude.push(this.sky.mesh, this.water.mesh);
+    this.post.aoExclude.push(this.sky.mesh, this.water.mesh, this.smoke.mesh);
     let hmin = 1e9;
     for (let i = 0; i < world.height.length; i++) hmin = Math.min(hmin, world.height[i]);
     this.post.setMistBase(hmin);
@@ -212,10 +215,24 @@ export class Engine {
 
   // ------------------------------------------------------------ public API
 
-  /** Upload the vegetation texture (RGBA8, n*n, row-major by y then x). */
+  /**
+   * Upload the vegetation texture (RGBA8, n*n, row-major by y then x). The burn channel is scrubbed on the way in: ash fades as
+   * grass regrows (so burned ground greens up in both the terrain and the blade layer), while burning cells (B = 255) are kept
+   * and handed to the smoke system.
+   */
   setVeg(data: Uint8Array): void {
-    (this.vegTexture.image.data as Uint8Array).set(data);
+    const dst = this.vegTexture.image.data as Uint8Array;
+    dst.set(data);
+    for (let o = 0; o < dst.length; o += 4) {
+      const b = dst[o + 2];
+      if (b > 0 && b < 250) {
+        const r = dst[o] / 255;
+        const t = clamp((r - 0.06) / 0.39, 0, 1);
+        dst[o + 2] = (b * (1 - t * t * (3 - 2 * t))) | 0;
+      }
+    }
     this.vegTexture.needsUpdate = true;
+    this.smoke.setVeg(dst);
   }
 
   /** Set the environment (partial updates allowed). Lighting, sky, season palette and haze all follow. */
@@ -262,6 +279,7 @@ export class Engine {
     this.uniforms.time.value = this.time;
     this.cam.update(dt);
     for (const cb of this.frameCbs) cb(dt, this.time);
+    this.smoke.update(dt, this.camera);
     this.updateEnvState(dt);
     this.post.render(dt);
     this.firstFrame = false;
@@ -315,6 +333,7 @@ export class Engine {
     this.water.dispose();
     this.trees.dispose();
     this.sky.dispose();
+    this.smoke.dispose();
     this.vegTexture.dispose();
     this.renderer.dispose();
     this.renderer.domElement.remove();

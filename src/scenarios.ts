@@ -33,6 +33,11 @@ export const SCENARIOS: Scenario[] = [
     schedule: [{ tick: YEAR_TICKS, iv: { kind: 'drought', ticks: YEAR_TICKS * 2, severity: 0.85 } }],
   },
   {
+    id: 'cougars', name: 'Cougar country',
+    blurb: 'Six cougars lie in wait in the groves along the creek: an ambush hunter working alongside the wolf packs.',
+    params: { 'cougar.initial': 6 }, schedule: [],
+  },
+  {
     id: 'collapse', name: 'Collapse',
     blurb: 'An overstocked valley with only one small pack. Can it recover on its own?',
     params: { 'bison.initial': 1500, 'deer.initial': 400, 'wolf.initial': 6 }, schedule: [],

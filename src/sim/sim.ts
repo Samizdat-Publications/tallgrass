@@ -30,6 +30,14 @@ export interface SimEvent {
   b: number;
 }
 
+/** A moment in the followed animal's life, for the documentary inspector. */
+export interface StoryEntry {
+  tick: number;
+  kind: 'fled' | 'chase' | 'kill' | 'birth' | 'infected' | 'recovered' | 'dispersed' | 'died';
+  /** kind-specific: species involved, litter size, or death cause code (0 starve, 1 thirst, 2 old, 3 killed, 4 culled, 5 removed). */
+  a: number;
+}
+
 export interface SimOptions {
   seed: number;
   params?: Record<string, number>;
@@ -111,9 +119,14 @@ export class Sim implements SimLike {
   coarseBrowse = new Float32Array(32 * 32);
 
   events: SimEvent[] = [];
+  /** Life story of one followed animal (set trackedId to start a fresh story). */
+  trackedId = 0;
+  story: StoryEntry[] = [];
+  private storyLast: Record<string, number> = {};
   /** Counters since the last sample() call. */
   private cKills = 0;
   private cKillsDeer = 0;
+  private cKillsCougar = 0;
   private cStrife = 0;
   private cChases = 0;
   private cGiveUps = 0;
@@ -219,6 +232,13 @@ export class Sim implements SimLike {
         }
       }
     }
+    for (let k = 0; k < P[Sp.Cougar].initial; k++) {
+      const [x, y] = this.coverSpot();
+      const i = this.spawnAdult(Sp.Cougar, x, y);
+      this.a.male[i] = k % 2;
+      this.a.fleeX[i] = x;
+      this.a.fleeY[i] = y;
+    }
     for (let k = 0; k < P[Sp.Raven].initial; k++) {
       const [x, y] = this.goodSpot(0.2);
       const i = this.spawnAdult(Sp.Raven, x, y);
@@ -244,6 +264,20 @@ export class Sim implements SimLike {
     this.defaultGenes(sp, a.genes, i * NG);
     this.everPresent[sp] = 1;
     return i;
+  }
+
+  /** A spot in tree or shrub cover, preferably near water (cougar country). */
+  private coverSpot(): [number, number] {
+    const w = this.world;
+    let best: [number, number] = [w.size / 2, w.size / 2], bs = -1;
+    for (let k = 0; k < 60; k++) {
+      const x = this.rng.range(30, w.size - 30), y = this.rng.range(30, w.size - 30);
+      const c = this.veg.cellAt(x, y);
+      if (w.water[c]) continue;
+      const s = w.cover[c] + (w.waterDist[c] < 40 ? 0.3 : 0) + this.rng.next() * 0.2;
+      if (s > bs) { bs = s; best = [x, y]; }
+    }
+    return best;
   }
 
   // ------------------------------------------------------------------ packs
@@ -350,6 +384,10 @@ export class Sim implements SimLike {
         if ((i + t) % 3 === 0) this.thinkWolf(i, P[s]);
         this.moveGround(i, P[s]);
         this.liveWolf(i, P[s]);
+      } else if (s === Sp.Cougar) {
+        if ((i + t) % 3 === 0) this.thinkCougar(i, P[s]);
+        this.moveGround(i, P[s]);
+        this.liveCougar(i, P[s]);
       } else if (s === Sp.Raven) {
         if ((i + t) % 6 === 0) this.thinkRaven(i, P[s]);
         this.liveRaven(i, P[s]);
@@ -410,6 +448,7 @@ export class Sim implements SimLike {
           a.pack[c] = pk;
           a.energy[c] = 0.42; // born lean: pups live on what the pack brings home from kills
         }
+        this.logStory(f, 'birth', litter);
         // a big, well-fed pack can raise a second litter from another female
         if (this.packSize[pk] >= 6 && this.packStore[pk] > 3) {
           let f2 = -1;
@@ -453,6 +492,7 @@ export class Sim implements SimLike {
     dbg('disp_ok');
     const take = (i: number) => { a.pack[i] = np; a.target[i] = -1; a.energy[i] = Math.max(a.energy[i], 0.75); };
     take(m); take(f);
+    this.logStory(m, 'dispersed'); this.logStory(f, 'dispersed');
     let extra = 0;
     for (let k = 0; k < this.predN && extra < 2; k++) {
       const i = this.predList[k];
@@ -599,6 +639,22 @@ export class Sim implements SimLike {
     this.packScentHit[pk] = best > 0 ? 1 : 0;
   }
 
+  /** Record a moment for the followed animal, with per-kind rate limits so it reads like a story. */
+  private logStory(i: number, kind: StoryEntry['kind'], a = 0): void {
+    if (this.trackedId === 0 || this.a.id[i] !== this.trackedId) return;
+    const gap = kind === 'fled' ? 300 : kind === 'chase' ? 240 : 0;
+    if (gap && this.tick - (this.storyLast[kind] ?? -1e9) < gap) return;
+    this.storyLast[kind] = this.tick;
+    this.story.push({ tick: this.tick, kind, a });
+    if (this.story.length > 60) this.story.shift();
+  }
+
+  setTracked(id: number): void {
+    this.trackedId = id;
+    this.story = [];
+    this.storyLast = {};
+  }
+
   // ------------------------------------------------------------------ births and deaths
 
   private birth(mother: number, fatherSlot: number, sp: number, x: number, y: number): number {
@@ -635,6 +691,7 @@ export class Sim implements SimLike {
 
   private die(i: number, cause: 'starve' | 'thirst' | 'old' | 'killed' | 'culled' | 'removed'): void {
     const a = this.a;
+    this.logStory(i, 'died', ['starve', 'thirst', 'old', 'killed', 'culled', 'removed'].indexOf(cause));
     const s = a.sp[i];
     if (cause === 'starve') { this.cStarve[s]++; if (s === Sp.Bison && a.age[i] < this.p.species[s].matureAge) this.cStarveJuv++; }
     else if (cause === 'thirst') this.cThirst[s]++;
@@ -783,7 +840,7 @@ export class Sim implements SimLike {
       }
     }
     if (a.infected[i] > 0) {
-      if (--a.infected[i] === 0) a.immune[i] = YEAR_TICKS;
+      if (--a.infected[i] === 0) { a.immune[i] = YEAR_TICKS; this.logStory(i, 'recovered'); }
     } else if (a.immune[i] > 0) a.immune[i]--;
     if (a.cooldown[i] > 0) a.cooldown[i]--;
     if (a.flee[i] > 0) a.flee[i]--;
@@ -841,6 +898,7 @@ export class Sim implements SimLike {
       if (n > p.diseaseSparkDensity) pInf += p.diseaseSpark * (n - p.diseaseSparkDensity);
       if (pInf > 0 && rng.next() < pInf) {
         a.infected[i] = p.diseaseTicks;
+        this.logStory(i, 'infected');
         if (infNear === 0 && this.tick - this.lastOutbreak > YEAR_TICKS / 2) {
           this.lastOutbreak = this.tick;
           this.event('outbreak', s, x, y, n, 0);
@@ -874,7 +932,9 @@ export class Sim implements SimLike {
           const d = Math.sqrt(dx * dx + dy * dy);
           // a predator's coat against the grass changes how far away it is noticed
           const contrast = Math.abs((1 - a.genes[j * NG + G_COAT]) * 0.75 + 0.1 - this.groundB);
-          const eff = sight * (0.6 + 0.8 * contrast);
+          let eff = sight * (0.6 + 0.8 * contrast);
+          // a cougar lying in cover is nearly invisible until it moves
+          if (a.sp[j] === Sp.Cougar && a.state[j] !== St.Chase) eff *= 1 - 0.8 * this.world.cover[this.veg.cellAt(a.x[j], a.y[j])];
           const hunting = a.state[j] === St.Chase;
           const stalking = a.state[j] === St.Stalk;
           if (d > (hunting ? sight * 0.75 : eff)) continue;
@@ -893,6 +953,7 @@ export class Sim implements SimLike {
     if (threat >= 0) {
       const dx = x - a.x[threat], dy = y - a.y[threat];
       const d = Math.sqrt(dx * dx + dy * dy) + 0.01;
+      if (a.flee[i] === 0) this.logStory(i, 'fled', a.sp[threat]);
       a.flee[i] = 24 + ((rng.next() * 16) | 0);
       a.fleeX[i] = dx / d;
       a.fleeY[i] = dy / d;
@@ -1062,6 +1123,7 @@ export class Sim implements SimLike {
     if (a.pregnant[i] > 0 && --a.pregnant[i] === 0) {
       const litter = Math.max(1, Math.round(P.litter * a.genes[i * NG + G_LITTER] + (this.rng.next() - 0.5) * 0.6));
       for (let k = 0; k < litter; k++) this.birth(i, -1, a.sp[i], a.x[i] + this.rng.range(-1, 1), a.y[i] + this.rng.range(-1, 1));
+      this.logStory(i, 'birth', litter);
       a.energy[i] -= 0.12 * litter;
       a.cooldown[i] = P.birthCooldown;
       if (a.energy[i] <= 0) this.die(i, 'starve');
@@ -1177,6 +1239,7 @@ export class Sim implements SimLike {
       if (best >= 0) {
         tgt = best;
         this.cChases++;
+        this.logStory(i, 'chase', a.sp[best]);
         a.target[i] = best;
         a.targetId[i] = a.id[best];
         if (pk >= 0 && this.packTarget[pk] < 0) { this.packTarget[pk] = best; this.packTargetId[pk] = a.id[best]; }
@@ -1344,6 +1407,7 @@ export class Sim implements SimLike {
             if (pk >= 0 && this.packTarget[pk] === t) this.packTarget[pk] = -1;
           } else if (this.rng.next() < pk2) {
             a.kills[i]++;
+            this.logStory(i, 'kill', a.sp[t]);
             this.cKills++;
             this.totalKills++;
             if (!this.firstKillLogged) { this.firstKillLogged = true; this.event('firstKill', Sp.Wolf, a.x[t], a.y[t], a.sp[t], 0); }
@@ -1392,6 +1456,238 @@ export class Sim implements SimLike {
       a.energy[i] += take;
     }
     this.vitals(i, P);
+  }
+
+  // ------------------------------------------------------------------ cougars
+
+  private thinkCougar(i: number, P: SpeciesParams): void {
+    const a = this.a, p = this.p, rng = this.rng;
+    const x = a.x[i], y = a.y[i];
+    const c = this.veg.cellAt(x, y);
+    const o = i * NG;
+    const juvenile = a.age[i] < P.matureAge;
+    const spd = a.genes[o + G_SPEED] / Math.pow(a.genes[o + G_SIZE], 0.25);
+    const run = P.runSpeed * spd * (a.stamina[i] > 0.05 ? 1 : 0.3);
+    const walk = P.walkSpeed;
+    let dvx = 0, dvy = 0;
+    let state: number = St.Rest;
+    const done = () => { a.dvx[i] = dvx; a.dvy[i] = dvy; a.state[i] = state; };
+    if (a.fleeX[i] === 0 && a.fleeY[i] === 0) { a.fleeX[i] = x; a.fleeY[i] = y; }
+
+    // kittens shadow their mother
+    const m = a.mother[i];
+    if (juvenile && a.same(m, a.motherId[i])) {
+      const dx = a.x[m] - x, dy = a.y[m] - y, d = Math.sqrt(dx * dx + dy * dy) + 0.01;
+      if (d > 4) { const v = Math.min(walk * 2.2, 0.5 + d * 0.4); dvx = (dx / d) * v; dvy = (dy / d) * v; state = St.Walk; }
+      return done();
+    }
+    // a young cougar that has just grown up needs a range of its own: no adult of its sex nearby, or it leaves the valley
+    if (!juvenile && a.age[i] < P.matureAge + 4 && a.parentA[i] !== 0) {
+      let home: [number, number] | null = null;
+      for (let k = 0; k < 30 && !home; k++) {
+        const [sx, sy] = this.coverSpot();
+        let free = true;
+        for (let q = 0; q < this.predN && free; q++) {
+          const j = this.predList[q];
+          if (j === i || !a.alive[j] || a.sp[j] !== Sp.Cougar || a.male[j] !== a.male[i] || a.age[j] < P.matureAge) continue;
+          if (Math.hypot(a.fleeX[j] - sx, a.fleeY[j] - sy) < p.cougarRange) free = false;
+        }
+        if (free) home = [sx, sy];
+      }
+      if (!home) { this.die(i, 'removed'); return; }
+      a.fleeX[i] = home[0];
+      a.fleeY[i] = home[1];
+    }
+    const hx = a.fleeX[i], hy = a.fleeY[i];
+
+    const chasing = a.state[i] === St.Chase && a.same(a.target[i], a.targetId[i]);
+    // water
+    if (!chasing && ((a.hydration[i] < 0.3 && a.energy[i] > 0.12) || (a.state[i] === St.Drink && a.hydration[i] < 0.97))) {
+      if (this.world.waterDist[c] < 3) { state = St.Drink; a.hydration[i] = Math.min(1, a.hydration[i] + 0.06); }
+      else { dvx = this.waterGX[c] * walk * 1.4; dvy = this.waterGY[c] * walk * 1.4; state = St.Walk; }
+      return done();
+    }
+    // return to a cached kill
+    if (a.energy[i] < 0.9 && !chasing) {
+      const k = this.nearestCarcass(x, y, 35, 1100, true);
+      if (k >= 0) {
+        const dx = this.cX[k] - x, dy = this.cY[k] - y, d = Math.sqrt(dx * dx + dy * dy) + 0.01;
+        if (d < 2.2) { state = St.Eat; a.timer[i] = k; }
+        else { const v = Math.min(walk * 1.6, 0.6 + d * 0.5); dvx = (dx / d) * v; dvy = (dy / d) * v; state = St.Walk; }
+        return done();
+      }
+    }
+    // the spring: short and explosive, abandoned quickly
+    if (chasing) {
+      const tg = a.target[i];
+      const dx = a.x[tg] - x, dy = a.y[tg] - y, d = Math.sqrt(dx * dx + dy * dy) + 0.01;
+      if (a.stamina[i] < 0.05 || d > 45) {
+        a.target[i] = -1;
+        a.timer[i] = -120;
+        state = St.Rest;
+      } else {
+        const lead = Math.min(0.5, d / (run + 0.1));
+        const px = a.x[tg] + a.vx[tg] * lead - x, py = a.y[tg] + a.vy[tg] * lead - y;
+        const pl = Math.sqrt(px * px + py * py) + 0.01;
+        dvx = (px / pl) * run;
+        dvy = (py / pl) * run;
+        state = St.Chase;
+      }
+      return done();
+    }
+    const resting = a.timer[i] < 0;
+    if (resting) a.timer[i] += 3;
+    if (a.energy[i] < 0.75 && !resting) {
+      if (a.state[i] === St.Stalk && a.flee[i] > 0) {
+        // lying in wait: spring at the most vulnerable animal that wanders close
+        const prey = this.preyWithin(i, p.cougarAmbushRadius);
+        if (prey >= 0) {
+          a.target[i] = prey;
+          a.targetId[i] = a.id[prey];
+          this.logStory(i, 'chase', a.sp[prey]);
+          dbg('cg_spring');
+          const dx = a.x[prey] - x, dy = a.y[prey] - y, d = Math.sqrt(dx * dx + dy * dy) + 0.01;
+          dvx = (dx / d) * run;
+          dvy = (dy / d) * run;
+          state = St.Chase;
+          return done();
+        }
+        state = St.Stalk;
+        return done();
+      }
+      // pick a new ambush point: cover near water or prey, within the home range
+      if (a.state[i] !== St.Walk || (a.tx[i] === 0 && a.ty[i] === 0) || a.flee[i] === 0) {
+        let bs = -1e9;
+        for (let k = 0; k < 10; k++) {
+          const ang = rng.next() * Math.PI * 2, r = rng.next() * 90;
+          const px = Math.min(this.world.size - 4, Math.max(4, hx + Math.cos(ang) * r));
+          const py = Math.min(this.world.size - 4, Math.max(4, hy + Math.sin(ang) * r));
+          const pc = this.veg.cellAt(px, py);
+          if (this.world.water[pc]) continue;
+          const wd = this.world.waterDist[pc];
+          const s = this.world.cover[pc] * 0.5 + (wd > 3 && wd < 15 ? 0.6 : wd < 30 ? 0.2 : 0)
+            + 0.025 * this.prey.counts[this.prey.bucketOf(px, py)] - Math.hypot(px - x, py - y) / 400;
+          if (s > bs) { bs = s; a.tx[i] = px; a.ty[i] = py; }
+        }
+      }
+      const dx = a.tx[i] - x, dy = a.ty[i] - y, d = Math.sqrt(dx * dx + dy * dy);
+      if (d > 3) {
+        const v = walk * 1.2;
+        dvx = (dx / d) * v;
+        dvy = (dy / d) * v;
+        state = St.Walk;
+        a.flee[i] = 1; // keeps the destination until arrival
+      } else {
+        state = St.Stalk;
+        dbg('cg_wait');
+        a.flee[i] = 260 + rng.int(220); // patience before moving on
+      }
+      return done();
+    }
+    // fed: lie up in cover near home
+    const dh = Math.hypot(hx - x, hy - y);
+    if (dh > 50) { dvx = ((hx - x) / dh) * walk; dvy = ((hy - y) / dh) * walk; state = St.Walk; }
+    else state = St.Rest;
+    return done();
+  }
+
+  /** The most vulnerable herbivore within r meters (for an ambush). */
+  private preyWithin(i: number, r: number): number {
+    const a = this.a;
+    const g = this.prey, nb = g.nb, bs = g.bs;
+    const x = a.x[i], y = a.y[i];
+    const bx = Math.min(nb - 1, Math.max(0, (x / bs) | 0)), by = Math.min(nb - 1, Math.max(0, (y / bs) | 0));
+    let best = -1, bestS = 0;
+    for (let yy = by - 1; yy <= by + 1; yy++) {
+      if (yy < 0 || yy >= nb) continue;
+      for (let xx = bx - 1; xx <= bx + 1; xx++) {
+        if (xx < 0 || xx >= nb) continue;
+        const b = yy * nb + xx;
+        for (let k = g.start[b], e = g.start[b + 1]; k < e; k++) {
+          const j = g.items[k];
+          if (!a.alive[j]) continue;
+          const dx = a.x[j] - x, dy = a.y[j] - y;
+          const d = Math.sqrt(dx * dx + dy * dy);
+          if (d > r) continue;
+          const Pj = this.p.species[a.sp[j]];
+          const young = a.age[j] < Pj.matureAge ? 2.5 : 1;
+          const sc = (young * (1.6 - a.energy[j])) / (Pj.toughness * a.genes[j * NG + G_SIZE]) / (d + 4);
+          if (sc > bestS) { bestS = sc; best = j; }
+        }
+      }
+    }
+    return best;
+  }
+
+  private liveCougar(i: number, P: SpeciesParams): void {
+    const a = this.a, p = this.p;
+    const st = a.state[i];
+    if (st === St.Eat) {
+      const k = a.timer[i];
+      if (k >= 0 && k < this.cN && this.cMeat[k] > 0.02 && Math.abs(this.cX[k] - a.x[i]) < 3 && Math.abs(this.cY[k] - a.y[i]) < 3) {
+        const take = Math.min(0.011, this.cMeat[k]);
+        this.cMeat[k] -= take;
+        a.energy[i] = Math.min(1, a.energy[i] + take);
+      }
+      a.dvx[i] = 0;
+      a.dvy[i] = 0;
+    } else if (st === St.Chase) {
+      const t = a.target[i];
+      if (a.same(t, a.targetId[i])) {
+        const dx = a.x[t] - a.x[i], dy = a.y[t] - a.y[i];
+        if (dx * dx + dy * dy < 4.5) {
+          dbg('cg_contact');
+          const Pt = p.species[a.sp[t]];
+          const isYoung = a.age[t] < Pt.matureAge;
+          const et = a.energy[t];
+          const guards = this.guardsNear(t, isYoung);
+          const resist = Pt.toughness * a.genes[t * NG + G_SIZE] * (isYoung ? 0.35 : 1) * (0.4 + 1.2 * et * et) * (1 + Pt.defense * Math.min(5, guards));
+          if (this.rng.next() < (p.cougarKillChance * a.genes[i * NG + G_SIZE]) / resist) {
+            a.kills[i]++;
+            this.cKills++;
+            this.cKillsCougar++;
+            this.totalKills++;
+            this.logStory(i, 'kill', a.sp[t]);
+            this.veg.stamp(this.veg.fear, a.x[t], a.y[t], p.fearKillRadius, p.fearKill, 1);
+            this.die(t, 'killed');
+            a.target[i] = -1;
+          }
+        }
+      }
+    }
+    // kittens eat at their mother's kill
+    const m = a.mother[i];
+    if (a.age[i] < P.matureAge && a.same(m, a.motherId[i]) && a.state[m] === St.Eat && a.energy[i] < 0.95) {
+      const k = a.timer[m];
+      if (k >= 0 && k < this.cN && this.cMeat[k] > 0.02 && Math.abs(this.cX[k] - a.x[i]) < 10 && Math.abs(this.cY[k] - a.y[i]) < 10) {
+        this.cMeat[k] -= 0.006;
+        a.energy[i] = Math.min(1, a.energy[i] + 0.006);
+      }
+    }
+    if (!this.vitals(i, P)) return;
+    // breeding: a well-fed female finds a male somewhere in the valley
+    if (!a.male[i] && a.age[i] >= P.matureAge && a.pregnant[i] === 0 && a.cooldown[i] === 0 && a.energy[i] > 0.6 && (this.tick + i) % 30 === 0) {
+      let mate = -1;
+      for (let k = 0; k < this.predN; k++) {
+        const j = this.predList[k];
+        if (a.alive[j] && a.sp[j] === Sp.Cougar && a.male[j] && a.age[j] >= P.matureAge && Math.hypot(a.x[j] - a.x[i], a.y[j] - a.y[i]) < 260) { mate = j; break; }
+      }
+      if (mate >= 0) {
+        a.pregnant[i] = P.gestation;
+        a.mateId[i] = a.id[mate];
+        for (let g = 0; g < NG; g++) a.mateGenes[i * NG + g] = a.genes[mate * NG + g];
+      }
+    }
+    if (a.pregnant[i] > 0 && --a.pregnant[i] === 0) {
+      const litter = Math.max(1, Math.min(4, Math.round(P.litter * a.genes[i * NG + G_LITTER] + (this.rng.next() - 0.5))));
+      for (let k = 0; k < litter; k++) {
+        const c = this.birth(i, -1, Sp.Cougar, a.x[i] + this.rng.range(-1, 1), a.y[i] + this.rng.range(-1, 1));
+        a.energy[c] = 0.6;
+      }
+      this.logStory(i, 'birth', litter);
+      a.energy[i] -= 0.15;
+      a.cooldown[i] = P.birthCooldown;
+    }
   }
 
   // ------------------------------------------------------------------ ravens
@@ -1630,6 +1926,7 @@ export class Sim implements SimLike {
     row.kills = this.cKills;
     row.kills_pronghorn = this.cKillsDeer;
     row.strife_wolf = this.cStrife;
+    row.kills_cougar = this.cKillsCougar;
     row.births_pronghorn = this.cBirths[Sp.Deer];
     row.starved_pronghorn = this.cStarve[Sp.Deer];
     row.chases = this.cChases;
@@ -1652,6 +1949,7 @@ export class Sim implements SimLike {
     this.cKills = 0;
     this.cKillsDeer = 0;
     this.cStrife = 0;
+    this.cKillsCougar = 0;
     this.cChases = 0;
     this.cGiveUps = 0;
     this.cBirths.fill(0);

@@ -1,5 +1,6 @@
 // Top right: the seed chip (click to copy) and the menu (scenarios, new world, keys).
 import { button, h, setText } from './dom';
+import { NAMED_SEEDS, type NamedSeed } from '../seeds';
 import { icon } from './icons';
 import { SCENARIOS, type UIActions } from './types';
 
@@ -7,6 +8,12 @@ const WORDS = [
   'bluestem', 'switchgrass', 'cottonwood', 'sumac', 'meadowlark', 'bison', 'prairie', 'plover', 'larkspur', 'coneflower',
   'fescue', 'sandhill', 'harrier', 'gramma', 'sedge', 'redtail', 'thistle', 'dogwood', 'creekbed', 'wildrye',
 ];
+
+/** The named world a seed belongs to, if any. */
+export function namedSeed(seed: string): NamedSeed | undefined {
+  const k = seed.trim();
+  return NAMED_SEEDS.find((n) => n.seed === k);
+}
 
 /** A readable random seed: a prairie word and four digits. */
 export function randomSeed(): string {
@@ -31,6 +38,8 @@ export class TopRight {
   readonly el: HTMLElement;
   private seedBtn: HTMLButtonElement;
   private seedText: HTMLElement;
+  private seedName: HTMLElement;
+  private namedBtns = new Map<string, HTMLButtonElement>();
   private seedIcon: HTMLElement;
   private menuBtn: HTMLButtonElement;
   private menu: HTMLElement;
@@ -44,9 +53,11 @@ export class TopRight {
 
   constructor(private actions: UIActions) {
     this.seedText = h('span', { class: 'tg-seed-text' });
+    this.seedName = h('span', { class: 'tg-seed-name' });
     this.seedIcon = h('span', { class: 'tg-seed-ic', html: icon('copy', 14) });
     this.seedBtn = button(
       { class: 'tg-seed tg-glass tg-leaf', title: 'Copy the seed so you can share this world', onclick: () => this.copySeed() },
+      this.seedName,
       h('span', { class: 'tg-seed-label', text: 'Seed' }),
       this.seedText,
       this.seedIcon,
@@ -85,6 +96,17 @@ export class TopRight {
       scenarios.append(b);
     }
 
+    const named = h('div', { class: 'tg-menu-list' });
+    for (const n of NAMED_SEEDS) {
+      const b = button(
+        { class: 'tg-sc', 'aria-pressed': 'false', title: `Seed ${n.seed}`, onclick: () => this.beginNamed(n) },
+        h('span', { class: 'tg-sc-dot', 'aria-hidden': 'true' }),
+        h('span', { class: 'tg-sc-text' }, h('span', { class: 'tg-sc-name', text: n.name }), h('span', { class: 'tg-sc-blurb', text: n.blurb })),
+      );
+      this.namedBtns.set(n.seed, b);
+      named.append(b);
+    }
+
     const keys = h('dl', { class: 'tg-keys' });
     for (const [ks, v] of KEYS) keys.append(h('dt', {}, ...ks.map((k) => h('kbd', { class: 'tg-kbd', text: k }))), h('dd', { text: v }));
 
@@ -93,6 +115,8 @@ export class TopRight {
       { class: 'tg-menu tg-glass', role: 'dialog', 'aria-label': 'Menu', hidden: true },
       h('h2', { class: 'tg-menu-h', text: 'Scenarios' }),
       scenarios,
+      h('h2', { class: 'tg-menu-h', text: 'Named worlds' }),
+      named,
       h('h2', { class: 'tg-menu-h', text: 'New world' }),
       h(
         'div',
@@ -130,6 +154,10 @@ export class TopRight {
       this.seedIcon.innerHTML = icon('copy', 14);
       setText(this.seedText, seed);
       this.seedBtn.title = `Copy the seed (${seed}) so you can share this world`;
+      const n = namedSeed(seed);
+      setText(this.seedName, n ? n.name : '');
+      this.seedBtn.classList.toggle('has-name', !!n);
+      for (const [k, b] of this.namedBtns) b.setAttribute('aria-pressed', n && n.seed === k ? 'true' : 'false');
     }
     if (scenario !== this.scenario) {
       this.scenario = scenario;
@@ -160,10 +188,16 @@ export class TopRight {
     }, 200);
   }
 
+  /** A named world always starts on the default scenario, which is what it was found on. */
+  private beginNamed(n: NamedSeed): void {
+    this.close();
+    this.actions.newWorld(n.seed, 'prairie');
+  }
+
   private begin(scenarioId: string | null): void {
     const typed = this.input.value.trim();
     const seed = typed || randomSeed();
-    const scenario = scenarioId ?? (this.scenario || 'baseline');
+    const scenario = scenarioId ?? (this.scenario || 'prairie');
     this.close();
     this.input.value = '';
     this.actions.newWorld(seed, scenario);

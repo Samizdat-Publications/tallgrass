@@ -37,6 +37,9 @@ export class Agents {
   alt!: Float32Array;
   fleeX!: Float32Array;
   fleeY!: Float32Array;
+  /** Generic target point (a cougar's ambush spot). */
+  tx!: Float32Array;
+  ty!: Float32Array;
   age!: Int32Array;
   born!: Int32Array;
   timer!: Int32Array;
@@ -88,6 +91,8 @@ export class Agents {
     this.alt = g(Float32Array, this.alt);
     this.fleeX = g(Float32Array, this.fleeX);
     this.fleeY = g(Float32Array, this.fleeY);
+    this.tx = g(Float32Array, this.tx);
+    this.ty = g(Float32Array, this.ty);
     this.age = g(Int32Array, this.age);
     this.born = g(Int32Array, this.born);
     this.timer = g(Int32Array, this.timer);
@@ -124,6 +129,7 @@ export class Agents {
     this.stamina[i] = 1;
     this.alt[i] = 0;
     this.fleeX[i] = this.fleeY[i] = 0;
+    this.tx[i] = this.ty[i] = 0;
     this.age[i] = 0;
     this.timer[i] = 0;
     this.flee[i] = 0;

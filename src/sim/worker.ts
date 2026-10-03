@@ -1,6 +1,6 @@
 // Web Worker host for the simulation. The main thread only renders and sends commands.
 import { NG, GENE_NAMES, G_COAT, G_SIZE, G_SPEED } from './agents';
-import { Sim, SimEvent } from './sim';
+import { Sim, SimEvent, StoryEntry } from './sim';
 import { Intervention, SPECIES_COUNT, TICKS_PER_SECOND } from './types';
 
 export type ToWorker =
@@ -70,6 +70,9 @@ export type FromWorker =
       history: HistoryRow[];
       selected: AnimalDetail | null;
       selectedGone: boolean;
+      /** Life story of the selected animal (kept after it dies). */
+      story: StoryEntry[];
+      storyId: number;
       speed: number;
       ticksPerSec: number;
       stepMs: number;
@@ -149,7 +152,7 @@ function post(forceVeg: boolean): void {
   const msg: FromWorker = {
     type: 'snap', tick: s.tick, env: s.env, count: s.count, ids: s.ids, agents: s.agents, carcassCount: s.carcassCount,
     carcasses: s.carcasses, veg: s.veg, pop: Array.from(s.pop), events, history, selected: sel,
-    selectedGone: selectedId !== null && sel === null, speed: skipping ? -1 : speed, ticksPerSec, stepMs: stepMsAvg,
+    selectedGone: selectedId !== null && sel === null, story: sim.story.slice(), storyId: sim.trackedId, speed: skipping ? -1 : speed, ticksPerSec, stepMs: stepMsAvg,
   };
   history = [];
   const transfer: Transferable[] = [s.ids.buffer, s.agents.buffer, s.carcasses.buffer];
@@ -224,6 +227,7 @@ ctx.onmessage = (e: MessageEvent<ToWorker>) => {
       break;
     case 'select':
       selectedId = m.id;
+      sim?.setTracked(m.id ?? 0);
       break;
     case 'skip':
       skipping = true;

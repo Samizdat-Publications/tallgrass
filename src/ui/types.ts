@@ -1,7 +1,7 @@
 // Public contract between the UI and the game (main.ts). Types only.
 import type { EnvState } from '../sim/types';
 import type { HistoryRow, AnimalDetail } from '../sim/worker';
-import type { SimEvent } from '../sim/sim';
+import type { SimEvent, StoryEntry } from '../sim/sim';
 
 export type ToolId = 'rain' | 'drought' | 'fire' | 'plague' | 'cull' | 'addWolves' | 'addBison' | 'removeWolves';
 export type OverlayId = 'none' | 'vegetation' | 'fear' | 'territory' | 'traits';
@@ -37,13 +37,17 @@ export interface UIFrame {
   seed: string;
   scenario: string;
   following: number | null;
+  /** Life story of the selected animal (kept after it dies, with a final 'died' entry). */
+  story?: StoryEntry[];
+  /** Id of the animal the story belongs to. */
+  storyId?: number;
 }
 
 /** Scenario ids passed to UIActions.newWorld, with the names the menu shows. */
 export const SCENARIOS: { id: string; name: string; blurb: string }[] = [
-  { id: 'baseline', name: 'Open prairie', blurb: 'Bison, wolves and ravens settle in together.' },
+  { id: 'prairie', name: 'Open prairie', blurb: 'Bison, wolves and ravens settle in together.' },
   { id: 'yellowstone', name: 'Yellowstone return', blurb: 'No wolves at first. Then they come back.' },
-  { id: 'plenty', name: 'Island of plenty', blurb: 'No predators. See how far the herds can grow.' },
+  { id: 'island', name: 'Island of plenty', blurb: 'No predators. See how far the herds can grow.' },
   { id: 'drought', name: 'The long drought', blurb: 'The rains fail and the grass thins out.' },
   { id: 'collapse', name: 'Collapse', blurb: 'A fragile valley, pushed to the edge.' },
 ];

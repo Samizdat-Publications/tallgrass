@@ -1,8 +1,10 @@
 // Bottom right: the inspector. Appears when an animal is selected and reads like a documentary caption.
+import type { StoryEntry } from '../sim/sim';
 import type { AnimalDetail } from '../sim/worker';
 import { button, h, setText } from './dom';
 import { activityPhrase, animalCaption, fmtInt, lineageText, packName, plural } from './describe';
 import { icon } from './icons';
+import { buildStory, diedEntry, memorialText } from './story';
 import { traitIndex } from './traits';
 import type { UIActions } from './types';
 
@@ -59,14 +61,27 @@ export class Inspector {
   private hideTimer = 0;
   private lastKey = '';
 
+  // life story and memorial
+  private storyEl: HTMLElement;
+  private storyList: HTMLElement;
+  private storyCount: HTMLElement;
+  private storyToggle: HTMLButtonElement;
+  private storyOpen = typeof window !== 'undefined' ? window.innerHeight >= 800 : true;
+  private storySig = '';
+  private memorial = false;
+  private memorialText: HTMLElement;
+  private lastDetail: AnimalDetail | null = null;
+
   constructor(private actions: UIActions) {
     this.caption = h('h2', { class: 'tg-insp-caption' });
     this.lineage = h('p', { class: 'tg-insp-lineage' });
     this.activity = h('p', { class: 'tg-insp-activity' });
     this.chips = h('div', { class: 'tg-insp-chips' });
-    this.stats = h('div', { class: 'tg-insp-stats' });
+    this.stats = h('div', { class: 'tg-insp-stats tg-live' });
+    this.activity.classList.add('tg-live');
+    this.chips.classList.add('tg-live');
 
-    const bars = h('div', { class: 'tg-insp-bars' });
+    const bars = h('div', { class: 'tg-insp-bars tg-live' });
     for (const b of BARS) {
       const fill = h('span', { class: 'tg-bar-fill' });
       const track = h('span', { class: 'tg-bar-track', role: 'meter', 'aria-label': b.label, 'aria-valuemin': '0', 'aria-valuemax': '100' }, fill);
@@ -74,7 +89,7 @@ export class Inspector {
       this.bars.set(b.key, { fill, track, last: -1 });
     }
 
-    const traits = h('div', { class: 'tg-insp-traits', role: 'group', 'aria-label': 'Traits against the species average' });
+    const traits = h('div', { class: 'tg-insp-traits tg-live', role: 'group', 'aria-label': 'Traits against the species average' });
     for (const t of TRAITS) {
       const dot = h('span', { class: 'tg-gauge-dot' });
       const tick = h('span', { class: 'tg-gauge-tick' });
@@ -89,28 +104,51 @@ export class Inspector {
 
     this.followLabel = h('span', { text: 'Follow' });
     this.followBtn = button(
-      { class: 'tg-btn tg-insp-follow', title: 'Follow with the camera (F)', 'aria-pressed': 'false', onclick: () => this.onFollow() },
+      { class: 'tg-btn tg-insp-follow tg-live', title: 'Follow with the camera (F)', 'aria-pressed': 'false', onclick: () => this.onFollow() },
       h('span', { html: icon('follow', 16) }),
       this.followLabel,
       h('kbd', { class: 'tg-kbd', text: 'F' }),
     );
     const closeBtn = button(
-      { class: 'tg-btn tg-insp-close', title: 'Close (Esc)', onclick: () => this.actions.select(null) },
+      { class: 'tg-btn tg-insp-close', title: 'Close (Esc)', onclick: () => this.close() },
       h('span', { html: icon('close', 16) }),
       h('span', { text: 'Close' }),
       h('kbd', { class: 'tg-kbd', text: 'Esc' }),
     );
 
+    // "In memoriam": replaces the live readout when the animal dies, and stays until the player closes it
+    this.memorialText = h('p', { class: 'tg-memorial-text' });
+    const memorial = h(
+      'div',
+      { class: 'tg-memorial' },
+      h('p', { class: 'tg-memorial-label', text: 'In memoriam' }),
+      this.memorialText,
+    );
+
+    // collapsible life story, newest at the bottom
+    this.storyCount = h('span', { class: 'tg-story-count' });
+    this.storyList = h('ol', { class: 'tg-story-list' });
+    this.storyToggle = button(
+      { class: 'tg-story-toggle', 'aria-expanded': String(this.storyOpen), onclick: () => this.setStoryOpen(!this.storyOpen) },
+      h('span', { class: 'tg-story-title', text: 'Life story' }),
+      this.storyCount,
+      h('span', { class: 'tg-story-caret', html: icon('chevronDown', 16) }),
+    );
+    this.storyEl = h('section', { class: 'tg-story', 'aria-label': 'Life story' }, this.storyToggle, this.storyList);
+    this.storyEl.classList.toggle('is-collapsed', !this.storyOpen);
+
     this.el = h(
       'section',
       { class: 'tg-insp tg-glass', 'aria-label': 'Selected animal', hidden: true },
       h('header', { class: 'tg-insp-head' }, this.caption, this.lineage),
+      memorial,
       this.activity,
       this.chips,
       bars,
       traits,
-      h('p', { class: 'tg-insp-note', text: 'Dot: this animal. Grey tick: where the founders started. Bright tick: the species now.' }),
+      h('p', { class: 'tg-insp-note tg-live', text: 'Dot: this animal. Grey tick: where the founders started. Bright tick: the species now.' }),
       this.stats,
+      this.storyEl,
       h('div', { class: 'tg-insp-actions' }, this.followBtn, closeBtn),
     );
   }
@@ -119,16 +157,46 @@ export class Inspector {
     return this.open;
   }
 
+  /** True while the "In memoriam" card is showing for an animal that has died. */
+  get isMemorial(): boolean {
+    return this.memorial;
+  }
+
+  /** Close button and Esc: let go of a live animal, or put away a memorial. */
+  close(): void {
+    if (this.memorial) this.closeMemorial();
+    this.actions.select(null);
+  }
+
+  closeMemorial(): void {
+    this.memorial = false;
+    this.lastDetail = null;
+    this.el.classList.remove('is-memorial');
+    this.hide();
+  }
+
+  private setStoryOpen(open: boolean): void {
+    this.storyOpen = open;
+    this.storyEl.classList.toggle('is-collapsed', !open);
+    this.storyToggle.setAttribute('aria-expanded', String(open));
+    if (open) this.storyList.scrollTop = this.storyList.scrollHeight;
+  }
+
   private onFollow(): void {
     if (this.currentId < 0) return;
     this.actions.follow(this.following ? null : this.currentId);
   }
 
-  update(sel: AnimalDetail | null, followingId: number | null): void {
+  update(sel: AnimalDetail | null, followingId: number | null, story: StoryEntry[] = [], storyId = 0): void {
     if (sel) {
+      if (this.memorial) {
+        this.memorial = false;
+        this.el.classList.remove('is-memorial');
+      }
       this.show();
       if (sel.id !== this.currentId) this.rebuild(sel);
       this.currentId = sel.id;
+      this.lastDetail = sel;
       this.refresh(sel);
       const f = followingId === sel.id;
       if (f !== this.following) {
@@ -136,9 +204,45 @@ export class Inspector {
         this.followBtn.setAttribute('aria-pressed', f ? 'true' : 'false');
         setText(this.followLabel, f ? 'Following' : 'Follow');
       }
-    } else if (this.open) {
-      this.hide();
+      this.renderStory(storyId === sel.id ? story : [], sel);
+      return;
     }
+    if (this.memorial) return; // stays until the player closes it
+    if (!this.open) return;
+    // the selection vanished: a death keeps the card open as a memorial, a deselect closes it
+    const d = this.lastDetail;
+    const died = d && storyId === d.id ? diedEntry(story) : null;
+    if (d && died) this.enterMemorial(d, story, died);
+    else this.hide();
+  }
+
+  private enterMemorial(d: AnimalDetail, story: StoryEntry[], died: StoryEntry): void {
+    this.memorial = true;
+    this.el.classList.add('is-memorial');
+    this.following = false;
+    setText(this.caption, animalCaption(d.sp, d.male, d.age, d.matureAge, d.alpha, d.maxAge));
+    setText(this.memorialText, memorialText({ sp: d.sp, male: d.male }, story, died, d.age, d.maxAge, d.children));
+    this.renderStory(story, d);
+    this.setStoryOpen(true);
+  }
+
+  /** The life story as documentary captions: valley season and year, then the line. Re-rendered only when it changes. */
+  private renderStory(entries: StoryEntry[], d: AnimalDetail): void {
+    const last = entries.length ? entries[entries.length - 1] : null;
+    const sig = `${d.id}:${entries.length}:${last ? last.tick : 0}:${this.memorial ? 1 : 0}`;
+    if (sig === this.storySig) return;
+    this.storySig = sig;
+    const lines = buildStory(entries, { sp: d.sp, male: d.male });
+    const atBottom = this.storyList.scrollHeight - this.storyList.scrollTop - this.storyList.clientHeight < 12;
+    if (!lines.length) {
+      this.storyList.replaceChildren(h('li', { class: 'tg-story-empty', text: this.memorial ? 'Nothing was recorded.' : 'Nothing to tell yet. Give it time.' }));
+    } else {
+      this.storyList.replaceChildren(
+        ...lines.map((l) => h('li', { class: 'tg-story-line' }, h('span', { class: 'tg-story-when', text: l.when }), ' ', h('span', { class: 'tg-story-text', text: l.text }))),
+      );
+    }
+    setText(this.storyCount, lines.length ? String(lines.length) : '');
+    if (atBottom || this.memorial) this.storyList.scrollTop = this.storyList.scrollHeight;
   }
 
   private show(): void {
@@ -158,6 +262,7 @@ export class Inspector {
       if (!this.open) {
         this.el.hidden = true;
         this.currentId = -1;
+        this.storySig = '';
       }
     }, 220);
   }

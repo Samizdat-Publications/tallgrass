@@ -95,6 +95,10 @@ export interface Params {
   /** If > 0, wolves are absent at first and this many arrive at wolfArrivalTick (a natural recolonization). */
   wolfArrivalTick: number;
   wolfArrivalCount: number;
+  cougarKillChance: number;
+  cougarAmbushRadius: number;
+  /** Same-sex adults keep their home ranges at least this far apart (m). */
+  cougarRange: number;
   wolfOpportunism: number;
   wolfTestGiveUp: number;
   wolfStrife: number;
@@ -147,7 +151,12 @@ export function defaultParams(): Params {
     wariness: 0.85, defense: 0.08, camo: 0.6, diet: 1, hideAge: 170,
   });
   species[Sp.Rabbit] = base({ initial: 0 });
-  species[Sp.Cougar] = base({ initial: 0 });
+  // cougar: solitary ambush hunter; waits in cover near water and springs a short, explosive sprint
+  species[Sp.Cougar] = base({
+    maxAge: 8400, matureAge: 1300, gestation: 300, birthCooldown: 2600, litter: 2.2,
+    walkSpeed: 1.6, runSpeed: 18, stamina: 45, sight: 45, metabolism: 1 / 1050, thirst: 1 / 1700,
+    meat: 2.5, toughness: 1.6, initial: 0, herdRadius: 0, camo: 0.8,
+  });
   return {
     species,
     grassGrowth: 0.0016,
@@ -184,6 +193,9 @@ export function defaultParams(): Params {
     wolfImmigration: 0,
     wolfArrivalTick: 0,
     wolfArrivalCount: 12,
+    cougarKillChance: 0.6,
+    cougarAmbushRadius: 18,
+    cougarRange: 120,
     wolfOpportunism: 0.25,
     wolfTestGiveUp: 0.05,
     wolfStrife: 0.002,
