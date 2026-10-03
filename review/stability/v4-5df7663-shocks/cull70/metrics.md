@@ -3,7 +3,7 @@
 - At 40% of the run, 70% of the bison are removed.
 - Seeds: 20 (1..20)
 - Run length: 288000 ticks (120 years)
-- Sampled every 1000 ticks; commit 0618dc7; real sim
+- Sampled every 1000 ticks; commit 5df7663 (frozen copy); real sim
 - Shocks: cull 70% bison at tick 115000 (year 47.9)
 
 Years are 1 year = 2400 ticks. Statistics exclude the first 15% of each run (burn-in).

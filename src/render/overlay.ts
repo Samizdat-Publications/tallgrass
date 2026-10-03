@@ -38,6 +38,7 @@ uniform float uWorld;
 uniform int uMode;
 uniform float uAlpha;
 uniform float uTime;
+uniform float uNight;
 uniform vec4 uPacks[${MAX_PACKS}];
 uniform vec3 uPackCol[${MAX_PACKS}];
 uniform int uPackN;
@@ -85,6 +86,8 @@ void main() {
   float edge = smoothstep(0.0, 6.0, min(min(vXZ.x, vXZ.y), min(uWorld - vXZ.x, uWorld - vXZ.y)));
   // keep the ponds and the creek clear (static A = distance to water / 64 m)
   if (uMode != 3) edge *= smoothstep(0.004, 0.035, texture2D(tStatic, uv).a);
+  // the night grade cools and lifts everything; keep overlay colours saturated and a little darker so they stay legible
+  col.rgb = pow(max(col.rgb, vec3(0.0)), vec3(1.0 + 1.3 * uNight)) * (1.0 - 0.3 * uNight);
   gl_FragColor = vec4(col.rgb, col.a * uAlpha * edge);
 }`;
 
@@ -128,6 +131,7 @@ export class OverlayLayer {
         uMode: { value: 0 },
         uAlpha: { value: 0 },
         uTime: shared.time,
+        uNight: shared.night,
         uPacks: { value: packs },
         uPackCol: { value: cols },
         uPackN: { value: 0 },

@@ -3,7 +3,7 @@
 - At 35% of the run all wolves are removed; at 50% eight wolves are reintroduced.
 - Seeds: 20 (1..20)
 - Run length: 288000 ticks (120 years)
-- Sampled every 1000 ticks; commit 0618dc7; real sim
+- Sampled every 1000 ticks; commit 5df7663 (frozen copy); real sim
 - Shocks: wolves removed at tick 101000 (year 42.1); introduce 8 wolves at tick 144000 (year 60.0)
 - Wolf near-zero stats can include the deliberate wolf-free stretch between removal and reintroduction.
 

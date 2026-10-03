@@ -3,7 +3,7 @@
 - No shocks: the long-run stability test.
 - Seeds: 20 (1..20)
 - Run length: until gen_bison >= 1000 (cap 3600000 ticks)
-- Sampled every 2000 ticks; commit unknown; real sim
+- Sampled every 2000 ticks; commit 5df7663 (frozen copy); real sim
 
 Years are 1 year = 2400 ticks. Statistics exclude the first 15% of each run (burn-in).
 Near-zero = below 10% of that seed's post-burn-in mean. Peaks and period use a one-year smoothed series.

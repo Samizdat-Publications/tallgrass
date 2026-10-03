@@ -3,7 +3,7 @@
 - At 40% of the run, a two-year drought (4800 ticks, severity 0.8).
 - Seeds: 20 (1..20)
 - Run length: 288000 ticks (120 years)
-- Sampled every 1000 ticks; commit 0618dc7; real sim
+- Sampled every 1000 ticks; commit 5df7663 (frozen copy); real sim
 - Shocks: drought (2 yr) at tick 115000 (year 47.9)
 
 Years are 1 year = 2400 ticks. Statistics exclude the first 15% of each run (burn-in).

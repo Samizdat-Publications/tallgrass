@@ -40,6 +40,9 @@ function hms(sec: number): string {
 }
 
 function gitCommit(): string {
+  // runs from scratch/frozen/<hash>/src are that commit, whatever HEAD has moved on to
+  const frozen = /frozen[\\/]([0-9a-f]{7,40})[\\/]/.exec(process.argv[1] ?? '');
+  if (frozen) return `${frozen[1]} (frozen copy)`;
   try {
     return execFileSync('git', ['rev-parse', '--short', 'HEAD'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
   } catch {
