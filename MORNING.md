@@ -15,7 +15,7 @@ Locally: `npm run dev`, then http://localhost:5199/.
 **Tallgrass**: a living tallgrass prairie seen like a drone nature documentary. Grass greens and cures with the seasons; bison graze it and pronghorn browse forbs and shrubs; wolf packs hold named territories, bud new packs and fight over borders; ravens follow every kill; carcasses feed the soil. Every animal carries heritable traits (speed, size, sight, boldness, herding, coat, litter) that evolve. The sim runs in a Web Worker, deterministic from the seed. The renderer is Three.js (WebGL2) with about a million wind-blown grass blades, procedurally animated instanced animals, a golden-hour sky with a slow day cycle, seasons, snow, fire with smoke and regrowth. The UI is a "documentary broadcast" overlay: location slate, chronicle, chapter cards, population and evolution graphs, inspector with each animal's life story, god tools, map overlays. Ambient sound and SFX by ElevenLabs.
 
 New since 09:00:
-- **Challenges** (menu, top): five tuned challenges, each a named world, a time limit, an intervention budget and a goal. From easiest: *The wolves come home*, *Island of plenty*, *Knife's edge*, *Pull it back*, *The dry years*. Each was played headless both hands-off (it fails) and by a simple scripted player (it can be won within the budget). Details in `DECISIONS.md` (11:35).
+- **Challenges** (menu, top): five tuned challenges, each a named world, a time limit, an intervention budget and a goal. From easiest: *The wolves come home*, *Island of plenty*, *Save the herd*, *Pull it back*, *The dry years*. Each was played headless on the current sim both hands-off (it fails) and by a simple scripted player (it can be won within the budget); `tools/challenge_suite.py` re-checks all five in one command. Details in `DECISIONS.md` (11:35 and 17:20).
 - **Map overlays** (button right of the time controls): vegetation, landscape of fear, wolf territories with pack names and sizes, and a speed-gene heatmap.
 - **Life story** in the inspector, with an "In memoriam" card when the animal dies. **Named worlds** in the menu (seeds with remarkable histories). **Photo mode** (P).
 - **Cougars** in the "Cougar country" scenario: ambush hunters that wait in cover by the water.
@@ -35,20 +35,33 @@ New since 09:00:
 - `4_wolf_territories.png`: the territory overlay draped over the hills.
 - `5_challenge_goal_card.png`: a challenge running in the real game (goal card, interventions left).
 - `6_ui_evolution.png`: the evolution chart.
-- `7_stability_20_worlds_650_years.png`: the acceptance run below, one panel per world.
+- `7_stability_20_worlds_v5.png`: the v5 acceptance run below, one panel per world.
 - `8_trophic_cascade.png`: the trophic cascade evidence.
 - Every image made tonight, in order, is in `journey/` (see `journey/INDEX.md`), as you asked.
 
 ## Stability: what is proven and what isn't (honest)
-- **Acceptance run, checkpoint v4** (commit 5df7663, `review/stability/v4-5df7663/`): 20 seeds, each run until the bison passed **1,000 generations (600 to 670 sim-years)**. **Bison, wolves and ravens survived in 20 of 20 worlds** and pass every criterion (never near zero, bounded swings, a roughly 5-year cycle). **Pronghorn survived in 15 of 20 (75%), just under the 80% bar**: one world lost them in year 22, the other four after 148 to 475 years.
-- **40-year check on 32 worlds:** bison, wolves and ravens 32/32, pronghorn 30/32.
-- **Predators control the herd (measured):** `review/stability/cascade/trophic_cascade.png`. With no predators the herd climbs to 2,500 to 3,000 on grazed-down grass; when 12 wolves arrive, it settles at 300 to 600 and the grass recovers. The Yellowstone trophic cascade, emergent, not scripted.
-- **Shock recovery, checkpoint v4** (20 seeds x 120 years, shock after a 42 to 48 year settling period; `review/stability/v4-5df7663-shocks/stability_overview.png`). The median trajectories come back from all three shocks. Per species, "recovered" means back inside its own pre-shock range:
-  - **70% bison cull: passes for every species.** Bison recover in 80% of worlds (median 6 years); persistence 19/20 for each species.
-  - **Two-summer drought:** bison, wolves and ravens pass (bison recover in 80%, median 9 years; wolves persist in 17/20). Pronghorn persist in 18/20 but return to range in only 75%, a narrow fail.
-  - **Wolf wipeout, then 8 wolves reintroduced 18 years later:** without wolves the herd explodes to about 4,000, and it comes back down once wolves return. But the reintroduced wolves fail to establish in 3 of 20 worlds, and bison (65%) and pronghorn (70%) return to their old range in too few worlds within the run. This one fails the strict bar.
-- **What the round-3 critic caught, and I agree with:** the dynamics are mostly bottom-up. Bison breed about one calf per animal per year, so the herd booms and then starves (68% of bison deaths are starvation, 20% predation), and wolves are pinned by territory space, so their numbers barely respond. The ecosystem persists, but the graphs read as jitter around a flat line rather than readable predator-prey cycles, and pronghorn boom and bust on browse. I'm running a **v5 research track** headless: slower ungulate breeding with longer lives, wolves that can respond in numbers, looser herds. v4 stays the default unless v5 beats it on persistence *and* shows lagged cycles (`tools/dynamics.py` measures both).
-- Cougars (opt-in): 6 cougars survive in only 7 of 32 worlds at 40 years and cost pronghorn persistence (30/32 to 23/32), because they ride the pronghorn boom and bust. They stay opt-in until v5.
+The default sim is now **checkpoint v5** (since 16:45 Saturday). v4 results are kept below for comparison.
+
+- **v5 acceptance** (`review/stability/v5P-4875c69/`): 20 seeds, each run until the bison passed **1,000 generations (720 to 750 sim-years)**. **Bison, wolves and ravens survived in 20 of 20 worlds** and pass every criterion. **Pronghorn survived in 18 of 20 (90%)**, above the brief's 80% bar (v4: 75%). One criterion still flags pronghorn: a 2.5-year stretch near zero in one world, against a 2-year limit.
+- **What changed from v4 to v5, and why:** the round-3 critic was right that v4's dynamics were bottom-up. Bison bore about one calf per animal per year, so the herd boomed and then starved (47 to 65% of bison deaths were starvation), and wolves barely moved. v5 changes four things:
+  - Slower breeding and longer lives for both grazers.
+  - Wolves spread their hunting by prey abundance, so a crashed species gets a refuge.
+  - Founding cows are staggered, so the first calves don't all arrive in one pulse.
+  - Lean small game, so wolves can't coast through a prey crash.
+  
+  At 40 years, starvation falls to 25% of bison deaths, predation rises to 37%, and year-to-year swings drop from 21% to 13%. Details and every rejected variant (about 20 screens of 32 worlds each) are in `DECISIONS.md`.
+- **v5 shocks** (20 seeds x 120 years; `review/stability/v5P-4875c69-shocks/stability_overview.png`):
+  - Every species persists in 90 to 100% of worlds through a 70% cull, a two-summer drought, and a wolf wipeout followed by reintroduction.
+  - Pronghorn recover in 90 to 95% of worlds after a cull or drought.
+  - Reintroduced wolves re-establish in 20 of 20 worlds (v4: 17 of 20).
+  - The strict "bison back inside their pre-shock range" metric fails (30 to 65%). The chart shows why: the herds don't fall short, they **overshoot and settle higher** (about 450 before, about 1,000 after). The bison are still evolving bigger and faster through their first century, so a shock at year 48 lands mid-way through that climb. A fair test shocks after evolution settles; a 300-year version is queued.
+- **Predators control the herd (measured):** `review/stability/cascade/trophic_cascade.png`. With no predators the herd climbs to 2,500 to 3,000 on grazed-down grass; when 12 wolves arrive, it settles far lower and the grass recovers. The Yellowstone trophic cascade, emergent, not scripted.
+- **v4, for comparison** (`review/stability/v4-5df7663*`): 1,000 generations, bison, wolves and ravens 20/20, pronghorn 15/20. Shocks: the cull passed for every species; the drought passed except pronghorn recovery; the wolf wipeout failed strict recovery.
+- **Still open:**
+  - Wolves sit near a ceiling set by territory space, so they respond to prey only weakly.
+  - Over centuries the herds evolve bigger and more fecund, which drifts the balance back toward food limits.
+  - Experiments in progress: prey-scaled wolf capacity, which makes wolves visibly rise and fall about a year behind their prey (wolf-prey correlation 0.41 to 0.63 in a 32-world screen at equal persistence); a raven-cap relaxation; and per-animal herd protection so herding pays.
+- Cougars (opt-in "Cougar country"): they ride the pronghorn boom and bust and die out in most worlds within 40 years. Revisit after the ecology settles.
 
 ## Reviews so far
 | Round | Source | Visual | Readability | Life | Ecosystem | UI | Keep watching |

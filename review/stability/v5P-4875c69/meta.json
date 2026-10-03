@@ -1,0 +1,75 @@
+{
+ "args": {
+  "seeds": 20,
+  "seedBase": 1,
+  "ticks": 3600000,
+  "generations": 1000,
+  "sampleEvery": 2000,
+  "threads": 20,
+  "scenarios": [
+   "baseline"
+  ],
+  "params": {
+   "bison.birthCooldown": 1250,
+   "bison.maxAge": 8000,
+   "deer.birthCooldown": 1000,
+   "deer.maxAge": 4500,
+   "founderDesync": 1,
+   "wolfRareHalf": 150,
+   "grassInit": 0.45,
+   "wolfSmallGame": 0.5
+  },
+  "mock": false,
+  "maxMinutes": 0,
+  "progressSec": 15,
+  "out": "C:\\Users\\stewa\\Documents\\Claude\\ecosystem-sim\\review\\stability\\v5P-4875c69",
+  "argv": [
+   "--seeds",
+   "20",
+   "--generations",
+   "1000",
+   "--ticks",
+   "3600000",
+   "--sample",
+   "2000",
+   "--threads",
+   "20",
+   "--out",
+   "review/stability/v5P-4875c69",
+   "--scenario",
+   "baseline",
+   "--params",
+   "{\"bison.birthCooldown\":1250,\"bison.maxAge\":8000,\"deer.birthCooldown\":1000,\"deer.maxAge\":4500,\"founderDesync\":1,\"wolfRareHalf\":150,\"grassInit\":0.45,\"wolfSmallGame\":0.5}"
+  ]
+ },
+ "commit": "4875c69 (frozen copy)",
+ "node": "v24.19.0",
+ "platform": "win32 x64",
+ "startedAt": "2026-10-03T18:42:01.506Z",
+ "finishedAt": "2026-10-03T20:27:20.497Z",
+ "wallSeconds": 6318.97,
+ "stopReason": null,
+ "tasks": {
+  "total": 20,
+  "completed": 20,
+  "errors": 0,
+  "aborted": 0,
+  "skipped": 0
+ },
+ "msPerTick": 2.814442,
+ "ticksRun": 35348000,
+ "ticksPerSecWall": 5594,
+ "scenarios": {
+  "baseline": {
+   "seeds": 20,
+   "completed": 20,
+   "persistencePct": {
+    "bison": 100,
+    "wolf": 100,
+    "raven": 100,
+    "pronghorn": 90
+   },
+   "maxGen": 1002.2301401869158
+  }
+ }
+}

@@ -1,0 +1,97 @@
+{
+ "args": {
+  "seeds": 20,
+  "seedBase": 1,
+  "ticks": 288000,
+  "generations": null,
+  "sampleEvery": 1000,
+  "threads": 15,
+  "scenarios": [
+   "cull70",
+   "drought",
+   "wolfwipe"
+  ],
+  "params": {
+   "bison.birthCooldown": 1250,
+   "bison.maxAge": 8000,
+   "deer.birthCooldown": 1000,
+   "deer.maxAge": 4500,
+   "founderDesync": 1,
+   "wolfRareHalf": 150,
+   "grassInit": 0.45,
+   "wolfSmallGame": 0.5
+  },
+  "mock": false,
+  "maxMinutes": 0,
+  "progressSec": 15,
+  "out": "C:\\Users\\stewa\\Documents\\Claude\\ecosystem-sim\\review\\stability\\v5P-4875c69-shocks",
+  "argv": [
+   "--seeds",
+   "20",
+   "--ticks",
+   "288000",
+   "--sample",
+   "1000",
+   "--threads",
+   "15",
+   "--out",
+   "review/stability/v5P-4875c69-shocks",
+   "--scenario",
+   "cull70,drought,wolfwipe",
+   "--params",
+   "{\"bison.birthCooldown\":1250,\"bison.maxAge\":8000,\"deer.birthCooldown\":1000,\"deer.maxAge\":4500,\"founderDesync\":1,\"wolfRareHalf\":150,\"grassInit\":0.45,\"wolfSmallGame\":0.5}"
+  ]
+ },
+ "commit": "4875c69 (frozen copy)",
+ "node": "v24.19.0",
+ "platform": "win32 x64",
+ "startedAt": "2026-10-03T20:27:33.247Z",
+ "finishedAt": "2026-10-03T21:13:22.604Z",
+ "wallSeconds": 2749.34,
+ "stopReason": null,
+ "tasks": {
+  "total": 60,
+  "completed": 60,
+  "errors": 0,
+  "aborted": 0,
+  "skipped": 0
+ },
+ "msPerTick": 2.181681,
+ "ticksRun": 17206000,
+ "ticksPerSecWall": 6258,
+ "scenarios": {
+  "cull70": {
+   "seeds": 20,
+   "completed": 20,
+   "persistencePct": {
+    "bison": 95,
+    "wolf": 95,
+    "raven": 95,
+    "pronghorn": 95
+   },
+   "maxGen": 151.06838565022423
+  },
+  "drought": {
+   "seeds": 20,
+   "completed": 20,
+   "persistencePct": {
+    "bison": 90,
+    "wolf": 95,
+    "raven": 90,
+    "pronghorn": 95
+   },
+   "maxGen": 154.86111111111111
+  },
+  "wolfwipe": {
+   "seeds": 20,
+   "completed": 20,
+   "persistencePct": {
+    "bison": 100,
+    "wolf": 100,
+    "raven": 100,
+    "pronghorn": 100
+   },
+   "maxGen": 158.03217158176943
+  }
+ }
+}
