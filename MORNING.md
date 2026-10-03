@@ -5,7 +5,7 @@
 ## How to run it (one step)
 Open **https://tallgrass.stewartgregerson.workers.dev** in Chrome or Edge. Click once anywhere to turn on sound. (The live build is redeployed after each verified milestone; the time of the last deploy is in the line below.)
 
-Last deploy: 08:55 Saturday. A redeploy with challenges, overlays, photo mode and the round-3 renderer fixes follows once the builders now running have landed and passed a check.
+Last deploy: 13:30 Saturday (commit 40f06ef: challenges, overlays, photo mode, UI and renderer round 3), verified: loads with no errors at 59 to 60 fps, default world and `?challenge=homecoming`. The fixes for foot sliding and the next renderer pass are still being verified and will follow.
 
 Locally: `npm run dev`, then http://localhost:5199/.
 - `?seed=anything` picks a world, `?scenario=yellowstone` picks a scenario, `?challenge=knife` starts a challenge. The menu (top right) does all three.
@@ -43,7 +43,10 @@ New since 09:00:
 - **Acceptance run, checkpoint v4** (commit 5df7663, `review/stability/v4-5df7663/`): 20 seeds, each run until the bison passed **1,000 generations (600 to 670 sim-years)**. **Bison, wolves and ravens survived in 20 of 20 worlds** and pass every criterion (never near zero, bounded swings, a roughly 5-year cycle). **Pronghorn survived in 15 of 20 (75%), just under the 80% bar**: one world lost them in year 22, the other four after 148 to 475 years.
 - **40-year check on 32 worlds:** bison, wolves and ravens 32/32, pronghorn 30/32.
 - **Predators control the herd (measured):** `review/stability/cascade/trophic_cascade.png`. With no predators the herd climbs to 2,500 to 3,000 on grazed-down grass; when 12 wolves arrive, it settles at 300 to 600 and the grass recovers. The Yellowstone trophic cascade, emergent, not scripted.
-- **Shock recovery (v4, 20 seeds x 120 years, shock after a 40 to 50 year settling period):** running now (`review/stability/v4-5df7663-shocks/`); results go here when it lands. The earlier v2 shock run recovered in its median trajectories, but failed the strict metric because the shock landed during the opening transient.
+- **Shock recovery, checkpoint v4** (20 seeds x 120 years, shock after a 42 to 48 year settling period; `review/stability/v4-5df7663-shocks/stability_overview.png`). The median trajectories come back from all three shocks. Per species, "recovered" means back inside its own pre-shock range:
+  - **70% bison cull: passes for every species.** Bison recover in 80% of worlds (median 6 years); persistence 19/20 for each species.
+  - **Two-summer drought:** bison, wolves and ravens pass (bison recover in 80%, median 9 years; wolves persist in 17/20). Pronghorn persist in 18/20 but return to range in only 75%, a narrow fail.
+  - **Wolf wipeout, then 8 wolves reintroduced 18 years later:** without wolves the herd explodes to about 4,000, and it comes back down once wolves return. But the reintroduced wolves fail to establish in 3 of 20 worlds, and bison (65%) and pronghorn (70%) return to their old range in too few worlds within the run. This one fails the strict bar.
 - **What the round-3 critic caught, and I agree with:** the dynamics are mostly bottom-up. Bison breed about one calf per animal per year, so the herd booms and then starves (68% of bison deaths are starvation, 20% predation), and wolves are pinned by territory space, so their numbers barely respond. The ecosystem persists, but the graphs read as jitter around a flat line rather than readable predator-prey cycles, and pronghorn boom and bust on browse. I'm running a **v5 research track** headless: slower ungulate breeding with longer lives, wolves that can respond in numbers, looser herds. v4 stays the default unless v5 beats it on persistence *and* shows lagged cycles (`tools/dynamics.py` measures both).
 - Cougars (opt-in): 6 cougars survive in only 7 of 32 worlds at 40 years and cost pronghorn persistence (30/32 to 23/32), because they ride the pronghorn boom and bust. They stay opt-in until v5.
 

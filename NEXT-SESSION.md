@@ -19,4 +19,5 @@
 - Never edit sim files while a non-frozen batch is running.
 - While a 20-thread batch runs, tsc and vite are slow (minutes). Run them in the background.
 - TaskStop on npx jobs leaves orphan node processes; kill by command line.
+- Bash heredocs here collapse double backslashes to one: write files containing backslashes (regexes, Windows paths) with the Write tool.
 - Background Bash commands are cut off at 2 hours (the node children keep running, but the notification says "stopped"). Keep single jobs under 2 h, or check the log/outputs directly.
