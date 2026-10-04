@@ -10,7 +10,8 @@
     "sim": "tsx src/headless/run.ts",
     "batch": "tsx src/headless/batch.ts",
     "capture": "node tools/capture.mjs",
-    "deploy": "vite build && wrangler deploy --name tallgrass --assets ./dist --compatibility-date 2026-10-01"
+    "deploy": "vite build && wrangler deploy --name tallgrass --assets ./dist --compatibility-date 2026-10-01",
+    "test": "tsx tools/run-tests.ts"
   },
   "repository": {
     "type": "git",
