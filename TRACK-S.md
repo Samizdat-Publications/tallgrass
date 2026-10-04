@@ -23,6 +23,8 @@ Only Track S writes this file (V2-PLAN.md section 4.3). Track R reads it with `g
   - Elder text now says the animal died at a great age.
   - `tools/smoke.ts` browser smoke tool (see above).
 
+- **S1 Open prairie** (all off; S3 decides adoption). `src/sim/region.ts` (regional gene pool, own Rng 'region'), 8 border corridors in `world.ts` (terrain only, no draws), St.Migrate driven by `migrantTick`, wolf arrivals into free den sites and loner departures, pronghorn autumn exodus and spring return (calibrated `deerBref` 35, `deerKb` 367 from 4 seeds x 48,000 ticks), vagrant ravens (`ravenVagrantK` 0.16: about 40% of residents at mean carrion) that never breed, `recolonized`, `imm_*`/`emig_*`/`vagrants`/`carrion`/`browse_pp` columns, presence and flow metrics in `metrics.ts` and `dynamics.py`. 4-seed 50-year smoke: all species persist; pronghorn steadier (CV 0.17 vs 0.46); vagrants mean 116; no wolf flow in a full valley (no free dens).
+- **S2 Canid disease** (all off). `src/sim/disease.ts` (own Rng 'disease'; `CANID_KEYS`, add 'coyote' in S5): distemper outbreaks at season 1.2, pack and carcass spread, deaths at the end of the course, `distemper` event; mange severity, spread, cold cost, hunting speed, recovery, `mange` event; immigrant wolves carry mange at `mangeImmigrantShare`. `disease.test.ts` checks death rates within 0.1 of the params. 4-seed 100-year smoke with `cdvRate 0.15, mangeRate 0.03`: wolves persist, mean 50 vs 51.5, CV 0.15 vs 0.14; 5 to 23 outbreaks per 100 years.
 - **S16 Share codes and replay** (sim side; R12 wires the UI).
   - `src/sim/sharecode.ts`: `encodeShare`, `decodeShare` (warning when the code comes from a different sim build or a newer format), `shareUrl`, `simBuildId`. The code is base64url JSON `{v, b, seed, scenario, params, log}`.
   - Worker: logs every player `apply` with its tick; `init` takes `replay` (merged after the scenario's schedule, stable by tick, which is exactly where a live apply lands); `{type:'getLog'}` answers `{type:'log', tick, log}`.
@@ -31,6 +33,10 @@ Only Track S writes this file (V2-PLAN.md section 4.3). Track R reads it with `g
 - Chronicle text for the 14 v2 event kinds and names for species 6 to 11 (`describe.ts`, tested by `src/ui/describe.test.ts`).
 
 ## Decisions
+- Migration clock is a new agent field `mig`, not `cdv` | both S1 and S2 builders used `cdv`; it is the distemper countdown by contract | sharing one field between two features.
+- Story death codes: 6 emigrated, 7 disease | both builders took 6 | -
+- Vagrant send-home rule is `ravenVagrantK * carrion < 0.2 * vagrants` | the plan's condition can never be true (target is proportional to carrion) | dropping send-home.
+- Pronghorn exodus fraction and spring return are not divided by calendarScale | they respond to browse and to the gap to Kb, not to a once-a-year litter | dividing.
 - Share-code build check fingerprints the default params (`simBuildId`) | it changes exactly when the default world changes (each adoption), needs no build step, and is the same in worker, page and Node | a git hash injected by Vite (not available to the headless tools).
 - Smoke tool is `tools/smoke.ts`, not `tools/smoke.mjs` | section 4.3 gives Track S `tools/*.ts`, not `.mjs` | writing a Track R file.
 - Smoke tool exits 2 (SKIP) when frames arrive slower than 1 per second | software GL in the cloud is too slow for the ready gate, and that is not a broken build | failing the cloud run every time.
@@ -42,6 +48,7 @@ Only Track S writes this file (V2-PLAN.md section 4.3). Track R reads it with `g
 - batch.ts workers boot through `batchWorkerBoot.mjs` | fixes cloud batches with no change to results | running screens single-threaded.
 
 ## Requests for Track R
+- `src/ui/story.ts` `causePhrase`: add `case 6: return 'Left the valley for the open prairie'` and `case 7: return 'Died of distemper'` (new death codes from S1 and S2). Code 6 is not a death in the story sense: the memorial could read "Left the valley" rather than "In memoriam" if you want to go further.
 - S18 wiring: in `ui.ts`, keep a `DecadeLines` next to `SeasonLines` and feed it the same history rows plus the frame's sim events; add its lines to the chronicle like season lines (`major: true` for decades, so they can carry the title; the title would also make a good chapter card for kind 'decade'). Call `reset()` where `seasons.reset()` is called.
 - S16 wiring (R12 Share button): on load, if `?w=` is present, `decodeShare(q.get('w'))` (catch: show "That valley code could not be read" and start normally); use `state.seed`, `scenarioById(state.scenario)` and `state.params` (they already include the scenario's params, so pass them as `params` and the scenario's `schedule` as `schedule`), and send `replay: state.log` in `init`; show `warning` once if set. Share button: send `{type:'getLog'}`, on the `log` reply build `shareUrl(location.href, {seed, scenario: scenario.id, params: simParams, log})` and copy it.
 - R0 item 2 (registry-safe render and UI): Track R files that still hard-code species are `src/ui/palette.ts` (can derive from `SPECIES[].color`), `src/ui/popgraph.ts` (`ALWAYS_SHOWN = 3`), `src/ui/traits.ts` (index table over TRAIT_SERIES), `src/ui/story.ts`, `src/render/animals.ts` and `src/render/models/*`, plus any `SPECIES_NAMES[...]` or `Sp.*` lookups that assume 6 species.
@@ -49,7 +56,7 @@ Only Track S writes this file (V2-PLAN.md section 4.3). Track R reads it with `g
 - Confirm one local `npm run batch` still runs on Windows with the boot file.
 
 ## In progress
-- S1 (builder, main tree), S2 (builder, worktree), S6 (builder, worktree).
+- S6 (builder, worktree).
 - Screen A16: default params, 16 seeds x 240,000 ticks, frozen at 61455f2, output scratch/screens/A16 (cloud VM only).
 
 ## Next

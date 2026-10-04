@@ -1,11 +1,12 @@
 // The Tallgrass simulation core. Deterministic from the seed, renderer-independent.
 import { Agents, G_BOLD, G_COAT, G_HERD, G_LITTER, G_SIGHT, G_SIZE, G_SPEED, NG, GENE_NAMES } from './agents';
+import { Disease, IS_CANID } from './disease';
 import { Environment } from './env';
 import { BucketGrid } from './grid';
 import { applyOverrides, defaultParams, Params, SpeciesParams } from './params';
 import { Rng } from './rng';
 import { RegionalPool } from './region';
-import { AGENT_STRIDE, CARCASS_STRIDE, F_ALPHA, F_INFECTED, F_JUVENILE, F_MALE, F_MIGRANT, F_PREGNANT, Intervention, SimLike, Snapshot, SPECIES_COUNT, SPECIES_KEYS, Sp, St, YEAR_TICKS, SEASON_TICKS, BASE_YEAR_TICKS, setCalendarScale } from './types';
+import { AGENT_STRIDE, CARCASS_STRIDE, F_ALPHA, F_INFECTED, F_JUVENILE, F_MALE, F_MANGE, F_MIGRANT, F_PREGNANT, Intervention, SimLike, Snapshot, SPECIES_COUNT, SPECIES_KEYS, Sp, St, YEAR_TICKS, SEASON_TICKS, BASE_YEAR_TICKS, setCalendarScale } from './types';
 import { COAT_BASE, COAT_RANGE, DIET, IS_PREY, isGrazer, SPECIES, THREAT } from './species';
 import { STRIDE, Vegetation } from './vegetation';
 import { generateWorld, World } from './world';
@@ -35,7 +36,7 @@ export interface SimEvent {
 export interface StoryEntry {
   tick: number;
   kind: 'fled' | 'chase' | 'kill' | 'birth' | 'infected' | 'recovered' | 'dispersed' | 'died';
-  /** kind-specific: species involved, litter size, or death cause code (0 starve, 1 thirst, 2 old, 3 killed, 4 culled, 5 removed, 6 emigrated). */
+  /** kind-specific: species involved, litter size, or death cause code (0 starve, 1 thirst, 2 old, 3 killed, 4 culled, 5 removed, 6 emigrated, 7 disease). */
   a: number;
 }
 
@@ -66,6 +67,8 @@ export class Sim implements SimLike {
   readonly env: Environment;
   readonly veg: Vegetation;
   readonly a: Agents;
+  /** Canid disease (distemper, mange); inert unless cdvRate or mangeRate is set. */
+  readonly dis: Disease;
   readonly prey: BucketGrid;
   readonly pred: BucketGrid;
   private preyList = new Int32Array(4096);
@@ -155,6 +158,7 @@ export class Sim implements SimLike {
   private firstKillLogged = false;
 
   constructor(opts: SimOptions) {
+    const self = this;
     this.seed = opts.seed >>> 0;
     this.p = applyOverrides(defaultParams(), opts.params);
     setCalendarScale(this.p.calendarScale);
@@ -164,6 +168,13 @@ export class Sim implements SimLike {
     this.env.climateAmp = this.p.climateAmp;
     this.veg = new Vegetation(this.world, this.p, this.env, this.rng.fork(12));
     this.a = new Agents(4096);
+    this.dis = new Disease(this.a, this.p, this.env, this.seed, {
+      get tick() { return self.tick; },
+      event: (kind, sp, x, y, a, b) => this.event(kind, sp, x, y, a, b),
+      kill: (i) => this.die(i, 'disease'),
+      story: (i, kind) => this.logStory(i, kind),
+      packSerial: (pk) => this.packSerial[pk],
+    });
     this.prey = new BucketGrid(this.world.size, BUCKET);
     this.pred = new BucketGrid(this.world.size, BUCKET);
     const n = this.world.n;
@@ -425,6 +436,7 @@ export class Sim implements SimLike {
     this.pred.build(this.predList, this.predN, a.x, a.y);
     this.updatePacks();
     if (this.region !== null) this.openPrairieStep(t);
+    if (this.dis.on) this.dis.step(this.pop[Sp.Wolf]);
 
     // agents
     for (let i = 0; i < a.hi; i++) {
@@ -750,9 +762,9 @@ export class Sim implements SimLike {
     return c;
   }
 
-  private die(i: number, cause: 'starve' | 'thirst' | 'old' | 'killed' | 'culled' | 'removed' | 'emigrated'): void {
+  private die(i: number, cause: 'starve' | 'thirst' | 'old' | 'killed' | 'culled' | 'removed' | 'emigrated' | 'disease'): void {
     const a = this.a;
-    this.logStory(i, 'died', ['starve', 'thirst', 'old', 'killed', 'culled', 'removed', 'emigrated'].indexOf(cause));
+    this.logStory(i, 'died', ['starve', 'thirst', 'old', 'killed', 'culled', 'removed', 'emigrated', 'disease'].indexOf(cause));
     const s = a.sp[i];
     if (cause === 'starve') { this.cStarve[s]++; if (s === Sp.Bison && a.age[i] < this.p.species[s].matureAge) this.cStarveJuv++; }
     else if (cause === 'thirst') this.cThirst[s]++;
@@ -879,6 +891,7 @@ export class Sim implements SimLike {
     let m = P.metabolism * Math.pow(size, -0.25) * (0.98 + 0.02 * spd * spd) * activity;
     if (running && this.p.sprintCost > 0) m *= Math.max(0.3, 1 + this.p.sprintCost * (spd * spd - 1));
     if (a.infected[i] > 0) m *= this.p.diseaseMetab;
+    if (this.dis.on && IS_CANID[a.sp[i]]) m *= this.dis.metabMult(i, this.env.state.warmth);
     if (a.age[i] < P.matureAge) m *= 0.75;
     // cold costs extra, much more for a small bird
     m *= 1 + (SPECIES[a.sp[i]].flies ? 0.5 : 0.25) * (1 - this.env.state.warmth);
@@ -902,6 +915,7 @@ export class Sim implements SimLike {
         return false;
       }
     }
+    if (this.dis.cdvOn && a.cdv[i] > 0 && IS_CANID[a.sp[i]] && this.dis.tickCdv(i)) return false;
     if (a.infected[i] > 0) {
       if (--a.infected[i] === 0) { a.immune[i] = BASE_YEAR_TICKS; this.logStory(i, 'recovered'); }
     } else if (a.immune[i] > 0) a.immune[i]--;
@@ -1236,7 +1250,7 @@ export class Sim implements SimLike {
     const pk = a.pack[i];
     const juvenile = a.age[i] < P.matureAge;
     const spdGene = a.genes[o + G_SPEED] / Math.pow(a.genes[o + G_SIZE], 0.25);
-    const run = P.runSpeed * spdGene * (a.stamina[i] > 0.05 ? 1 : 0.35);
+    const run = P.runSpeed * spdGene * (a.stamina[i] > 0.05 ? 1 : 0.35) * (this.dis.mangeOn ? this.dis.mangeSpeed(i) : 1);
     const trot = P.walkSpeed * 1.6;
     const c = this.veg.cellAt(x, y);
     let dvx = 0, dvy = 0;
@@ -1247,6 +1261,7 @@ export class Sim implements SimLike {
     const denX = pk >= 0 ? this.packDenX[pk] : x, denY = pk >= 0 ? this.packDenY[pk] : y;
     const toDen = Math.hypot(denX - x, denY - y);
     const pupAtDen = juvenile && a.age[i] < p.wolfPupDenAge && pk >= 0;
+    if (a.cdv[i] > 0 && this.dis.cdvOn) this.dis.packSpread(i, this.predList, this.predN);
 
     if (pupAtDen) {
       // pups stay at the den and are fed from the pack's store
@@ -1465,6 +1480,7 @@ export class Sim implements SimLike {
         const take = Math.min(p.wolfEatRate, this.cMeat[k]);
         this.cMeat[k] -= take;
         a.energy[i] = Math.min(1, a.energy[i] + take);
+        if (this.dis.cdvOn) this.dis.onFeed(i);
         if (pk >= 0) {
           const carry = Math.min(this.cMeat[k], take * p.wolfPackStoreShare);
           this.cMeat[k] -= carry;
@@ -2176,6 +2192,7 @@ export class Sim implements SimLike {
       a.origin[i] = origin;
       if (SPECIES[sp].flies) a.alt[i] = 30;
       this.beginMigrate(i, false, tx - ny * off, ty + nx * off);
+      if (origin === 1) this.dis.maybeSeedMangeOnImmigrant(i); // some immigrants bring mange in (S2; disease rng only)
       slots.push(i);
     }
     if (n > 0) {
@@ -2312,12 +2329,14 @@ export class Sim implements SimLike {
     // generation depth and trait means
     const gsum = new Float64Array(SPECIES_COUNT);
     const tsum = new Float64Array(SPECIES_COUNT * NG);
-    let juvBison = 0, infBison = 0;
+    let juvBison = 0, infBison = 0, cdvWolf = 0, mangeWolf = 0, mangeSev = 0;
     for (let i = 0; i < a.hi; i++) {
       if (!a.alive[i]) continue;
       const s = a.sp[i];
       gsum[s] += a.gen[i];
       for (let g = 0; g < NG; g++) tsum[s * NG + g] += a.genes[i * NG + g];
+      if (a.cdv[i] > 0 && IS_CANID[s]) cdvWolf++;
+      if (a.mange[i] > 0 && IS_CANID[s]) { mangeWolf++; mangeSev += a.mange[i]; }
       if (s === Sp.Bison) {
         if (a.age[i] < this.p.species[s].matureAge) juvBison++;
         if (a.infected[i] > 0) infBison++;
@@ -2332,6 +2351,15 @@ export class Sim implements SimLike {
     }
     row.juv_bison = juvBison;
     row.infected_bison = infBison;
+    // canid disease: wolves sick with distemper now, wolves with mange now (and their mean severity),
+    // disease deaths, outbreaks closed and packs newly hit by mange since the last sample
+    const dr = this.dis.drainSample();
+    row.cdv_wolf = cdvWolf;
+    row.mange_wolf = mangeWolf;
+    row.mange_sev_wolf = mangeWolf ? mangeSev / mangeWolf : 0;
+    row.cdv_deaths_wolf = dr.deaths;
+    row.cdv_outbreaks = dr.outbreaks;
+    row.mange_events = dr.mangeEvents;
     row.kills = this.cKills;
     row.kills_pronghorn = this.cKillsDeer;
     row.strife_wolf = this.cStrife;
@@ -2409,7 +2437,8 @@ export class Sim implements SimLike {
       if (a.age[i] < P.matureAge) f |= F_JUVENILE;
       if (a.pregnant[i] > 0) f |= F_PREGNANT;
       if (a.state[i] === St.Migrate) f |= F_MIGRANT;
-      if (a.infected[i] > 0) f |= F_INFECTED;
+      if (a.infected[i] > 0 || (a.cdv[i] > 0 && IS_CANID[s])) f |= F_INFECTED;
+      if (a.mange[i] > 0) f |= F_MANGE;
       if (a.male[i]) f |= F_MALE;
       const pk = a.pack[i];
       if (pk >= 0 && (this.packAlphaF[pk] === i || this.packAlphaM[pk] === i)) f |= F_ALPHA;
