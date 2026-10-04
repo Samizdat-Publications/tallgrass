@@ -181,4 +181,4 @@ Stills critic: Visual 7, Readability 5, Life 6, Ecosystem 5, UI 7, Keep watching
 | 7 | Events told, not shown | DEFER | lead | Sick animals already lower their heads; stampedes raise dust in dry ground only. |
 | 8 | Fragile, slow opening; 100x runs at 34x | DEFER | lead | Near-equilibrium start rejected (cost persistence); fast-forward is CPU-bound on the sim. |
 | 9 | Potato rocks, repeated bare trees | DEFER | renderer | Rocks were reworked at 09:44; still read as smooth ovals. |
-| 10 | Rain streaks in the map view | FIXED | lead | Streaks fade out as the camera looks steeply down (engine.ts); checked in scratch/rain_fix/sheet.jpg. Graph labels, trait captions and pink territory: deferred. |
+| 10 | Rain streaks in the map view | FIXED | lead | Streaks fade out as the camera looks steeply down (engine.ts); checked in scratch/rain_fix/sheet.jpg. Graph: each row's low number is now quieter (bd57789). Inspector traits read in plain words against the founders (54e479c). Pink territory tint: deferred. |
