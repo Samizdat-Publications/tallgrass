@@ -182,3 +182,14 @@ Stills critic: Visual 7, Readability 5, Life 6, Ecosystem 5, UI 7, Keep watching
 | 8 | Fragile, slow opening; 100x runs at 34x | DEFER | lead | Near-equilibrium start rejected (cost persistence); fast-forward is CPU-bound on the sim. |
 | 9 | Potato rocks, repeated bare trees | DEFER | renderer | Rocks were reworked at 09:44; still read as smooth ovals. |
 | 10 | Rain streaks in the map view | FIXED | lead | Streaks fade out as the camera looks steeply down (engine.ts); checked in scratch/rain_fix/sheet.jpg. Graph: each row's low number is now quieter (bd57789). Inspector traits read in plain words against the founders (54e479c). Pink territory tint: deferred. |
+
+## Round 10 (10:57, Gemini video of 673802a: the final build before the riparian ribbon) -> `review/round-10-video/reel.gemini.md`
+Gemini: Visual 7, Readability 6, Life 3, Ecosystem 8, UI 9, Keep watching 5 (round 8: 5, 6, 2, 4, 8, 3).
+
+| # | Issue | Triage | Owner | Notes |
+|---|---|---|---|---|
+| G1 | Locomotion slides, feet don't plant at close range | DEFER | animals | Round 4 measured 8 to 12% foot slip; path smoothing in round 7. Gemini keeps seeing it at the hunt close-ups; next step is a close-range gait check on the reel frames. |
+| G2 | Kill snaps to a dead pose without struggle | DEFER | animals | A 0.25 s struggle landed at 09:51; too brief to read on video. Lengthen it next session. |
+| G3 | Metronomic raven flight | DEFER | animals | Glides and soaring landed in round 7; still reads as mechanical in flapping flight. |
+| G4 | Night too dark to watch | REJECT for now | lead | Round 9's stills critic and earlier rounds read the night as land; Gemini sees the darkest moment of the reel. |
+| G5 | Captions hard to read on grass | DEFER | UI | A soft shadow was added in round 8; a fuller scrim is the next step. |
