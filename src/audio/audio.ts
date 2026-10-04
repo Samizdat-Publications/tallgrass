@@ -11,6 +11,8 @@ import {
   segmentClip, spotPlan,
 } from './mix';
 import type { BedMix, BedName, Nearby, Segment, SpotKey, SpotRule } from './mix';
+import { MusicDirector } from './music';
+import type { TensionSample } from './music';
 
 export type { BedMix, BedName, Nearby } from './mix';
 export { bedMix } from './mix';
@@ -29,9 +31,30 @@ export interface AudioFrame {
   nearby: Nearby;
   /** 0..1 how close the camera is to water. */
   nearWater: number;
+  /** Chases, kills and die-offs around the camera (scanTension in inputs.ts); drives the music tension. Optional. */
+  tension?: TensionSample | null;
 }
 
-type ClipName = BedName | 'thunder' | 'wolfPack' | 'wolfSingle' | 'bison' | 'stampede' | 'raven';
+/**
+ * A sandhill crane flyover the audio has scheduled. The V-formation render is not audio's job: set `audio.onFlyover` and
+ * draw the birds crossing the sky for `duration` seconds from `startAt` (AudioContext time; real seconds from now are
+ * `startAt - audio.now`), entering at pan `panFrom` and leaving at `panTo` (-1 left edge of the view .. +1 right edge).
+ */
+export interface Flyover {
+  startAt: number;
+  /** Seconds from the first call to the last (the birds are in earshot a little longer). */
+  duration: number;
+  panFrom: number;
+  panTo: number;
+  /** Birds in the flock (about 5 to 12). */
+  birds: number;
+  /** Height above ground in metres. */
+  altitude: number;
+  /** 'spring' or 'autumn' (autumn flocks head south, spring flocks north). */
+  season: 'spring' | 'autumn';
+}
+
+type ClipName = BedName | 'thunder' | 'wolfPack' | 'wolfSingle' | 'bison' | 'stampede' | 'raven' | 'rut' | 'crane';
 
 const FILES: Record<ClipName, string> = {
   wind: 'wind_day',
@@ -46,10 +69,14 @@ const FILES: Record<ClipName, string> = {
   bison: 'bison_grunts',
   stampede: 'stampede',
   raven: 'raven_calls',
+  blizzard: 'blizzard',
+  grasshopper: 'grasshopper',
+  rut: 'bison_rut',
+  crane: 'crane_bugle',
 };
 
 /** Per-bed loudness trim. The files are levelled to the same RMS, so this is the artistic balance. */
-const BED_TRIM: Record<BedName, number> = { wind: 0.72, birds: 0.42, crickets: 0.36, rain: 0.42, winter: 0.62, creek: 0.42 };
+const BED_TRIM: Record<BedName, number> = { wind: 0.72, birds: 0.42, crickets: 0.36, rain: 0.42, winter: 0.62, creek: 0.42, blizzard: 0.55, grasshopper: 0.3 };
 /** Seconds for a bed to settle on a new target (time constant). Crossfades take about three of these. */
 const BED_TC = 0.7;
 const BED_TICK = 0.125;
@@ -67,6 +94,8 @@ interface PlayOpts {
   segment?: Segment;
   /** Override the low-pass cutoff (Hz). */
   cutoff?: number;
+  /** If set, the pan glides from `pan` to this over the sound's length. */
+  panEnd?: number;
 }
 
 export class AudioDirector {
@@ -75,7 +104,13 @@ export class AudioDirector {
   /** Files that failed to load (the game runs on without them). */
   readonly missing: string[] = [];
   /** The last bed targets, for debug displays. */
-  lastMix: BedMix = { wind: 0, birds: 0, crickets: 0, rain: 0, winter: 0, creek: 0 };
+  lastMix: BedMix = { wind: 0, birds: 0, crickets: 0, rain: 0, winter: 0, creek: 0, blizzard: 0, grasshopper: 0 };
+  /** The music director (sparse acoustic cues under the ambience; see music.ts). Starts with the context, after the first gesture. */
+  readonly music = new MusicDirector();
+  /** Set this to be told when a crane flyover is scheduled (draw the flock; audio only makes the sound). */
+  onFlyover: ((f: Flyover) => void) | null = null;
+  /** Flyovers scheduled so far, newest last (capped at 20), for debug and tests. */
+  readonly flyovers: Flyover[] = [];
 
   private ctx: AudioContext | null = null;
   private master: GainNode | null = null;
@@ -97,8 +132,9 @@ export class AudioDirector {
   private clock = 0;
   private bedClock = 0;
   private voices = 0;
-  private armed: Record<SpotKey, boolean> = { wolf: false, raven: false, bison: false, thunder: false };
-  private timers: Record<SpotKey, number> = { wolf: 0, raven: 0, bison: 0, thunder: 0 };
+  private armed: Record<SpotKey, boolean> = { wolf: false, raven: false, bison: false, thunder: false, rut: false, crane: false };
+  private timers: Record<SpotKey, number> = { wolf: 0, raven: 0, bison: 0, thunder: 0, rut: 0, crane: 0 };
+  private musicDuck: GainNode | null = null;
   private lastEvent = new Map<string, number>();
   private last: AudioFrame | null = null;
   private gestureHandler: (() => void) | null = null;
@@ -110,7 +146,29 @@ export class AudioDirector {
       const h = () => this.resume();
       this.gestureHandler = h;
       for (const ev of GESTURES) window.addEventListener(ev, h, { capture: true, passive: true });
+      // debug: window.__audioState is a live snapshot of the music state machine and the ambience
+      Object.defineProperty(window, '__audioState', { configurable: true, get: () => this.debugState() });
     }
+  }
+
+  /** The AudioContext clock in seconds (0 before the context exists). */
+  get now(): number {
+    return this.ctx ? this.ctx.currentTime : 0;
+  }
+
+  /** Live debug snapshot: context state, music state machine (cue, tension, crossfades, transition log), ambience targets. */
+  debugState(): Record<string, unknown> {
+    return {
+      context: this.state,
+      ready: this.ready,
+      muted: this._muted,
+      volume: this._volume,
+      music: this.music.state(),
+      mix: this.lastMix,
+      flyovers: this.flyovers.length,
+      lastFlyover: this.flyovers.length ? this.flyovers[this.flyovers.length - 1] : null,
+      missing: this.missing,
+    };
   }
 
   // ------------------------------------------------------------------------------------------------ public API
@@ -175,6 +233,7 @@ export class AudioDirector {
       this.bedClock = BED_TICK;
       this.updateBeds(s, ctx.currentTime);
     }
+    this.music.update(dt, { env: s.env, speed: s.speed, tension: s.tension ?? null }, ctx.currentTime);
     if (!this._muted) this.updateSpots(dt, s);
   }
 
@@ -183,6 +242,7 @@ export class AudioDirector {
     const ctx = this.ctx;
     if (!ctx || ctx.state !== 'running' || !this.bedsStarted || this._muted) return;
     const kind = e.kind === 'extinct' && e.sp === 1 ? 'wolfExtinct' : e.kind;
+    this.music.onEvent(e.kind, e.a, eventAttenuation(Number.isFinite(distance) ? Math.max(0, distance) : 300));
     const now = this.clock;
     const prev = this.lastEvent.get(kind);
     if (prev !== undefined && now - prev < EVENT_COOLDOWN) return;
@@ -236,6 +296,7 @@ export class AudioDirector {
     const d = Number.isFinite(distance) ? Math.max(0, distance) : 300;
     const atten = eventAttenuation(d);
     if (atten < 0.08) return;
+    this.music.onDeath(atten);
     const o = { gain: 0.55 * atten, distance: Math.min(eventDistance01(d), 0.85), pan: (Math.random() * 2 - 1) * 0.5 };
     if (sp === 0) this.playCalls('bison', 2, { ...o, rate: rand(0.78, 0.86) }); // a low bellow
     else if (sp === 3) this.playCalls('bison', 1, { ...o, gain: o.gain * 0.7, rate: rand(1.45, 1.6) }); // a thin, high bleat
@@ -358,7 +419,7 @@ export class AudioDirector {
 
   /** Smooth ramp of the beds and spot sounds to `level` (1 = untouched). */
   private rampDuck(level: number, seconds: number, now: number): void {
-    for (const bus of [this.bedBus, this.spotBus]) {
+    for (const bus of [this.bedBus, this.spotBus, this.musicDuck]) {
       if (!bus) continue;
       const p = bus.gain;
       const cur = p.value;
@@ -444,6 +505,11 @@ export class AudioDirector {
     bedBus.connect(master);
     spotBus.connect(master);
     voiceBus.connect(master);
+    // music: its own director-controlled bus, then a duck node (the narrator ducks it like the beds), then the master
+    const musicDuck = ctx.createGain();
+    musicDuck.connect(master);
+    this.music.attach(ctx, musicDuck);
+    this.musicDuck = musicDuck;
     master.connect(comp);
     comp.connect(limiter);
     limiter.connect(ctx.destination);
@@ -476,7 +542,7 @@ export class AudioDirector {
     }
     this.bedsStarted = true;
     // First spot sounds come after a plausible wait, not all at once.
-    this.timers = { wolf: rand(12, 40), raven: rand(6, 16), bison: rand(4, 10), thunder: rand(6, 20) };
+    this.timers = { wolf: rand(12, 40), raven: rand(6, 16), bison: rand(4, 10), thunder: rand(6, 20), rut: rand(5, 14), crane: rand(8, 30) };
     if (this.last) this.updateBeds(this.last, ctx.currentTime);
   }
 
@@ -552,7 +618,61 @@ export class AudioDirector {
       case 'thunder':
         this.play('thunder', { gain: rule.gain * rand(0.6, 1.1), rate: rand(0.9, 1.05), distance: clamp01(rule.distance + (Math.random() - 0.5) * 0.4), pan });
         break;
+      case 'rut': {
+        // a bull's bellow, now and then answered by a second
+        const o = { gain: rule.gain * jitter, distance, pan };
+        const d1 = this.play('rut', { ...o, rate: rand(0.88, 1.04) });
+        if (d1 > 0 && Math.random() < 0.35) this.play('rut', { ...o, gain: o.gain * 0.6, distance: clamp01(distance + 0.25), pan: -pan, delay: d1 * rand(0.6, 1.1), rate: rand(0.8, 0.95) });
+        break;
+      }
+      case 'crane':
+        this.scheduleFlyover(rule.gain * rand(0.8, 1.1), s.env.season);
+        break;
     }
+  }
+
+  /**
+   * Sound of a flock of sandhill cranes crossing the sky: three or four bugle calls spread over 24 to 40 seconds, panning
+   * steadily from one side to the other and loudest mid-pass. Calls onFlyover so a renderer can draw the flock.
+   * Public so a debug key or a test can trigger one. Returns the schedule (also pushed to `flyovers`), or null if nothing played.
+   */
+  scheduleFlyover(gain = 0.45, season = 0.3): Flyover | null {
+    const ctx = this.ctx;
+    if (!ctx || ctx.state !== 'running' || !this.bedsStarted || !this.buffers.has('crane')) return null;
+    const duration = rand(24, 40);
+    const dir = Math.random() < 0.5 ? 1 : -1;
+    const panFrom = -0.85 * dir;
+    const panTo = 0.85 * dir;
+    const calls = 3 + Math.floor(Math.random() * 2);
+    const base = ctx.currentTime + 0.1;
+    let played = 0;
+    for (let i = 0; i < calls; i++) {
+      const u0 = i / (calls - 1); // where in the pass this call sits
+      const bell = 0.45 + 0.55 * Math.sin(Math.PI * clamp01(0.15 + 0.7 * u0)); // loudest mid-pass
+      const at = u0 * Math.max(0, duration - 5);
+      const p0 = lerp(panFrom, panTo, clamp01(at / duration));
+      const p1 = lerp(panFrom, panTo, clamp01((at + 5) / duration));
+      const dur = this.play('crane', {
+        gain: gain * bell * rand(0.85, 1.1), rate: rand(0.94, 1.06), distance: clamp01(0.55 - 0.25 * bell + rand(-0.05, 0.05)),
+        pan: p0, panEnd: p1, delay: at + rand(0, 1.5),
+      });
+      if (dur > 0) played++;
+    }
+    if (played === 0) return null;
+    const f: Flyover = {
+      startAt: base, duration, panFrom, panTo, birds: 5 + Math.floor(Math.random() * 8), altitude: rand(90, 220),
+      season: season > 2 && season < 3.5 ? 'autumn' : 'spring',
+    };
+    this.flyovers.push(f);
+    if (this.flyovers.length > 20) this.flyovers.shift();
+    if (this.onFlyover) {
+      try {
+        this.onFlyover(f);
+      } catch (err) {
+        console.warn('[audio] onFlyover handler threw: ' + (err instanceof Error ? err.message : String(err)));
+      }
+    }
+    return f;
   }
 
   // ------------------------------------------------------------------------------------------------ voices
@@ -585,6 +705,10 @@ export class AudioDirector {
     const g = ctx.createGain();
     const pan = ctx.createStereoPanner();
     pan.pan.value = Math.max(-1, Math.min(1, o.pan ?? 0));
+    if (o.panEnd !== undefined) {
+      pan.pan.setValueAtTime(pan.pan.value, t0);
+      pan.pan.linearRampToValueAtTime(Math.max(-1, Math.min(1, o.panEnd)), t0 + dur);
+    }
     src.connect(lp);
     lp.connect(g);
     g.connect(pan);

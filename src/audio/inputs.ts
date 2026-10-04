@@ -1,6 +1,7 @@
 // Helpers that turn sim data into the numbers AudioDirector.update() wants. Pure, no Web Audio.
-import { AGENT_STRIDE, Sp } from '../sim/types';
+import { AGENT_STRIDE, CARCASS_STRIDE, Sp, St } from '../sim/types';
 import type { World } from '../sim/world';
+import type { TensionSample } from './music';
 import type { Nearby } from './mix';
 import { clamp01 } from './mix';
 
@@ -22,6 +23,40 @@ export function countNearby(agents: Float32Array, count: number, camX: number, c
       case Sp.Raven: out.raven++; break;
       case Sp.Deer: out.pronghorn++; break;
     }
+  }
+  return out;
+}
+
+/**
+ * Count what is tense in the world, for the music: chasers, fleeing prey and stalkers within `radius` metres of the
+ * camera (state at 7 in each agent record), chasers anywhere, and fresh carcasses (remaining fraction above 0.985, a kill or
+ * a die-off that just happened), near and anywhere. Carcass records are CARCASS_STRIDE floats: x, y, remaining, species.
+ */
+export function scanTension(
+  agents: Float32Array, count: number, camX: number, camY: number,
+  carcasses: Float32Array, carcassCount: number, radius = 250,
+): TensionSample {
+  const out: TensionSample = { chasing: 0, fleeing: 0, stalking: 0, chasingWorld: 0, fresh: 0, freshWorld: 0 };
+  const r2 = radius * radius;
+  for (let i = 0; i < count; i++) {
+    const o = i * AGENT_STRIDE;
+    const st = agents[o + 7];
+    if (st !== St.Chase && st !== St.Flee && st !== St.Stalk) continue;
+    if (st === St.Chase) out.chasingWorld++;
+    const dx = agents[o + 1] - camX;
+    const dy = agents[o + 2] - camY;
+    if (dx * dx + dy * dy > r2) continue;
+    if (st === St.Chase) out.chasing++;
+    else if (st === St.Flee) out.fleeing++;
+    else out.stalking++;
+  }
+  for (let k = 0; k < carcassCount; k++) {
+    const o = k * CARCASS_STRIDE;
+    if (carcasses[o + 2] < 0.985) continue;
+    out.freshWorld++;
+    const dx = carcasses[o] - camX;
+    const dy = carcasses[o + 1] - camY;
+    if (dx * dx + dy * dy <= r2) out.fresh++;
   }
   return out;
 }

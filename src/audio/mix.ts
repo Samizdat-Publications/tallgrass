@@ -26,10 +26,13 @@ export function winterWeight(season: number): number {
   return 1 - smoothstep(0.45, 0.9, d);
 }
 
+/** Season wrapped into 0..4 (0 spring start, 1 summer, 2 autumn, 3 winter). */
+export const season01 = (season: number): number => (((Number.isFinite(season) ? season : 0) % 4) + 4) % 4;
+
 // ---------------------------------------------------------------------------------------------------- beds
 
-export type BedName = 'wind' | 'birds' | 'crickets' | 'rain' | 'winter' | 'creek';
-export const BED_NAMES: readonly BedName[] = ['wind', 'birds', 'crickets', 'rain', 'winter', 'creek'];
+export type BedName = 'wind' | 'birds' | 'crickets' | 'rain' | 'winter' | 'creek' | 'blizzard' | 'grasshopper';
+export const BED_NAMES: readonly BedName[] = ['wind', 'birds', 'crickets', 'rain', 'winter', 'creek', 'blizzard', 'grasshopper'];
 export type BedMix = Record<BedName, number>;
 
 /** The slice of EnvState the mix needs (so tests and the demo page can pass partial objects). */
@@ -64,7 +67,14 @@ export function bedMix(env: MixEnv, camHeight: number, nearWater: number): BedMi
   const golden = 1 - 0.45 * smoothstep(0.45, 0.95, sun); // birds peak at the golden hours, thinner at noon
 
   const wind = (0.2 + 0.7 * ws) * (1 - 0.9 * winter) * (1 - 0.2 * night) * (1 + 0.55 * high + 0.25 * storm) * (1 - 0.3 * snow);
-  const winterBed = winter * (0.35 + 0.65 * ws) * (1 + 0.4 * high);
+  // blizzard: deep winter with a hard wind (or snow falling in a good blow); the plain winter bed gives way to it
+  const blizzard = clamp01(Math.max(winter * smoothstep(0.55, 0.9, ws), snow * smoothstep(0.35, 0.75, ws)));
+  const winterBed = winter * (0.35 + 0.65 * ws) * (1 + 0.4 * high) * (1 - 0.65 * blizzard);
+  // grasshoppers: summer days, hot and dry, right down in the grass (they vanish once the camera lifts off)
+  const hot = smoothstep(0.45, 0.8, warmth);
+  const summerW = smoothstep(0.75, 1.2, season01(env.season)) * (1 - smoothstep(2.0, 2.4, season01(env.season)));
+  const lowCam = 1 - smoothstep(8, 55, h);
+  const grasshopper = 0.9 * summerW * smoothstep(0.1, 0.45, sun) * lerp(0.45, 1, hot) * (1 + 0.25 * drought) * (1 - 0.8 * wet) * (1 - 0.5 * ws) * lowCam;
   const birds = 0.85 * dayLight * golden * (1 - 0.9 * winter) * detail * (1 - 0.9 * wet);
   const crickets = 0.9 * night * (1 - winter) * lerp(0.25, 1, warmth) * detail * (1 - 0.85 * wet);
   const rainBed = (1 - snow) * 0.9 * smoothstep(0.1, 0.55, rain) * (1 - 0.3 * high);
@@ -77,6 +87,8 @@ export function bedMix(env: MixEnv, camHeight: number, nearWater: number): BedMi
     rain: clamp01(rainBed),
     winter: clamp01(winterBed),
     creek: clamp01(creek),
+    blizzard: clamp01(blizzard * (0.6 + 0.4 * ws) * (1 + 0.3 * high)),
+    grasshopper: clamp01(grasshopper),
   };
 }
 
@@ -97,8 +109,8 @@ export interface SpotRule {
   /** 0 close .. 1 far: drives the low-pass and extra attenuation. */
   distance: number;
 }
-export type SpotKey = 'wolf' | 'raven' | 'bison' | 'thunder';
-export const SPOT_KEYS: readonly SpotKey[] = ['wolf', 'raven', 'bison', 'thunder'];
+export type SpotKey = 'wolf' | 'raven' | 'bison' | 'thunder' | 'rut' | 'crane';
+export const SPOT_KEYS: readonly SpotKey[] = ['wolf', 'raven', 'bison', 'thunder', 'rut', 'crane'];
 export type SpotPlan = Record<SpotKey, SpotRule>;
 
 const OFF: SpotRule = { mean: Infinity, gain: 0, distance: 1 };
@@ -112,7 +124,7 @@ const OFF: SpotRule = { mean: Infinity, gain: 0, distance: 1 };
  * At speed >= 10 everything thins out (a quarter as often, a little quieter); speed 0 (paused) is silent.
  */
 export function spotPlan(env: MixEnv, camHeight: number, nearby: Nearby, speed: number): SpotPlan {
-  if (!(speed > 0)) return { wolf: OFF, raven: OFF, bison: OFF, thunder: OFF };
+  if (!(speed > 0)) return { wolf: OFF, raven: OFF, bison: OFF, thunder: OFF, rut: OFF, crane: OFF };
   const thin = speed >= 10 ? 4 : 1;
   const quiet = speed >= 10 ? 0.75 : 1;
   const sun = sunHeight(env.dayFrac);
@@ -159,7 +171,38 @@ export function spotPlan(env: MixEnv, camHeight: number, nearby: Nearby, speed: 
   if (env.weather === Weather.Storm && rain > 0.3) {
     thunder = rule(lerp(70, 30, rain), 0.5, 0.5);
   }
-  return { wolf, raven, bison, thunder };
+
+  // rut: bulls bellow in late summer and early autumn when the camera is down among the herd
+  let rut = OFF;
+  const rutW = rutWeight(env.season);
+  if (rutW > 0.25 && h < 120 && nearby.bison > 3 && rain < 0.7) {
+    const herd = clamp01((nearby.bison - 3) / 30);
+    rut = rule(lerp(42, 15, herd) / (0.4 + 0.6 * rutW), (0.35 + 0.35 * herd) * (1 - 0.5 * smoothstep(40, 120, h)), lerp(0.45, 0.2, herd));
+  }
+
+  // cranes: spring and autumn flyovers by day, anywhere on the map (they are high up)
+  let crane = OFF;
+  const craneW = craneWeight(env.season);
+  const crDay = smoothstep(-0.05, 0.3, sun);
+  if (craneW > 0.25 && crDay > 0.3 && rain < 0.5 && env.weather !== Weather.Storm && env.weather !== Weather.Snow) {
+    crane = rule(lerp(110, 45, craneW), 0.42, 0.5);
+  }
+  return { wolf, raven, bison, thunder, rut, crane };
+}
+
+/** 0..1, how deep into the bison rut (peaks late summer, gone by mid autumn). season 0..4. */
+export function rutWeight(season: number): number {
+  const u = season01(season);
+  return smoothstep(1.45, 1.7, u) * (1 - smoothstep(2.0, 2.3, u));
+}
+
+/** 0..1, how deep into a sandhill crane migration (spring: late winter to early spring; autumn: early to mid autumn). */
+export function craneWeight(season: number): number {
+  const u = season01(season);
+  const d = u < 2 ? u + 4 : u; // spring straddles the year wrap
+  const spring = smoothstep(3.85, 3.98, d) * (1 - smoothstep(4.35, 4.6, d));
+  const autumn = smoothstep(2.0, 2.15, u) * (1 - smoothstep(2.55, 2.8, u));
+  return Math.max(spring, autumn);
 }
 
 /** Random wait with a floor: mean * (0.4 + exponential(0.6)), capped at 4x the mean. u is a uniform [0,1) sample. */
