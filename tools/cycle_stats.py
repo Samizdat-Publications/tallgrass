@@ -16,7 +16,7 @@ import statistics as st
 
 import numpy as np
 
-SPECIES = ("bison", "wolf", "pronghorn")
+from species_cols import species_from_files
 
 
 def annual(rows, key):
@@ -64,8 +64,31 @@ def lag(b, w, max_lag=6):
     return bl, best
 
 
+def cycle_species(files):
+    """Species whose cycles are analysed: those that start alive and track generations (a gen_<key> column).
+
+    Read from the CSV header. Ravens (no gen_ column) and species with no starting population are left out.
+    """
+    cols = set()
+    for f in files:
+        with open(f, newline="") as fh:
+            cols.update(next(csv.reader(fh), []))
+    out = []
+    for k in species_from_files(files):
+        if f"gen_{k}" not in cols:
+            continue
+        for f in files:
+            with open(f, newline="") as fh:
+                first = next(csv.DictReader(fh), None)
+            if first and float(first.get(f"pop_{k}", 0) or 0) > 0:
+                out.append(k)
+                break
+    return out
+
+
 def report(d, burn):
     files = sorted(glob.glob(os.path.join(d, "baseline", "seed_*.csv")) or glob.glob(os.path.join(d, "seed_*.csv")))
+    SPECIES = cycle_species(files)
     alive = {k: 0 for k in SPECIES}
     hc = {k: [] for k in SPECIES}
     rec = {k: [] for k in SPECIES}

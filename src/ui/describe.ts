@@ -87,9 +87,10 @@ export function whenPhrase(tick: number): string {
 // names
 // ---------------------------------------------------------------------------------------------------------
 
-const SINGULAR = ['bison', 'wolf', 'raven', 'pronghorn', 'rabbit', 'cougar'];
-const PLURAL = ['bison', 'wolves', 'ravens', 'pronghorn', 'rabbits', 'cougars'];
-const GROUP = ['herd', 'packs', 'flocks', 'herd', 'warrens', 'cougars'];
+// by species id (src/sim/species.ts); ids 6 to 11 arrive with their WPs, the names are ready before them
+const SINGULAR = ['bison', 'wolf', 'raven', 'pronghorn', 'jackrabbit', 'cougar', 'coyote', 'prairie dog', 'golden eagle', 'red-tailed hawk', 'mule deer', 'beaver'];
+const PLURAL = ['bison', 'wolves', 'ravens', 'pronghorn', 'jackrabbits', 'cougars', 'coyotes', 'prairie dogs', 'golden eagles', 'red-tailed hawks', 'mule deer', 'beavers'];
+const GROUP = ['herd', 'packs', 'flocks', 'herd', 'jackrabbits', 'cougars', 'coyotes', 'towns', 'eagles', 'hawks', 'herd', 'colonies'];
 
 export function speciesName(sp: number): string {
   return SPECIES_NAMES[sp] ?? 'Animal';
@@ -142,7 +143,7 @@ export function regionWord(x: number, y: number): string {
 // ---------------------------------------------------------------------------------------------------------
 
 /** Biological lifespans in years, by species id. Sim time is compressed, so ages are shown on this scale. */
-export const LIFESPAN_YEARS = [20, 12, 15, 12, 5, 14];
+export const LIFESPAN_YEARS = [20, 12, 15, 12, 5, 14, 10, 5, 25, 20, 12, 12];
 /** Sim lifespans in ticks, straight from the sim's defaults, used where only a species id is known (the "elder" event). */
 export const MAX_AGE_TICKS = defaultParams().species.map((s) => s.maxAge);
 
@@ -231,6 +232,14 @@ export function cardRank(kind: string): number {
     case 'stampede': return 2;
     case 'packLost': return 2;
     case 'packFounded': return 1;
+    case 'recolonized': return 4;
+    case 'sylvaticPlague': return 3;
+    case 'lightningFire': return 3;
+    case 'mesoRelease': return 3;
+    case 'distemper': return 2;
+    case 'immigrated': return 2;
+    case 'hareCrash': return 1;
+    case 'townFounded': return 1;
     default: return 0;
   }
 }
@@ -256,10 +265,26 @@ export function eventWeight(e: SimEvent): number {
     case 'removed':
     case 'culled':
     case 'plague':
+    case 'recolonized':
+    case 'lightningFire':
+    case 'sylvaticPlague':
       return 4;
     case 'outbreak':
     case 'packLost':
+    case 'distemper':
+    case 'mesoRelease':
       return 3;
+    case 'immigrated':
+      return e.sp === 1 ? 3 : 2;
+    case 'emigrated':
+    case 'mange':
+    case 'townFounded':
+    case 'townLost':
+    case 'hareBoom':
+    case 'hareCrash':
+    case 'coyotePups':
+    case 'storm':
+      return 2;
     case 'stampede':
       return e.a >= 60 ? 3 : 1;
     case 'packFounded':
@@ -382,10 +407,10 @@ export function describeEvent(e: SimEvent, ctx?: DescribeContext): EventText {
         const age = ageText(e.a, e.sp);
         return {
           sentence: pick(e, [
-            `An elder ${sg}, ${age} old, still roams the valley.`,
-            `At ${age}, one old ${sg} has outlived most of its kin.`,
-            `A ${sg} of ${age} is among the oldest in the valley.`,
-            `${cap(sg)} elder: ${age} old and still going.`,
+            `An elder ${sg} dies at ${age}, a great age.`,
+            `At ${age}, one old ${sg} dies, having outlived most of its kin.`,
+            `A ${sg} of ${age}, among the oldest the valley has known, dies of old age.`,
+            `${cap(sg)} elder: dead at ${age}, after a long life.`,
           ]),
         };
       }
@@ -397,6 +422,82 @@ export function describeEvent(e: SimEvent, ctx?: DescribeContext): EventText {
     }
     case 'record':
       return { sentence: 'A new record is set in the valley.' };
+    // ---- v2 kinds: open prairie (S1), canid disease (S2), small prey (S4), coyotes (S5), storms (S6) ----
+    case 'immigrated': {
+      const n = Math.max(1, Math.round(e.a));
+      if (e.sp === 1) {
+        return {
+          sentence: n === 2
+            ? pick(e, ['A pair of wolves comes in over the rim and claims an empty den.', 'Two wolves from the wider prairie settle in the valley.', 'A wandering pair of wolves finds a free range and stays.'])
+            : `${cap(countWord(n))} ${n === 1 ? 'wolf arrives' : 'wolves arrive'} from the wider prairie.`,
+          card: e.tick > 100 && e.a % 2 === 0 && Math.round(e.tick / 97) % 3 === 0 ? { title: 'Wolves from outside', subtitle: when } : undefined,
+        };
+      }
+      if (e.sp === 3) {
+        return { sentence: pick(e, [`${cap(countWord(n))} pronghorn come back over the rim for spring.`, `The pronghorn return: ${countWord(n)} file in from the open prairie.`]) };
+      }
+      return { sentence: `${cap(countWord(n))} ${n === 1 ? sg : pl} ${n === 1 ? 'arrives' : 'arrive'} from the wider prairie.` };
+    }
+    case 'emigrated': {
+      const n = Math.max(1, Math.round(e.a));
+      if (e.sp === 3) {
+        return { sentence: pick(e, [`${cap(countWord(n))} pronghorn drift out of the valley ahead of winter.`, `The browse runs short, and ${countWord(n)} pronghorn leave for the open prairie.`]) };
+      }
+      if (e.sp === 1) return { sentence: n === 1 ? 'A lone wolf with no pack leaves the valley.' : `${cap(countWord(n))} wolves leave the valley.` };
+      return { sentence: `${cap(countWord(n))} ${n === 1 ? sg : pl} ${n === 1 ? 'leaves' : 'leave'} the valley.` };
+    }
+    case 'recolonized':
+      return {
+        sentence: pick(e, [`${cap(pl)} are back: they find their own way into the valley.`, `After years without them, ${pl} return to the valley on their own.`]),
+        card: { title: `The ${pl} return`, subtitle: when },
+      };
+    case 'distemper': {
+      const pups = Math.max(0, Math.round(e.a)), adults = Math.max(0, Math.round(e.b));
+      const lost = pups + adults;
+      const canid = e.sp === 6 ? 'coyotes' : 'wolves';
+      const detail = lost === 0
+        ? 'and every animal pulls through'
+        : `and it takes ${[pups ? `${countWord(pups)} ${pups === 1 ? 'pup' : 'pups'}` : '', adults ? `${countWord(adults)} ${adults === 1 ? 'adult' : 'adults'}` : ''].filter(Boolean).join(' and ')}`;
+      return {
+        sentence: `Distemper runs through the ${canid}, ${detail}.`,
+        card: lost >= 4 ? { title: 'Distemper', subtitle: when } : undefined,
+      };
+    }
+    case 'mange': {
+      const name = e.sp === 1 && e.a > 0 ? `the ${packName(e.a)} pack` : `the ${pl}`;
+      return { sentence: pick(e, [`Mange shows up in ${name}: thinning coats, hard winters ahead.`, `A wolf of ${name} is losing its coat to mange.`]) };
+    }
+    case 'townFounded':
+      return { sentence: region && region !== 'central' ? `Prairie dogs dig a new town on the ${region} flats.` : 'Prairie dogs dig a new town on the flats.' };
+    case 'townLost':
+      return { sentence: region && region !== 'central' ? `The ${region} prairie dog town falls empty; only the mounds remain.` : 'A prairie dog town falls empty; only the mounds remain.' };
+    case 'sylvaticPlague': {
+      const n = Math.max(0, Math.round(e.a));
+      return {
+        sentence: `Plague sweeps the prairie dog towns${n > 0 ? `, and ${countWord(n)} prairie dogs die` : ''}.`,
+        card: { title: 'Plague in the towns', subtitle: when },
+      };
+    }
+    case 'hareBoom':
+      return { sentence: pick(e, ['Jackrabbits are everywhere this year.', 'A jackrabbit boom: the grass is alive with them.']) };
+    case 'hareCrash':
+      return { sentence: pick(e, ['The jackrabbits crash, and the prairie goes quiet.', 'Jackrabbits grow scarce after the boom.']) };
+    case 'coyotePups': {
+      const n = Math.max(0, Math.round(e.a));
+      return { sentence: n > 0 ? `Coyote pups tumble out of a den: ${countWord(n)} of them.` : 'The coyotes have pups.' };
+    }
+    case 'mesoRelease':
+      return {
+        sentence: 'With the wolves few, coyotes take over the valley.',
+        card: { title: 'The coyotes take over', subtitle: when },
+      };
+    case 'storm':
+      return { sentence: pick(e, ['A thunderstorm rolls across the valley.', 'Thunderheads build over the rim and the storm breaks.', 'A line of storms marches across the prairie.']) };
+    case 'lightningFire':
+      return {
+        sentence: region && region !== 'central' ? `Lightning strikes the ${region} prairie, and the grass catches.` : 'Lightning strikes the dry grass, and it catches.',
+        card: { title: 'Lightning fire', subtitle: when },
+      };
     default:
       return { sentence: 'Something stirs in the valley.' };
   }

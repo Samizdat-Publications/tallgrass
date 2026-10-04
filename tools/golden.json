@@ -1,0 +1,5 @@
+{
+  "note": "Golden hashes (V2-PLAN.md S0): default params, src/headless/hash.ts. Recorded at v1 6155768. Update only when a WP's adoption rule changes the default world, and say so in TRACK-S.md.",
+  "ticks": 24000,
+  "seeds": { "3": "e6b99005", "7": "19759373", "11": "7bc34541" }
+}
