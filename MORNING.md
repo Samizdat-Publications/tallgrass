@@ -116,11 +116,13 @@ The default sim is now **checkpoint v5 on a 2x valley calendar** (since about 06
 | 5 (23:10) | Gemini, video | 5 | 8 | 3 | 6 | 9 | 5 |
 | 6 (01:40) | blind critic, stills + v5 charts | 7 | 5 | 7 | 4 | 7 | 6 |
 | 6 (01:40) | Gemini, video | 4 | 6 | 2 | 7 | 9 | 5 |
+| 7 (07:25) | blind critic, stills + 2x-calendar charts | 7 | 6 | 6 | 4 | 7 | 5 |
 
 Every issue and its triage is in `REVIEWS.md`.
 - Round 4's verdict: animals were illegible and looked motionless at drone distance. In the drone shots a wolf is about 20 px tall, so planted feet can't read. The animal work since then targets exactly that, with whole-body motion scaled to camera distance, larger minimum sizes and a kill lunge.
 - Rounds 5 and 6: the stills critic's visual, life and keep-watching scores rose (visual 6 to 7, life 5 to 7). Its top complaint, three rounds running, is that population swings are too fast for "years": a bison lives about 3.3 valley-years, so a crash heals in about 5 years. That was the calendar trade-off; the 2x calendar adopted at 06:25 is the fix (see Stability). Gemini's top complaint is gait and weight in wide shots. A frame-by-frame check of its clip found a 70 to 100 m wide shot where legs are 2 to 3 px tall, so the fix is distance cues (body bob, slope pitch), not foot IK.
 - Round 6 also found a real bug: deep snow in early summer after fast-forward at a low frame rate. Fixed (e82a67b).
+- Round 7 (after the calendar, narrator, Field notes, renderer, water and dust rounds): readability up to 6. Praised: golden-hour and dusk lighting ("wallpaper-grade"), wolves that pop, the follow panel, the territory overlay, and shock tests that "tell a real trophic story". Its top complaint is still the predators: wolves and ravens sit on near-flat lines (the research is under Next 5 things). Fixes in progress from it: winter snowpack and leafless winter trees, visible rain, night that reads as land, distant water that reads as water, a richer chronicle.
 
 ## Decisions you might want to overrule
 - **Stack:** TypeScript + Three.js instead of Godot (ADR-001 in `DECISIONS.md`): one language for sim, harness and renderer, headless GPU capture, and the URL build.
