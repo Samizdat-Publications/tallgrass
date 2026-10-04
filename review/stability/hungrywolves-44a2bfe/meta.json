@@ -1,0 +1,70 @@
+{
+ "args": {
+  "seeds": 20,
+  "seedBase": 1,
+  "ticks": 3600000,
+  "generations": 1000,
+  "sampleEvery": 2000,
+  "threads": 8,
+  "scenarios": [
+   "baseline"
+  ],
+  "params": {
+   "wolfPreyRef": 1000,
+   "wolfRareHalf": 400,
+   "leanLitter": 0.8
+  },
+  "mock": false,
+  "maxMinutes": 0,
+  "progressSec": 15,
+  "out": "C:\\Users\\stewa\\Documents\\Claude\\ecosystem-sim\\review\\stability\\hungrywolves-44a2bfe",
+  "argv": [
+   "--seeds",
+   "20",
+   "--generations",
+   "1000",
+   "--ticks",
+   "3600000",
+   "--sample",
+   "2000",
+   "--threads",
+   "8",
+   "--out",
+   "review/stability/hungrywolves-44a2bfe",
+   "--scenario",
+   "baseline",
+   "--params",
+   "{\"wolfPreyRef\":1000,\"wolfRareHalf\":400,\"leanLitter\":0.8}"
+  ]
+ },
+ "commit": "44a2bfe (frozen copy)",
+ "node": "v24.19.0",
+ "platform": "win32 x64",
+ "startedAt": "2026-10-04T12:26:33.154Z",
+ "finishedAt": "2026-10-04T14:01:27.193Z",
+ "wallSeconds": 5694.01,
+ "stopReason": null,
+ "tasks": {
+  "total": 20,
+  "completed": 20,
+  "errors": 0,
+  "aborted": 0,
+  "skipped": 0
+ },
+ "msPerTick": 1.325589,
+ "ticksRun": 28922000,
+ "ticksPerSecWall": 5079,
+ "scenarios": {
+  "baseline": {
+   "seeds": 20,
+   "completed": 20,
+   "persistencePct": {
+    "bison": 95,
+    "wolf": 95,
+    "raven": 95,
+    "pronghorn": 0
+   },
+   "maxGen": 1004.3832335329341
+  }
+ }
+}
