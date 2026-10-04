@@ -1,19 +1,21 @@
 # NEXT SESSION: pick up here
 
-**Updated:** 2026-10-04 09:58 (deadline in .claude/hooks/run_until.txt: 2026-10-04 12:00)
+**Updated:** 2026-10-04 10:35 (deadline in .claude/hooks/run_until.txt: 2026-10-04 12:00)
 
 ## State
-- **Updated 09:58.** Live: deployed 09:51 from aee1c66 (final quick round: animals, UI, water, renderer). Working tree clean apart from the riparian builder (below).
-- Riparian builder running (report due 11:05): green ribbon along the creek and ponds, lighter broken mud rims; files src/render/terrain.ts and src/render/grass.ts only, nothing committed by it.
-- GPU A/B of the final round (scratch/gpuab_final.log, base 132a078 vs aee1c66, 1440p): +1.1 to +1.5 ms in most views, +3.6 ms in low_golden. A/A bias run in progress (scratch/gpuab_aa.log, both sides aee1c66) to see how much of that is the bench's side bias.
-- Hungry wolves acceptance (scratch/accept_hw.log, review/stability/hungrywolves-44a2bfe) at 17/20; hn2 (herdNearest 6 on cal2, scratch/hn2, compare with cal2 30/31/30/31 of 32 at 240,000 ticks) finishing.
+- **Updated 10:35.** Live: 09:51 deploy from aee1c66. Committed since, not yet deployed: rain streaks fade in the map view, frozen-pond snow rim, smaller chapter cards (bc62b0f to 2d8fd02), docs.
+- Riparian builder running (report due 11:05): green ribbon along the creek and ponds, lighter broken mud rims; its uncommitted edits are in src/render/terrain.ts and src/render/grass.ts.
+- Round 9 critique saved and triaged (REVIEWS.md); scores 7, 5, 6, 5, 7, 6.
+- Hungry wolves acceptance done (19/20 bison, wolves, ravens; pronghorn 0/20). hn2 done (herdNearest 6 holds 31/32 on cal2 but shows no visible loosening; not adopted; its acceptance was stopped at 10:16).
+- Final round GPU cost: about +0.5 ms per frame at 1440p (paired, side-swapped A/B; logs scratch/gpuab_round_a.log and _b.log).
 
 ## Next 3 steps
-1. A/A result: if the final round really costs more than about 1 ms, bisect (b441795 animals, be5dc0c UI, aee1c66 water) with BASE_DIR=scratch/wt and fix or revert the culprit before the last deploy.
-2. Riparian report: review the sheet against the concept image, A/B, commit, build and probe in scratch/wt, deploy by 11:30, live_check2.
-3. Final: Hungry wolves and hn2 numbers into MORNING.md and DECISIONS.md; morning screenshots from the worktree (`cd scratch/wt; node ../morning_shots.mjs ../../review/morning/sunday2`), MORNING.md screenshot list, journey + artifact republish, final adversarial audit, push. Deadline 12:00.
+1. Riparian report: check its sheet against the concept image, paired A/B if it claims more than 0.3 ms, commit its two files, build and probe in scratch/wt, deploy, live_check2, MORNING deploy line.
+2. Morning screenshots from the deployed commit (`cd scratch/wt; node ../morning_shots.mjs ../../review/morning/final`), update the MORNING.md screenshot list, journey + making-of artifact republish (map only the new files).
+3. Final adversarial audit of MORNING.md (times, numbers, links), push. Deadline 12:00.
 
 ## Gotchas
+- **GPU A/B: one run is not a result.** An A/A run (same code both sides) showed up to 1 ms of side bias. Run each comparison twice with the builds swapped between BASE_DIR and the cwd tree (two worktrees: scratch/wt and scratch/wt2, both with node_modules junctions) and halve the difference.
 - **Before committing a shared file (src/main.ts, ui.ts, engine.ts), look at its diff: builders edit them too.** At 05:50 a commit swept in half-finished Field notes wiring; fixed by rebuilding the index entry from the previous blob.
 - **Size a batch's `timeout` to at least 2.5x its expected wall time under load.** The cal2 shock suite was cut at 3 h with 42/60 seeds done; seeds 15 to 20 re-run into `review/stability/cal2-2a5caf9-shocks300-b`, merged with `npx tsx scratch/merge_shocks.ts <first> <rerun> 2`.
 - **Never `sed -i` source files from Git Bash: it turns CRLF files into LF and the whole file shows as changed.** Use the Edit tool or Python with byte-level CRLF handling.
