@@ -6,6 +6,7 @@
 //        founder (a founding bison with an empty story)
 //        &tshift=-230 (shifts the mock clock)  &speed=0 (frozen clock)
 //        &caption=Some+words (a narrator caption, visible in cinematic mode)
+//        &fresh=1 (start with an empty field notebook)  state=notes (the notebook open, a few notes earned)
 //        &autocam=1 (the documentary camera chip shows)
 //        &intro=0 (rail starts as icons)  &hint=1 (show the H and C hint)  &behind=0.13 (sim runs at 13% of the speed asked)
 //        &labels=1 (sample territory labels like the overlay draws)
@@ -24,7 +25,7 @@ declare global {
   interface Window {
     __ready?: boolean;
     __ui?: GameUI;
-    __mock?: { emit(e: Partial<SimEvent> & { kind: SimEvent['kind'] }): void; tick(): number; log: string[] };
+    __mock?: { emit(e: Partial<SimEvent> & { kind: SimEvent['kind'] }): void; tick(): number; setTick(t: number): void; log: string[] };
   }
 }
 
@@ -209,6 +210,8 @@ const pending: SimEvent[] = [...prefillEvents];
 
 window.__mock = {
   tick: () => Math.round(tick),
+  /** Jump the mock clock (used to cross a season boundary while a card is on screen). */
+  setTick: (t: number) => { tick = t; },
   emit: (e) => pending.push({ tick, sp: -1, x: 0, y: 0, a: 0, b: 0, ...e }),
   log,
 };
@@ -271,6 +274,13 @@ const actions: UIActions = {
   },
 };
 
+if (q.has('fresh')) {
+  try {
+    localStorage.removeItem('tallgrass.fieldnotes.v1');
+  } catch {
+    /* no storage */
+  }
+}
 ui = new GameUI(root, actions);
 window.__ui = ui;
 if (q.get('intro') === '0') document.querySelector('.tg-rail')?.classList.remove('is-intro');
@@ -391,6 +401,11 @@ function hoverChart(frac: number): void {
   c.dispatchEvent(new PointerEvent('pointermove', { clientX: r.left + r.width * frac, clientY: r.top + r.height * 0.5, bubbles: true }));
 }
 switch (state) {
+  case 'notes':
+    for (const id of ['firstKill', 'packFounded', 'drought', 'outbreak', 'fire', 'elder', 'followHunt']) ui.fieldNotes.debugEarn(id);
+    (document.querySelector('.tg-menubtn') as HTMLButtonElement).click();
+    setTimeout(() => (document.querySelector('.tg-menurow') as HTMLButtonElement).click(), 300);
+    break;
   case 'graph':
   case 'graphhover':
     key('g');

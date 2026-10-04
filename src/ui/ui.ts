@@ -14,6 +14,8 @@ import type { Challenge } from '../challenges';
 import { ChapterCard, cardDuration } from './chapter';
 import { ChallengeRun } from './challenge';
 import { GoalCard } from './goal';
+import { FieldNotes, NoteTracker, NOTE_COUNT } from './fieldnotes';
+import { NotesPanel, NoteToast } from './notespanel';
 import { ResultCard } from './result';
 import { Chronicle, type ChronicleEntry } from './chronicle';
 import { cardRank, describeEvent, eventWeight, seasonName, seasonOfTick, yearOfTick } from './describe';
@@ -75,6 +77,17 @@ export class GameUI {
   private goalRo: ResizeObserver;
   private hint: HTMLElement;
   private camChip: HTMLButtonElement;
+  /** The notebook of witnessed moments (also reachable from the console as __fieldnotes). */
+  readonly fieldNotes = new FieldNotes();
+  private tracker: NoteTracker;
+  private notesPanel: NotesPanel;
+  private noteToast = new NoteToast();
+  private toastQueue: { id: string; title: string; hint: string }[] = [];
+  private lastToastAt = -1e9;
+  private lastYear = 1;
+  private popRo: ResizeObserver;
+  /** True during the very first frame, whose events are history (a bulk fill), not news: notes tick without a toast. */
+  private firstFrame = true;
   private narrCaption: HTMLElement;
   private narratorOn = true;
   private captionText = '';
@@ -97,6 +110,9 @@ export class GameUI {
   private hidden = false;
   private cinematic = false;
   private lastCardAt = -1e9;
+  /** Sim tick of the event the card on screen is about (null for a card shown by hand). */
+  private cardTick: number | null = null;
+  private cardCheckAt = 0;
   /** Latest sim speed from the frame (0 paused, -1 skipping). */
   private speed = 1;
   private queued: QueuedCard | null = null;
@@ -109,7 +125,15 @@ export class GameUI {
     this.time = new TimeBar(actions);
     this.chron = new Chronicle((x, y) => actions.flyTo(x, y));
     this.inspector = new Inspector(actions);
-    this.top = new TopRight(actions, () => this.setHidden(true));
+    this.tracker = new NoteTracker(this.fieldNotes);
+    this.notesPanel = new NotesPanel(this.fieldNotes, () => this.notesPanel.hide());
+    this.top = new TopRight(actions, () => this.setHidden(true), () => this.notesPanel.show());
+    this.top.setNotesCount(this.fieldNotes.count, NOTE_COUNT);
+    this.fieldNotes.onChange = () => {
+      this.top.setNotesCount(this.fieldNotes.count, NOTE_COUNT);
+      this.notesPanel.refresh();
+    };
+    this.fieldNotes.onEarn = (def) => this.toastNote(def);
 
     this.goal = new GoalCard(() => this.tryAgain());
     this.result = new ResultCard(
@@ -119,6 +143,9 @@ export class GameUI {
     // the rail makes room under the goal card, whatever height the card is
     this.goalRo = new ResizeObserver(() => this.syncGoalHeight());
     this.goalRo.observe(this.goal.el);
+    // the field note toast rides above the population strip, whatever height that has
+    this.popRo = new ResizeObserver(() => this.ui.style.setProperty('--pop-h', `${this.pop.el.offsetHeight}px`));
+    this.popRo.observe(this.pop.el);
 
     const right = h('div', { class: 'tg-right' }, this.top.el, this.chron.el, this.inspector.el);
     // a quiet chip beside the time controls while the documentary camera is driving; a click takes the camera back
@@ -154,7 +181,7 @@ export class GameUI {
       /* storage unavailable: the hint just shows once per page load */
     }
 
-    this.ui = h('div', { class: 'tg-ui', dataset: { cinematic: 'false' } }, chrome, this.hint, bars, this.chapterCard.el, this.result.el, this.narrCaption, this.ambientNote);
+    this.ui = h('div', { class: 'tg-ui', dataset: { cinematic: 'false' } }, chrome, this.noteToast.el, this.notesPanel.el, this.hint, bars, this.chapterCard.el, this.result.el, this.narrCaption, this.ambientNote);
     root.append(this.ui);
 
     this.keyDown = (e) => this.onKeyDown(e);
@@ -199,10 +226,19 @@ export class GameUI {
     if (f.events.length) this.handleEvents(f.events, now, f.tick);
     this.pop.update(now, f.pop);
     this.inspector.update(f.selected, f.following, f.story, f.storyId);
+    this.lastYear = f.env.year + 1;
+    this.fieldNotes.yearNow = this.lastYear;
     this.top.setWorld(f.seed, f.scenario);
     this.flushQueuedCard(now);
+    this.keepCardInStep(now);
     if ((this.dodgeFrame++ & 3) === 0) this.dodgeLabels();
     if (this.run) this.stepChallenge(f);
+    this.tracker.update(
+      { tick: f.tick, env: f.env, pop: f.pop, events: f.events, selected: f.selected, following: f.following, speed: f.speed },
+      { memorial: this.inspector.isMemorial, challengeWon: this.run?.result?.state === 'won' },
+    );
+    this.firstFrame = false;
+    this.flushToast(now);
     if (!this.hintDone && now - this.lastInput > HINT_IDLE_MS && !this.hidden && !this.cinematic && !this.result.isOpen) this.showHint();
   }
 
@@ -248,6 +284,41 @@ export class GameUI {
     this.goal.update(this.run);
     this.syncToolLock();
     return ok;
+  }
+
+  // ---- field notes ----------------------------------------------------------------------------------------------
+
+  /** The game saw the documentary camera (or cinematic mode) catch a kill close to its focus. */
+  noteFilmedKill(): void {
+    this.fieldNotes.earn('documentary', this.lastYear);
+  }
+
+  /**
+   * A note was just earned. Show a quiet toast, unless the interface is hidden (earn silently) or time is flying (only
+   * the first of a burst gets a toast; the rest are ticked silently).
+   */
+  private toastNote(def: { id: string; title: string; hint: string }): void {
+    if (this.hidden || this.cinematic || this.firstFrame) return;
+    const now = performance.now();
+    const fast = this.speed >= 100 || this.speed < 0;
+    if (fast && (this.noteToast.showing || now - this.lastToastAt < 8000)) return;
+    if (this.toastQueue.length < 3) this.toastQueue.push(def);
+  }
+
+  /** Shows the next waiting toast when nothing is in the way: not over a chapter card, not in ambient or cinematic view. */
+  private flushToast(now: number): void {
+    this.noteToast.tick(now);
+    if (this.hidden || this.cinematic) {
+      this.toastQueue.length = 0;
+      this.noteToast.hide();
+      return;
+    }
+    if (this.noteToast.showing || !this.toastQueue.length || this.chapterCard.isOn) return;
+    const def = this.toastQueue.shift();
+    if (def) {
+      this.noteToast.show(def, now);
+      this.lastToastAt = now;
+    }
   }
 
   private stepChallenge(f: UIFrame): void {
@@ -325,6 +396,7 @@ export class GameUI {
 
   /** Show a chapter card right now (ignores the rate limit). */
   chapter(title: string, subtitle?: string): void {
+    this.cardTick = null; // a card shown by hand has no event to keep in step with the header
     this.lastCardAt = performance.now();
     this.queued = null;
     // one card at a time (show() replaces whatever is up), and shorter while years fly by
@@ -343,6 +415,7 @@ export class GameUI {
     window.clearTimeout(this.ambientTimer);
     this.ambientNote.classList.toggle('is-on', hidden);
     if (hidden) {
+      this.notesPanel.hide();
       this.top.close();
       this.time.closeMenu();
       this.chapterCard.clear();
@@ -356,6 +429,7 @@ export class GameUI {
     this.ui.classList.toggle('is-cinematic', on);
     this.ui.dataset.cinematic = String(on);
     if (on) {
+      this.notesPanel.hide();
       this.top.close();
       this.time.closeMenu();
     }
@@ -378,6 +452,8 @@ export class GameUI {
     for (const ev of ['pointermove', 'pointerdown', 'wheel', 'keydown']) window.removeEventListener(ev, this.onInput);
     window.clearTimeout(this.hintTimer);
     this.goalRo.disconnect();
+    this.popRo.disconnect();
+    this.notesPanel.destroy();
     this.chron.destroy();
     this.time.destroy();
     this.top.destroy();
@@ -391,6 +467,7 @@ export class GameUI {
     this.seed = f.seed;
     this.scenario = f.scenario;
     this.pop.reset();
+    this.tracker.reset();
     this.inspector.setMeans(null);
     this.chron.clear();
     this.chapterCard.clear();
@@ -457,6 +534,20 @@ export class GameUI {
       subtitle = this.degrade(subtitle, c.tick, 10); // keep only the year
     }
     this.chapter(c.title, this.degrade(subtitle, c.tick, this.speed < 0 ? 100 : this.speed));
+    this.cardTick = c.tick;
+  }
+
+  /**
+   * While a card is up the valley moves on (a season is 30 s at 1x with the 2x calendar). About once a second, if the
+   * season the card names is no longer the header's, its subtitle drops to just the year.
+   */
+  private keepCardInStep(now: number): void {
+    if (this.cardTick === null || !this.chapterCard.isOn || now - this.cardCheckAt < 1000) return;
+    this.cardCheckAt = now;
+    const t = this.cardTick;
+    const cur = this.lastTick;
+    const same = yearOfTick(t) === yearOfTick(cur) && seasonName(seasonOfTick(t)) === seasonName(seasonOfTick(cur));
+    if (!same) this.chapterCard.setSubtitleIf(/^Year \d+, /, `Year ${yearOfTick(t)}`);
   }
 
   /**
@@ -560,7 +651,9 @@ export class GameUI {
 
   /** Esc backs out one layer at a time: popovers, then the armed tool, then the selection, then cinematic mode. */
   private onEscape(): void {
-    if (this.result.isOpen) {
+    if (this.notesPanel.isOpen) {
+      this.notesPanel.hide();
+    } else if (this.result.isOpen) {
       this.keepWatching();
     } else if (this.top.isOpen) {
       this.top.close();

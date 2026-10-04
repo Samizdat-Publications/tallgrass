@@ -1,6 +1,7 @@
 // Top right: the seed chip (click to copy) and the menu (scenarios, new world, keys).
 import { button, h, setText } from './dom';
-import { CHALLENGES } from '../challenges';
+import { CHALLENGES, type Challenge } from '../challenges';
+import { BASE_YEAR_TICKS, YEAR_TICKS, setCalendarScale } from '../sim/types';
 import { NAMED_SEEDS, type NamedSeed } from '../seeds';
 import { icon } from './icons';
 import { SCENARIOS, type UIActions } from './types';
@@ -37,12 +38,30 @@ const KEYS: [string[], string][] = [
   [['Esc'], 'let go, disarm, close'],
 ];
 
+/**
+ * A challenge pins its own calendar (the classic 2,400-tick year it was tuned in), whatever calendar this page runs.
+ * Its blurb and length are written in valley years of that calendar, so the menu reads them under it, not under ours.
+ */
+function inChallengeCalendar<T>(c: Challenge, read: () => T): T {
+  const mine = BASE_YEAR_TICKS / YEAR_TICKS;
+  const theirs = c.params?.calendarScale;
+  if (theirs === undefined || theirs === mine) return read();
+  setCalendarScale(theirs);
+  try {
+    return read();
+  } finally {
+    setCalendarScale(mine);
+  }
+}
+
 export class TopRight {
   readonly el: HTMLElement;
   private seedBtn: HTMLButtonElement;
   private seedText: HTMLElement;
   private ambientBtn: HTMLButtonElement;
   private narratorBtn: HTMLButtonElement;
+  private notesBtn: HTMLButtonElement;
+  private notesCount: HTMLElement;
   private narratorOn = true;
   private seedName: HTMLElement;
   private namedBtns = new Map<string, HTMLButtonElement>();
@@ -58,7 +77,7 @@ export class TopRight {
   private copiedTimer = 0;
   private onDocDown: (e: PointerEvent) => void;
 
-  constructor(private actions: UIActions, private onAmbient: () => void = () => {}) {
+  constructor(private actions: UIActions, private onAmbient: () => void = () => {}, private onNotes: () => void = () => {}) {
     this.seedText = h('span', { class: 'tg-seed-text' });
     this.seedName = h('span', { class: 'tg-seed-name' });
     this.seedIcon = h('span', { class: 'tg-seed-ic', html: icon('copy', 14) });
@@ -112,11 +131,12 @@ export class TopRight {
 
     const challenges = h('div', { class: 'tg-menu-list' });
     for (const c of CHALLENGES) {
-      const meta = `${c.years} years, ${c.maxTools === null ? 'any number of interventions' : c.maxTools === 1 ? 'one intervention' : `up to ${c.maxTools} interventions`}`;
+      const { years, blurb } = inChallengeCalendar(c, () => ({ years: c.years, blurb: c.blurb }));
+      const meta = `${years} years, ${c.maxTools === null ? 'any number of interventions' : c.maxTools === 1 ? 'one intervention' : `up to ${c.maxTools} interventions`}`;
       const b = button(
         { class: 'tg-sc', 'aria-pressed': 'false', onclick: () => this.startChallenge(c.id) },
         h('span', { class: 'tg-sc-dot', 'aria-hidden': 'true' }),
-        h('span', { class: 'tg-sc-text' }, h('span', { class: 'tg-sc-name', text: c.name }), h('span', { class: 'tg-sc-blurb', text: c.blurb }), h('span', { class: 'tg-sc-meta', text: meta })),
+        h('span', { class: 'tg-sc-text' }, h('span', { class: 'tg-sc-name', text: c.name }), h('span', { class: 'tg-sc-blurb', text: blurb }), h('span', { class: 'tg-sc-meta', text: meta })),
       );
       this.challengeBtns.set(c.id, b);
       challenges.append(b);
@@ -143,10 +163,20 @@ export class TopRight {
       h('span', { class: 'tg-switch-track', 'aria-hidden': 'true' }, h('i', { class: 'tg-switch-knob' })),
     );
 
+    // the notebook of witnessed moments: its count lives on the menu entry, the page opens on a click
+    this.notesCount = h('span', { class: 'tg-menurow-count' });
+    this.notesBtn = button(
+      { class: 'tg-menurow', onclick: () => { this.close(); this.onNotes(); } },
+      h('span', { class: 'tg-switch-text' }, h('span', { class: 'tg-sc-name', text: 'Field notes' }), h('span', { class: 'tg-sc-blurb', text: 'A notebook of moments you have witnessed in the valley.' })),
+      this.notesCount,
+      h('span', { class: 'tg-menurow-ic', html: icon('chevronRight', 14) }),
+    );
+
     this.menu = h(
       'div',
       { class: 'tg-menu tg-glass', role: 'dialog', 'aria-label': 'Menu', hidden: true },
       this.narratorBtn,
+      this.notesBtn,
       h('h2', { class: 'tg-menu-h', text: 'Scenarios' }),
       scenarios,
       h('h2', { class: 'tg-menu-h', text: 'Challenges' }),
@@ -178,6 +208,11 @@ export class TopRight {
 
   get isOpen(): boolean {
     return this.open;
+  }
+
+  /** The count on the Field notes entry: "7 of 18". */
+  setNotesCount(n: number, total: number): void {
+    setText(this.notesCount, `${n} of ${total}`);
   }
 
   /** Reflect the narrator switch in the menu. */

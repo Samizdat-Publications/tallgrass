@@ -289,6 +289,19 @@ let fpsAcc = 0, fpsN = 0;
 let audioFrame = 0;
 let nearbyCache = { bison: 0, wolf: 0, raven: 0, pronghorn: 0 };
 const heardDeaths = new Map<number, number>();
+// field notes: a fresh carcass with a predator beside it is a kill; one the documentary camera caught close to its focus
+// earns "The documentary camera films a kill"
+const focusV = new THREE.Vector3();
+function predatorWithin(x: number, y: number, r: number): boolean {
+  if (!pending) return false;
+  const A = pending.agents;
+  for (let k = 0; k < pending.count; k++) {
+    const o = k * 12;
+    if (A[o] !== Sp.Wolf && A[o] !== Sp.Cougar) continue;
+    if (Math.hypot(A[o + 1] - x, A[o + 2] - y) < r) return true;
+  }
+  return false;
+}
 const w = window as unknown as Record<string, unknown>;
 w.__overlay = overlay;
 engine.onFrame((dt, t) => {
@@ -325,6 +338,8 @@ engine.onFrame((dt, t) => {
     // a fresh carcass near the camera: someone just died here
     if (!skipping && pending.speed > 0 && pending.speed <= 10) {
       const C = pending.carcasses;
+      const filming = (autoCam || cinematicOn) && !ui.fieldNotes.has('documentary');
+      if (filming) engine.cam.getFocus(focusV);
       for (let k = 0; k < pending.carcassCount; k++) {
         const o = k * 4;
         if (C[o + 2] < 0.985) continue;
@@ -333,6 +348,7 @@ engine.onFrame((dt, t) => {
         heardDeaths.set(key, performance.now());
         const dist = Math.hypot(C[o] - cp.x, C[o + 1] - cp.z, camHeight);
         if (dist < 160) audio.onDeath(C[o + 3], dist);
+        if (filming && Math.hypot(C[o] - focusV.x, C[o + 1] - focusV.z) < 80 && predatorWithin(C[o], C[o + 1], 35)) ui.noteFilmedKill();
       }
       if (heardDeaths.size > 400) for (const [key, t0] of heardDeaths) if (performance.now() - t0 > 60000) heardDeaths.delete(key);
     }
@@ -360,6 +376,8 @@ w.__director = director;
 w.__apply = (iv: Intervention) => send({ type: 'apply', iv });
 w.__audio = audio;
 w.__narrator = narrator;
+// dev hook: window.__fieldnotes.debugEarn('fire') ticks a field note as if it had just happened
+w.__fieldnotes = ui.fieldNotes;
 // dev hook: speak one line by id, bypassing the narrator's rules (the audio must be unlocked by a click)
 w.__narrate = (id: string) => narrator.speakNow(id);
 w.__followId = (id: number | null) => {

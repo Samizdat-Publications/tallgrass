@@ -90,6 +90,12 @@ export class ChapterCard {
     };
   }
 
+  /** Replace the subtitle while the card is up (no new animation), but only if it matches `pattern`. */
+  setSubtitleIf(pattern: RegExp, text: string): void {
+    if (!this.isOn || this.sub.style.display === 'none') return;
+    if (pattern.test(this.sub.textContent ?? '') && this.sub.textContent !== text) this.sub.textContent = text;
+  }
+
   get isOn(): boolean {
     return this.el.classList.contains('is-on');
   }
