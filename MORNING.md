@@ -51,11 +51,11 @@ Earlier, Saturday (since 09:00):
   - **Camera:** it drifts slowly during fast-forward.
 
 ## What to look at first
-1. Open the link and leave it alone: the camera opens on the biggest herd, and after 25 seconds without input the **documentary camera** takes over and films hunts, kills, herds and vistas (a small chip says so; any mouse or key input, or Take over, gives you the camera back).
-2. Press **C** for the full cinematic version (interface hidden, letterbox).
+1. Open the link, **click once** (that turns the sound on), and leave it alone: the camera opens on the biggest herd, and after 25 seconds without input the **documentary camera** takes over, cutting between hunts, kills, herds and vistas, and the **narrator** speaks when something big happens. Any mouse or key input, or Take over, gives you the camera back.
+2. Press **C** for the full cinematic version (interface hidden, letterbox, narrator lines as captions), or **H** for the ambient view on a second monitor.
 3. Menu, Challenges, **The wolves come home**: bring wolves back to a valley that lost them. It's the gentle one.
 4. Overlays, **Wolf territories**, then 10x: watch packs form, bud and fall apart.
-5. Press **G**, then 100x: decades of booms and crashes. **E** for evolution: bison grow faster and bigger under wolf pressure in the first century, then level off (see Next 5 things).
+5. Press **G**, then 100x: decades of booms and crashes, now on the slower calendar. **E** for evolution.
 
 ## Screenshots (all in `review/morning/`; the 09:00 set is in `review/morning/old-0900/`)
 - `1_opening_herd.png`: the opening shot, current build.
