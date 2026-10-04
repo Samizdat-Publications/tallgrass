@@ -69,6 +69,8 @@ export class Director {
     if (!on) {
       this.cam.follow(null);
       this.cam.setCinematic(false);
+      this.cam.followSmoothTime = 0.4;
+      this.cam.followDeadzone = 0.055;
     }
   }
 
@@ -105,6 +107,9 @@ export class Director {
       const sx = shot.id !== null ? (ok ? v.x : NaN) : shot.x, sy = shot.id !== null ? (ok ? v.z : NaN) : shot.y;
       if (Number.isFinite(sx) && Number.isFinite(sy)) shot.yaw = this.clearYaw(sx, sy, shot.pitch, shot.yaw);
     }
+    // a documentary operator lets the subject drift in frame and eases after it, so the background doesn't judder
+    this.cam.followSmoothTime = shot.id !== null ? 1.1 : 0.4;
+    this.cam.followDeadzone = shot.id !== null ? 0.13 : 0.055;
     if (shot.id !== null) {
       const id = shot.id;
       const v = new THREE.Vector3();
