@@ -6,7 +6,9 @@
 // between the previous and current snapshot by id.
 //
 // Foot-lock: the leg cycle advances by (distance drawn this frame / stride), never by time, so a planted foot stands
-// still on the ground at any sim rate or frame rate (the stride comes from the gait, see models/types.ts plantedStride).
+// still on the ground at any sim rate or frame rate (the stride is the one the foot path uses, see models/legmath.ts gaitMix).
+// Within 45 m of the camera the legs also read the ground under each foot (two-bone IK in the vertex shader) and the body
+// height follows the mean height of the stance feet (stanceBodyDy below, eased here because a shader keeps no state).
 import * as THREE from 'three';
 import { AGENT_STRIDE, CARCASS_STRIDE, F_INFECTED, SPECIES_COUNT, Sp, St } from '../sim/types';
 import type { Snapshot } from '../sim/types';
@@ -15,7 +17,8 @@ import { sampleHeight } from '../sim/world';
 import type { World } from '../sim/world';
 import { getModel } from './models';
 import type { AnimParams, ModelDef } from './models';
-import { plantedStride } from './models/types';
+import { IK_FAR, IK_NEAR, gaitMix, gaitStride, legRigOf, stanceBodyDy } from './models/legmath';
+import type { LegRig } from './models/legmath';
 import { makeAnimalMaterials } from './models/shader';
 import type { AnimalShared } from './models/shader';
 import { Dust, KillSites, Markers, SceneLit } from './models/fx';
@@ -71,28 +74,32 @@ const smoothstep = (a: number, b: number, x: number): number => {
 
 /**
  * Metres of ground covered per leg cycle at a gait pace (the pace the animal moves at in its own world, on-screen m/s at
- * 1x). The gait mix is the one the vertex shader uses. Quadrupeds use the stride that leaves a planted foot standing
- * still on the ground (see plantedStride); hoppers and birds interpolate their authored strides.
+ * 1x). Quadrupeds use the stride of the blended gait that the vertex shader's foot path uses (legmath.ts gaitMix), which is
+ * what leaves a planted foot standing still on the ground; hoppers and birds interpolate their authored strides.
  */
 function strideFor(p: AnimParams, gaitSpd: number): number {
   if (p.kind !== 0) {
     const u = clamp(gaitSpd / p.strideSpeedMax, 0, 1);
     return p.strideW + (p.strideG - p.strideW) * u * u * (3 - 2 * u);
   }
-  const s1 = smoothstep(p.trot0, p.trot1, gaitSpd);
-  const wG = smoothstep(p.gal0, p.gal1, gaitSpd);
-  const wT = s1 * (1 - wG);
-  const wW = smoothstep(0.08, 0.4, gaitSpd) * (1 - s1);
-  const sum = wW + wT + wG;
-  if (sum < 1e-3) return plantedStride(p, 0);
-  return (wW * plantedStride(p, 0) + wT * plantedStride(p, 1) + wG * plantedStride(p, 2, gaitSpd)) / sum;
+  return gaitStride(p, gaitSpd);
 }
 
 /**
- * Most leg cycles per second the cadence may reach (faster than this the legs alias on screen). Raised from 6: the fastest
- * gallops (a pronghorn in flight, a wolf closing at 25 m/s on screen) need about 5 to 6 Hz even with the long fast-gallop stride.
+ * The scale the vertex shader gives an animal of drawn scale `vs` at camera distance `camD` so it is never smaller than minPx pixels
+ * (see the distance readability line at the end of tgAnimate). Its legs grow with it, so its stride does too.
  */
-const MAX_CADENCE = 7.5;
+function legBoost(p: AnimParams, vs: number, camD: number, uPxK: number): number {
+  const px = (p.boostLen * vs * uPxK) / Math.max(camD, 1);
+  return clamp(p.minPx / Math.max(px, 0.01), 1, 7);
+}
+
+/**
+ * Most leg cycles per second the cadence may reach (faster than this the legs alias on screen). It must never bind at 1x: the
+ * fastest real gallop (a pronghorn in flight, a wolf closing at 25 m/s on screen) is about 4 to 6 Hz with the blended stride.
+ * Only a time-lapse (10x and up, where the body covers ten times the ground per frame) can hit it, and then the feet slide.
+ */
+const MAX_CADENCE = 12;
 
 /**
  * Render-side heading dynamics per species: natural frequency (rad/s) of the critically damped spring that chases the sim
@@ -230,6 +237,9 @@ class Slots {
   /** Where the animal was drawn last frame (the foot-lock measures the distance covered from this) and the velocity of the drawn path. */
   px = new Float32Array(this.cap);
   pz = new Float32Array(this.cap);
+  /** Terrain height under the body last frame (the foot-lock measures the distance along the ground from it) and the eased body-height offset (m, model units). */
+  pgy = new Float32Array(this.cap);
+  bdy = new Float32Array(this.cap);
   svx = new Float32Array(this.cap);
   svz = new Float32Array(this.cap);
   /** Feeding tug and hunting weights, eased. */
@@ -274,6 +284,8 @@ class Slots {
     this.vis = g(this.vis, Float32Array);
     this.px = g(this.px, Float32Array);
     this.pz = g(this.pz, Float32Array);
+    this.pgy = g(this.pgy, Float32Array);
+    this.bdy = g(this.bdy, Float32Array);
     this.svx = g(this.svx, Float32Array);
     this.svz = g(this.svz, Float32Array);
     this.tug = g(this.tug, Float32Array);
@@ -313,6 +325,7 @@ export class AnimalLayer {
   private uTime = { value: 0 };
   private shared: AnimalShared = {
     uTime: this.uTime, uCamPos: { value: new THREE.Vector3(256, 400, 256) }, uPxK: { value: 900 / (2 * Math.tan((45 * Math.PI) / 360)) },
+    tHeight: { value: null }, uCell: { value: 1 }, uHN: { value: 2 },
     uLow: { value: 0 },
     uAmb: { value: new THREE.Vector3(0.6, 0.55, 0.45) },
     probe: (scene, exposure) => {
@@ -330,6 +343,10 @@ export class AnimalLayer {
   private tg: SharedUniforms | null = null;
   /** A species material compiled before `tg` was known (it has no hill shadow until it is rebuilt). */
   private tgMissed = false;
+  /** Terrain heights as a texture for the vertex shader (the legs read the ground under their feet within 45 m). */
+  private heightTex: THREE.DataTexture;
+  /** Rest-pose leg bones by species (quadrupeds only), read from the meshes. */
+  private rigs: Array<LegRig | null> = [];
   private dust: Dust;
   private kills: KillSites;
   private markers: Markers;
@@ -372,12 +389,19 @@ export class AnimalLayer {
   constructor(world: World) {
     this.world = world;
     this.object3D.name = 'AnimalLayer';
+    this.heightTex = new THREE.DataTexture(new Float32Array(world.height), world.hn, world.hn, THREE.RedFormat, THREE.FloatType);
+    this.heightTex.needsUpdate = true;
+    this.shared.tHeight.value = this.heightTex;
+    this.shared.uCell.value = world.cell;
+    this.shared.uHN.value = world.hn;
     for (let sp = 0; sp < SPECIES_COUNT; sp++) {
       const def = getModel(sp);
       if (!def) {
         this.batches.push(null);
+        this.rigs.push(null);
         continue;
       }
+      this.rigs.push(def.params.kind === 0 ? legRigOf(def.geometry) : null);
       const { material, depth } = makeAnimalMaterials(sp, def, this.shared);
       // animals sit in hill shadow like the terrain and trees do (the depth material casts only, so it needs nothing)
       const baseCompile = material.onBeforeCompile;
@@ -648,6 +672,8 @@ export class AnimalLayer {
     const sel = this.selectedId;
     this.selInfo.found = false;
     const kSick = 1 - Math.exp(-dt / 2.5);
+    const kBdy = 1 - Math.exp(-dt / 0.12);
+    const groundAt = (gx: number, gz: number): number => sampleHeight(H, hn, cell, gx, gz);
     const running = this.timeScale > 0 ? dt : 0;
     this.dust.update(running);
     this.markers.begin();
@@ -706,6 +732,9 @@ export class AnimalLayer {
         } else { S.svx[slot] = 0; S.svz[slot] = 0; }
       }
 
+      // the terrain under the drawn position: the leg cycle runs on the distance along the ground, and the pose below uses it
+      const g0 = sampleHeight(H, hn, cell, x, z);
+
       // animation state targets
       // gait style follows the animal's own pace (walk, trot, gallop), not the time-lapse factor
       const spdT = this.timeScale > 0 ? spd1 * VIS_PER_SIM : 0;
@@ -725,6 +754,8 @@ export class AnimalLayer {
         S.fresh[slot] = 0;
         S.px[slot] = x;
         S.pz[slot] = z;
+        S.pgy[slot] = g0;
+        S.bdy[slot] = 0;
         S.hs[slot] = h;
         S.hw[slot] = 0;
         S.spd[slot] = spdT;
@@ -740,8 +771,11 @@ export class AnimalLayer {
       // planted foot stands still on the ground whatever the sim rate, time scale or snapshot jitter.
       let ds = Math.hypot(x - S.px[slot], z - S.pz[slot]);
       if (ds > 30) ds = 0; // a teleport (respawn, new world), not a step
+      // on a slope the body travels further along the ground than its shadow does (1 / cos(20 deg) = +6%): the feet move by that
+      const dsGround = pr.kind === 0 && ds > 0 ? Math.hypot(ds, g0 - S.pgy[slot]) : ds;
       S.px[slot] = x;
       S.pz[slot] = z;
+      S.pgy[slot] = g0;
       const visT = dt > 1e-4 ? ds / dt : 0;
       const feeding = state === St.Eat && (HUNTER[sp] || (FLIES[sp] && hdT > 0)) && this.timeScale > 0;
       const hunting = HUNTER[sp] && this.timeScale > 0 ? (state === St.Chase || state === St.Stalk ? 1 : state === St.Eat ? 0.6 : 0) : 0;
@@ -785,7 +819,12 @@ export class AnimalLayer {
       const gaitSpd = Math.min(spdS, S.vis[slot] * 1.6 + 0.15);
       // the model is drawn scaled (species readability boost, age, size), and its stride scales with it
       const vs = sc * this.speciesScale[sp];
-      S.phase[slot] = (S.phase[slot] + Math.min(ds / (strideFor(pr, gaitSpd) * vs), MAX_CADENCE * dt)) % 1;
+      // the vertex shader scales an animal that would be a few pixels long (distance readability, ModelDef.minPx): its stride
+      // grows with it, so the legs run at the matching slower cadence
+      const camP = this.shared.uCamPos.value;
+      const camD = Math.hypot(x - camP.x, g0 - camP.y, z - camP.z);
+      const sizeBoost = pr.kind === 0 ? legBoost(pr, vs, camD, this.shared.uPxK.value) : 1;
+      S.phase[slot] = (S.phase[slot] + Math.min(dsGround / (strideFor(pr, gaitSpd) * vs * sizeBoost), MAX_CADENCE * dt)) % 1;
 
       // The drawn heading is a critically damped follower of the sim heading, rate limited, so a turn is a curve with some
       // momentum behind it rather than a snap on a central pivot.
@@ -807,7 +846,7 @@ export class AnimalLayer {
 
       // pose on the terrain
       const ch = Math.cos(hd), sh = Math.sin(hd);
-      const ground = sampleHeight(H, hn, cell, x, z);
+      const ground = g0;
       let pitch = 0, roll = 0, y = ground;
       if (FLIES[sp]) {
         y = ground + alt;
@@ -864,6 +903,16 @@ export class AnimalLayer {
         }
       }
       this.writeInstance(b, x, y, z, ch, sh, pitch, roll, vs);
+      // Body height: the body rides at the mean height of the ground under the stance feet (within 45 m of the camera, where the
+      // legs reach for the real ground; eased to 0 beyond, and while lying). The shader raises the whole body by it.
+      if (pr.kind === 0) {
+        const ikK = 1 - smoothstep(IK_NEAR, IK_FAR, camD);
+        let bT = 0;
+        if (ikK > 0.001 && S.lie[slot] < 0.98) {
+          bT = stanceBodyDy(pr, this.rigs[sp]!, gaitMix(pr, gaitSpd), S.phase[slot], { x, y, z, ch, sh, pitch, roll, s: vs }, groundAt) * ikK * (1 - S.lie[slot]);
+        }
+        S.bdy[slot] += (bT - S.bdy[slot]) * kBdy;
+      }
 
       this.markers.add(sp, x, y + (FLIES[sp] ? 0.3 : pr.height * 0.6 * vs), z, pr.boostLen, vs);
       // from the wide view, a faint ripple where a predator is actually chasing
@@ -907,7 +956,7 @@ export class AnimalLayer {
       // feeding tug (head hauls and shakes, ravens peck), altitude (a bird in flight casts no shadow), hunting weight
       const fx = b.fx.array as Float32Array;
       fx[gp] = S.tug[slot];
-      fx[gp + 1] = FLIES[sp] ? alt : 0;
+      fx[gp + 1] = FLIES[sp] ? alt : pr.kind === 0 ? S.bdy[slot] : 0;
       fx[gp + 2] = S.hunt[slot];
       fx[gp + 3] = pounceE;
       look[gp] = clamp(coat, 0, 1);
@@ -1148,6 +1197,7 @@ export class AnimalLayer {
       b.material.dispose();
       b.depth.dispose();
     }
+    this.heightTex.dispose();
     this.markers.dispose();
     this.dust.dispose();
     this.kills.dispose();

@@ -1,0 +1,367 @@
+// CPU mirror of the quadruped leg math in models/shader.ts (tgAnimate, KIND 0). The vertex shader is ported from this file
+// function by function (the GLSL names are given next to each one), so the foot-slip rig (dev/footslip.ts), the animal layer's
+// phase and body-height code and the shader all agree on where a foot is.
+//
+// The model of a leg: the leg mesh is rigid above and below the knee (aPart.y weights the blend). The hip pivot rotates the whole
+// leg, the knee pivot rotates the lower part. Angles are measured from straight down, positive = foot forward (+x).
+//
+//   1. gaitMix:   walk, trot and gallop parameters are BLENDED by speed (stance share, stride, lift, per-leg offsets) and a
+//                 single foot path is evaluated, so a gait change never resets or splits the phase.
+//   2. legWave:   the foot path along the body. During stance (u < beta) it slides back LINEARLY at exactly the body speed
+//                 (stride S metres per cycle), so a planted foot stands still on the ground; the swing is an eased return.
+//   3. solveLeg:  two-bone analytic IK (plus a final stretch of at most IK_CAP) puts the foot point on the target the path asks
+//                 for, a point on the ground (read from the height texture within 45 m) raised by the swing lift.
+//
+// Units: model space metres (before the instance scale), x forward, y up.
+import type { AnimParams } from './types';
+import { IK_CAP, gallopDuty, plantedStride } from './types';
+
+export const TAU = Math.PI * 2;
+/** Swing lift height as a share of the leg length per radian of the species' knee flexion parameter (kneeW/T/G). */
+export const LIFT_K = 0.4;
+/**
+ * How far the body sinks while it moves, as a share of the leg length, at a walk, trot and gallop: the stance legs run with the
+ * knees a little bent (as a real animal's do) instead of as straight rods, and the foot then reaches the ground at the ends of
+ * its sweep without stretching. Faded in with the gait amplitude.
+ */
+export const LEG_FLEX = [0.035, 0.06, 0.09];
+/** The IK fades out between these camera distances (m): beyond it a leg aims at flat ground (the cheap path). */
+export const IK_NEAR = 40;
+export const IK_FAR = 45;
+
+export const clamp = (x: number, a: number, b: number): number => (x < a ? a : x > b ? b : x);
+export const sstep = (a: number, b: number, x: number): number => {
+  const t = clamp((x - a) / (b - a), 0, 1);
+  return t * t * (3 - 2 * t);
+};
+const fract = (x: number): number => x - Math.floor(x);
+const mix = (a: number, b: number, t: number): number => a + (b - a) * t;
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Leg geometry (read from the mesh)
+
+/** One leg in the rest pose: hip pivot, knee (or hock) pivot and the lowest point of the paw, all (x, y) in model space. */
+export interface LegBones {
+  hip: [number, number];
+  knee: [number, number];
+  foot: [number, number];
+  /** Distance of the hip pivot from the body's midline (m; the right legs are at +z, the left legs at -z), and of the paw. */
+  z: number;
+  footZ: number;
+}
+export interface LegRig {
+  front: LegBones;
+  hind: LegBones;
+}
+
+/** Reads the rest-pose bones of the front and hind legs from a model geometry (aPart 1..4, aPivot, aPivot2, position). */
+export function legRigOf(g: { getAttribute(n: string): { array: ArrayLike<number>; count: number } }): LegRig {
+  const pos = g.getAttribute('position').array;
+  const part = g.getAttribute('aPart').array;
+  const piv = g.getAttribute('aPivot').array;
+  const piv2 = g.getAttribute('aPivot2').array;
+  const n = g.getAttribute('position').count;
+  const bones = (a: number, b: number): LegBones => {
+    let miny = Infinity, fx = 0, fz = 0, hx = 0, hy = 0, kx = 0, ky = 0, hz = 0;
+    for (let i = 0; i < n; i++) {
+      const pt = Math.round(part[i * 4]);
+      if (pt !== a && pt !== b) continue;
+      hx = piv[i * 3]; hy = piv[i * 3 + 1]; kx = piv2[i * 3]; ky = piv2[i * 3 + 1]; hz = Math.abs(piv[i * 3 + 2]);
+      if (pos[i * 3 + 1] < miny) { miny = pos[i * 3 + 1]; fx = pos[i * 3]; fz = Math.abs(pos[i * 3 + 2]); }
+    }
+    return { hip: [hx, hy], knee: [kx, ky], foot: [fx, miny], z: hz, footZ: fz };
+  };
+  return { front: bones(1, 2), hind: bones(3, 4) };
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// 1. Gait blend (GLSL: the gN / betaB / strideB / liftB / offB block at the top of the leg branch of tgAnimate)
+
+export interface GaitMix {
+  /** Raw gait weights before the rest/stagger fade (walk, trot, gallop) and their sum, 0 at a standstill. */
+  w: [number, number, number];
+  sum: number;
+  /** The same weights normalised to sum to 1 (pure walk at a standstill). */
+  n: [number, number, number];
+  /** Gait amplitude 0..1 (fades the foot path in below walking pace). */
+  amt: number;
+  /** Stance share of the cycle. */
+  beta: number;
+  /** Metres of ground per leg cycle (model units; the animal layer multiplies by the drawn scale). */
+  stride: number;
+  /** Peak swing lift of the foot (m). */
+  lift: number;
+  /** How far the body sinks while moving so the knees stay bent (m, positive = down). */
+  flex: number;
+  /** Per-leg phase offsets FL, FR, HL, HR. */
+  off: [number, number, number, number];
+}
+
+export const legLength = (p: AnimParams): number => p.legL ?? p.comY;
+
+/** Gait weights by speed (m/s on screen at 1x), the same bands the shader uses. */
+export function gaitWeights(p: AnimParams, spd: number): { wW: number; wT: number; wG: number; s1: number } {
+  const s1 = sstep(p.trot0, p.trot1, spd);
+  const wG = sstep(p.gal0, p.gal1, spd);
+  return { wW: sstep(0.08, 0.4, spd) * (1 - s1), wT: s1 * (1 - wG), wG, s1 };
+}
+
+export function gaitMix(p: AnimParams, spd: number): GaitMix {
+  const { wW, wT, wG } = gaitWeights(p, spd);
+  const sum = wW + wT + wG;
+  const n: [number, number, number] = sum < 1e-3 ? [1, 0, 0] : [wW / sum, wT / sum, wG / sum];
+  const L = legLength(p);
+  const dutyG = gallopDuty(p, spd);
+  const beta = n[0] * p.dutyW + n[1] * p.dutyT + n[2] * dutyG;
+  const stride = n[0] * plantedStride(p, 0) + n[1] * plantedStride(p, 1) + n[2] * plantedStride(p, 2, spd);
+  const lift = LIFT_K * L * (n[0] * p.kneeW + n[1] * p.kneeT + n[2] * p.kneeG);
+  const flex = L * (n[0] * LEG_FLEX[0] + n[1] * LEG_FLEX[1] + n[2] * LEG_FLEX[2]) * Math.min(sum, 1);
+  const off = [0, 1, 2, 3].map((i) => n[0] * p.offW[i] + n[1] * p.offT[i] + n[2] * p.offG[i]) as GaitMix['off'];
+  return { w: [wW, wT, wG], sum, n, amt: Math.min(sum, 1), beta, stride, lift, flex, off };
+}
+
+/**
+ * Metres of ground per leg cycle at a gait pace (the phase advances by distance / this, see AnimalLayer.update). The same number
+ * as gaitMix(p, spd).stride, without allocating (it runs for every animal every frame).
+ */
+export function gaitStride(p: AnimParams, spd: number): number {
+  const s1 = sstep(p.trot0, p.trot1, spd);
+  const wG = sstep(p.gal0, p.gal1, spd);
+  const wT = s1 * (1 - wG);
+  const wW = sstep(0.08, 0.4, spd) * (1 - s1);
+  const sum = wW + wT + wG;
+  if (sum < 1e-3) return plantedStride(p, 0);
+  return (wW * plantedStride(p, 0) + wT * plantedStride(p, 1) + wG * plantedStride(p, 2, spd)) / sum;
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// 2. Foot path (GLSL: tgLegWave and the footX / footLift lines)
+
+/**
+ * u = leg phase 0..1, beta = stance share. Returns [W, arc]: W is the foot position along the stride (+1 front end .. -1 back
+ * end), arc the 0..1 height profile of the lifted foot. Stance: W falls linearly from 1 to -1 over u in [0, beta], so the foot
+ * moves back at a constant rate and (with the cycle run at speed / stride) stays put on the ground. Swing: an eased return
+ * with a small retraction just before touchdown, so the foot lands already moving back.
+ */
+export function legWave(u: number, beta: number): [number, number] {
+  const v = fract(u);
+  if (v < beta) return [1 - (2 * v) / beta, 0];
+  const s = (v - beta) / (1 - beta);
+  const k = (1.2 * (1 - beta)) / beta;
+  const h = s * s * (3 - 2 * s);
+  const t1 = s * s * s * (1 - s);
+  const t0 = s * (1 - s) * (1 - s) * (1 - s);
+  return [-1 + 2 * h + k * (t1 - t0), Math.sin(Math.PI * s)];
+}
+
+/** Foot offset along the body from its rest position (m) and its lift (m) for leg i (0 FL, 1 FR, 2 HL, 3 HR). */
+export function footPath(gm: GaitMix, ph: number, i: number, calmK = 1): { footX: number; lift: number; u: number; stance: boolean } {
+  const u = fract(ph + gm.off[i]);
+  const [W, arc] = legWave(u, gm.beta);
+  const k = gm.amt * calmK;
+  return { footX: 0.5 * gm.beta * gm.stride * W * k, lift: gm.lift * arc * k, u, stance: u < gm.beta };
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// 3. Two-bone IK (GLSL: tgSolveLeg)
+
+export interface LegSolution {
+  /** Hip rotation (about the hip pivot) and knee rotation (about the knee pivot, weighted by aPart.y), radians. */
+  hip: number;
+  knee: number;
+  /** Uniform stretch of the whole leg about the hip, 1 .. IK_CAP. */
+  stretch: number;
+  /** True when the target was beyond what the stretch can reach (the foot falls short). */
+  short: boolean;
+}
+
+/**
+ * Puts the foot point of `b` at (tx, ty) (model space, before the body's own motion). The knee bends the way the leg is built:
+ * forelegs fold the foot backward, hind legs forward (`front` picks the branch). If the target is further than the straight
+ * leg the whole leg lengthens, at most IK_CAP.
+ */
+export function solveLeg(b: LegBones, front: boolean, tx: number, ty: number): LegSolution {
+  const u1x = b.knee[0] - b.hip[0], u1y = b.knee[1] - b.hip[1];
+  const u2x = b.foot[0] - b.knee[0], u2y = b.foot[1] - b.knee[1];
+  const l1 = Math.hypot(u1x, u1y), l2 = Math.hypot(u2x, u2y);
+  const a1 = Math.atan2(u1x, -u1y), a2 = Math.atan2(u2x, -u2y);
+  const Tx = tx - b.hip[0], Ty = ty - b.hip[1];
+  const d = Math.hypot(Tx, Ty);
+  const dmax = l1 + l2, dmin = Math.abs(l1 - l2) + 0.002;
+  const dc = clamp(d, dmin, dmax);
+  const cg = clamp((l1 * l1 + l2 * l2 - dc * dc) / (2 * l1 * l2), -1, 1);
+  const bend = Math.PI - Math.acos(cg); // 0 = straight
+  const s = front ? -1 : 1;
+  const alpha = Math.atan2(l2 * Math.sin(bend), l1 + l2 * Math.cos(bend));
+  const phi = Math.atan2(Tx, -Ty); // direction to the target, from straight down
+  const A1 = phi - s * alpha; // thigh direction
+  const delta = s * bend; // knee: shin direction minus thigh direction
+  const want = d / dmax;
+  const stretch = clamp(want, 1, IK_CAP);
+  return { hip: A1 - a1, knee: delta - (a2 - a1), stretch, short: want > IK_CAP + 1e-6 };
+}
+
+/** Applies a leg solution to a point of the leg mesh with knee weight w1: the vertex path of tgAnimate (rotate, rotate, stretch). */
+export function poseLegPoint(b: LegBones, sol: { hip: number; knee: number; stretch: number }, p: [number, number], w1: number): [number, number] {
+  let [x, y] = p;
+  [x, y] = rotZ(x, y, b.knee[0], b.knee[1], sol.knee * w1);
+  [x, y] = rotZ(x, y, b.hip[0], b.hip[1], sol.hip);
+  return [b.hip[0] + (x - b.hip[0]) * sol.stretch, b.hip[1] + (y - b.hip[1]) * sol.stretch];
+}
+
+/** GLSL tgRotZ on (x, y). */
+export function rotZ(x: number, y: number, cx: number, cy: number, a: number): [number, number] {
+  const cs = Math.cos(a), sn = Math.sin(a);
+  const dx = x - cx, dy = y - cy;
+  return [cx + cs * dx - sn * dy, cy + sn * dx + cs * dy];
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// The body's own motion on top of the legs (GLSL: tgBodyFwd). Bob, pitch, the distance cues (which already start at 20 m) and the
+// body-height offset from the terrain. The IK aims at a point and takes this motion back out, so the foot lands where asked.
+
+export interface BodyMotion {
+  /** Vertical offset of the body (bob + terrain offset, m) and its pitch (rad) about (0, comY). */
+  yoff: number;
+  pitch: number;
+  /** Distance cue strength 0..1 (smoothstep(20, 110, camera distance)), the body length used to size the cues, and gait weights. */
+  farK: number;
+  bl: number;
+  w: [number, number, number];
+  cyc: number;
+}
+
+/**
+ * Bob, pitch and sink of the body for a gait (the faded weights gm.w, GLSL: bob, pitch and flex in tgAnimate), plus the vertical
+ * body offset `dy` from the terrain.
+ */
+export function bodyMotion(p: AnimParams, gm: GaitMix, ph: number, farK: number, dy: number): BodyMotion {
+  const w = gm.w;
+  const cyc = TAU * ph;
+  const bob = w[0] * p.bobW * Math.cos(2 * cyc) + w[1] * p.bobT * Math.cos(2 * cyc) + w[2] * p.bobG * Math.cos(cyc - 0.5);
+  const pitch = w[1] * p.pitchT * Math.sin(2 * cyc + 0.5) + w[2] * p.pitchG * Math.sin(cyc + 1.0);
+  return { yoff: bob - gm.flex + dy, pitch, farK, bl: p.boostLen, w, cyc };
+}
+
+/** Forward body transform of a model-space point (x, y, z). */
+export function bodyFwd(p: AnimParams, m: BodyMotion, pt: [number, number, number]): [number, number, number] {
+  let [x, y, z] = pt;
+  y += m.yoff;
+  [x, y] = rotZ(x, y, 0, p.comY, m.pitch);
+  if (m.farK > 0.001) {
+    const [wW, wT, wG] = m.w;
+    const c = m.cyc, bl = m.bl;
+    const hop = wW * 0.03 * Math.cos(2 * c) + wT * 0.08 * Math.cos(2 * c) + wG * 0.16 * Math.cos(c - 0.5);
+    const xn = clamp(x / (bl * 0.55), -1.3, 1.3);
+    const arch = (wT * 0.04 + wG * 0.08) * Math.cos(c + 1.0) * (xn * xn - 0.35);
+    const snake = (wW * 0.02 + wT * 0.036 + wG * 0.04) * Math.sin(c + 0.3) * xn;
+    y += bl * m.farK * (hop + arch);
+    z += bl * m.farK * snake;
+    [x, y] = rotZ(x, y, 0, p.comY, m.farK * (wW * 0.03 * Math.sin(2 * c + 0.5) + wT * 0.09 * Math.sin(2 * c + 0.5) + wG * 0.2 * Math.sin(c + 1.0)));
+    // rolling from side to side (tgRotX about (0, comY))
+    const a = m.farK * (wW * 0.03 + wT * 0.055 + wG * 0.06) * Math.sin(c + 0.9);
+    const cs = Math.cos(a), sn = Math.sin(a);
+    const dy = y - p.comY;
+    [y, z] = [p.comY + cs * dy - sn * z, sn * dy + cs * z];
+  }
+  return [x, y, z];
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// One leg, end to end: the foot target and its solution (GLSL: the leg branch of tgAnimate)
+
+export interface LegAim {
+  /** Where the foot point is wanted in the final (post body motion) model frame, and the solution that puts it there. */
+  target: [number, number, number];
+  sol: LegSolution;
+  path: { footX: number; lift: number; u: number; stance: boolean };
+}
+
+/**
+ * `groundY` is the height of the ground under the foot in the model frame relative to the model's own ground plane (m); 0 for the
+ * cheap flat path. The target is raised by the swing lift, and the body's own motion is taken back out with one correction step.
+ */
+export function aimLeg(
+  p: AnimParams, rig: LegRig, gm: GaitMix, ph: number, leg: number, z: number, groundY: number, bm: BodyMotion, calmK = 1,
+): LegAim {
+  const front = leg < 2;
+  const b = front ? rig.front : rig.hind;
+  const path = footPath(gm, ph, leg, calmK);
+  const tx = b.foot[0] + path.footX;
+  const target: [number, number, number] = [tx, b.foot[1] + groundY + path.lift, z];
+  const f = bodyFwd(p, bm, target);
+  const sol = solveLeg(b, front, target[0] - (f[0] - target[0]), target[1] - (f[1] - target[1]));
+  return { target, sol, path };
+}
+
+/**
+ * The foot point of a leg after the whole pipeline (leg pose, then the body's motion), model space. Used by the rig to measure
+ * where the foot really ends up.
+ */
+export function footModel(p: AnimParams, rig: LegRig, leg: number, z: number, aim: LegAim, bm: BodyMotion): [number, number, number] {
+  const b = leg < 2 ? rig.front : rig.hind;
+  const [x, y] = poseLegPoint(b, aim.sol, b.foot, 1);
+  // the stretch scales the leg about the hip pivot in z too (the paw sits a little off the pivot's z)
+  const sg = Math.sign(z), zp = sg * b.z;
+  return bodyFwd(p, bm, [x, y, zp + (sg * b.footZ - zp) * aim.sol.stretch]);
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Body height from the ground under the stance feet (used by the animal layer; the shader offsets the whole body by it)
+
+/** The pose of an instance as AnimalLayer.writeInstance builds it: position, heading as (cos, sin), terrain pitch and roll, scale. */
+export interface InstancePose {
+  x: number; y: number; z: number;
+  ch: number; sh: number;
+  pitch: number; roll: number;
+  s: number;
+}
+
+/** Rotation of an instance (rows of R, as in AnimalLayer.writeInstance): [m00, m01, m02, m10, m11, m12, m20, m21, m22]. */
+export function instanceRotation(q: InstancePose): number[] {
+  const cp = Math.cos(q.pitch), sp = Math.sin(q.pitch), cr = Math.cos(q.roll), sr = Math.sin(q.roll);
+  const cphi = q.ch, sphi = -q.sh;
+  return [
+    cphi * cp, -cphi * sp * cr + sphi * sr, cphi * sp * sr + sphi * cr,
+    sp, cp * cr, -cp * sr,
+    -sphi * cp, sphi * sp * cr + cphi * sr, -sphi * sp * sr + cphi * cr,
+  ];
+}
+
+/** World position of a model-space point. */
+export function instanceToWorld(q: InstancePose, R: number[], x: number, y: number, z: number): [number, number, number] {
+  return [
+    q.x + q.s * (R[0] * x + R[1] * y + R[2] * z),
+    q.y + q.s * (R[3] * x + R[4] * y + R[5] * z),
+    q.z + q.s * (R[6] * x + R[7] * y + R[8] * z),
+  ];
+}
+
+/** Model-space height of a world point above the instance's own ground plane (GLSL: tgGroundModelY). */
+export function worldToModelY(q: InstancePose, R: number[], wx: number, wy: number, wz: number): number {
+  return (R[1] * (wx - q.x) + R[4] * (wy - q.y) + R[7] * (wz - q.z)) / q.s;
+}
+
+/** Model-space height of the ground under the foot at model position (tx, ty, zf), relative to the instance's ground plane. */
+export function groundUnderFoot(q: InstancePose, R: number[], ground: (x: number, z: number) => number, tx: number, ty: number, zf: number): number {
+  const w = instanceToWorld(q, R, tx, ty, zf);
+  return worldToModelY(q, R, w[0], ground(w[0], w[2]), w[2]);
+}
+
+/**
+ * Where the body should ride: the mean height (model metres) of the ground under the stance feet above the body's own ground
+ * plane, so the body rises over a bump the feet are standing on and sinks into a dip. 0 on level ground. The animal layer eases
+ * it over time (a foot entering or leaving stance moves the mean in a step).
+ */
+export function stanceBodyDy(p: AnimParams, rig: LegRig, gm: GaitMix, ph: number, q: InstancePose, ground: (x: number, z: number) => number, calmK = 1): number {
+  const R = instanceRotation(q);
+  let sum = 0, n = 0;
+  for (let i = 0; i < 4; i++) {
+    const path = footPath(gm, ph, i, calmK);
+    if (!path.stance) continue;
+    const b = i < 2 ? rig.front : rig.hind;
+    sum += groundUnderFoot(q, R, ground, b.foot[0] + path.footX, b.foot[1], (i & 1 ? 1 : -1) * b.z);
+    n++;
+  }
+  return n ? sum / n : 0;
+}
