@@ -24,7 +24,7 @@ Deadline: `.claude/hooks/run_until.txt` (2026-10-04 12:00). Owner rulings live i
 | M14 | Loop: capture, critique, fix top 3, re-verify | ongoing |
 
 ## Ordered backlog (top = next)
-1. Close-range animation (every Gemini round): a longer kill struggle, foot planting on hunt close-ups, varied raven flapping.
+1. Close-range animation (every Gemini round): check the 1.2 s takedown (11:19) on video, foot planting on hunt close-ups, varied raven flapping.
 2. Pronghorn under prey-scaled wolves: a fawning brake, so 'Hungry wolves' can keep its pronghorn over 1,000 generations.
 3. Evolution costs per species plus a bison single-calf cap; re-run the acceptance.
 4. Herd shape: personal space while grazing.
