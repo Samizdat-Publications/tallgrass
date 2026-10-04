@@ -64,6 +64,25 @@ export function winterK(season: number): number {
  */
 export const RIPARIAN = { cureFade: 0.2, winterFade: 0.9, dryBase: 0.02, dryCure: 0.12, dryStub: 0.4 } as const;
 
+/**
+ * Late-summer upland cure. Once the prairie is mostly cured (the CURE_KEYS peak, season about 1.6 to 2.2) every spot that is not in
+ * the riparian belt is pulled toward fully dry, whatever its moisture, so the hills read as cured gold and green is left to the belt
+ * and the swales (the ground shader's drain term). `floor` is the dryness reached at full cure; the pull ramps in over cure [from, to].
+ */
+export const UPLAND = { from: 0.55, to: 0.92, floor: 0.97 } as const;
+
+/**
+ * Sun-aspect banding of the dry ground. Slopes that face the sun go pale gold, slopes turned away go deeper ochre (saturated, never
+ * grey and never green). Strength rides on dryness (living grass keeps its colour), is strongest with a low sun, and dies out on the flat.
+ */
+export const ASPECT = { sun: [1.14, 1.08, 0.82], shade: [0.86, 0.76, 0.5], base: 0.45, low: 0.55, slope0: 0.02, slope1: 0.3 } as const;
+
+/**
+ * Drought ground (weather 2, eased by the engine as `drought` 0..1): grass is forced toward dry, bleached to a pale straw that keeps
+ * the same luminance and leans yellow (r above g above b, so never mauve or pink), and the riparian belt shrinks by `rip`.
+ */
+export const DROUGHT = { dry: 0.92, rip: 0.5, ripKeep: 0.6, straw: [1.28, 1.0, 0.52], lift: 1.1, amount: 0.62, dust: [0.5, 0.4, 0.26], soil: 0.7 } as const;
+
 /** GLSL float literal ("3.0", "0.95"). */
 function glf(x: number): string {
   return Number.isInteger(x) ? x.toFixed(1) : String(x);
@@ -74,6 +93,12 @@ function glf(x: number): string {
  *   tgWinterK(s)                          winter amount 0..1 (raw season, same as the TS winterK for s in [0, 4))
  *   tgRiparian(edge, cure, winterK)       belt strength: edge falloff x cure fade x winter fade
  *   tgRiparianDry(dry, cure, stub, rip)   dryness inside the belt (capped low, a little drier with cure and stubble)
+ *   tgCuredFloor(dry, cure, rip)          late-summer pull of non-riparian ground toward fully dry
+ *   tgDroughtRip(rip, drought)            the belt shrinks in a drought
+ *   tgDroughtDry(dry, drought, rip)       drought forces dry grass (less so inside the belt)
+ *   tgDroughtTint(color, drought, rip)    bleach to pale straw at constant luminance
+ *   tgDroughtSoil(soil, drought)          dusty tan ground
+ *   tgAspectTint(nrm, L, amt)            pale gold on sun-facing slopes, deeper ochre on shaded ones (colour multiplier)
  */
 export const SEASON_GLSL = /* glsl */ `
 float tgWinterK(float s) {
@@ -84,5 +109,33 @@ float tgRiparian(float edge, float cure, float winterK) {
 }
 float tgRiparianDry(float dry, float cure, float stub, float rip) {
   return mix(dry, min(dry, ${glf(RIPARIAN.dryBase)} + ${glf(RIPARIAN.dryCure)} * cure + ${glf(RIPARIAN.dryStub)} * stub), rip);
+}
+float tgCuredFloor(float dry, float cure, float rip) {
+  return max(dry, cure * smoothstep(${glf(UPLAND.from)}, ${glf(UPLAND.to)}, cure) * ${glf(UPLAND.floor)} * (1.0 - rip));
+}
+float tgDroughtRip(float rip, float drought) {
+  return rip * (1.0 - ${glf(DROUGHT.rip)} * drought);
+}
+float tgDroughtDry(float dry, float drought, float rip) {
+  return max(dry, drought * ${glf(DROUGHT.dry)} * (1.0 - ${glf(DROUGHT.ripKeep)} * rip));
+}
+vec3 tgDroughtTint(vec3 c, float drought, float rip) {
+  float lum = dot(c, vec3(0.2126, 0.7152, 0.0722));
+  vec3 straw = vec3(lum * ${glf(DROUGHT.lift)}) * vec3(${DROUGHT.straw.map(glf).join(', ')});
+  return mix(c, straw, ${glf(DROUGHT.amount)} * drought * (1.0 - ${glf(DROUGHT.ripKeep)} * rip));
+}
+vec3 tgDroughtSoil(vec3 soil, float drought) {
+  return mix(soil, vec3(${DROUGHT.dust.map(glf).join(', ')}), ${glf(DROUGHT.soil)} * drought);
+}
+// nrm: ground normal, L: direction toward the light, amt: 0..1 strength (dryness of the ground, off at night and under living grass)
+vec3 tgAspectTint(vec3 nrm, vec3 L, float amt) {
+  float sl = length(nrm.xz);
+  float slopeK = smoothstep(${glf(ASPECT.slope0)}, ${glf(ASPECT.slope1)}, sl);
+  float facing = dot(nrm.xz / max(sl, 1e-4), L.xz / max(length(L.xz), 1e-4)) * slopeK;
+  float low = 1.0 - smoothstep(0.15, 0.75, L.y);
+  vec3 sunC = vec3(${ASPECT.sun.map(glf).join(', ')});
+  vec3 shadeC = vec3(${ASPECT.shade.map(glf).join(', ')});
+  vec3 t = mix(vec3(1.0), facing >= 0.0 ? sunC : shadeC, abs(facing));
+  return mix(vec3(1.0), t, clamp(amt, 0.0, 1.0) * (${glf(ASPECT.base)} + ${glf(ASPECT.low)} * low));
 }
 `;
