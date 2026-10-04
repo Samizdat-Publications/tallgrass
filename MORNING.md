@@ -62,14 +62,14 @@ Earlier, Saturday (since 09:00):
 4. Overlays, **Wolf territories**, then 10x: watch packs form, bud and fall apart.
 5. Press **G**, then 100x: decades of booms and crashes, now on the slower calendar. **E** for evolution.
 
-## Screenshots (current build, in `review/morning/sunday/`; Saturday's sets are in `review/morning/` and `review/morning/old-0900/`)
+## Screenshots (current build, captured about 09:10 in `review/morning/sunday2/`; earlier sets in `review/morning/`)
 - `2_golden_low.png`: bison against a low sun, the new horizon and dusk glow (no interface, H).
-- `1_golden_herd.png`: the valley from the drone at golden hour, with the reworked creek.
-- `5_ui_golden.png`: the documentary interface: chronicle newest first, population strip, tools.
-- `7_follow_a_wolf_hunt.png`: following an alpha female wolf on a hunt, with her traits and life story and a Field note.
+- `1_golden_herd.png`: the valley from the drone at golden hour, with the creek reading as water.
+- `4_winter_dawn.png`: winter dawn with the new snowpack, bare cottonwoods and a herd along the creek.
+- `5_ui_golden.png`: the documentary interface with the chronicle's season lines ("Pups at the dens, and the wolves rise from 24 to 40").
+- `7_follow_a_wolf_hunt.png`: following a founder wolf pup on a hunt, with its traits and life story and a Field note.
 - `6_ui_territories.png`: wolf territories with named packs, and a chapter card.
-- `8_field_notes.png`: the Field notes notebook.
-- `9_chart_60_years.png`: 60 valley-years in 4 worlds on the 2x calendar.
+- `8_field_notes.png`, `9_chart_60_years.png` (60 valley-years in 4 worlds), `10_chart_shocks.png` (the 300-year shock suite).
 - Every image made tonight, in order, is in `journey/` (see `journey/INDEX.md`), as you asked. **Browse them as a page with a slideshow: https://claude.ai/artifact/7jPHUFvbzTv6AUz5UCA3Mu** (private to you; republished as new images are added). Locally: open `journey/index.html`.
 
 ## Stability: what is proven and what isn't (honest)
