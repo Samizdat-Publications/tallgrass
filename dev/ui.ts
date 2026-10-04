@@ -4,6 +4,7 @@
 //        story (live life story)|memorial (the animal dies)|evolution|evohover
 //        challenge (Knife's edge running; &used=5 spends the budget)|challenge-won (Dry years, wins after a second) (the expanded graph on its Evolution tab)
 //        founder (a founding bison with an empty story)
+//        &tshift=-230 (shifts the mock clock)  &speed=0 (frozen clock)
 //        &autocam=1 (the documentary camera chip shows)
 //        &intro=0 (rail starts as icons)  &hint=1 (show the H and C hint)  &behind=0.13 (sim runs at 13% of the speed asked)
 //        &labels=1 (sample territory labels like the overlay draws)
@@ -22,7 +23,7 @@ declare global {
   interface Window {
     __ready?: boolean;
     __ui?: GameUI;
-    __mock?: { emit(e: Partial<SimEvent> & { kind: SimEvent['kind'] }): void; log: string[] };
+    __mock?: { emit(e: Partial<SimEvent> & { kind: SimEvent['kind'] }): void; tick(): number; log: string[] };
   }
 }
 
@@ -38,7 +39,7 @@ const log: string[] = [];
 // ---- fake world ------------------------------------------------------------------------------------------------
 
 const OFFSET = Math.round(START_SEASON * SEASON_TICKS);
-const T0 = 19 * YEAR_TICKS + 2250; // year 21, a few hundred ticks before late summer
+const T0 = 19 * YEAR_TICKS + 2250 + (q.has('tshift') ? Number(q.get('tshift')) : 0); // year 21, a few hundred ticks before late summer
 let tick = T0;
 let speed = Number(q.get('speed') ?? 10);
 let lastRunSpeed = speed || 10;
@@ -203,6 +204,7 @@ let nextSched = 0;
 const pending: SimEvent[] = [...prefillEvents];
 
 window.__mock = {
+  tick: () => Math.round(tick),
   emit: (e) => pending.push({ tick, sp: -1, x: 0, y: 0, a: 0, b: 0, ...e }),
   log,
 };
@@ -274,6 +276,7 @@ if (q.has('labels')) {
     [820, 470, 'Ridge', '7 wolves', '#8FD18A'],
     [330, 560, 'Willow', '4 wolves', '#F08A8A'],
     [760, 884, 'Switchgrass', '5 wolves', '#E07A6A'],
+    [800, 770, 'Bluff', '13 wolves', '#9FA8F0'],
   ];
   for (const [x, y, name, count, col] of pts) {
     const el = document.createElement('div');

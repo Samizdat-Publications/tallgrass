@@ -1,6 +1,7 @@
 // Right column: the chronicle. One plain sentence per event, grouped under a heading for each valley year, newest on
 // top. A busy year keeps only its significant events and folds the rest into "and 3 smaller events" (click to open).
 import { button, h, setText } from './dom';
+import { seasonName, seasonOfTick } from './describe';
 import { icon } from './icons';
 
 export interface ChronicleEntry {
@@ -17,9 +18,10 @@ export interface ChronicleEntry {
   weight: number;
 }
 
-const MAX_ENTRIES = 600;
-/** DOM nodes shown at most; older years scroll off the end. */
-const MAX_NODES = 170;
+const MAX_ENTRIES = 4000;
+/** DOM nodes drawn at first; the "N earlier entries" line draws more on request, so nothing is lost silently. */
+const FIRST_NODES = 150;
+const MORE_NODES = 250;
 /** A year with more entries than this folds its smaller events away. */
 export const FOLD_OVER = 4;
 
@@ -29,6 +31,15 @@ export class Chronicle {
   private toggle: HTMLButtonElement;
   private badge: HTMLElement;
   private entries: ChronicleEntry[] = [];
+  /** Arrival order of each entry: the tie-break when two events share a tick (later arrival is newer). */
+  private seq = new Map<ChronicleEntry, number>();
+  private seqNext = 0;
+  private nodeLimit = FIRST_NODES;
+  /** Entries that exist but are not drawn yet (older years beyond the node limit). */
+  private undrawn = 0;
+  private footer: HTMLButtonElement;
+  private footerText: HTMLElement;
+  private hiddenBelow = 0;
   private fresh = new Set<ChronicleEntry>();
   private opened = new Set<number>();
   private collapsed = false;
@@ -47,10 +58,17 @@ export class Chronicle {
     this.toggle = button(
       { class: 'tg-chron-toggle', 'aria-expanded': 'true', 'aria-label': 'Collapse the chronicle', title: 'Collapse the chronicle', onclick: () => this.setCollapsed(!this.collapsed) },
       h('span', { class: 'tg-chron-title', text: 'Chronicle' }),
+      h('span', { class: 'tg-chron-order', text: 'newest first' }),
       this.badge,
       h('span', { class: 'tg-chron-caret', html: icon('chevronDown', 16) }),
     );
-    this.el = h('aside', { class: 'tg-chron tg-glass tg-leaf', 'aria-label': 'Chronicle' }, this.toggle, this.list);
+    this.footerText = h('span', {});
+    this.footer = button(
+      { class: 'tg-chron-more', hidden: true, title: 'Show the earlier entries', onclick: () => this.showEarlier() },
+      this.footerText,
+      h('span', { class: 'tg-chron-more-ic', html: icon('chevronDown', 14) }),
+    );
+    this.el = h('aside', { class: 'tg-chron tg-glass tg-leaf', 'aria-label': 'Chronicle' }, this.toggle, this.list, this.footer);
     // The list is clipped by its panel (and shrinks when the inspector opens). Whatever the height, the visible part
     // must end on a whole entry, never half a sentence, so the part below the last whole entry is masked away.
     this.list.addEventListener('scroll', () => this.scheduleTrim(), { passive: true });
@@ -90,6 +108,9 @@ export class Chronicle {
 
   clear(): void {
     this.entries = [];
+    this.seq.clear();
+    this.seqNext = 0;
+    this.nodeLimit = FIRST_NODES;
     this.fresh.clear();
     this.opened.clear();
     this.unread = 0;
@@ -103,11 +124,15 @@ export class Chronicle {
     if (!items.length) return;
     for (const it of items) {
       this.entries.push(it);
+      this.seq.set(it, this.seqNext++);
       if (animate) this.fresh.add(it);
     }
     while (this.entries.length > MAX_ENTRIES) {
       const old = this.entries.shift();
-      if (old) this.fresh.delete(old);
+      if (old) {
+        this.fresh.delete(old);
+        this.seq.delete(old);
+      }
     }
     this.render();
     if (this.collapsed && !this.quietNext) {
@@ -128,6 +153,8 @@ export class Chronicle {
     const frag = document.createDocumentFragment();
     if (!this.entries.length) {
       this.list.replaceChildren(this.empty);
+      this.undrawn = 0;
+      this.footer.hidden = true;
       return;
     }
     const byYear = new Map<number, ChronicleEntry[]>();
@@ -138,9 +165,14 @@ export class Chronicle {
     }
     const years = [...byYear.keys()].sort((a, b) => b - a);
     let nodes = 0;
+    this.undrawn = 0;
     for (const year of years) {
-      if (nodes > MAX_NODES) break;
-      const all = byYear.get(year) as ChronicleEntry[]; // oldest first
+      if (nodes > this.nodeLimit) {
+        this.undrawn += (byYear.get(year) as ChronicleEntry[]).length;
+        continue;
+      }
+      // oldest first, by tick; two events on the same tick keep the order they arrived in
+      const all = (byYear.get(year) as ChronicleEntry[]).sort((a, b) => a.tick - b.tick || (this.seq.get(a) ?? 0) - (this.seq.get(b) ?? 0));
       const open = this.opened.has(year);
       let shown = all;
       let hidden = 0;
@@ -152,7 +184,7 @@ export class Chronicle {
       }
       const group = h('div', { class: 'tg-year', role: 'group', 'aria-label': `Year ${year}` });
       group.append(h('div', { class: 'tg-year-head', text: `Year ${year}` }));
-      const ordered = [...shown].reverse(); // newest first
+      const ordered = [...shown].reverse(); // newest first, in every year
       ordered.forEach((e, i) => {
         group.append(this.build(e, i === 0, i === ordered.length - 1 && hidden === 0 && !(open && foldable)));
         nodes++;
@@ -193,17 +225,40 @@ export class Chronicle {
       l.style.webkitMaskImage = v;
     };
     if (this.collapsed || l.clientHeight === 0) return;
-    if (l.scrollTop + l.clientHeight >= l.scrollHeight - 2) return set('none'); // everything is on show
-    const top = l.getBoundingClientRect().top;
-    const limit = l.getBoundingClientRect().bottom + 0.5;
+    const box = l.getBoundingClientRect();
+    const limit = box.bottom + 0.5;
     let lastWhole = -1;
+    let below = 0;
     for (const it of l.querySelectorAll<HTMLElement>('.tg-ent, .tg-more')) {
       const r = it.getBoundingClientRect();
-      if (r.bottom > limit) break;
-      if (r.bottom > top) lastWhole = r.bottom - top;
+      if (r.bottom > limit) {
+        if (it.classList.contains('tg-ent')) below++;
+        continue;
+      }
+      if (r.bottom > box.top) lastWhole = r.bottom - box.top;
     }
-    if (lastWhole < 0) return set('none');
-    set(`linear-gradient(#000 ${lastWhole.toFixed(1)}px, transparent ${(lastWhole + 7).toFixed(1)}px)`);
+    // everything drawn is on show when nothing is below and the list is scrolled to its end
+    const atEnd = l.scrollTop + l.clientHeight >= l.scrollHeight - 2;
+    if (atEnd) below = 0;
+    if (atEnd || lastWhole < 0) set('none');
+    else set(`linear-gradient(#000 ${lastWhole.toFixed(1)}px, transparent ${(lastWhole + 7).toFixed(1)}px)`);
+    // the cue for what is out of sight: older entries below, or older years not drawn yet
+    this.hiddenBelow = below;
+    const n = below + this.undrawn;
+    this.footer.hidden = n === 0;
+    if (n > 0) setText(this.footerText, `${n.toLocaleString('en-US')} earlier ${n === 1 ? 'entry' : 'entries'}`);
+  }
+
+  /** The "N earlier entries" line: page down through what is drawn, then draw more of the older years. */
+  private showEarlier(): void {
+    const l = this.list;
+    if (this.hiddenBelow > 0) {
+      l.scrollTo({ top: l.scrollTop + l.clientHeight * 0.85, behavior: 'smooth' });
+    } else if (this.undrawn > 0) {
+      this.nodeLimit += MORE_NODES;
+      this.render();
+      l.scrollTo({ top: l.scrollTop + l.clientHeight * 0.85, behavior: 'smooth' });
+    }
   }
 
   private toggleYear(year: number): void {
@@ -217,12 +272,19 @@ export class Chronicle {
     const spColor = it.sp >= 0 && it.sp < 6 ? `var(--sp-${it.sp})` : 'var(--paper-dim)';
     const inner = [
       h('span', { class: 'tg-ent-node', 'aria-hidden': 'true' }),
-      h('span', { class: 'tg-ent-t' }, h('span', { class: 'tg-sr', text: `Year ${it.year}: ` }), it.sentence),
+      h(
+        'span',
+        { class: 'tg-ent-t' },
+        h('span', { class: 'tg-sr', text: `Year ${it.year}: ` }),
+        it.sentence,
+        // the season each entry happened in, so the order down the list can be read at a glance
+        h('span', { class: 'tg-ent-when', text: ` ${seasonName(seasonOfTick(it.tick))}` }),
+      ),
     ];
     const cls = `tg-ent${flyable ? ' is-flyable' : ''}${it.major ? ' is-major' : ''}${this.fresh.has(it) ? ' is-new' : ''}${first ? ' is-first' : ''}${last ? ' is-last' : ''}`;
     const body = flyable
       ? button({ class: 'tg-ent-b', title: 'Fly the camera there', onclick: () => this.flyTo(it.x, it.y) }, ...inner)
       : h('div', { class: 'tg-ent-b' }, ...inner);
-    return h('div', { class: cls, role: 'listitem', dataset: { year: String(it.year) }, style: `--node:${spColor}` }, body);
+    return h('div', { class: cls, role: 'listitem', dataset: { year: String(it.year), tick: String(it.tick) }, style: `--node:${spColor}` }, body);
   }
 }

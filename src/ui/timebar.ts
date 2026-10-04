@@ -15,7 +15,7 @@ export function paceText(ticksPerSec: number, speed: number): string {
   if (nominal > 0 && tps > 0 && tps < nominal * 0.85) {
     const actual = tps / TICKS_PER_SECOND;
     const a = actual >= 10 ? Math.round(actual) : Math.round(actual * 10) / 10;
-    return `${speed}\u00d7 asked, running at ${a}\u00d7`;
+    return `${speed}\u00d7: this machine is running at ${a}\u00d7`;
   }
   if (nominal > 0 && Math.abs(tps - nominal) / nominal < 0.06) tps = nominal;
   if (!(tps > 0)) return '';
@@ -168,7 +168,6 @@ export class TimeBar {
     else {
       text = paceText(ticksPerSec, v);
     }
-    this.rate.classList.toggle('is-behind', text.includes('running at'));
     if (text !== this.lastRateText) {
       this.lastRateText = text;
       setText(this.rate, text);

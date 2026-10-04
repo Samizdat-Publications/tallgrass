@@ -16,7 +16,7 @@ import { ChallengeRun } from './challenge';
 import { GoalCard } from './goal';
 import { ResultCard } from './result';
 import { Chronicle, type ChronicleEntry } from './chronicle';
-import { cardRank, describeEvent, eventWeight, yearOfTick } from './describe';
+import { cardRank, describeEvent, eventWeight, seasonName, seasonOfTick, yearOfTick } from './describe';
 import { FeedFilter } from './feed';
 import { button, h, unitPx } from './dom';
 import { icon } from './icons';
@@ -45,13 +45,17 @@ const HINT_KEY = 'tallgrass.hint.v1';
 /** Packs that lasted fewer ticks than this are left out of the chronicle altogether. */
 const FLASH_PACK_TICKS = 300;
 /** Events older than this many ticks when they arrive (a backgrounded tab, a bulk fill) never earn a card. */
-const STALE_TICKS = 600;
+const STALE_TICKS = 240;
+/** How long the "interface hidden" note stays up after entering ambient view. */
+const AMBIENT_NOTE_MS = 4200;
 
 interface QueuedCard {
   title: string;
   subtitle: string;
   rank: number;
   at: number;
+  /** Sim tick of the event the card is about. */
+  tick: number;
 }
 
 export class GameUI {
@@ -71,6 +75,11 @@ export class GameUI {
   private goalRo: ResizeObserver;
   private hint: HTMLElement;
   private camChip: HTMLButtonElement;
+  private ambientNote: HTMLElement;
+  private ambientTimer = 0;
+  private dodgeFrame = 0;
+  private dodging = false;
+  private onAnyDown: (e: PointerEvent) => void;
   private camOn = false;
   private hintDone = false;
   private lastInput = performance.now();
@@ -97,7 +106,7 @@ export class GameUI {
     this.time = new TimeBar(actions);
     this.chron = new Chronicle((x, y) => actions.flyTo(x, y));
     this.inspector = new Inspector(actions);
-    this.top = new TopRight(actions);
+    this.top = new TopRight(actions, () => this.setHidden(true));
 
     this.goal = new GoalCard(() => this.tryAgain());
     this.result = new ResultCard(
@@ -126,10 +135,12 @@ export class GameUI {
     const bottom = h('div', { class: 'tg-bottom' }, h('div', { class: 'tg-camwrap' }, this.camChip), this.time.el, this.time.overlayEl);
     const chrome = h('div', { class: 'tg-chrome' }, this.slate.el, this.goal.el, this.tools.el, right, this.pop.el, bottom);
     const bars = h('div', { class: 'tg-bars', 'aria-hidden': 'true' });
+    // shown briefly when the interface goes away, so nobody is left wondering how to get it back
+    this.ambientNote = h('div', { class: 'tg-ambient-note', role: 'status', 'aria-live': 'polite', text: 'Interface hidden. Press any key or click to bring it back.' });
     this.hint = h(
       'div',
       { class: 'tg-hint tg-glass tg-leaf', role: 'status', 'aria-live': 'polite' },
-      h('span', {}, h('kbd', { class: 'tg-kbd', text: 'H' }), 'hides the interface'),
+      h('span', {}, h('kbd', { class: 'tg-kbd', text: 'H' }), 'ambient view, hides everything'),
       h('span', {}, h('kbd', { class: 'tg-kbd', text: 'C' }), 'documentary mode'),
     );
     try {
@@ -138,7 +149,7 @@ export class GameUI {
       /* storage unavailable: the hint just shows once per page load */
     }
 
-    this.ui = h('div', { class: 'tg-ui', dataset: { cinematic: 'false' } }, chrome, this.hint, bars, this.chapterCard.el, this.result.el);
+    this.ui = h('div', { class: 'tg-ui', dataset: { cinematic: 'false' } }, chrome, this.hint, bars, this.chapterCard.el, this.result.el, this.ambientNote);
     root.append(this.ui);
 
     this.keyDown = (e) => this.onKeyDown(e);
@@ -153,6 +164,11 @@ export class GameUI {
       if (this.hint.classList.contains('is-on')) this.hideHint();
     };
     for (const ev of ['pointermove', 'pointerdown', 'wheel', 'keydown']) window.addEventListener(ev, this.onInput, { passive: true });
+    // ambient view: a click anywhere brings the interface back (the click still goes through to the scene)
+    this.onAnyDown = (e) => {
+      if (this.hidden && e.button === 0) this.setHidden(false);
+    };
+    window.addEventListener('pointerdown', this.onAnyDown, true);
   }
 
   // ---- public API --------------------------------------------------------------------------------------------
@@ -178,6 +194,7 @@ export class GameUI {
     this.inspector.update(f.selected, f.following, f.story, f.storyId);
     this.top.setWorld(f.seed, f.scenario);
     this.flushQueuedCard(now);
+    if ((this.dodgeFrame++ & 3) === 0) this.dodgeLabels();
     if (this.run) this.stepChallenge(f);
     if (!this.hintDone && now - this.lastInput > HINT_IDLE_MS && !this.hidden && !this.cinematic && !this.result.isOpen) this.showHint();
   }
@@ -299,10 +316,13 @@ export class GameUI {
   setHidden(hidden: boolean): void {
     this.hidden = hidden;
     this.ui.classList.toggle('is-hidden', hidden);
+    window.clearTimeout(this.ambientTimer);
+    this.ambientNote.classList.toggle('is-on', hidden);
     if (hidden) {
       this.top.close();
       this.time.closeMenu();
       this.chapterCard.clear();
+      this.ambientTimer = window.setTimeout(() => this.ambientNote.classList.remove('is-on'), AMBIENT_NOTE_MS);
     }
   }
 
@@ -329,6 +349,8 @@ export class GameUI {
   destroy(): void {
     window.removeEventListener('keydown', this.keyDown);
     window.removeEventListener('keyup', this.keyUp);
+    window.removeEventListener('pointerdown', this.onAnyDown, true);
+    window.clearTimeout(this.ambientTimer);
     for (const ev of ['pointermove', 'pointerdown', 'wheel', 'keydown']) window.removeEventListener(ev, this.onInput);
     window.clearTimeout(this.hintTimer);
     this.goalRo.disconnect();
@@ -356,7 +378,7 @@ export class GameUI {
   private handleEvents(events: SimEvent[], now: number, tick: number): void {
     const entries: ChronicleEntry[] = [];
     const markers: Marker[] = [];
-    let best: { title: string; subtitle: string; rank: number } | null = null;
+    let best: { title: string; subtitle: string; rank: number; tick: number } | null = null;
 
     // A pack that is founded and lost within a blink is a dispersal that never took: it is not news.
     const flash = new Set<number>();
@@ -372,7 +394,7 @@ export class GameUI {
       if (MARK_KINDS.has(e.kind)) markers.push({ tick: e.tick, sentence: d.sentence, major });
       if (d.card && tick - e.tick <= STALE_TICKS) {
         const rank = cardRank(e.kind);
-        if (!best || rank > best.rank) best = { title: d.card.title, subtitle: d.card.subtitle, rank };
+        if (!best || rank > best.rank) best = { title: d.card.title, subtitle: d.card.subtitle, rank, tick: e.tick };
       }
     }
 
@@ -381,7 +403,7 @@ export class GameUI {
 
     if (best && best.rank >= this.cardMinRank()) {
       if (now - this.lastCardAt >= CARD_COOLDOWN_MS) {
-        this.chapter(best.title, best.subtitle);
+        this.showCard(best);
       } else if (best.rank >= 4 && (!this.queued || best.rank > this.queued.rank)) {
         // an important card held back by the rate limit waits for its turn
         this.queued = { ...best, at: now };
@@ -397,18 +419,70 @@ export class GameUI {
     return 0;
   }
 
+  /**
+   * A card must never contradict the header. If the valley has moved on from the season the card names, a minor card
+   * is dropped, and an important one keeps only its year (which cannot be wrong).
+   */
+  private showCard(c: { title: string; subtitle: string; rank: number; tick: number }): void {
+    const cur = this.lastTick;
+    const sameSeason = yearOfTick(c.tick) === yearOfTick(cur) && seasonName(seasonOfTick(c.tick)) === seasonName(seasonOfTick(cur));
+    let subtitle: string | undefined = c.subtitle;
+    if (!sameSeason) {
+      this.queued = null;
+      if (c.rank < 4) return;
+      subtitle = this.degrade(subtitle, c.tick, 10); // keep only the year
+    }
+    this.chapter(c.title, this.degrade(subtitle, c.tick, this.speed < 0 ? 100 : this.speed));
+  }
+
+  /**
+   * While time runs fast the header outruns the card (a year goes by in under 3 s at 100x), so the card names less:
+   * the year only from 10x, nothing but the title from 100x. A subtitle that is not a date (a pack name) is left alone.
+   */
+  private degrade(subtitle: string | undefined, tick: number, speed: number): string | undefined {
+    if (!subtitle || !/^Year \d+, /.test(subtitle)) return subtitle;
+    if (speed >= 100) return undefined;
+    if (speed >= 10) return `Year ${yearOfTick(tick)}`;
+    return subtitle;
+  }
+
+  /** Hide any pack label that sits under the chapter card, so the two never fight over the same pixels. */
+  private dodgeLabels(): void {
+    const b = this.chapterCard.bounds();
+    if (!b) {
+      if (this.dodging) {
+        this.dodging = false;
+        for (const el of this.ui.querySelectorAll('.tg-map-label.is-under-card')) el.classList.remove('is-under-card');
+      }
+      return;
+    }
+    this.dodging = true;
+    for (const el of this.ui.querySelectorAll<HTMLElement>('.tg-map-label')) {
+      const r = el.getBoundingClientRect();
+      const hit = r.right > b.left && r.left < b.right && r.bottom > b.top && r.top < b.bottom;
+      el.classList.toggle('is-under-card', hit);
+    }
+  }
+
   private flushQueuedCard(now: number): void {
     const q = this.queued;
     if (!q) return;
     if (now - q.at > CARD_HOLD_MS) {
       this.queued = null;
     } else if (now - this.lastCardAt >= CARD_COOLDOWN_MS) {
-      this.chapter(q.title, q.subtitle);
+      this.showCard(q);
     }
   }
 
   private onKeyDown(e: KeyboardEvent): void {
     if (e.ctrlKey || e.metaKey || e.altKey) return;
+    // ambient view: any key brings the interface back and is spent doing so (Space must not also pause).
+    // Modifier keys, function keys and P (a photo of the clean view) leave it as it is.
+    if (this.hidden && !isTyping(e.target) && !MODIFIER_KEYS.has(e.key) && !/^F\d+$/.test(e.key) && e.key !== 'p' && e.key !== 'P') {
+      e.preventDefault();
+      if (!e.repeat) this.setHidden(false);
+      return;
+    }
     if (isTyping(e.target)) {
       if (e.key === 'Escape') (e.target as HTMLElement).blur();
       return;
@@ -481,6 +555,8 @@ export class GameUI {
     }
   }
 }
+
+const MODIFIER_KEYS = new Set(['Shift', 'Control', 'Alt', 'Meta', 'AltGraph', 'CapsLock', 'NumLock', 'ScrollLock', 'Fn', 'Dead', 'Unidentified']);
 
 function isTyping(t: EventTarget | null): boolean {
   const el = t as HTMLElement | null;

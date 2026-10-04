@@ -249,7 +249,8 @@
 .tg-seed.is-copied .tg-seed-text {
   color: var(--gold);
 }
-.tg-menubtn {
+.tg-menubtn,
+.tg-ambientbtn {
   width: calc(36 * var(--u));
   height: calc(36 * var(--u));
   border-radius: 50%;
@@ -258,6 +259,7 @@
   transition: background-color 0.18s, border-color 0.18s, opacity 0.35s var(--ease);
 }
 .tg-menubtn:hover,
+.tg-ambientbtn:hover,
 .tg-menubtn[aria-expanded='true'] {
   border-color: var(--edge-hi);
   background-color: rgba(60, 50, 34, 0.6);
@@ -614,9 +616,45 @@
 .tg-chron-toggle:hover {
   background: rgba(240, 228, 200, 0.07);
 }
+.tg-chron-order {
+  font-size: calc(12 * var(--u));
+  color: var(--paper-dim);
+  margin-left: calc(-2 * var(--u));
+  flex: 1;
+}
+.tg-chron-more {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: calc(6 * var(--u));
+  margin: calc(1 * var(--u)) calc(4 * var(--u)) calc(2 * var(--u)) calc(4 * var(--u));
+  padding: calc(5 * var(--u)) calc(10 * var(--u));
+  border-radius: 999px;
+  border: 1px solid var(--edge);
+  font: italic 400 calc(14 * var(--u)) / 1 var(--serif);
+  color: var(--paper);
+  transition: background-color 0.15s, border-color 0.15s;
+}
+.tg-chron-more:hover {
+  background: rgba(240, 228, 200, 0.09);
+  border-color: var(--edge-hi);
+}
+.tg-chron-more-ic {
+  display: grid;
+  color: var(--paper-dim);
+}
+.tg-chron.is-collapsed .tg-chron-more {
+  display: none;
+}
+.tg-ent-when {
+  font: 400 calc(12 * var(--u)) / 1 var(--sans);
+  color: var(--paper-dim);
+  white-space: nowrap;
+}
 .tg-chron-title {
   font: italic 400 calc(17 * var(--u)) / 1 var(--serif);
-  flex: 1;
+  flex: none;
 }
 .tg-chron-badge {
   display: none;
@@ -1693,6 +1731,34 @@ button.tg-ent-b:hover {
   }
 }
 
+/* ---- ambient view: the note that says how to get the interface back, and the labels that give way to cards ------ */
+.tg-ambient-note {
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--m) + 8 * var(--u));
+  transform: translate(-50%, calc(6 * var(--u)));
+  padding: calc(8 * var(--u)) calc(16 * var(--u));
+  border-radius: 999px;
+  background: rgba(22, 17, 10, 0.6);
+  border: 1px solid var(--edge);
+  font-size: calc(13.5 * var(--u));
+  color: var(--paper);
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.6s var(--ease), transform 0.6s var(--ease);
+}
+.tg-ambient-note.is-on {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+.tg-map-label {
+  transition: filter 0.3s;
+}
+.tg-map-label.is-under-card {
+  filter: opacity(0);
+}
+
 /* ---- quiet hint for second-monitor use ----------------------------------------------------------------------- */
 .tg-hint {
   position: absolute;
@@ -1789,11 +1855,8 @@ button.tg-ent-b:hover {
   background: var(--edge-hi);
   margin: 0 calc(4 * var(--u));
 }
-.tg-trate.is-behind {
-  color: #f0a272;
-}
 .tg-trate {
-  min-width: calc(158 * var(--u));
+  min-width: calc(176 * var(--u));
   padding: 0 calc(10 * var(--u)) 0 calc(10 * var(--u));
   text-align: right;
   font-size: calc(12 * var(--u));

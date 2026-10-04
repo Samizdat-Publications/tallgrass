@@ -90,6 +90,19 @@ export class ChapterCard {
     };
   }
 
+  get isOn(): boolean {
+    return this.el.classList.contains('is-on');
+  }
+
+  /** The area the card's words cover, padded a little, in viewport pixels (null when no card is up). */
+  bounds(): { left: number; top: number; right: number; bottom: number } | null {
+    if (!this.isOn) return null;
+    const a = this.title.getBoundingClientRect();
+    const b = this.sub.style.display === 'none' ? a : this.sub.getBoundingClientRect();
+    const pad = 18;
+    return { left: Math.min(a.left, b.left) - pad, right: Math.max(a.right, b.right) + pad, top: a.top - pad, bottom: Math.max(a.bottom, b.bottom) + pad };
+  }
+
   /** Cut the current card short (new world, hidden UI). */
   clear(): void {
     for (const a of this.anims) a.cancel();

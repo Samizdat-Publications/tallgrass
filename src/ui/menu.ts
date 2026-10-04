@@ -31,7 +31,8 @@ const KEYS: [string[], string][] = [
   [['L'], 'log scale on the graph'],
   [['E'], 'evolution view of the graph'],
   [['C'], 'documentary mode: bars, drifting camera, no panels'],
-  [['H'], 'hide the interface for a clean screen'],
+  [['H'], 'ambient view: hide everything; any key or click brings it back'],
+  [['P'], 'save a picture of the view'],
   [['Esc'], 'let go, disarm, close'],
 ];
 
@@ -39,6 +40,7 @@ export class TopRight {
   readonly el: HTMLElement;
   private seedBtn: HTMLButtonElement;
   private seedText: HTMLElement;
+  private ambientBtn: HTMLButtonElement;
   private seedName: HTMLElement;
   private namedBtns = new Map<string, HTMLButtonElement>();
   private challengeBtns = new Map<string, HTMLButtonElement>();
@@ -53,7 +55,7 @@ export class TopRight {
   private copiedTimer = 0;
   private onDocDown: (e: PointerEvent) => void;
 
-  constructor(private actions: UIActions) {
+  constructor(private actions: UIActions, private onAmbient: () => void = () => {}) {
     this.seedText = h('span', { class: 'tg-seed-text' });
     this.seedName = h('span', { class: 'tg-seed-name' });
     this.seedIcon = h('span', { class: 'tg-seed-ic', html: icon('copy', 14) });
@@ -64,6 +66,13 @@ export class TopRight {
       this.seedText,
       this.seedIcon,
     );
+    this.ambientBtn = button({
+      class: 'tg-ambientbtn tg-glass tg-leaf',
+      'aria-label': 'Hide the interface',
+      title: 'Ambient view: hide the interface (H). Any key or click brings it back.',
+      html: icon('eyeoff', 20),
+      onclick: () => this.onAmbient(),
+    });
     this.menuBtn = button({
       class: 'tg-menubtn tg-glass tg-leaf',
       'aria-haspopup': 'dialog',
@@ -144,7 +153,7 @@ export class TopRight {
       keys,
     );
 
-    this.el = h('div', { class: 'tg-topright' }, h('div', { class: 'tg-topright-row' }, this.seedBtn, this.menuBtn), this.menu);
+    this.el = h('div', { class: 'tg-topright' }, h('div', { class: 'tg-topright-row' }, this.seedBtn, this.ambientBtn, this.menuBtn), this.menu);
 
     this.onDocDown = (e) => {
       if (this.open && !this.el.contains(e.target as Node)) this.close();
