@@ -1111,6 +1111,12 @@ button.tg-ent-b:hover {
 .tg-tip-r.is-grass .tg-dot {
   background: var(--sage);
 }
+.tg-tip-ev.is-solo {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+  font-size: calc(15 * var(--u));
+}
 .tg-tip-ev {
   margin-top: calc(6 * var(--u));
   padding-top: calc(6 * var(--u));
@@ -1669,6 +1675,15 @@ button.tg-ent-b:hover {
 }
 .tg-ui.is-hidden .tg-result {
   display: none;
+}
+
+/* ---- idle: the side panels settle to about half after a while with no input, and come back on any move or key ----- */
+.tg-ui.is-idle:not(.is-cinematic):not(.is-hidden) .tg-tool,
+.tg-ui.is-idle:not(.is-cinematic):not(.is-hidden) .tg-rail-title,
+.tg-ui.is-idle:not(.is-cinematic):not(.is-hidden) .tg-chron,
+.tg-ui.is-idle:not(.is-cinematic):not(.is-hidden) .tg-pop {
+  opacity: 0.5;
+  transition: opacity 1.2s var(--ease);
 }
 
 /* ---- the documentary camera chip, beside the time controls while the camera drives itself ---------------------- */

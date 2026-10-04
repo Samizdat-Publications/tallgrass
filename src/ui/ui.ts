@@ -46,6 +46,8 @@ const MARK_KINDS = new Set(['drought', 'droughtEnd', 'outbreak', 'stampede', 'ex
 /** A quiet hint about H and C appears once after this long with no input (a second monitor, a lazy afternoon). */
 const HINT_IDLE_MS = 60000;
 const HINT_KEY = 'tallgrass.hint.v1';
+/** The side panels (tools, chronicle, population) dim to about half after this long with no input; any input restores them. */
+const DIM_IDLE_MS = 20000;
 /** Packs that lasted fewer ticks than this are left out of the chronicle altogether. */
 const FLASH_PACK_TICKS = 300;
 /** Events older than this many ticks when they arrive (a backgrounded tab, a bulk fill) never earn a card. */
@@ -100,6 +102,8 @@ export class GameUI {
   private camOn = false;
   private hintDone = false;
   private lastInput = performance.now();
+  private dimmed = false;
+  private dimAfter = DIM_IDLE_MS;
   private hintTimer = 0;
   private onInput: () => void;
 
@@ -198,8 +202,16 @@ export class GameUI {
     window.addEventListener('keyup', this.keyUp);
     this.onInput = () => {
       this.lastInput = performance.now();
+      if (this.dimmed) this.setDimmed(false);
       if (this.hint.classList.contains('is-on')) this.hideHint();
     };
+    // ?dim=0 turns the dimming off (captures), ?dim=<ms> shortens it (tests)
+    try {
+      const dq = new URLSearchParams(window.location.search).get('dim');
+      if (dq !== null) this.dimAfter = Number(dq) > 0 ? Number(dq) : Infinity;
+    } catch {
+      /* no location: keep the default */
+    }
     for (const ev of ['pointermove', 'pointerdown', 'wheel', 'keydown']) window.addEventListener(ev, this.onInput, { passive: true });
     // ambient view: a click anywhere brings the interface back (the click still goes through to the scene)
     this.onAnyDown = (e) => {
@@ -245,6 +257,7 @@ export class GameUI {
     );
     this.firstFrame = false;
     this.flushToast(now);
+    this.updateDim(now);
     if (!this.hintDone && now - this.lastInput > HINT_IDLE_MS && !this.hidden && !this.cinematic && !this.result.isOpen) this.showHint();
   }
 
@@ -373,6 +386,23 @@ export class GameUI {
     const el = this.goal.el;
     const px = this.run && !el.hidden ? el.offsetHeight + 10 * unitPx(this.ui) : 0;
     this.ui.style.setProperty('--goal-h', `${px}px`);
+  }
+
+  /**
+   * A second monitor does not need the side panels at full strength: after a while with no input the tools, chronicle
+   * and population strip settle to about half. Never while a challenge is running or something is open that is being
+   * read (the menu, the notebook, the expanded graph, an inspected animal), and the ambient and cinematic views already
+   * handle themselves.
+   */
+  private updateDim(now: number): void {
+    const busy = (!!this.run && !this.run.finished) || this.top.isOpen || this.time.isMenuOpen || this.notesPanel.isOpen || this.pop.isExpanded || this.result.isOpen;
+    const want = !busy && !this.hidden && !this.cinematic && now - this.lastInput > this.dimAfter;
+    if (want !== this.dimmed) this.setDimmed(want);
+  }
+
+  private setDimmed(on: boolean): void {
+    this.dimmed = on;
+    this.ui.classList.toggle('is-idle', on);
   }
 
   private setNarrator(on: boolean): void {
@@ -598,7 +628,7 @@ export class GameUI {
       this.panelRectsAt = now;
       this.panelRects = [];
       const pad = 10 * this.unitPx();
-      for (const sel of ['.tg-rail', '.tg-chron', '.tg-insp', '.tg-goal', '.tg-topright-row']) {
+      for (const sel of ['.tg-rail', '.tg-chron', '.tg-insp', '.tg-goal', '.tg-topright-row', '.tg-map-legend', '.tg-pop']) {
         const el = this.ui.querySelector<HTMLElement>(sel);
         if (!el || el.hidden) continue;
         if (sel === '.tg-insp' && !el.classList.contains('is-open')) continue;

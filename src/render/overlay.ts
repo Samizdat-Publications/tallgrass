@@ -86,16 +86,17 @@ void main() {
       // a feathered tint over the range, a little denser toward the edge like a stain that has soaked in
       float r = d / max(R, 1.0);
       float inside = 1.0 - smoothstep(0.74, 1.04, r);
-      float wash = inside * (0.08 + 0.14 * smoothstep(0.2, 0.95, r));
+      float wash = inside * (0.30 + 0.12 * smoothstep(0.25, 0.98, r));
       // a thin, soft edge line that comes and goes along the border instead of a drawn circle
       float soft = max(1.7, aa * 1.5);
       float le = (d - R) / soft;
-      float line = exp(-le * le) * (0.42 + 0.34 * vnoise(dir * 5.0 + fi * 2.3));
+      float line = exp(-le * le) * (0.30 + 0.26 * vnoise(dir * 5.0 + fi * 2.3));
       // the den: a small dot and a faint breathing ring
       float dr = 3.2 + 0.5 * sin(uTime * 1.6 + fi);
       float de = (d - dr) / max(0.9, aa);
       float den = (1.0 - smoothstep(0.7, 0.7 + aa, d)) * 0.8 + exp(-de * de) * 0.32;
-      col = over(col, uPackCol[i], clamp(max(max(line, wash), den), 0.0, 0.8));
+      // the tint is the range; the edge line only crisps it up (blended, not maxed, so it never outshouts the fill)
+      col = over(col, uPackCol[i], clamp(wash + line * 0.6 * (1.0 - wash) + den, 0.0, 0.85));
     }
     // a tint on the land has to hold at night too: a little more opaque, and not darkened by the night grade below
     col.a = min(col.a * (1.0 + 0.9 * uNight), 0.85);

@@ -504,22 +504,34 @@ export class PopGraph {
       return;
     }
     const species = this.visible.filter((sp) => this.on[sp]);
+    // the event marker nearest the pointer (within a generous reach), so a diamond can be read without aiming at it
+    const P = this.plotRect(w, ht);
+    const t0 = this.ticks[0];
+    const t1 = Math.max(this.ticks[n - 1], t0 + YEAR_TICKS * 0.5);
+    let hit = -1;
+    let hitD = 12 * u;
+    if (hoverX >= P.l && hoverX <= P.r) {
+      this.markers.forEach((m, i) => {
+        if (m.tick < t0 || m.tick > t1) return;
+        const d = Math.abs(P.l + ((m.tick - t0) / (t1 - t0)) * (P.r - P.l) - hoverX);
+        if (d < hitD) { hitD = d; hit = i; }
+      });
+    }
     const idx = drawRows(
       g, w, ht, u,
       { ticks: this.ticks, pops: this.pops, species, grass: this.grass, grassMax: this.grassMax, markers: this.markers, log: this.log },
       hoverX,
+      hit,
     );
+    this.chart.style.cursor = hit >= 0 ? 'pointer' : 'crosshair';
     if (idx >= 0) {
-      const P = this.plotRect(w, ht);
-      const t0 = this.ticks[0];
-      const t1 = Math.max(this.ticks[n - 1], t0 + YEAR_TICKS * 0.5);
-      this.showTip(idx, P.l + ((this.ticks[idx] - t0) / (t1 - t0)) * (P.r - P.l), w);
+      this.showTip(idx, P.l + ((this.ticks[idx] - t0) / (t1 - t0)) * (P.r - P.l), w, hit >= 0 ? this.markers[hit] : null);
     } else {
       this.tip.classList.remove('is-on');
     }
   }
 
-  private showTip(idx: number, x: number, w: number): void {
+  private showTip(idx: number, x: number, w: number, event: Marker | null = null): void {
     const t = this.ticks[idx];
     const rows: HTMLElement[] = [h('div', { class: 'tg-tip-h', text: `Year ${yearOfTick(t)}, ${seasonPhrase(seasonOfTick(t))}` })];
     for (const sp of this.visible) {
@@ -529,17 +541,11 @@ export class PopGraph {
       );
     }
     rows.push(h('div', { class: 'tg-tip-r is-grass' }, h('i', { class: 'tg-dot' }), h('span', { text: 'Grass' }), h('b', { text: `${Math.round((this.grass[idx] / (this.grassMax > 1.0001 ? this.grassMax : 1)) * 100)}%` })));
-    // an event within a few pixels of the cursor
-    const P = this.plotRect(w, this.chart.clientHeight);
-    const t0 = this.ticks[0];
-    const t1 = Math.max(this.ticks[this.ticks.length - 1], t0 + YEAR_TICKS * 0.5);
-    let best: Marker | null = null, bestD = 7 * this.unit;
-    for (const m of this.markers) {
-      const mx = P.l + ((m.tick - t0) / (t1 - t0)) * (P.r - P.l);
-      const d = Math.abs(mx - x);
-      if (d < bestD) { bestD = d; best = m; }
+    // an event the pointer is on: its sentence, in the chronicle's own words, with the year it happened
+    if (event) {
+      rows.length = 0;
+      rows.push(h('div', { class: 'tg-tip-h', text: `Year ${yearOfTick(event.tick)}, ${seasonPhrase(seasonOfTick(event.tick))}` }), h('div', { class: 'tg-tip-ev is-solo', text: event.sentence }));
     }
-    if (best) rows.push(h('div', { class: 'tg-tip-ev', text: best.sentence }));
     this.tip.replaceChildren(...rows);
     this.tip.classList.add('is-on');
     const tw = this.tip.offsetWidth;

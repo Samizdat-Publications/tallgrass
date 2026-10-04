@@ -39,7 +39,7 @@ function axisRange(lo: number, hi: number, minSpanFrac: number): [number, number
 }
 
 /** Draws the rows and returns the hovered index (-1 when the pointer is outside the plot). */
-export function drawRows(g: CanvasRenderingContext2D, w: number, h: number, u: number, d: RowsData, hoverX: number): number {
+export function drawRows(g: CanvasRenderingContext2D, w: number, h: number, u: number, d: RowsData, hoverX: number, markerHit: number = -1): number {
   const n = d.ticks.length;
   const P = rowsPlot(w, h, u);
   const pw = P.r - P.l;
@@ -146,11 +146,27 @@ export function drawRows(g: CanvasRenderingContext2D, w: number, h: number, u: n
     g.stroke();
     g.font = axisFont;
     g.textAlign = 'right';
-    g.fillStyle = PAPER_DIM;
+    // the row's numbers wear its colour and hang off a short tick, so each pair reads as belonging to its own row
+    g.fillStyle = hexA(color, 0.9);
     const fmtAxis = (v: number) => (isGrass ? v.toFixed(2).replace(/0$/, '') : fmtInt(v));
     // two labels per row, each inset well inside its own band, so a row's low number never meets the next row's high
-    g.fillText(fmtAxis(aHi), P.l - 7 * u, top + 7 * u);
-    g.fillText(fmtAxis(aLo), P.l - 7 * u, bottom - 8 * u);
+    g.fillText(fmtAxis(aHi), P.l - 8 * u, top + 7 * u);
+    g.fillText(fmtAxis(aLo), P.l - 8 * u, bottom - 8 * u);
+    g.strokeStyle = hexA(color, 0.55);
+    g.lineWidth = 1.3 * u;
+    g.beginPath();
+    g.moveTo(P.l - 5 * u, top + 7 * u);
+    g.lineTo(P.l - 1 * u, top + 7 * u);
+    g.moveTo(P.l - 5 * u, bottom - 8 * u);
+    g.lineTo(P.l - 1 * u, bottom - 8 * u);
+    g.stroke();
+    // a thin bracket joining the pair, so the two numbers are one scale
+    g.strokeStyle = hexA(color, 0.28);
+    g.lineWidth = 1;
+    g.beginPath();
+    g.moveTo(P.l - 3 * u, top + 7 * u);
+    g.lineTo(P.l - 3 * u, bottom - 8 * u);
+    g.stroke();
 
     // year hairlines
     g.strokeStyle = 'rgba(239,230,208,0.05)';
@@ -226,10 +242,25 @@ export function drawRows(g: CanvasRenderingContext2D, w: number, h: number, u: n
   g.fillText('year', 2, P.b + 13 * u);
 
   // marker glyphs on the axis, over the lines
-  for (const m of d.markers) {
+  for (let i = 0; i < d.markers.length; i++) {
+    const m = d.markers[i];
     if (m.tick < t0 || m.tick > t1) continue;
     const x = X(m.tick);
-    if (m.major) {
+    if (i === markerHit) {
+      // the marker under the pointer: a larger diamond in a ring, so it is clear which event the tooltip is reading
+      const r = 5.6 * u;
+      g.beginPath();
+      g.moveTo(x, P.b - r);
+      g.lineTo(x + r, P.b);
+      g.lineTo(x, P.b + r);
+      g.lineTo(x - r, P.b);
+      g.closePath();
+      g.fillStyle = m.major ? GOLD : '#EFE6D0';
+      g.fill();
+      g.strokeStyle = 'rgba(20,16,10,0.85)';
+      g.lineWidth = 1.4;
+      g.stroke();
+    } else if (m.major) {
       const r = 3.6 * u;
       g.beginPath();
       g.moveTo(x, P.b - r);

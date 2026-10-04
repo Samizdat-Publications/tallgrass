@@ -299,6 +299,14 @@ if (q.has('labels')) {
     [46, 330, 'Hollow', '11 wolves', '#E0A870'],
     [1500, 230, 'Creek', '9 wolves', '#7AC7A0'],
   ];
+  if (q.has('legend')) {
+    // the territory legend sits above the overlay button; a label whose den is just over it must move clear
+    pts.push([1190, 780, 'Cottonwood', '7 wolves', '#D4A85C']);
+    const lgd = document.createElement('div');
+    lgd.className = 'tg-map-legend tg-glass';
+    lgd.textContent = "Wolf territories. Each tinted patch is one pack's range; the small mark is its den.";
+    document.querySelector('.tg-overlay')?.append(lgd);
+  }
   for (const [x, y, name, count, col] of pts) {
     const el = document.createElement('div');
     el.className = 'tg-map-label';
