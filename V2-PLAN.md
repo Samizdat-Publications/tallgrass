@@ -731,7 +731,7 @@ Budget for the whole WP: ≤ +1.0 ms at 1440p in every view.
   - Beyond 80 m and at incidence above 60°, apply an artistic reflectance floor of 0.35.
   - Up close, keep the bed and depth look (water.ts:450-488 and 635-675).
   - From the v1 backlog: a bare apron on the shaded side of ponds, and more width variation along the creek channel.
-- [ ] **2. Aerial perspective** (FogPass, post.ts:75-184):
+- [x] **2. Aerial perspective** (FogPass, post.ts:75-184):
   - distance haze with a forward-scattering lobe toward the sun (Henyey-Greenstein, g 0.75)
   - tinted by the sun colour
   - stronger in summer and drought (dust)
