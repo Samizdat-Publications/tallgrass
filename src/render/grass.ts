@@ -19,7 +19,7 @@
 import * as THREE from 'three';
 import type { World } from '../sim/world';
 import type { EnvState } from '../sim/types';
-import { CURE_KEYS, SEED_KEYS, SEASON_GLSL, keyCurve, smooth01, winterK } from './season';
+import { COPPER_KEYS, CURE_KEYS, SEED_KEYS, SEASON_GLSL, keyCurve, smooth01, winterK } from './season';
 import { POND_GLSL, makePondUniform } from './common';
 
 export interface GrassOptions {
@@ -44,6 +44,8 @@ export interface GrassParams {
   lightScale: number;
   /** Strength of the backlight translucency glow. */
   translucency: number;
+  /** Strength of the warm backlit glow on blade edges and seed heads (looking toward a low sun). */
+  backGlow: number;
   /** Tip specular sheen. */
   specular: number;
   /** How strongly gust bands brighten and darken the field. */
@@ -267,6 +269,7 @@ uniform float uWinterK;
 uniform float uSeedFrac;
 uniform float uMoistK;
 uniform float uWindGain;
+uniform float uCopper;
 
 varying vec2 vUv;
 varying vec3 vN;
@@ -279,6 +282,7 @@ varying float vTS;
 varying vec4 vP3;
 varying float vRip;
 varying vec3 vAsp;
+varying vec4 vSd;   // x copper-red amount of this blade, y half width (m) of a seed head, z its length (m)
 uniform vec3 uSunDir;
 uniform float uMoon;
 
@@ -331,7 +335,7 @@ vec4 vegAt(vec2 p) {
 void cullBlade() {
   gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
   vUv = vec2(0.0); vN = vec3(0.0, 1.0, 0.0); vNg = vec3(0.0, 1.0, 0.0); vWP = vec3(0.0);
-  vP0 = vec4(0.0); vP1 = vec4(0.0); vP2 = vec4(0.0); vP3 = vec4(0.0); vTS = 1.0; vRip = 0.0;
+  vP0 = vec4(0.0); vP1 = vec4(0.0); vP2 = vec4(0.0); vP3 = vec4(0.0); vTS = 1.0; vRip = 0.0; vSd = vec4(0.0);
 }
 
 void main() {
@@ -448,10 +452,20 @@ void main() {
   H = mix(H, 0.05 + 0.07 * rA, burn);
   H *= 1.0 - 0.85 * smoothstep(uDens.w * 0.8, uDens.w, dist);
   float seedFlag = 0.0;
+  float seedHead = 0.0;   // seed blades only: head length as a fraction of the blade
+  float seedHW = 0.0;     // and the full width of its quad (m)
 #if LEVEL == 0
-  seedFlag = step(rB, uSeedFrac) * step(0.45, bio) * (1.0 - burn) * step(fType, 0.5);
+  // (the old gate, bio above 0.45, never opened: the vegetation texture's biomass tops out near 0.4 in this sim)
+  seedFlag = step(rB, uSeedFrac * 0.42 * smoothstep(0.1, 0.28, bio)) * (1.0 - burn) * step(fType, 0.5);
+  if (seedFlag > 0.5) {
+    // two kinds of head, in stands: 1 = big bluestem's three-pronged turkey foot, 2 = switchgrass's airy spray
+    seedFlag += step(u01(pcg(h6 + 8u)), 0.12 + 0.7 * smoothstep(0.4, 0.62, patch1));
+    // the flowering culms stand well above the leaf canopy; the head has a fixed size in metres (a turkey foot is about 9 cm across)
+    H *= 1.3 + 0.35 * rA;
+    seedHead = min((seedFlag < 1.5 ? 0.1 : 0.2) / H, 0.45);
+    seedHW = seedFlag < 1.5 ? 0.095 : 0.17;
+  }
 #endif
-  H *= 1.0 + 0.14 * seedFlag;
   if (fType > 0.5) H *= 1.08 + 0.22 * rD;
   float wScale = min(pow(max(1.0, uDens.x / max(dens, 1e-3)), 0.8), 36.0);
   float Wd = uBladeW * (0.75 + 0.5 * rC) * wScale;
@@ -486,6 +500,11 @@ void main() {
 #if LEVEL == 0
   // coneflower and yarrow: squeeze the top rows together so the head is a compact disc at the stem tip
   if (fType > 0.5 && fType < 2.5) v = vg <= 0.62 ? vg * 1.4435 : (vg <= 0.8 ? 0.895 + (vg - 0.62) * 0.1389 : 0.92 + (vg - 0.8) * 0.4);
+  // seed heads: rows .8 to .95 become a flat camera-facing head quad at the culm tip (the tip vertex lands past it and is discarded)
+  if (seedFlag > 0.5) {
+    float vb = 1.0 - seedHead - 0.015;
+    v = vg <= 0.62 ? vg * (vb / 0.62) : (vg <= 0.8 ? vb + (vg - 0.62) * (0.015 / 0.18) : 1.0 - seedHead + (vg - 0.8) * (seedHead / 0.15));
+  }
 #endif
   float side = position.x;
   float s = phi * v;
@@ -493,13 +512,30 @@ void main() {
   float arcY = phi > 0.002 ? sin(s) / phi : v;
   vec3 centre = root + vec3(dir.x * arcH * H, arcY * H, dir.y * arcH * H);
   vec3 tang = normalize(vec3(dir.x * sin(s), cos(s), dir.y * sin(s)));
+#if LEVEL == 0
+  if (seedFlag > 0.5 && vg > 0.79) {
+    // the head stands more upright than the bending culm tip: it hangs off the culm at the head's base and runs mostly straight up
+    float v0 = 1.0 - seedHead;
+    float s0 = phi * v0;
+    float aH0 = phi > 0.002 ? (1.0 - cos(s0)) / phi : 0.5 * phi * v0 * v0;
+    float aY0 = phi > 0.002 ? sin(s0) / phi : v0;
+    vec3 c0 = root + vec3(dir.x * aH0 * H, aY0 * H, dir.y * aH0 * H);
+    vec3 t0 = normalize(vec3(dir.x * sin(s0), cos(s0), dir.y * sin(s0)));
+    tang = normalize(mix(t0, vec3(0.0, 1.0, 0.0), 0.65));
+    centre = c0 + tang * ((v - v0) * H);
+  }
+#endif
   vec3 Wf = vec3(-dir.y, 0.0, dir.x);
 
   float prof = pow(clamp((1.0 - vg) * 1.8, 0.0, 1.0), 0.75);
 #if LEVEL == 0
-  if (seedFlag > 0.5) prof = mix(0.3, 1.5, smoothstep(0.82, 0.9, vg)) * (1.0 - step(0.95, vg));
+  if (seedFlag > 0.5) prof = 0.3;
 #endif
   float wv = Wd * prof;
+#if LEVEL == 0
+  // a thin culm, then the head quad (the fragment stage carves the prongs or the spray out of it)
+  if (seedFlag > 0.5) wv = (0.0075 + seedHW * step(0.79, vg)) * min(wScale, 3.0);
+#endif
   if (fType > 0.5) {
 #if LEVEL == 0
     float headW = fType < 1.5 ? 0.1 : (fType < 2.5 ? 0.11 : 0.07);
@@ -519,8 +555,12 @@ void main() {
   // flower heads turn to face the camera (flat quads would vanish edge-on)
   vec3 Wr = Wf;
   if (fType > 0.5) Wr = normalize(mix(Wf, camRight, 0.92 * smoothstep(0.55, 0.8, vg)));
+  float noEdge = fType > 0.5 ? 0.0 : 1.0;
+#if LEVEL == 0
+  if (seedFlag > 0.5) { Wr = normalize(mix(Wf, camRight, 0.94 * smoothstep(0.55, 0.8, vg))); noEdge = 0.0; }
+#endif
 
-  vec3 wp3 = centre + Wr * (side * 0.5 * wv) + camRight * (side * 0.5 * wv * 0.9 * edgeOn * (fType > 0.5 ? 0.0 : 1.0));
+  vec3 wp3 = centre + Wr * (side * 0.5 * wv) + camRight * (side * 0.5 * wv * 0.9 * edgeOn * noEdge);
 
   vec3 Nb = normalize(cross(tang, Wr));
   Nb = normalize(Nb + Wr * (side * 0.4));
@@ -558,6 +598,19 @@ void main() {
   vP1 = vec4(bio, gust, burn, stub);
   vP2 = vec4(rA, dist, swath, patch1);
   vP3 = vec4(fType, fTone, tusC, ridge);
+  vSd = vec4(0.0);
+#if LEVEL < 2
+  {
+    // copper-red bluestem: a share of the blades (stands of it, all the culms that carry a turkey foot) flush copper through autumn.
+    // The flush fades out with distance (the ground and the far rings keep the plain cured palette).
+    float bs = max(step(fract(rE * 17.0 + rC * 5.0), 0.05 + 0.75 * smoothstep(0.5, 0.74, tusC)), step(seedFlag, 1.5) * step(0.5, seedFlag));
+    vSd.x = uCopper * bs * (1.0 - smoothstep(14.0, 50.0, dist));
+#if LEVEL == 0
+    vSd.y = 0.5 * (0.0075 + seedHW) * min(wScale, 3.0);
+    vSd.z = seedHead * H;
+#endif
+  }
+#endif
 
   vec4 mvPosition = viewMatrix * vec4(wp3, 1.0);
   gl_Position = projectionMatrix * mvPosition;
@@ -605,6 +658,11 @@ uniform vec3 uAsh;
 uniform vec3 uStubble;
 uniform vec3 uAmbSky;
 uniform vec3 uAmbGround;
+uniform float uGlow;
+uniform vec3 uCopB;
+uniform vec3 uCopM;
+uniform vec3 uCopT;
+uniform vec3 uPanicle;
 
 varying vec2 vUv;
 varying vec3 vN;
@@ -617,9 +675,63 @@ varying float vTS;
 varying vec4 vP3;
 varying float vRip;
 varying vec3 vAsp;
+varying vec4 vSd;
 uniform float uDrought;
 uniform float uWinterK;
 ${SEASON_GLSL}
+
+#if LEVEL == 0
+// ---- seed heads, drawn as distance fields in the head quad (q in metres, origin at the culm tip, y up the head)
+float sdSeg(vec2 p, vec2 a, vec2 b, out float h) {
+  vec2 pa = p - a, ba = b - a;
+  h = clamp(dot(pa, ba) / max(dot(ba, ba), 1e-9), 0.0, 1.0);
+  return length(pa - ba * h);
+}
+// one tapered, fringed stroke: keeps the smallest signed distance (negative inside) and where along the stroke it was
+void stroke(vec2 q, vec2 a, vec2 b, float w0, float w1, float ph, inout float best, inout float along) {
+  float h;
+  float d = sdSeg(q, a, b, h);
+  float w = mix(w0, w1, h) * (1.0 + 0.26 * sin(h * length(b - a) * 560.0 + ph));
+  if (d - w < best) { best = d - w; along = h; }
+}
+// big bluestem's turkey foot: a culm forking into three hairy racemes, the outer two bowed outward
+float turkeyFoot(vec2 q, float hw, float L, float r, out float along) {
+  float best = 1e9;
+  along = 0.0;
+  float fork = 0.14 * L;
+  stroke(q, vec2(0.0), vec2(0.0, fork), 0.0028, 0.0028, 0.0, best, along);
+  stroke(q, vec2(0.0, fork), vec2(hw * 0.12 * (r - 0.5), 0.98 * L), 0.0038, 0.0024, 1.0, best, along);
+  stroke(q, vec2(0.0, fork), vec2(-hw * 0.34, 0.56 * L), 0.0036, 0.0038, 2.0, best, along);
+  stroke(q, vec2(-hw * 0.34, 0.56 * L), vec2(-hw * (0.8 + 0.1 * r), 0.95 * L), 0.0038, 0.0024, 3.0, best, along);
+  stroke(q, vec2(0.0, fork), vec2(hw * 0.34, 0.54 * L), 0.0036, 0.0038, 4.0, best, along);
+  stroke(q, vec2(hw * 0.34, 0.54 * L), vec2(hw * (0.8 + 0.1 * (1.0 - r)), 0.93 * L), 0.0038, 0.0024, 5.0, best, along);
+  along = clamp((q.y - fork) / (0.8 * L), 0.0, 1.0);
+  return best;
+}
+// switchgrass: an open panicle, fine branches arching out of the culm and drooping, beaded with spikelets toward their ends
+float panicle(vec2 q, float hw, float L, float r, out float along) {
+  float best = 1e9;
+  along = 0.0;
+  stroke(q, vec2(0.0), vec2(0.0, 0.9 * L), 0.0024, 0.0012, 0.0, best, along);
+  for (int k = 0; k < 6; k++) {
+    float fk = float(k);
+    float sg = (k & 1) == 0 ? -1.0 : 1.0;
+    float rk = fract(sin((fk + 1.0) * 12.9898 + r * 78.233) * 43758.5453);
+    float yb = L * (0.1 + 0.11 * fk);
+    float reach = hw * (0.98 - 0.12 * fk) * (0.8 + 0.4 * rk);
+    float up = L - yb;
+    vec2 p0 = vec2(0.0, yb);
+    vec2 p1 = vec2(sg * reach * 0.5, yb + up * 0.45);
+    vec2 p2 = vec2(sg * reach, yb + up * (0.62 - 0.2 * rk));
+    vec2 p3 = p2 + vec2(sg * hw * 0.1, -0.07 * L);
+    stroke(q, p0, p1, 0.0011, 0.0009, fk, best, along);
+    stroke(q, p1, p2, 0.0009, 0.0016, fk + 3.0, best, along);
+    stroke(q, p2, p3, 0.0016, 0.0022, fk + 6.0, best, along);
+  }
+  along = clamp(q.y / L, 0.0, 1.0);
+  return best;
+}
+#endif
 
 // Never let a zero-length or NaN input escape: every normalize in this shader goes through here.
 vec3 sn(vec3 v) { return v * inversesqrt(max(dot(v, v), 1e-12)); }
@@ -629,6 +741,9 @@ vec3 grad3(vec3 b, vec3 m, vec3 t, float v) {
 }
 
 void main() {
+#if LEVEL == 0
+  vec2 fwUv = fwidth(vUv);   // screen footprint of the blade coordinates, taken in uniform flow (seed heads size their strokes by it)
+#endif
   vec3 V = sn(cameraPosition - vWP);
   vec3 Nb = sn(vN);
   vec3 Nf = dot(Nb, V) >= 0.0 ? Nb : -Nb;
@@ -657,6 +772,10 @@ void main() {
   vec3 aGreen = grad3(uGreenB, uGreenM, uGreenT, vc);
   vec3 aDry = grad3(uDryB, uDryM, uDryT, vc);
   vec3 albedo = mix(aGreen, aDry, dry);
+#if LEVEL < 2
+  // copper-red bluestem (vSd.x is the season curve times this blade's membership, faded out with distance), strongest on dry blades
+  if (vSd.x > 0.002) albedo = mix(albedo, grad3(uCopB, uCopM, uCopT, vc), clamp(vSd.x * dry * (1.0 - vRip) * 0.85, 0.0, 1.0));
+#endif
   // riparian belt: sage to fresh green, olive-leaning and never lime (the ground shader pushes the same way)
   albedo *= mix(vec3(1.0), vec3(1.03, 1.25, 0.78), vRip * 0.9);
   // per-blade variation fades with distance so the mid field is smooth, not salt and pepper
@@ -675,9 +794,39 @@ void main() {
   albedo *= mix(vec3(1.0), vec3(1.0 + 0.14 * (hue - 0.5), 1.0, 1.0 - 0.3 * (hue - 0.5)), nearK);
   albedo = mix(albedo, uStubble * (0.7 + 0.6 * bright), 0.85 * stub);
   // seed heads: pale green-straw while the grass is green, tan once it has cured
-  float seedTip = seed * smoothstep(0.82, 0.9, v);
   vec3 seedC = mix(aGreen * 1.35 + vec3(0.02, 0.02, 0.0), uSeedCol * (0.8 + 0.4 * bright), smoothstep(0.25, 0.7, dry));
-  albedo = mix(albedo, seedC, seedTip * 0.85);
+  float headGlow = 0.0;
+  float aOut = 1.0;   // alpha to coverage antialiases the thin strokes of the seed heads
+#if LEVEL == 0
+  if (seed > 0.5) {
+    float hwK = seed < 1.5 ? 0.095 : 0.17;
+    if (v < 0.79) {
+      // the culm: only a thin line out of the ribbon (its width runs from the stem's to the head's across rows .62 to .8)
+      float halfW = vSd.y * mix(0.0075 / (0.0075 + hwK), 1.0, clamp((v - 0.62) / 0.18, 0.0, 1.0));
+      float xw = sideX * halfW;
+      aOut = clamp(0.85 - (abs(xw) - 0.0026) / max(fwUv.x * halfW, 1e-5), 0.0, 1.0);
+      if (aOut < 0.02) discard;
+    } else {
+      if (v > 0.951) discard;
+      vec2 q = vec2(sideX * vSd.y, (v - 0.8) / 0.15 * vSd.z);
+      float along;
+      float cov = seed < 1.5 ? turkeyFoot(q, vSd.y, vSd.z, bright, along) : panicle(q, vSd.y, vSd.z, bright, along);
+      // never thinner than about a pixel, or the heads shimmer
+      aOut = clamp(0.85 - cov / max(fwUv.x * vSd.y, fwUv.y * vSd.z * (1.0 / 0.15)), 0.0, 1.0);
+      if (aOut < 0.02) discard;
+      float cu = vSd.x * dry;
+      vec3 headC;
+      if (seed < 1.5) {
+        // bronze racemes, pale and yellow at their tips where the anthers hang
+        headC = mix(seedC * mix(0.8, 1.15, along), mix(uCopM, uCopT, along) * 1.3, 0.3 + 0.5 * cu);
+      } else {
+        headC = mix(seedC * vec3(1.0, 0.84, 0.76), uPanicle, 0.55) * mix(0.8, 1.2, along);
+      }
+      albedo = headC * (0.7 + 0.25 * bright);
+      headGlow = 1.0;
+    }
+  }
+#endif
   if (fType > 0.5) {
     float tone = vP3.y;
 #if LEVEL == 0
@@ -743,8 +892,20 @@ void main() {
   float backFace = saturate(dot(-Nf, L));
   float fwd = pow(clamp(dot(-V, L), 0.0, 1.0), 3.0);
   float transK = pow(max(backFace, 0.0), 1.5) * (0.2 + 0.8 * fwd) * (0.12 + 0.88 * pow(max(v, 0.0), 1.3)) * (0.55 + 0.9 * max(bright, 0.0));
-  vec3 trans = pow(max(albedo, vec3(0.0)), vec3(0.8)) * uSunColor * transK * uTrans * shadow * RECIPROCAL_PI;
+  vec3 tAlb = pow(max(albedo, vec3(0.0)), vec3(0.8));
+  vec3 trans = tAlb * uSunColor * transK * uTrans * shadow * RECIPROCAL_PI;
   trans *= mix(1.0, canopyT, 0.8) * (1.0 - 0.9 * uMoon);
+  // backlit glow: looking toward the sun the blade edges and above all the seed heads light up gold, whichever way a blade faces
+  // (thin tissue passes the light). It builds as the sun drops, and dies in shade and at night.
+  {
+    float lowSun = 1.0 - smoothstep(0.12, 0.7, L.y);
+    float toSun = clamp(dot(-V, L), 0.0, 1.0);
+    toSun *= toSun;
+    toSun *= toSun;
+    float gl = toSun * (0.3 + 0.7 * lowSun) * uGlow * (0.2 + 0.8 * v * (0.4 + 0.6 * v)) * (1.0 + 0.55 * headGlow);
+    vec3 warm = tAlb * vec3(1.45, 1.0, 0.5);
+    trans += warm * uSunColor * gl * shadow * RECIPROCAL_PI * mix(1.0, canopyT, 0.5) * (1.0 - 0.9 * uMoon);
+  }
 
   vec3 Namb = sn(mix(Nf, vec3(0.0, 1.0, 0.0), 0.6));
   vec3 irr = ambientLightColor;
@@ -773,7 +934,8 @@ void main() {
   float sp = pow(nh, 20.0) * 0.3 + pow(nh, 6.0) * 0.07;
   vec3 spec = uSunColor * sp * uSpec * uSpecK * smoothstep(0.3, 1.0, v) * shadow * RECIPROCAL_PI * 1.6 * (1.0 - smoothstep(15.0, 90.0, vP2.y));
 
-  vec3 col = ambient + (diffuse + trans) * mix(1.0, ao, 0.75) + spec * canopy;
+  // (a flat head quad facing a sun behind the camera would flash white under the tip sheen, so heads take none)
+  vec3 col = ambient + (diffuse + trans) * mix(1.0, ao, 0.75) + spec * canopy * (1.0 - 0.9 * headGlow);
   col *= 1.0 + uGustLight * (gust - 0.4) * (0.35 + 0.65 * uWindStr);
 
   col = mix(vec3(dot(col, vec3(0.2126, 0.7152, 0.0722))), col, uSat);
@@ -792,7 +954,7 @@ void main() {
   // belt and braces: the scene target is half float and bloom smears any NaN or Inf over the whole frame.
   // min/max drop a NaN operand on D3D, so this also scrubs NaN.
   col = min(max(col, vec3(0.0)), vec3(64.0));
-  gl_FragColor = vec4(col, 1.0);
+  gl_FragColor = vec4(col, aOut);
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
   #include <fog_fragment>
@@ -805,6 +967,7 @@ export class GrassField {
   readonly params: GrassParams = {
     lightScale: 1,
     translucency: 1.2,
+    backGlow: 1,
     specular: 1,
     gustLight: 1.2,
     maxHeight: 1.05,
@@ -919,6 +1082,12 @@ export class GrassField {
       uDryM: { value: new THREE.Color() },
       uDryT: { value: new THREE.Color() },
       uSeedCol: { value: new THREE.Color(0xd9b46a) },
+      uCopper: { value: 0 },
+      uGlow: { value: 1 },
+      uCopB: { value: new THREE.Color(0x4e170c) },
+      uCopM: { value: new THREE.Color(0xa23a1c) },
+      uCopT: { value: new THREE.Color(0xd45a2a) },
+      uPanicle: { value: new THREE.Color(0xc8a070) },
       uFlCone: { value: new THREE.Color(0xb8559a) },
       uFlConeC: { value: new THREE.Color(0x8a3d14) },
       uFlYarrow: { value: new THREE.Color(0xf0eadb) },
@@ -1024,6 +1193,7 @@ export class GrassField {
         HAS_NORMAL: '',
       },
     });
+    mat.alphaToCoverage = l === 0;
     const mesh = new THREE.Mesh(geo, mat);
     mesh.frustumCulled = false;
     mesh.receiveShadow = true;
@@ -1134,6 +1304,8 @@ export class GrassField {
     // same winter curve as the ground shader's winterK (season.ts), for the riparian belt
     u.uWinterK.value = winterK(env.season);
     u.uSeedFrac.value = keyCurve(SEED_KEYS, env.season);
+    u.uCopper.value = keyCurve(COPPER_KEYS, env.season);
+    u.uGlow.value = P.backGlow;
     {
       const sn = ((env.season % 4) + 4) % 4;
       const bump = (a: number, b: number, c: number) => (sn <= a || sn >= c ? 0 : sn < b ? smooth01((sn - a) / (b - a)) : smooth01((c - sn) / (c - b)));
