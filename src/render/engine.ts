@@ -83,6 +83,10 @@ export class Engine {
   readonly uniforms: SharedUniforms;
   /** RGBA8 n x n vegetation texture other layers can sample: R biomass, G fertility, B burn, A fear. */
   readonly vegTexture: THREE.DataTexture;
+  /** Grazing and trampling memory (R8), derived from how fast biomass drops; fades over a few sim minutes. */
+  readonly trailTexture: THREE.DataTexture;
+  private prevBio: Uint8Array;
+  private trail: Uint8Array;
   readonly sun: SunLight;
   readonly hemi: THREE.HemisphereLight;
   readonly terrain: Terrain;
@@ -152,6 +156,21 @@ export class Engine {
     this.vegTexture.needsUpdate = true;
     this.vegTexture.name = 'veg';
     this.uniforms.vegTex.value = this.vegTexture;
+    {
+      let sm = 0, sb = 0, cnt = 0;
+      for (let k = 0; k < n * n; k++) if (!world.water[k]) { sm += world.moisture[k]; sb += veg[k * 4]; cnt++; }
+      this.uniforms.farStats.value.set(sb / Math.max(1, cnt) / 255, sm / Math.max(1, cnt));
+    }
+    this.prevBio = new Uint8Array(n * n);
+    for (let k = 0; k < n * n; k++) this.prevBio[k] = veg[k * 4];
+    this.trail = new Uint8Array(n * n);
+    this.trailTexture = new THREE.DataTexture(this.trail, n, n, THREE.RedFormat, THREE.UnsignedByteType);
+    this.trailTexture.minFilter = this.trailTexture.magFilter = THREE.LinearFilter;
+    this.trailTexture.wrapS = this.trailTexture.wrapT = THREE.ClampToEdgeWrapping;
+    this.trailTexture.generateMipmaps = false;
+    this.trailTexture.needsUpdate = true;
+    this.trailTexture.name = 'trail';
+    this.uniforms.trailTex.value = this.trailTexture;
 
     this.terrain = new Terrain(world, this.uniforms);
     this.water = new Water(world, this.uniforms, this.terrain.creekDist);
@@ -174,6 +193,9 @@ export class Engine {
 
     this.post = new PostFX(renderer, this.scene, this.camera, this.uniforms);
     this.post.aoExclude.push(this.sky.mesh, this.water.mesh, this.smoke.mesh);
+    // GTAO renders its own normal/depth pass with an override material that ignores alpha cut-outs, so a sparse canopy would occlude
+    // the sky behind its gaps and show as grey smoke. Keep alpha-cut foliage (crowns and shrubs) out of that pass.
+    for (const m of this.trees.meshes) if (m.name.startsWith('cottonwood-crown') || m.name.startsWith('shrubs')) this.post.aoExclude.push(m);
     let hmin = 1e9;
     for (let i = 0; i < world.height.length; i++) hmin = Math.min(hmin, world.height[i]);
     this.post.setMistBase(hmin);
@@ -234,6 +256,25 @@ export class Engine {
     }
     this.vegTexture.needsUpdate = true;
     this.smoke.setVeg(dst);
+    // trail memory: a quick drop in biomass (grazing, trampling) marks the cell; slow seasonal die-back does not
+    const tr = this.trail, pb = this.prevBio;
+    for (let k = 0, o = 0; k < tr.length; k++, o += 4) {
+      const cur = dst[o];
+      const drop = pb[k] - cur;
+      let t = tr[k] * 0.9965;
+      if (drop >= 2 && cur < 200) t += Math.min(70, drop * 5);
+      tr[k] = t > 255 ? 255 : t;
+      pb[k] = cur;
+    }
+    this.trailTexture.needsUpdate = true;
+    // keep the far ring's stand-in grass at the valley's own average biomass (smoothed), so the border does not show
+    {
+      let sb = 0, cnt = 0;
+      for (let k = 0, o = 0; k < tr.length; k += 7, o += 28) { sb += dst[o]; cnt++; }
+      const m = sb / Math.max(1, cnt) / 255;
+      const fs = this.uniforms.farStats.value;
+      fs.x += (m - fs.x) * 0.35;
+    }
   }
 
   /** Set the environment (partial updates allowed). Lighting, sky, season palette and haze all follow. */
@@ -372,6 +413,9 @@ export class Engine {
     sm.overcast = ease(sm.overcast, overTarget, 160);
     sm.snow = ease(sm.snow, snowTarget, snowTarget > sm.snow ? 320 : 220, snowTarget > sm.snow ? 7 : 9);
     sm.wet = ease(sm.wet, wetTarget, 200);
+    // the eased values only approach their targets asymptotically: snap the last trace to zero so no ghost snow or frost lingers
+    if (snowTarget === 0 && sm.snow < 0.03) sm.snow = 0;
+    if (wetTarget === 0 && sm.wet < 0.02) sm.wet = 0;
 
     computeAtmosphere(env, sm, u, this.lighting);
     this.applySeason(env.season);
@@ -380,6 +424,7 @@ export class Engine {
     const frostTarget = winter * frostTime * (1 - 0.6 * env.warmth);
     this.frostSm = this.firstFrame ? frostTarget : this.frostSm + (frostTarget - this.frostSm) * (1 - Math.exp(-(env.tick === 0 ? dt * 10 : Math.min(14, Math.max(0, env.tick - this.lastTickF))) / 90));
     this.lastTickF = env.tick;
+    if (frostTarget === 0 && this.frostSm < 0.01) this.frostSm = 0;
     u.frost.value = this.frostSm;
     u.snow.value = sm.snow;
     u.wet.value = sm.wet;

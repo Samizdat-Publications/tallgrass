@@ -84,6 +84,7 @@ class FogPass extends Pass {
         tDiffuse: { value: null },
         tDepth: { value: null },
         uInvProj: { value: new THREE.Matrix4() },
+        uTexel: { value: new THREE.Vector2(1 / 1600, 1 / 900) },
         uCamWorld: { value: new THREE.Matrix4() },
         uCamPos: { value: new THREE.Vector3() },
         uHaze: { value: 0.0007 },
@@ -104,6 +105,7 @@ class FogPass extends Pass {
         uniform sampler2D tDiffuse;
         uniform sampler2D tDepth;
         uniform mat4 uInvProj;
+        uniform vec2 uTexel;
         uniform mat4 uCamWorld;
         uniform vec3 uCamPos;
         uniform float uHaze;
@@ -115,7 +117,15 @@ class FogPass extends Pass {
         void main() {
           vec4 c = texture2D(tDiffuse, vUv);
           float d = texture2D(tDepth, vUv).x;
-          if (d >= 0.999999) { gl_FragColor = c; return; }
+          // The resolved MSAA depth keeps one sample per pixel. On thin foreground geometry (leaf speckle, blades) a partly covered
+          // pixel can carry the depth of the far hill behind it, which fogs the leaf color to a pale smoke. Take the nearest depth of
+          // the pixel and its four neighbours so edge pixels are fogged as the foreground object they mostly are.
+          float dn = min(min(texture2D(tDepth, vUv + vec2(uTexel.x, 0.0)).x, texture2D(tDepth, vUv - vec2(uTexel.x, 0.0)).x),
+                         min(texture2D(tDepth, vUv + vec2(0.0, uTexel.y)).x, texture2D(tDepth, vUv - vec2(0.0, uTexel.y)).x));
+          float dNear = min(d, dn);
+          if (d >= 0.999999 && dNear >= 0.999999) { gl_FragColor = c; return; }
+          if (d >= 0.999999) d = dNear;
+          d = dNear;
           vec4 vp = uInvProj * vec4(vUv * 2.0 - 1.0, d * 2.0 - 1.0, 1.0);
           vp.xyz /= vp.w;
           vec3 wvec = (uCamWorld * vec4(vp.xyz, 0.0)).xyz;
@@ -162,6 +172,7 @@ class FogPass extends Pass {
     const u = this.material.uniforms;
     u.tDiffuse.value = readBuffer.texture;
     u.tDepth.value = this.scenePass.depthTexture;
+    (u.uTexel.value as THREE.Vector2).set(1 / this.scenePass.rt.width, 1 / this.scenePass.rt.height);
     (u.uInvProj.value as THREE.Matrix4).copy(this.camera.projectionMatrixInverse);
     (u.uCamWorld.value as THREE.Matrix4).copy(this.camera.matrixWorld);
     (u.uCamPos.value as THREE.Vector3).copy(this.camera.position);

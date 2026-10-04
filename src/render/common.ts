@@ -70,6 +70,10 @@ export interface SharedUniforms {
   /** Terrain heights, R32F 257 x 257, nearest filtered (use tgHeightAt in GLSL). */
   heightTex: U<THREE.Texture | null>;
   vegTex: U<THREE.Texture | null>;
+  /** Where herds have grazed and trampled recently: R8 n x n, 0 untouched .. 1 well-trodden (decays slowly). */
+  trailTex: U<THREE.Texture | null>;
+  /** Mean grass biomass and mean moisture over the playable valley: the far ring is tinted to match so the border never shows. */
+  farStats: U<THREE.Vector2>;
   staticTex: U<THREE.Texture | null>;
 }
 
@@ -107,6 +111,8 @@ export function createSharedUniforms(worldSize: number): SharedUniforms {
     farRect: { value: new THREE.Vector3(-768, -768, 2048) },
     heightTex: { value: null },
     vegTex: { value: null },
+    trailTex: { value: null },
+    farStats: { value: new THREE.Vector2(0.6, 0.46) },
     staticTex: { value: null },
   };
 }

@@ -273,6 +273,7 @@ uniform sampler2D uWind;
 uniform sampler2D uBig;
 uniform vec4 uFlower;
 uniform sampler2D uTgShadow;
+uniform sampler2D uTrail;
 uniform vec4 uWorld;   // size, n, cell, hn
 uniform float uTime;
 uniform vec2 uWindDir;
@@ -394,6 +395,9 @@ void main() {
   float tusC = 0.5 + (tus - 0.5) * (1.0 - 0.6 * smoothstep(40.0, 120.0, dist));
 
   float bio = clamp(veg.r * (0.9 + 0.2 * texture(uBig, pn * 1.7 + 0.5).a), 0.0, 1.0);
+  // herd trails: grass that has been grazed down and trampled is shorter, thinner and browner
+  float trodK = smoothstep(0.07, 0.55, texture(uTrail, fuv).r);
+  bio *= 1.0 - 0.68 * trodK;
   float burn = smoothstep(0.04, 0.55, veg.b);
   float bioEff = max(bio, burn * 0.12);
   float cover = st0.b;
@@ -407,7 +411,9 @@ void main() {
   // fade out over the last 25 m inside the world edge (thinner and shorter) so the field melts into the far-ring
   // terrain instead of ending in a straight line
   float edgeD = min(min(p.x, p.y), min(uWorld.x - p.x, uWorld.x - p.y));
-  float edgeK = smoothstep(0.0, 25.0, edgeD);
+  // a wide, ragged margin (about 20 to 70 m) instead of a straight 25 m line, so the field never ends along a ruler edge
+  edgeD += (texture(uBig, pn * 0.9 + 0.2).a - 0.5) * 36.0;
+  float edgeK = smoothstep(4.0, 62.0, edgeD);
   pres *= edgeK * edgeK;
   if (rThin >= keepD * pres) { cullBlade(); return; }
 
@@ -525,7 +531,7 @@ void main() {
 
   vec3 Ng = normalize(vec3(-(st0.r * 2.0 - 1.0), 1.0, -(st0.g * 2.0 - 1.0)));
 
-  float stub = 1.0 - smoothstep(0.06, 0.42, bio);
+  float stub = max(1.0 - smoothstep(0.06, 0.42, bio), 0.9 * trodK);
   float dry = uCure + (0.55 - moist) * uMoistK - st1.g * 0.28 + (patch1 - 0.5) * 0.3 + (rC - 0.5) * 0.22 * (1.0 - smoothstep(25.0, 90.0, dist)) + stub * 0.55 + 0.3 * ridge;
 
   vUv = vec2(side, vg);
@@ -802,9 +808,11 @@ export class GrassField {
   private bigNoiseTex: THREE.DataTexture;
   private terrainShadowU: { value: THREE.Texture | null } | null = null;
   private whiteTex: THREE.DataTexture;
+  private blackTex: THREE.DataTexture;
   private frameNo = 0;
   private snowU: { value: number } | null = null;
   private snowTry = 0;
+  private trailU: { value: THREE.Texture | null } | null = null;
   private vegVersion = -1;
   private lastVegRebuild = -1e9;
   private frustum = new THREE.Frustum();
@@ -825,6 +833,8 @@ export class GrassField {
     this.bigNoiseTex = makeNoiseTexture(512, BIG_LAYERS, 0x5eed1e55);
     this.whiteTex = new THREE.DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1, THREE.RGBAFormat, THREE.UnsignedByteType);
     this.whiteTex.needsUpdate = true;
+    this.blackTex = new THREE.DataTexture(new Uint8Array([0, 0, 0, 255]), 1, 1, THREE.RGBAFormat, THREE.UnsignedByteType);
+    this.blackTex.needsUpdate = true;
     this.terrainShadowU = opts.terrainShadow ?? null;
     this.cellData = new Float32Array(MAX_CELLS_PER_LEVEL * 4 * 4);
     this.cellTex = new THREE.DataTexture(this.cellData, MAX_CELLS_PER_LEVEL, 4, THREE.RGBAFormat, THREE.FloatType);
@@ -842,6 +852,7 @@ export class GrassField {
       uBig: { value: this.bigNoiseTex },
       uFlower: { value: new THREE.Vector4(0, 0, 0, 0) },
       uTgShadow: { value: this.whiteTex },
+      uTrail: { value: this.blackTex },
       uWorld: { value: new THREE.Vector4(world.size, world.n, world.cell, world.hn) },
       uTime: { value: 0 },
       uWindDir: { value: new THREE.Vector2(1, 0) },
@@ -1119,9 +1130,11 @@ export class GrassField {
     if (!this.snowU && (this.snowTry++ & 15) === 0) {
       let root: THREE.Object3D = this.object3D;
       while (root.parent) root = root.parent;
-      const tu = root.userData?.tgUniforms as { snow?: { value: number } } | undefined;
+      const tu = root.userData?.tgUniforms as { snow?: { value: number }; trailTex?: { value: THREE.Texture | null } } | undefined;
       if (tu?.snow) this.snowU = tu.snow;
+      if (tu?.trailTex) this.trailU = tu.trailTex;
     }
+    u.uTrail.value = this.trailU?.value ?? this.blackTex;
     u.uSnow.value = this.snowU?.value ?? 0;
     // grass blades under moonlight (blue key light) must not sparkle like static: damp the specular sheen there
     const moon = Math.max(0, Math.min(1, (sun.color.b / Math.max(sun.color.r, 1e-3) - 0.95) * 3));
@@ -1241,5 +1254,6 @@ export class GrassField {
     this.bigNoiseTex.dispose();
     this.cellTex.dispose();
     this.whiteTex.dispose();
+    this.blackTex.dispose();
   }
 }

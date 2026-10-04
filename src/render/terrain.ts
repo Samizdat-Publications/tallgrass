@@ -37,8 +37,10 @@ function shapeCreek(world: World): { height: Float32Array; creekDist: Float32Arr
     const ax = creek[2 * k], az = creek[2 * k + 1], bx = creek[2 * k + 2], bz = creek[2 * k + 3];
     const dx = bx - ax, dz = bz - az;
     const l2 = dx * dx + dz * dz;
-    const i0 = Math.max(0, Math.floor((Math.min(ax, bx) - R) / cell)), i1 = Math.min(hn - 1, Math.ceil((Math.max(ax, bx) + R) / cell));
-    const j0 = Math.max(0, Math.floor((Math.min(az, bz) - R) / cell)), j1 = Math.min(hn - 1, Math.ceil((Math.max(az, bz) + R) / cell));
+    // distance is tracked out to 50 m (the wall-removal weight needs it); only the inner R meters are reshaped below
+    const RD = 50;
+    const i0 = Math.max(0, Math.floor((Math.min(ax, bx) - RD) / cell)), i1 = Math.min(hn - 1, Math.ceil((Math.max(ax, bx) + RD) / cell));
+    const j0 = Math.max(0, Math.floor((Math.min(az, bz) - RD) / cell)), j1 = Math.min(hn - 1, Math.ceil((Math.max(az, bz) + RD) / cell));
     for (let j = j0; j <= j1; j++) {
       for (let i = i0; i <= i1; i++) {
         const x = i * cell, z = j * cell;
@@ -197,36 +199,25 @@ export class Terrain {
     // ---- render heights: smooth creek channel and banks (see shapeCreek)
     const shaped = shapeCreek(world);
     this.creekDist = shaped.creekDist;
-    // Near the border the ground is blurred along the border only (60 m window), so rim bumps and the creek notch do not extrude
-    // outward as streaks, while the profile across the border (the rim slope) is untouched. The far ring then continues that profile.
-    // The sim raises a 22 m bowl wall over the last 82 m of every edge (world.ts). Seen from above that wall frames the playable
-    // square like a picture frame, so the render takes most of it back out (never near the creek, whose banks are already shaped).
+    // The sim raises a 22 m bowl wall over the last 82 m of every edge (world.ts). Seen from above it frames the playable square
+    // like a picture frame, so the render removes it entirely (except in the creek corridor, whose banks are already shaped); the
+    // valley edge then simply continues as rolling ground into the far ring.
     for (let j = 0; j < hn; j++) {
       for (let i = 0; i < hn; i++) {
         const u = i / (hn - 1), v = j / (hn - 1);
         const edge = Math.min(u, 1 - u, v, 1 - v);
         if (edge >= 0.16) continue;
         const up = 22 * Math.pow((0.16 - edge) / 0.16, 2);
-        const wc = smoothstep(10, 34, shaped.creekDist[j * hn + i]);
-        shaped.height[j * hn + i] -= 0.62 * up * wc;
+        // the sim's creek carve blends the wall back in as smoothstep(0, 46, distance to creek); the shaped channel (about 15 m) is untouched
+        const cd = shaped.creekDist[j * hn + i];
+        const wc = smoothstep(0, 46, cd) * smoothstep(8, 16, cd);
+        shaped.height[j * hn + i] -= 0.97 * up * wc;
       }
     }
-    const blurred = boxBlur(boxBlur(shaped.height, hn, 20), hn, 20);
-    const Lx = boxBlur1(shaped.height, hn, 45, 0);
-    const Lz = boxBlur1(shaped.height, hn, 45, 1);
+    // trend field: a wide blur of the ground (about 110 m). The far ring continues this smooth field outward and adds the
+    // mirrored high-pass detail on top, so beyond the border the terrain has the same character as inside, with no streaks.
+    const blurred = boxBlur(boxBlur(shaped.height, hn, 28), hn, 28);
     this.renderHeight = Float32Array.from(shaped.height);
-    for (let j = 0; j < hn; j++) {
-      for (let i = 0; i < hn; i++) {
-        const dX = Math.min(i, hn - 1 - i) * cell, dZ = Math.min(j, hn - 1 - j) * cell;
-        const dE = Math.min(dX, dZ);
-        const w = smoothstep(60, 0, dE);
-        if (w <= 0) continue;
-        // tangent of the nearest edge, blended continuously: left/right edges run along z (Lz), top/bottom along x (Lx)
-        const wz = smoothstep(-30, 30, dZ - dX);
-        const L = wz * Lz[j * hn + i] + (1 - wz) * Lx[j * hn + i];
-        this.renderHeight[j * hn + i] = shaped.height[j * hn + i] * (1 - w) + L * w;
-      }
-    }
     const rh = this.renderHeight;
 
     // ---- data textures
@@ -265,38 +256,56 @@ export class Terrain {
     }
     const rimBase = rimSum / rimCount;
     const L = 75;
-    // Far ring: continues the border height with the rim's outward slope easing to zero (C1 at the border, no crease).
+    // Far ring. Trend: the wide-blur field continued past the border with its outward slope easing to zero (C1, no crease; the blur
+    // makes it smooth along the border so nothing extrudes into streaks). Detail: the ground's own high-pass detail mirrored
+    // across the border and domain-warped, fading out over about 250 m, so the first stretch of far ring looks like more valley.
     const Lg = 50;
-    const gClamp = (g: number) => clamp(g, -0.3, 0.85);
-    // extension along x at row zc, then along z: each continues the border height with the slope easing out (C1 across every border
-    // and corner, so no crease or crack along the extension of an edge)
-    const extX = (x: number, zc: number): number => {
+    const gClamp = (g: number) => clamp(g, -0.3, 0.6);
+    const bAt = (x: number, z: number) => sampleHeight(blurred, hn, cell, clamp(x, 0, S), clamp(z, 0, S));
+    const trendX = (x: number, zc: number): number => {
       const cx = clamp(x, 0, S);
-      const hb = sampleHeight(rh, hn, cell, cx, zc);
+      const hb = bAt(cx, zc);
       if (x === cx) return hb;
-      const g = gClamp((hb - sampleHeight(rh, hn, cell, x < 0 ? 4 : S - 4, zc)) / 4);
+      const g = gClamp((hb - bAt(x < 0 ? 12 : S - 12, zc)) / 12);
       return hb + g * Lg * (1 - Math.exp(-Math.abs(x - cx) / Lg));
+    };
+    const mirror = (v: number): number => {
+      let m = v;
+      for (let k = 0; k < 3; k++) {
+        if (m < 0) m = -m; else if (m > S) m = 2 * S - m; else break;
+      }
+      return clamp(m, 0, S);
     };
     this.heightFn = (x: number, z: number) => {
       const cx = clamp(x, 0, S), cz = clamp(z, 0, S);
       const dx = x - cx, dz = z - cz;
       if (dx === 0 && dz === 0) return sampleHeight(rh, hn, cell, cx, cz);
       const d = Math.hypot(dx, dz);
-      const e0 = extX(x, cz);
-      let inner = e0;
+      const e0 = trendX(x, cz);
+      let trend = e0;
       if (dz !== 0) {
-        const gz = gClamp((e0 - extX(x, dz < 0 ? 4 : S - 4)) / 4);
-        inner = e0 + gz * Lg * (1 - Math.exp(-Math.abs(dz) / Lg));
+        const gz = gClamp((e0 - trendX(x, dz < 0 ? 12 : S - 12)) / 12);
+        trend = e0 + gz * Lg * (1 - Math.exp(-Math.abs(dz) / Lg));
       }
-      const t = smoothstep(0, 170, d);
+      const warp = smoothstep(0, 70, d);
+      const wx = x + 34 * warp * (vnoise2(x * 0.011 + 3, z * 0.011 - 2, 17) - 0.5);
+      const wz = z + 34 * warp * (vnoise2(x * 0.011 - 8, z * 0.011 + 5, 19) - 0.5);
+      const mx = mirror(wx), mz = mirror(wz);
+      const detail = sampleHeight(rh, hn, cell, mx, mz) - sampleHeight(blurred, hn, cell, mx, mz);
+      // the creek channel itself does not continue outside the world (it would read as a dry gully with cliff-like banks)
+      const ci = Math.min(hn - 1, Math.max(0, Math.round(mx / cell))), cj = Math.min(hn - 1, Math.max(0, Math.round(mz / cell)));
+      const creekFade = 1 - (1 - smoothstep(14, 46, shaped.creekDist[cj * hn + ci])) * smoothstep(0, 70, d);
+      const detailFade = (1 - smoothstep(30, 280, d)) * creekFade;
+      const inner = trend + detail * detailFade;
+      const t = smoothstep(0, 220, d);
       const gain = 0.2 * L * (1 - Math.exp(-d / L));
       const far = smoothstep(150, 2600, d);
       const big = fbm2(x * 0.0021 + 7.3, z * 0.0021 - 3.1, 4, 11);
       const mid = fbm2(x * 0.0075 - 2.2, z * 0.0075 + 8.4, 3, 29);
       const near = fbm2(x * 0.02 + 1.7, z * 0.02 - 6.1, 3, 41);
-      // relief at the scales the valley itself has (about 130 m and 50 m hills) starts right at the border
-      const midA = (1 - smoothstep(260, 620, d)) * smoothstep(0, 60, d);
-      const nearA = (1 - smoothstep(60, 170, d)) * smoothstep(0, 26, d);
+      // broad relief at the scale of the valley's own hills, fading in as the mirrored detail fades out
+      const midA = smoothstep(120, 400, d) * (1 - smoothstep(500, 900, d)) + smoothstep(0, 60, d) * (1 - smoothstep(60, 400, d)) * 0.45;
+      const nearA = smoothstep(150, 260, d) * (1 - smoothstep(260, 420, d)) * 0.7;
       const farBase = (rimBase + 5) + gain + (6 + 24 * big);
       return inner * (1 - t) + farBase * t + 16 * (mid - 0.5) * midA + 9 * (near - 0.5) * nearA + far * (20 + 90 * big) + d * 0.008;
     };
@@ -561,6 +570,8 @@ export class Terrain {
       const u = shader.uniforms;
       u.tVeg = sh.vegTex;
       u.tStatic = sh.staticTex;
+      u.tTrail = sh.trailTex;
+      u.uFarStats = sh.farStats;
       u.uWorldSize = sh.worldSize;
       u.uTime = sh.time;
       u.uWind = sh.wind;
@@ -637,6 +648,8 @@ export class Terrain {
 const GROUND_PARS = /* glsl */ `
 uniform sampler2D tVeg;
 uniform sampler2D tStatic;
+uniform sampler2D tTrail;
+uniform vec2 uFarStats;
 uniform float uWorldSize;
 uniform float uTime;
 uniform vec3 uWind;
@@ -680,7 +693,7 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
   // far-field look across the edge so no rectangle shows from any angle
   vec2 qd = abs(xz - 0.5 * uWorldSize) - 0.5 * uWorldSize;
   float sd = max(qd.x, qd.y);
-  float edgeW = smoothstep(-70.0, 70.0, sd);
+  float edgeW = smoothstep(-110.0, 150.0, sd);
 
   float lodFine = 1.0 - smoothstep(70.0, 320.0, dist);
   float lodMid = 1.0 - smoothstep(300.0, 1100.0, dist);
@@ -701,15 +714,15 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
   draw = smoothstep(0.72, 0.96, draw);
   float highGround = smoothstep(8.0, 70.0, wp.y);
 
-  float farBio = 0.6 + 0.25 * (nE - 0.5) * 2.0;
+  float farBio = uFarStats.x + 0.3 * (nE - 0.5);
   float bio = mix(veg.r, farBio, edgeW);
   // bare dirt patches: where the macro noise peaks the grass thins out (a little in the valley, a lot in the far field)
   float dirt = smoothstep(0.64, 0.8, nM1 + 0.1 * (nM2 - 0.5));
-  bio *= 1.0 - dirt * mix(0.35, 0.8, edgeW);
+  bio *= 1.0 - dirt * mix(0.4, 0.5, edgeW);
   float fert = mix(veg.g, 0.6, edgeW);
   float burn = veg.b * (1.0 - edgeW);
   float fear = veg.a * (1.0 - edgeW);
-  float farMoist = 0.46 + 0.22 * (nE - 0.5) + 0.2 * draw - 0.3 * highGround;
+  float farMoist = uFarStats.y + 0.22 * (nE - 0.5) + 0.2 * draw - 0.3 * highGround;
   float moist = mix(st.r, farMoist, edgeW);
   moist = clamp(moist + 0.28 * draw * (1.0 - edgeW) - 0.1 * highGround * (1.0 - edgeW), 0.0, 1.0);
   float cover = st.g * (1.0 - edgeW);
@@ -748,7 +761,10 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
   float c2s = smoothstep(0.3, 0.7, s2), c3s = smoothstep(0.32, 0.68, s3);
   float streakTone = (s1 - 0.5) * 0.4 * f1 + (c2s - 0.5) * 0.7 * f2 + (c3s - 0.5) * 0.4 * f3 + (s4 - 0.5) * 0.12;
   float graze = smoothstep(0.04, 0.3, max(-rayDir.y, 0.0));
-  gTgH = ((s1 - 0.5) * 0.1 * f1 + (s2 - 0.5) * 0.22 * f2 + (s3 - 0.5) * 0.55 * f3) * mix(0.5, 1.0, graze) * (0.4 + 0.6 * farK);
+  // looking straight down (map view) combed strokes read as fur or smear, so thin them out; they belong to oblique views
+  float topK = smoothstep(0.7, 0.96, -rayDir.y);
+  streakTone *= mix(1.0, 0.3, topK);
+  gTgH = ((s1 - 0.5) * 0.1 * f1 + (s2 - 0.5) * 0.22 * f2 + (s3 - 0.5) * 0.55 * f3) * mix(0.5, 1.0, graze) * (0.4 + 0.6 * farK) * mix(1.0, 0.3, topK);
   // rolling wind waves of light and dark
   vec2 sp = vec2(dot(xz, wv), dot(xz, vec2(-wv.y, wv.x)));
   sp.x += 26.0 * tgNoise2(xz * 0.013) + 6.0 * nD;
@@ -787,7 +803,7 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
   grassCol = mix(grassCol, grassCol * vec3(1.12, 1.05, 0.8), ridgeK * 0.5 * dry);
 
   // the far field stands in for blades seen from a distance: a touch darker and calmer than the sunlit blade tops
-  grassCol *= mix(1.0, 0.88, edgeW);
+  grassCol *= mix(1.0, 0.97, edgeW);
 
   // honey, not orange: dry ridges go lighter and straw-gold, swales and draws go deeper olive-gold, and the redness is capped
   // (the light is already warm, so red ground under red light reads as wine at dusk)
@@ -804,7 +820,7 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
   grassCol *= 1.0 + (speck - 0.5) * 0.5 * (1.0 - smoothstep(25.0, 110.0, dist)) * (0.35 + 0.65 * edgeW);
 
   // short grass: a little of the soil shows through, darker and earthier, never light sand
-  float soilShow = smoothstep(0.1, 0.0, bio + (nC - 0.5) * 0.05) + dirt * 0.5 * edgeW;
+  float soilShow = smoothstep(0.1, 0.0, bio + (nC - 0.5) * 0.05) + dirt * 0.25 * edgeW;
   soilShow = clamp(soilShow, 0.0, 1.0);
   vec3 shortGrass = mix(grassCol, grassCol * vec3(0.9, 0.84, 0.74) + uSoil * 0.12, stubA * 0.5);
   vec3 col = mix(shortGrass, uSoil * (0.8 + 0.5 * nA), soilShow * 0.85);
@@ -815,6 +831,15 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
   float rock = max(smoothstep(0.78, 1.25, slopeG + (nA - 0.5) * 0.3 + (nD - 0.5) * 0.25), outcrop * 0.85);
   vec3 rockCol = uRock * (0.7 + 0.6 * nC) * (0.85 + 0.3 * nB);
   col = mix(col, rockCol, rock * 0.7);
+
+  // herd trails: grass that animals have grazed down and trampled goes darker, browner and flatter, and the ground shows
+  // through as churned earth with small hoof-scale pits near the camera
+  float trod = texture2D(tTrail, cuv).r * (1.0 - edgeW);
+  float trodK = smoothstep(0.07, 0.55, trod);
+  float hoof = smoothstep(0.55, 0.78, tgNoise2(xz * 2.3 + 3.0) * 0.6 + tgNoise2(xz * 5.9 + 11.0) * 0.4);
+  col = mix(col, col * vec3(0.7, 0.62, 0.5) + uSoil * 0.08, trodK * 0.6);
+  col *= 1.0 - trodK * hoof * 0.35 * (1.0 - smoothstep(25.0, 150.0, dist));
+  gTgGrass *= 1.0 - 0.45 * trodK;
 
   // damp banks, mud at the waterline
   float damp = (1.0 - smoothstep(0.0, 9.0, wd)) * (0.6 + 0.4 * nA);
@@ -861,13 +886,17 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
   float flatK = smoothstep(0.58, 0.93, nrm.y);
   float drift = tgFbm2(xz * 0.05 + 12.0) * 0.6 + tgFbm2(xz * 0.31 + 4.0) * 0.4;
   float pot = flatK * 0.62 + drift * 0.5 + hollowK * 0.28 - ridgeK * 0.34 - rock * 0.5 - charAmt * 0.6 + 0.1 * gTgGrass;
-  float Tsn = mix(1.4, 0.06, clamp(uSnow, 0.0, 1.0));
-  float snowAmt = smoothstep(Tsn - 0.16, Tsn + 0.1, pot) * smoothstep(0.0, 0.06, uSnow);
+  // The threshold starts above the highest possible potential (about 1.5), so a trace of leftover snow (the eased value never
+  // reaches exactly zero) cannot show as isolated white patches on the flattest, wettest spots: nothing settles until there is real snow.
+  float sn1 = clamp(uSnow, 0.0, 1.0);
+  float Tsn = 1.78 - 1.72 * pow(sn1, 0.75);
+  float snowAmt = smoothstep(Tsn - 0.16, Tsn + 0.1, pot) * smoothstep(0.05, 0.16, uSnow);
   float tipsPoke = (0.25 * gTgGrass * smoothstep(0.52, 0.8, s2)) * (1.0 - smoothstep(0.5, 1.0, uSnow));
   float snowCover = clamp(snowAmt * (0.9 - tipsPoke), 0.0, 1.0);
   vec3 snowC = vec3(0.87, 0.87, 0.885) * (0.93 + 0.07 * nC);
   snowC = mix(snowC, col * 2.4 + vec3(0.06), 0.1 * (1.0 - snowCover * 0.5));
   col = mix(col, snowC, snowCover);
+  col = mix(col, col * vec3(0.72, 0.7, 0.68), trodK * snowCover * 0.55);
   gTgH *= 1.0 - 0.55 * snowCover;
 
   // rain darkens and glosses the ground
