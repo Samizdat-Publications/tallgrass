@@ -151,6 +151,8 @@ export function drawRows(g: CanvasRenderingContext2D, w: number, h: number, u: n
     const fmtAxis = (v: number) => (isGrass ? v.toFixed(2).replace(/0$/, '') : fmtInt(v));
     // two labels per row, each inset well inside its own band, so a row's low number never meets the next row's high
     g.fillText(fmtAxis(aHi), P.l - 8 * u, top + 7 * u);
+    // the low number is quieter, so a row's floor and the next row's ceiling never read as one column of figures
+    g.fillStyle = hexA(color, 0.5);
     g.fillText(fmtAxis(aLo), P.l - 8 * u, bottom - 8 * u);
     g.strokeStyle = hexA(color, 0.55);
     g.lineWidth = 1.3 * u;
