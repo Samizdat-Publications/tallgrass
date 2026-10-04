@@ -50,6 +50,8 @@ export interface SharedUniforms {
   frost: U<number>;
   snow: U<number>;
   wet: U<number>;
+  /** 0..1 visible rain intensity right now (eased; 0 for snow and dry weather). */
+  rain: U<number>;
   /** 0..1 strength of the fear-map debug overlay on the terrain. */
   fearOverlay: U<number>;
   /** Mid-tone of living grass and of cured grass right now (linear), and how cured the field is 0..1. Same source as the grass blades. */
@@ -100,6 +102,7 @@ export function createSharedUniforms(worldSize: number): SharedUniforms {
     frost: { value: 0 },
     snow: { value: 0 },
     wet: { value: 0 },
+    rain: { value: 0 },
     fearOverlay: { value: 0 },
     grassGreen: c(), grassDry: c(), cure: { value: 0 },
     occCam: { value: new THREE.Vector3() },
@@ -226,6 +229,7 @@ export function injectTerrainShadow(
   shader.uniforms.tTgShadowFar = shared.terrainShadowFar;
   shader.uniforms.uTgFarRect = shared.farRect;
   shader.uniforms.uTgWorld = shared.worldSize;
+  shader.uniforms.uTgOver = shared.overcast;
   if (!shader.vertexShader.includes('vTgShadowXZ')) {
     shader.vertexShader = shader.vertexShader
       .replace('void main() {', 'varying vec2 vTgShadowXZ;\nvoid main() {')
@@ -242,6 +246,7 @@ export function injectTerrainShadow(
       uniform sampler2D tTgShadowFar;
       uniform vec3 uTgFarRect;
       uniform float uTgWorld;
+      uniform float uTgOver;
       varying vec2 vTgShadowXZ;
       float gTgShadow = 1.0;
       float tgSampleTerrainShadow(){
@@ -252,7 +257,8 @@ export function injectTerrainShadow(
         float wIn = 1.0 - smoothstep(-20.0, 30.0, sd);
         vec2 fuv = (vTgShadowXZ - uTgFarRect.xy) / uTgFarRect.z;
         float far = texture2D(tTgShadowFar, clamp(fuv, 0.0, 1.0)).r;
-        return mix(far, texture2D(tTgShadow, clamp(uv, 0.0, 1.0)).r, wIn);
+        // an overcast sky has no hard hill shadows: the horizon map fades out as the cloud thickens
+        return mix(mix(far, texture2D(tTgShadow, clamp(uv, 0.0, 1.0)).r, wIn), 1.0, 0.85 * uTgOver);
       }
       void main() {`,
     )

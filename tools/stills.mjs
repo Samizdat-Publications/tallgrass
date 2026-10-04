@@ -56,6 +56,30 @@ const SETS = {
     { name: 'ov_05_traits', eval: "window.__overlay.setMode('traits')", wait: 3000 },
     { name: 'ov_06_traits_wide', eval: "window.__cam('wide')", wait: 3000 },
   ],
+  // seasons and weather held by window.__env (the sim keeps running underneath): the same wide valley through the year (snowpack and
+  // leaf-out), a bare-to-leafy tree row, rain early and late, and night. Each shot is lit and dressed as asked.
+  seasons: [
+    { name: 'se_00_setup', eval: `(() => {
+      const e = window.__engine;
+      window.__env = (o) => {
+        window.__envO = Object.assign({ season: 1.8, weather: 0, warmth: 0.7, rain: 0, dayFrac: 0.4 }, o);
+        if (!window.__envHook) window.__envHook = e.onFrame(() => e.setEnv(window.__envO));
+        e.setEnv(window.__envO); e.applyEnvNow();
+      };
+      window.__speed(1); window.__followId(null); window.__env({ season: 3.05, dayFrac: 0.4 }); window.__cam('wide');
+    })()`, wait: 2500 },
+    { name: 'se_01_early_winter', eval: "window.__env({ season: 3.2, dayFrac: 0.4 })", wait: 2500 },
+    { name: 'se_02_mid_winter', eval: "window.__env({ season: 3.5, dayFrac: 0.4 })", wait: 2500 },
+    { name: 'se_03_late_winter', eval: "window.__env({ season: 3.8, dayFrac: 0.4 })", wait: 2500 },
+    { name: 'se_04_early_spring', eval: "window.__env({ season: 0.2, dayFrac: 0.4 })", wait: 2500 },
+    { name: 'se_05_late_spring', eval: "window.__env({ season: 0.8, dayFrac: 0.4 })", wait: 2500 },
+    { name: 'se_06_rain_wide', eval: "window.__env({ season: 0.6, dayFrac: 0.4, weather: 1, rain: 0.1 })", wait: 3500 },
+    { name: 'se_07_rain_low', eval: "window.__cam('low')", wait: 2500 },
+    { name: 'se_08_storm_wide', eval: "window.__cam('wide'); window.__env({ season: 1.2, dayFrac: 0.4, weather: 3, rain: 0.6 })", wait: 3500 },
+    { name: 'se_09_night_wide', eval: "window.__env({ season: 1.0, dayFrac: 0.95, weather: 0 })", wait: 3000 },
+    { name: 'se_10_night_low', eval: "window.__cam('low')", wait: 2500 },
+    { name: 'se_11_winter_night', eval: "window.__cam('wide'); window.__env({ season: 3.5, dayFrac: 0.95, weather: 0 })", wait: 3000 },
+  ],
   // water close-ups: the creek and a pond at golden hour, midday from above, dusk, night and in winter.
   // __wv(target, distance, pitchDeg, yawFromLightDeg): orbit a creek point (fraction 0..1 along it) or a pond ('p0'..'p2'), with
   // yaw measured from looking straight into the key light (0 = facing the sun or moon).

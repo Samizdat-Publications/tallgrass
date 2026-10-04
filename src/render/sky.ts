@@ -18,9 +18,9 @@ interface Key {
 // Night is a documentary "day for night": silver-blue, readable, never black (see MOON_I, hemi at el <= -14).
 const KEYS: Key[] = [
   { el: -40, zen: C('#17163e'), mid: C('#2a3470'), hor: C('#5a5084'), glow: C('#c2682c'), sun: C('#000000'), sunI: 0,
-    hSky: C('#6f98dc'), hGnd: C('#2e3f66'), hI: 0.9, expo: 1.55, haze: 0.5 },
+    hSky: C('#6f98dc'), hGnd: C('#2e3f66'), hI: 0.66, expo: 1.42, haze: 0.5 },
   { el: -14, zen: C('#191a46'), mid: C('#2d3a78'), hor: C('#62588c'), glow: C('#c2682c'), sun: C('#000000'), sunI: 0,
-    hSky: C('#6f98dc'), hGnd: C('#2e3f66'), hI: 0.95, expo: 1.55, haze: 0.6 },
+    hSky: C('#6f98dc'), hGnd: C('#2e3f66'), hI: 0.7, expo: 1.42, haze: 0.6 },
   { el: -11, zen: C('#18286a'), mid: C('#384c88'), hor: C('#855a86'), glow: C('#ff7a50'), sun: C('#c8483c'), sunI: 0.1,
     hSky: C('#7088cc'), hGnd: C('#4c4050'), hI: 1.1, expo: 1.65, haze: 0.5 },
   { el: -7, zen: C('#1c326c'), mid: C('#4a5c94'), hor: C('#b07a8a'), glow: C('#ff9a60'), sun: C('#ff7038'), sunI: 0.85,
@@ -40,7 +40,7 @@ const KEYS: Key[] = [
 ];
 
 const MOON_COLOR = C('#bccdff');
-const MOON_I = 3.6;
+const MOON_I = 4.3;
 
 const _a = new THREE.Color();
 const _b = new THREE.Color();
@@ -91,6 +91,8 @@ export interface Lighting {
   bloom: number;
   /** Additive linear lift (before exposure) so shadows never crush to black; strongest at night. */
   gradeLift: THREE.Color;
+  /** 0..1 visible rain intensity (set by the engine; drives the rain streak layer in the grade pass). */
+  rain: number;
   /** 0..1 how strongly the night tint (silver-blue, desaturated) is applied by the grade. */
   gradeNight: number;
 }
@@ -99,7 +101,7 @@ export function createLighting(): Lighting {
   return {
     sunElDeg: 20, lightIntensity: 3, hemiSky: new THREE.Color(), hemiGround: new THREE.Color(), hemiIntensity: 1,
     exposure: 1, hazeDensity: 0.0007, mistDensity: 0, gradeShadow: new THREE.Color(1, 1, 1), gradeHighlight: new THREE.Color(1, 1, 1),
-    gradeSat: 1, gradeContrast: 1, vignette: 0.25, bloom: 0.3, gradeLift: new THREE.Color(0, 0, 0), gradeNight: 0,
+    gradeSat: 1, gradeContrast: 1, vignette: 0.25, bloom: 0.3, gradeLift: new THREE.Color(0, 0, 0), gradeNight: 0, rain: 0,
   };
 }
 
@@ -169,7 +171,7 @@ export function computeAtmosphere(env: EnvLike, sm: Smoothed, u: SharedUniforms,
   u.sunDiskColor.value.copy(k0.sun).lerp(k1.sun, t);
 
   // key light: sun by day, moon at night, continuous through twilight
-  const sunI = lerp(k0.sunI, k1.sunI, t) * (1 - over * 0.78);
+  const sunI = lerp(k0.sunI, k1.sunI, t) * (1 - over * 0.86);
   const moonAmt = smoothstep(-6, -15, elDeg);
   const moonI = MOON_I * moonAmt * (1 - over * 0.5);
   mixKey(_a, (k) => k.sun, k0, k1, t);
@@ -208,12 +210,12 @@ export function computeAtmosphere(env: EnvLike, sm: Smoothed, u: SharedUniforms,
     L.hemiSky.lerp(_b.setRGB(l, l, l * 1.05), over * 0.5);
     L.hemiGround.lerp(_b.setRGB(l * 0.7, l * 0.68, l * 0.62), over * 0.4);
   }
-  L.exposure = lerp(k0.expo, k1.expo, t) * (1 + over * 0.12);
+  L.exposure = lerp(k0.expo, k1.expo, t) * (1 + over * 0.2);
 
   // distance haze: a light near-field term (scaled down with camera altitude in the post pass) plus a fixed far term;
   // slightly heavier at dawn/dusk, in drought dust and in overcast
   const hazeKey = lerp(k0.haze, k1.haze, t);
-  L.hazeDensity = 0.00026 * hazeKey * (1 + over * 0.3 + dust * 0.6 + winter * 0.1);
+  L.hazeDensity = 0.0002 * hazeKey * (1 + over * 0.45 + dust * 0.6 + winter * 0.1);
   // valley mist: dawn hours, more in the cool seasons and when humid. Atmospheric, never opaque.
   const dawn = Math.exp(-Math.pow((env.dayFrac - 0.255) / 0.05, 2));
   const dusk = Math.exp(-Math.pow((env.dayFrac - 0.77) / 0.035, 2));
@@ -234,7 +236,7 @@ export function computeAtmosphere(env: EnvLike, sm: Smoothed, u: SharedUniforms,
   L.gradeHighlight.setRGB(1.0 + 0.08 * golden - 0.1 * nightG, 1.0 + 0.0 * golden + 0.02 * nightG, 1.0 - 0.1 * golden + 0.14 * nightG);
   L.gradeShadow.setRGB(1.0 - 0.14 * golden - 0.2 * nightG, 1.0 + 0.0 * golden + 0.0 * nightG, 1.0 + 0.24 * golden + 0.26 * nightG);
   L.gradeSat = 1.1 - 0.1 * golden + 0.06 * twilight - 0.1 * nightG - 0.12 * over - 0.04 * winter;
-  L.gradeContrast = 1.1 - 0.06 * over + 0.06 * nightG + 0.08 * twilight;
+  L.gradeContrast = 1.1 - 0.06 * over + 0.2 * nightG + 0.08 * twilight;
   L.vignette = 0.26 + 0.06 * nightG;
   L.bloom = 0.17 + 0.13 * golden + 0.06 * nightG;
   // shadow floor: a faint cool lift, plus more at night so nothing is ever pure black

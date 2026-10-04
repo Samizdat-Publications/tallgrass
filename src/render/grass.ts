@@ -631,14 +631,14 @@ void main() {
   float ridge = vP3.w;
   // seen from above or from afar the dark blade bases are hidden under the canopy: lift them, or the sparse
   // thinned blades show up as dark flecks on the ground
-  float baseLift = max(max(smoothstep(0.3, 0.85, V.y), smoothstep(30.0, 90.0, vP2.y)), 0.85 * uMoon);
+  float baseLift = max(max(smoothstep(0.3, 0.85, V.y), smoothstep(30.0, 90.0, vP2.y)), 0.5 * uMoon);
   float vc = mix(v, 0.55 + 0.45 * v, baseLift);
   vec3 aGreen = grad3(uGreenB, uGreenM, uGreenT, vc);
   vec3 aDry = grad3(uDryB, uDryM, uDryT, vc);
   vec3 albedo = mix(aGreen, aDry, dry);
   // per-blade variation fades with distance so the mid field is smooth, not salt and pepper
   float nearK = 1.0 - smoothstep(25.0, 90.0, vP2.y);
-  albedo *= mix(1.0, 0.8 + 0.4 * bright, nearK * (1.0 - 0.75 * uMoon));
+  albedo *= mix(1.0, 0.8 + 0.4 * bright, nearK * (1.0 - 0.35 * uMoon));
   // broad swaths (already faded out with distance), patches and tussocks: gentle, never a regular pattern
   albedo *= 1.0 + 0.55 * (vP2.z - 0.5);
   albedo *= 0.9 + 0.2 * vP2.w;
@@ -689,7 +689,7 @@ void main() {
   }
   albedo = mix(albedo, uAsh, burn);
   // moonlit grass stays grass: a little darker and cooler toward teal, never silver
-  albedo *= mix(vec3(1.0), vec3(0.74, 0.95, 0.93), uMoon);
+  albedo *= mix(vec3(1.0), vec3(0.56, 0.76, 0.82), uMoon);
   // snow on the blades: starts at the tips and in the patches where it settles first, so the field greys and whitens gradually
   {
     float snowPatch = 0.3 + 0.7 * vP2.w;
@@ -733,7 +733,7 @@ void main() {
   irr += mix(uAmbGround, uAmbSky, 0.5 * Namb.y + 0.5);
 #endif
   float aoDist = 1.0 - smoothstep(12.0, 75.0, vP2.y);
-  float ao = mix(mix(uAO, 1.0, 0.5 * uMoon), 1.0, smoothstep(0.0, 0.7, vc));
+  float ao = mix(mix(uAO, 1.0, 0.25 * uMoon), 1.0, smoothstep(0.0, 0.7, vc));
   ao = mix(1.0, ao, (0.4 + 0.6 * bio) * aoDist * (1.0 - 0.7 * baseLift));
   // shorter blades sit under taller ones: darker overall, which gives the field its light and dark structure
   float canopy = mix(1.0, mix(0.45, 1.0, smoothstep(0.0, 0.75, vP2.x)), 0.08 + 0.77 * aoDist);

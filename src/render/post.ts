@@ -140,7 +140,7 @@ class FogPass extends Pass {
           float sunAlign = max(dot(dir, uSunDir), 0.0);
           float fwd = 1.0 + 1.6 * pow(sunAlign, 6.0) * (1.0 - smoothstep(0.1, 0.5, uSunDir.y));
           float nearOd = (dist * uHaze * alt) * (dist * uHaze * alt) * fwd;
-          float dFar = dist / 2800.0;
+          float dFar = dist / 3500.0;
           float farOd = dFar * dFar * dFar;
           float od = nearOd + farOd;
           float k = uMistFalloff;
@@ -201,12 +201,16 @@ class GradePass extends Pass {
         uAspect: { value: 16 / 9 },
         uLift: { value: new THREE.Color(0, 0, 0) },
         uNight: { value: 0 },
+        uRain: { value: 0 },
+        uTime: { value: 0 },
       },
       vertexShader: FS_VERT,
       fragmentShader: /* glsl */ `
         precision highp float;
         varying vec2 vUv;
         uniform sampler2D tDiffuse;
+        uniform float uRain;
+        uniform float uTime;
         uniform vec3 uShadowTint;
         uniform vec3 uHighTint;
         uniform float uSat;
@@ -229,8 +233,28 @@ class GradePass extends Pass {
           col = mix(vec3(l2), col, uSat);
           // day for night: cool the palette toward blue-teal while keeping luminance and most of the hue, so moonlit grass reads as
           // dark teal-green grass (as in the concept art) and not as silver snow
-          vec3 teal = vec3(l2) * vec3(0.7, 1.0, 1.06);
-          col = mix(col, teal + (col - vec3(l2)) * 0.26, uNight * 0.85);
+          vec3 teal = vec3(l2) * vec3(0.86, 0.98, 1.08);
+          col = mix(col, teal + (col - vec3(l2)) * 0.4, uNight * 0.85);
+          // rain: three layers of slanted streaks (near, middle, far), brighter against the dark ground than the bright sky
+          #ifdef TG_RAIN
+          {
+            float rs = 0.0;
+            for (int k = 0; k < 3; k++) {
+              float fk = float(k);
+              float sc = 60.0 + 46.0 * fk;
+              vec2 p = vec2((vUv.x * uAspect + vUv.y * (0.22 + 0.05 * fk)) * sc, vUv.y * sc * 0.07 + uTime * (3.3 + 1.7 * fk) * sc * 0.07);
+              vec2 id = floor(p);
+              vec2 fr = fract(p);
+              float h = fract(sin(dot(id + fk * 31.7, vec2(12.9898, 78.233))) * 43758.5453);
+              float h2 = fract(h * 7.31 + fk * 0.37);
+              float on = step(1.0 - (0.3 + 0.16 * fk) * uRain, h);
+              float line = smoothstep(0.14, 0.0, abs(fr.x - 0.15 - 0.7 * h2)) * smoothstep(0.0, 0.25, fr.y) * smoothstep(1.0, 0.45, fr.y);
+              rs += on * line * (1.0 - 0.28 * fk);
+            }
+            float lr = dot(col, vec3(0.2126, 0.7152, 0.0722));
+            col = mix(col, col * 0.8 + vec3(0.62, 0.7, 0.8) * (0.05 + 0.5 * lr), clamp(rs, 0.0, 1.0) * 0.6 * min(uRain * 1.2, 1.0));
+          }
+          #endif
           col = pow(max(col / 0.18, vec3(0.0)), vec3(uContrast)) * 0.18;
           vec2 q = (vUv - 0.5) * vec2(uAspect, 1.0) * 0.9;
           float v = smoothstep(0.35, 1.05, length(q));
@@ -300,7 +324,7 @@ export class PostFX {
   /** Objects hidden while the AO normal/depth pass renders (sky, water, big instanced grass...). */
   readonly aoExclude: THREE.Object3D[] = [];
 
-  constructor(private renderer: THREE.WebGLRenderer, scene: THREE.Scene, private camera: THREE.PerspectiveCamera, shared: SharedUniforms) {
+  constructor(private renderer: THREE.WebGLRenderer, scene: THREE.Scene, private camera: THREE.PerspectiveCamera, private shared: SharedUniforms) {
     const size = renderer.getSize(new THREE.Vector2());
     const pr = renderer.getPixelRatio();
     const w = Math.max(2, Math.floor(size.x * pr)), h = Math.max(2, Math.floor(size.y * pr));
@@ -374,6 +398,16 @@ export class PostFX {
     g.uVignette.value = L.vignette;
     (g.uLift.value as THREE.Color).copy(L.gradeLift);
     g.uNight.value = L.gradeNight;
+    g.uRain.value = L.rain;
+    // the streak layer is compiled in only while it is raining (a shader branch on a uniform still costs the full-screen pass)
+    const defs = this.grade.material.defines as Record<string, string>;
+    const hasRain = 'TG_RAIN' in defs;
+    const wantRain = hasRain ? L.rain > 0.01 : L.rain > 0.02;
+    if (wantRain !== hasRain) {
+      if (wantRain) defs.TG_RAIN = '1'; else delete defs.TG_RAIN;
+      this.grade.material.needsUpdate = true;
+    }
+    g.uTime.value = this.shared.time.value;
     this.bloom.strength = (this.quality === 'high' ? 1 : 0.85) * L.bloom;
   }
 

@@ -58,6 +58,18 @@ const ROCK_COLOR = new THREE.Color('#8d7f6a');
 const CURE_KEYS: [number, number][] = [
   [0, 0.03], [0.6, 0.06], [1.0, 0.12], [1.25, 0.24], [1.5, 0.6], [1.8, 0.92], [2.0, 1.0], [3.5, 1.0], [3.8, 0.5], [4.0, 0.03],
 ];
+/**
+ * Cottonwood leaf cover across the year: [season, leaf amount]. Bare through winter and into early spring, buds and small leaves
+ * by mid spring, full by early summer, thinning from mid autumn. The old table interpolated half-season keys around the year
+ * wrap (late winter 0.1 to early spring 0.45), so crowns were already half green in late winter.
+ */
+const LEAF_KEYS: [number, number][] = [
+  [0, 0.05], [0.3, 0.14], [0.55, 0.5], [0.8, 0.9], [1.05, 1.0], [1.5, 1.0], [2.0, 0.88], [2.5, 0.4], [3.0, 0.08], [3.6, 0.05], [4.0, 0.05],
+];
+/** Seasonal snowpack: [season, cover] (0..1 of the snow uniform). Builds from early winter, peaks mid winter, melts out by early spring. */
+const PACK_KEYS: [number, number][] = [
+  [0, 0], [3.1, 0], [3.35, 0.3], [3.5, 0.36], [3.7, 0.3], [3.9, 0.06], [4.0, 0],
+];
 function keyCurve(keys: [number, number][], s: number): number {
   const t = ((s % 4) + 4) % 4;
   for (let i = 0; i < keys.length - 1; i++) {
@@ -147,6 +159,7 @@ export class Engine {
   private firstFrame = true;
   private lastTick = 0;
   private frostSm = 0;
+  private rainSm = 0;
   private tickPool = 0;
   private _focus = new THREE.Vector3();
   /** Fade tree canopies and trunks out of the line between the camera and the point it watches (default on). */
@@ -461,9 +474,11 @@ export class Engine {
     // 10x or 100x) instead of popping when the weather flips. Sim time comes from env.tick (10 ticks per second at 1x);
     // pages that never advance the tick (dev pages) fall back to real time. Paused sim = frozen weather state.
     const w = env.weather;
-    const overTarget = w === 3 ? 0.9 : w === 1 ? 0.45 + 0.4 * env.rain : w === 4 ? 0.38 : 0;
+    const overTarget = w === 3 ? 0.95 : w === 1 ? 0.8 + 0.15 * env.rain : w === 4 ? 0.4 : 0;
+    // visible rain (streaks in the grade pass): rain and storm only, building at once rather than with the sim's slow rain value
+    const rainTarget = w === 3 ? 1 : w === 1 ? 0.55 + 0.45 * env.rain : 0;
     const snowTarget = w === 4 ? 1 : 0;
-    const wetTarget = w === 1 || w === 3 ? clamp(0.3 + env.rain, 0, 1) : w === 4 ? 0.2 : 0;
+    const wetTarget = w === 1 || w === 3 ? clamp(0.55 + env.rain, 0, 1) : w === 4 ? 0.2 : 0;
     let simTicks: number;
     if (this.firstFrame) simTicks = 1e6;
     else if (env.tick === 0) simTicks = dt * 10;
@@ -492,9 +507,11 @@ export class Engine {
       const kReal = floor > 0 && !this.firstFrame ? dt / floor : Infinity;
       return cur + (target - cur) * (1 - Math.exp(-Math.min(kSim, kReal)));
     };
-    sm.overcast = ease(sm.overcast, overTarget, 160);
+    sm.overcast = ease(sm.overcast, overTarget, overTarget > sm.overcast ? 60 : 160);
+    this.rainSm = ease(this.rainSm, rainTarget, rainTarget > this.rainSm ? 25 : 70);
+    if (rainTarget === 0 && this.rainSm < 0.02) this.rainSm = 0;
     sm.snow = ease(sm.snow, snowTarget, snowTarget > sm.snow ? 320 : 220, snowTarget > sm.snow ? 7 : 9);
-    sm.wet = ease(sm.wet, wetTarget, 200);
+    sm.wet = ease(sm.wet, wetTarget, wetTarget > sm.wet ? 90 : 200);
     // the eased values only approach their targets asymptotically: snap the last trace to zero so no ghost snow or frost lingers
     if (snowTarget === 0 && sm.snow < 0.03) sm.snow = 0;
     if (wetTarget === 0 && sm.wet < 0.02) sm.wet = 0;
@@ -507,12 +524,19 @@ export class Engine {
     this.frostSm = this.firstFrame ? frostTarget : this.frostSm + (frostTarget - this.frostSm) * (1 - Math.exp(-simTicks / (90 * cal)));
     if (frostTarget === 0 && this.frostSm < 0.01) this.frostSm = 0;
     u.frost.value = this.frostSm;
-    u.snow.value = sm.snow;
+    // effective snow: the weather's own snowfall, or the seasonal pack that lies on a deep-winter valley even when it is not snowing
+    // (the pack follows the calendar directly; it is a slow curve, so it needs no easing of its own)
+    u.snow.value = Math.max(sm.snow, keyCurve(PACK_KEYS, u.season.value));
+    u.rain.value = this.rainSm;
+    this.lighting.rain = this.rainSm;
     u.wet.value = sm.wet;
     u.rock.value.copy(ROCK_COLOR);
 
     const L = this.lighting;
     // lights
+    // under cloud the sun is a soft glow: shadows lose their edge and most of their depth
+    this.sun.shadow.intensity = 0.92 * (1 - 0.82 * sm.overcast);
+    this.sun.shadow.radius = 1.8 + 2.4 * sm.overcast;
     this.sun.position.copy(u.lightDir.value);
     this.sun.color.copy(u.lightColor.value);
     this.sun.intensity = 1;
@@ -588,7 +612,7 @@ export class Engine {
     u.leafColorB.value.copy(ca.lB).lerp(cb.lB, t);
     u.greenHigh.value = lerp(a.gH, b.gH, t);
     u.greenLow.value = lerp(a.gL, b.gL, t);
-    u.leafAmount.value = lerp(a.leaf, b.leaf, t);
+    u.leafAmount.value = keyCurve(LEAF_KEYS, s);
     this.trees.setLeafAmount(u.leafAmount.value);
 
     // terrain grass color = the blade layer's own palette (probes into grassTint, see grass.ts), so ground and blades match
