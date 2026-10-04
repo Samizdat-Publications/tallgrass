@@ -4,6 +4,13 @@ export default defineConfig({
   base: './',
   worker: { format: 'es' },
   build: { target: 'es2022', chunkSizeWarningLimit: 2000 },
-  server: { port: 5199, strictPort: true },
+  // don't scan or watch the big non-source folders: with them, a dev server (and every capture tool built on one) took
+  // minutes to start
+  server: {
+    port: 5199,
+    strictPort: true,
+    watch: { ignored: ['**/scratch/**', '**/.venv/**', '**/review/**', '**/dist/**', '**/journey/**', '**/art/**'] },
+  },
+  optimizeDeps: { entries: ['index.html'] },
   preview: { port: 5198, strictPort: true },
 });
