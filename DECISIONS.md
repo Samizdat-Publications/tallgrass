@@ -135,3 +135,6 @@ One line each: decision | why | alternative rejected.
 - Review videos are no longer committed (`review/**/*.mp4` is gitignored); review stills go in as JPEG q90.
 
 ### Log
+- 2026-10-04 R0.3 tone mapping: keep ACES. | Side-by-side at __concept() (review/wip/R0/tonemap_sheet.jpg): Neutral is a touch warmer but pushes the sky orange; AgX washes everything grey. Gemini concept match: ACES 4, Neutral 4 (Neutral palette 3, grass 3). The gap to the concept is albedo, haze and water (R2), not the tone curve. DESIGN.md's AgX line is stale. | Rejected: Neutral (no measured gain, riskier for night and winter), AgX (flat).
+- 2026-10-04 R0.5 concept view: __concept() frames the creek bend with the most trees nearby, pitch 19, distance 200, view 35 degrees right of the sun azimuth (backlit), dayFrac 0.28, season 1.8. Baseline concept match 4/10. | It matches the concept's drone oblique with the horizon in frame. | Rejected: the first, high top-down framing (3/10, wrong composition).
+- 2026-10-04 Two-track merge timing: Track R works R1 and R2 in worktrees while Track S has not pushed S0 yet; R0 item 2 waits for S0. | Keeps the GPU track busy. | Rejected: idling until S0 lands.
