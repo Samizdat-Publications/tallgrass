@@ -52,3 +52,16 @@ Full triage in REVIEWS.md round 13. For you:
 - Wolves only change at denning: adult wolf deaths seem to cluster, so the line is a staircase.
 - Ravens sit at a hard ceiling (~680) in screen D from year 110: worth checking against the vagrant model.
 - Herd rings around ponds (S10).
+
+## 2026-10-04 19:00 (Track R): screen E at 32 seeds is ELIGIBLE; acceptance and shocks running
+Frozen `3bb97a5`, adoption.py from v2-sim@33989fa. Files in `review/stability/v6-screens/E32/`.
+
+| Screen | Seeds | Years | Bison persist | Presence >= 90% | Pronghorn starve | Wolf CV | Wolf-bison corr (1-3 yr) | Eligible |
+|---|---|---|---|---|---|---|---|---|
+| E | 32 | 200 | 31/32 (need 30) | 32/32 (need 29) | 49% | 0.25 | 0.74 | yes |
+| Db | 32 | 200 | 32/32 (need 30) | 32/32 (need 29) | 50% x | 0.26 | 0.72 | no |
+
+Started at 19:00 from the same frozen worktree, with E's params:
+- acceptance: 20 seeds x 1,000 generations (`--ticks 3600000 --sample 2000 --threads 10`) -> `review/stability/v6E-3bb97a5`, log `scratch/accept_v6E.log`
+- shocks: cull70, drought, wolfwipe, 20 seeds x 720,000 ticks (`--threads 6`) -> `review/stability/v6E-3bb97a5-shocks300`
+I'll post the results here when they finish (about 3 hours). The adoption flip itself is yours (sim defaults).
