@@ -65,3 +65,25 @@ Gemini video: Visual 4, Readability 8, Life and motion 1, Ecosystem 6 (was 4), U
 | 10 | Story moments not staged; founders have no story | FIX | UI + lead | Founder backstory line; director prefers animals with something happening. |
 | G3 | Turning on a pivot (Gemini) | FIX | animals builder | Render-side heading smoothing and banking. |
 | G6 | Static camera during fast-forward (Gemini) | FIX | lead | Idle drift at 10x and 100x. |
+
+## Round 5 (23:10, stills + v5 charts incl. 60-year close-up and 300-year shocks; Gemini video) -> `review/round-05/critique.md`, `review/round-05-video/reel.gemini.md`
+Stills critic: Visual 6, Readability 4, Life 5, Ecosystem 5, UI 7, Keep watching 5.
+Gemini video: Visual 5, Readability 8, Life and motion 3 (was 1), Ecosystem 6, UI 9, Keep watching 5 (was 3).
+
+| # | Issue | Triage | Owner | Notes |
+|---|---|---|---|---|
+| 1 | Predation off-camera | FIX (done) + animals builder | lead | The documentary director is now the default camera when idle (25 s without input), with shot angles chosen for a clear line of sight. Wolf contrast at distance: animals builder. |
+| 2 | Dynamics read as noise; wolves flat; ravens capped | DEFER (documented) | lead | v6 research showed faster predator response costs pronghorn persistence over centuries; a calendar re-scale is the real fix. 60-year close-up chart added. |
+| 3 | First hour is a decline | FIX (screen) | lead | Starting near the long-run means (bison 550, pronghorn 450) screening at 100 years. |
+| 4 | White patches in summer; snow as sand; moonlit grass as snow; lawn-green spring | FIX | lead (done: snow lag after fast-forward) + renderer builder | |
+| 5 | Distant land like a desert | FIX | renderer builder | Keep frame cost flat (1440p is at 16 to 17.5 ms on an RTX 5070 Ti Laptop). |
+| 6 | Evolution plateaus | DEFER | lead | loneIndividual works for herding but is part of the rejected v6 package. |
+| 7 | Herds as donuts and clumps | DEFER | lead | herdNearest rejected (persistence). |
+| 8 | A drought can end the wolves | DEFER (design) | lead | Closed valley by design for the stats; the 300-year drought test keeps wolves in 16 of 20 worlds and recovers 80%. |
+| 9 | Burnt trees, pronghorn glow, red sick bison | FIX | renderer + animals builders | |
+| 10 | Graph label collisions, flat sparklines, cut-off chronicle | FIX | UI builder | |
+| G1 | Gallop slides at chase speed | FIX | animals builder | Chases reach about 27 m/s on screen; cadence cap and gallop stride. |
+| G3 | Rigid follow judder in hunt shots | FIX | lead | Director follow with lazier smoothing. |
+| G4 | Weightless kills | FIX | animals builder | Stagger before the roll. |
+| G6 | Chapter cards linger at 100x | FIX | UI builder | |
+| G7 | Shadow flicker | FIX | renderer builder | |
