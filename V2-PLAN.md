@@ -1285,7 +1285,7 @@ Render-side only, driven by sim state plus an id hash; no sim change.
 
 ### Sound and lens
 
-**R14. Music and sound** [R, M]
+**R14. Music and sound** [R, M] (done 2026-10-04: music via ElevenLabs, rut, cranes audio, blizzard, grasshoppers; crane V-formation render still to do)
 - **Music:** use ElevenLabs if its music API is available.
   - 5 cues, 60 to 120 s loops: dawn, day, tension, night, storm or winter.
   - A tension index (chases, kills, die-offs, storms) drives the crossfades.
