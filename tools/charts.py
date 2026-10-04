@@ -11,7 +11,7 @@ Each scenario folder gets, at 150 dpi:
     stability_overview.png  (f) one page a human can read at a glance
 and the run folder gets a combined stability_overview.png (scenarios x species).
 With --log the population charts use a symmetric-log axis and the files get a _log suffix.
-Time is shown in years (1 year = 2400 ticks); big charts add a ticks axis on top.
+Time is shown in years (1 year = 2400 ticks unless meta.json records another yearTicks); big charts add a ticks axis on top.
 """
 
 from __future__ import annotations
@@ -251,7 +251,7 @@ def add_ticks_axis(ax, label=True):
 
 
 def xlabel_years(ax):
-    ax.set_xlabel("time (years; 1 year = 2400 ticks)")
+    ax.set_xlabel(f"time (years; 1 year = {YEAR:,.0f} ticks)")
 
 
 def label_bottom_axes(axes):
@@ -757,6 +757,9 @@ def main() -> int:
     if not root.is_dir():
         print(f"not a folder: {root}", file=sys.stderr)
         return 2
+    # runs from a re-scaled calendar record their own year length
+    global YEAR
+    YEAR = float(load_meta(root).get("mode", {}).get("yearTicks", YEAR))
     scs = find_scenarios(root)
     if not scs:
         print(f"no seed_*.csv files found under {root}", file=sys.stderr)
