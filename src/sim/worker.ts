@@ -246,8 +246,10 @@ function loop(): void {
     }
   } else if (speed > 0) {
     acc += (dt / 1000) * TICKS_PER_SECOND * speed;
-    // budget ~11 ms per slice so the worker stays responsive at 100x
-    while (acc >= 1 && performance.now() - t0 < 11) {
+    // step for most of each 16 ms frame at fast-forward (the worker has its own core), less at 1x and 10x where a
+    // slice is only a few ticks anyway; messages from the page are still handled between slices
+    const budget = speed >= 50 ? 24 : 11;
+    while (acc >= 1 && performance.now() - t0 < budget) {
       sim.step(1);
       record();
       acc -= 1;
@@ -264,7 +266,8 @@ function loop(): void {
     rateWindowStart = now;
   }
   post(false);
-  setTimeout(loop, 16);
+  // aim for a slice every 16 ms of wall time rather than 16 ms of idle after each slice
+  setTimeout(loop, Math.max(1, 16 - (performance.now() - now)));
 }
 
 ctx.onmessage = (e: MessageEvent<ToWorker>) => {
