@@ -19,6 +19,7 @@
 import * as THREE from 'three';
 import type { World } from '../sim/world';
 import type { EnvState } from '../sim/types';
+import { CURE_KEYS, SEED_KEYS, SEASON_GLSL, keyCurve, smooth01, winterK } from './season';
 
 export interface GrassOptions {
   quality?: 'high' | 'medium';
@@ -122,33 +123,7 @@ const DRY_KEYS: PalKey[] = [
   [3.6, 0x6e6046, 0xab9b78, 0xd0c4a0],
   [4.0, 0x5a4a28, 0x8f7a4a, 0xbba46a],
 ];
-// how cured the grass is across the year: [season, cure]
-const CURE_KEYS: [number, number][] = [
-  [0, 0.03], [0.6, 0.06], [1.0, 0.12], [1.25, 0.24], [1.5, 0.6], [1.8, 0.92], [2.0, 1.0], [3.5, 1.0], [3.8, 0.5], [4.0, 0.03],
-];
-// fraction of tall blades carrying a seed head
-const SEED_KEYS: [number, number][] = [
-  [0, 0.0], [0.9, 0.0], [1.3, 0.04], [1.8, 0.12], [2.2, 0.18], [3.0, 0.14], [3.6, 0.04], [4.0, 0.0],
-];
-
-function smooth01(t: number): number {
-  t = Math.max(0, Math.min(1, t));
-  return t * t * (3 - 2 * t);
-}
-
-function keyCurve(keys: [number, number][], s: number): number {
-  const t = ((s % 4) + 4) % 4;
-  for (let i = 0; i < keys.length - 1; i++) {
-    const [a, va] = keys[i];
-    const [b, vb] = keys[i + 1];
-    if (t >= a && t <= b) {
-      const f = (t - a) / (b - a);
-      const e = f * f * (3 - 2 * f);
-      return va + (vb - va) * e;
-    }
-  }
-  return keys[keys.length - 1][1];
-}
+// the cure, seed-head and winter curves and the riparian season factors live in season.ts (shared with the ground shader and engine)
 
 const _c0 = new THREE.Color();
 const _c1 = new THREE.Color();
@@ -309,6 +284,7 @@ uint pcg(uint v) {
 }
 float u01(uint h) { return float(h) * (1.0 / 4294967296.0); }
 
+${SEASON_GLSL}
 // same hash and value noise as the ground shader (common.ts NOISE_GLSL), for the riparian belt's width
 float rpHash(vec2 p) { vec3 p3 = fract(vec3(p.xyx) * .1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
 float rpNoise(vec2 p) {
@@ -554,8 +530,8 @@ void main() {
     float wdw = -16.0 * log(max(st1.g, 1e-3));
     float ripBroad = rpNoise(p * 0.011 + vec2(31.7, 12.3)) * 0.6 + rpNoise(p * 0.027 + vec2(7.3, 55.1)) * 0.4;
     float ripW = mix(20.0, 50.0, smoothstep(0.22, 0.66, ripBroad)) * (0.85 + 0.3 * rpNoise(p * 0.07 + vec2(3.1, 91.7)));
-    rip = (1.0 - smoothstep(0.3 * ripW, ripW, wdw)) * mix(1.0, 0.8, uCure) * (1.0 - 0.9 * uWinterK);
-    dry = mix(dry, min(dry, 0.02 + 0.12 * uCure + 0.4 * stub), rip);
+    rip = tgRiparian(1.0 - smoothstep(0.3 * ripW, ripW, wdw), uCure, uWinterK);
+    dry = tgRiparianDry(dry, uCure, stub, rip);
   }
 
   vUv = vec2(side, vg);
@@ -1130,11 +1106,8 @@ export class GrassField {
     seasonColor(DRY_KEYS, env.season, 1, u.uDryM.value);
     seasonColor(DRY_KEYS, env.season, 2, u.uDryT.value);
     u.uCure.value = keyCurve(CURE_KEYS, env.season);
-    {
-      // same winter curve as the ground shader's winterK, for the riparian belt
-      const ws = ((env.season % 4) + 4) % 4;
-      u.uWinterK.value = smooth01((ws - 2.5) / 0.5) * (1 - smooth01((ws - 3.6) / 0.35));
-    }
+    // same winter curve as the ground shader's winterK (season.ts), for the riparian belt
+    u.uWinterK.value = winterK(env.season);
     u.uSeedFrac.value = keyCurve(SEED_KEYS, env.season);
     {
       const sn = ((env.season % 4) + 4) % 4;
