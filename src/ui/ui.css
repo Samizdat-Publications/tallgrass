@@ -2298,14 +2298,14 @@ button.tg-ent-b:hover {
   position: absolute;
   left: 50%;
   top: 50%;
-  width: min(96vw, calc(1060 * var(--u)));
-  height: calc(300 * var(--u));
+  width: min(96vw, calc(900 * var(--u)));
+  height: calc(250 * var(--u));
   transform: translate(-50%, -50%);
   background: radial-gradient(closest-side, rgba(16, 11, 4, 0.5), rgba(16, 11, 4, 0.26) 55%, transparent);
   z-index: -1;
 }
 .tg-chapter-title {
-  font: italic 400 clamp(calc(34 * var(--u)), 4vw, calc(61 * var(--u))) / 1.04 var(--serif);
+  font: italic 400 clamp(calc(30 * var(--u)), 3.3vw, calc(50 * var(--u))) / 1.04 var(--serif);
   letter-spacing: -0.004em;
   text-shadow: 0 2px 28px rgba(0, 0, 0, 0.6), 0 1px 3px rgba(0, 0, 0, 0.45);
   text-wrap: balance;
