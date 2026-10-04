@@ -2480,6 +2480,14 @@ export class Sim implements SimLike {
     row.thirst_wolf = this.cThirst[Sp.Wolf];
     row.old_wolf = this.cOld[Sp.Wolf];
     row.killed_bison = this.cKilled[Sp.Bison];
+    // the same death and birth counts for every agent species, where the columns above do not have them already, so the
+    // tools can read any species' causes of death (killed counts every predator, not just wolves)
+    for (const d of SPECIES) {
+      if (d.repr !== 'agent') continue;
+      const k = d.key;
+      const cols: [string, number][] = [['births_', this.cBirths[d.id]], ['starved_', this.cStarve[d.id]], ['old_', this.cOld[d.id]], ['thirst_', this.cThirst[d.id]], ['killed_', this.cKilled[d.id]]];
+      for (const [pre, v] of cols) if (!((pre + k) in row)) row[pre + k] = v;
+    }
     let packs = 0;
     for (let pk = 0; pk < MAX_PACKS; pk++) packs += this.packAlive[pk];
     row.packs = packs;

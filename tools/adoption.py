@@ -6,8 +6,8 @@ Per screen, over its seeds:
   bison persist        seeds whose final bison count is > 0
   presence >= 90%      seeds where wolves, pronghorn and ravens are each present (pop > 0) in >= 90% of samples
   pronghorn starve     median share of pronghorn deaths that are starvation, after burn-in
-                       (deaths = kills_pronghorn + starved_pronghorn + old_pronghorn + thirst_pronghorn, where present;
-                       emigrants are not deaths)
+                       (deaths = killed + starved + old + thirst; CSVs before the generic death columns have only
+                       kills_pronghorn (wolf kills) and no old age, so their share reads high; emigrants are not deaths)
   wolf CV              median CV of annual mean wolf counts, after burn-in
   wolf-bison corr      median over seeds of the best correlation corr(bison[t], wolf[t+L]) for L in 1..3 years
 Thresholds scale with the seed count: the plan's "30 of 32" and "29 of 32" become ceil(n * 30/32) and ceil(n * 29/32).
@@ -66,7 +66,9 @@ def screen_stats(d, scenario, burn):
         if len(rs) < 2:
             continue
         g = lambda k: sum(float(r.get(k) or 0) for r in rs)
-        deaths = g('kills_pronghorn') + g('starved_pronghorn') + g('old_pronghorn') + g('thirst_pronghorn')
+        # killed_pronghorn (every predator) when the CSV has it, else kills_pronghorn (wolf kills only, older CSVs)
+        killed = g('killed_pronghorn') if 'killed_pronghorn' in rs[0] else g('kills_pronghorn')
+        deaths = killed + g('starved_pronghorn') + g('old_pronghorn') + g('thirst_pronghorn')
         if deaths:
             starve.append(g('starved_pronghorn') / deaths)
         w = annual(rs, 'pop_wolf')
