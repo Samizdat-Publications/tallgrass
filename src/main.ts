@@ -13,7 +13,8 @@ import { challengeById } from './challenges';
 import { Director } from './director';
 import { AudioDirector } from './audio/audio';
 import { Narrator } from './audio/narrator';
-import { countNearby, nearWater01 } from './audio/inputs';
+import { countNearby, nearWater01, scanTension } from './audio/inputs';
+import type { TensionSample } from './audio/music';
 import { DAY_TICKS, setCalendarScale, Sp, YEAR_TICKS, type Intervention, type Snapshot } from './sim/types';
 import { applyOverrides, defaultParams } from './sim/params';
 import { isPredator } from './sim/species';
@@ -289,6 +290,7 @@ const sun = { dir: engine.uniforms.lightDir.value, color: engine.uniforms.lightC
 let fpsAcc = 0, fpsN = 0;
 let audioFrame = 0;
 let nearbyCache = { bison: 0, wolf: 0, raven: 0, pronghorn: 0 };
+let tensionCache: TensionSample | null = null;
 const heardDeaths = new Map<number, number>();
 // field notes: a fresh carcass with a predator beside it is a kill; one the documentary camera caught close to its focus
 // earns "The documentary camera films a kill"
@@ -331,8 +333,8 @@ engine.onFrame((dt, t) => {
     const cp = engine.camera.position; // three x = sim x, three z = sim y
     const camHeight = Math.max(0, cp.y - engine.groundHeight(cp.x, cp.z));
     audioFrame++;
-    if ((audioFrame & 3) === 0) nearbyCache = countNearby(pending.agents, pending.count, cp.x, cp.z, 250);
-    audio.update(dt, { env: pending.env, camX: cp.x, camY: cp.z, camHeight, speed: pending.speed, nearby: nearbyCache, nearWater: nearWater01(world, cp.x, cp.z) });
+    if ((audioFrame & 3) === 0) { nearbyCache = countNearby(pending.agents, pending.count, cp.x, cp.z, 250); tensionCache = scanTension(pending.agents, pending.count, cp.x, cp.z, pending.carcasses, pending.carcassCount); }
+    audio.update(dt, { env: pending.env, camX: cp.x, camY: cp.z, camHeight, speed: pending.speed, nearby: nearbyCache, nearWater: nearWater01(world, cp.x, cp.z), tension: tensionCache });
     if (!skipping) for (const ev of pendingEvents) if (ev.x !== 0 || ev.y !== 0) audio.onEvent(ev, Math.hypot(ev.x - cp.x, ev.y - cp.z, camHeight));
     if (!skipping) narrator.onEvents(pendingEvents, pending.tick);
     narrator.update({ filming: autoCam || cinematicOn, speed: pending.speed });
