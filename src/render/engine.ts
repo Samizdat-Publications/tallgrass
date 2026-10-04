@@ -26,6 +26,10 @@ export type { Quality } from './post';
 export { injectTerrainShadow } from './common';
 export type { SharedUniforms } from './common';
 
+/** Fixed steps for the shadow range and the camera near plane (see updateEnvState). */
+const SHADOW_RANGES = [140, 190, 260, 360, 500, 700, 900];
+const NEAR_STEPS = [0.25, 0.4, 0.65, 1, 1.6, 2.5, 4, 5];
+
 const DEFAULT_ENV: EnvState = {
   tick: 0, year: 0, season: 1.2, dayFrac: 0.3, weather: 0, rain: 0, windDir: 0.35, windStrength: 0.35, warmth: 0.7,
 };
@@ -65,6 +69,31 @@ function keyCurve(keys: [number, number][], s: number): number {
   }
   return keys[keys.length - 1][1];
 }
+
+/**
+ * Sun shadow filter. three's PCF takes 5 rotated taps with one UV offset for both axes, but the two cascades sit side by side in one
+ * atlas (twice as wide as tall), so the kernel came out half as tall as wide in texels and, with only 5 binary-ish taps, it dithered
+ * into jagged, flickering edges as shadows moved. This keeps the same Vogel disk rotated per pixel but works in true texels on
+ * both axes and takes 8 taps, so penumbrae are round, smoother and steadier. Patched once at module load, before any program compiles.
+ */
+function patchShadowFilter(): void {
+  const chunk = THREE.ShaderChunk as unknown as Record<string, string>;
+  const src = chunk.shadowmap_pars_fragment;
+  if (!src || src.includes('tgShadowTaps')) return;
+  const a = src.indexOf('float radius = shadowRadius * texelSize.x;');
+  const b = src.indexOf(') * 0.2;', a);
+  if (a < 0 || b < 0) { console.warn('tallgrass: shadow filter patch skipped (three chunk layout changed)'); return; }
+  const body = `vec2 radius = shadowRadius * texelSize;
+				// tgShadowTaps: Vogel disk, rotated per pixel
+				float phi = interleavedGradientNoise( gl_FragCoord.xy ) * PI2;
+				shadow = 0.0;
+				for ( int i = 0; i < 8; i ++ ) {
+					shadow += texture( shadowMap, vec3( shadowCoord.xy + vogelDiskSample( i, 8, phi ) * radius, shadowCoord.z ) );
+				}
+				shadow *= 0.125;`;
+  chunk.shadowmap_pars_fragment = src.slice(0, a) + body + src.slice(b + ') * 0.2;'.length);
+}
+patchShadowFilter();
 
 export interface EngineOptions {
   quality?: Quality;
@@ -111,7 +140,9 @@ export class Engine {
   private sm: Smoothed = { overcast: 0, snow: 0, wet: 0 };
   private resizeObs: ResizeObserver | null = null;
   private lastNear = 0;
-  private shadowRange = 300;
+  private nearIdx = 0;
+  private rangeIdx = 3;
+  private shadowRange = 360;
   private firstFrame = true;
   private lastTick = 0;
   private frostSm = 0;
@@ -185,7 +216,8 @@ export class Engine {
     this.sun.shadow.camera.far = this.shadowRange;
     this.sun.shadow.bias = -0.0004;
     this.sun.shadow.normalBias = 0.25;
-    this.sun.shadow.radius = 2;
+    this.sun.shadow.radius = 1.8;
+    this.sun.shadow.intensity = 0.92;
     this.hemi = new THREE.HemisphereLight(0xffffff, 0x886644, 1);
 
     this.scene.userData.tgUniforms = this.uniforms;
@@ -477,22 +509,39 @@ export class Engine {
     this.hemi.intensity = L.hemiIntensity;
     this.renderer.toneMappingExposure = L.exposure * this.exposure;
 
-    // shadow range follows how far the camera looks: tight when low and close, whole valley when high
-    const range = clamp(this.cam.distance * 1.7 + 80, 140, 900);
-    if (Math.abs(range - this.shadowRange) > 2) {
-      this.shadowRange = range;
-      this.sun.shadow.camera.far = range;
+    // Shadow range follows how far the camera looks: tight when low and close, whole valley when high. The cascade split and
+    // texel size depend on the range and on the camera's near plane, so a value that creeps with every frame makes every shadow
+    // texel swim. Both snap to a few fixed steps (with hysteresis), so shadows hold still while the camera moves and re-fit
+    // only when it really changes scale.
+    const rawRange = clamp(this.cam.distance * 1.7 + 80, 140, 900);
+    {
+      let i = this.rangeIdx;
+      while (i < SHADOW_RANGES.length - 1 && rawRange > SHADOW_RANGES[i]) i++;
+      while (i > 0 && rawRange < SHADOW_RANGES[i - 1] * 0.9) i--;
+      this.rangeIdx = i;
+      const range = SHADOW_RANGES[i];
+      if (range !== this.shadowRange) {
+        this.shadowRange = range;
+        this.sun.shadow.camera.far = range;
+      }
     }
 
-    // dynamic near plane keeps depth precision good from ground level to the wide view
+    // dynamic near plane keeps depth precision good from ground level to the wide view (stepped, same reason)
     const camY = this.camera.position.y;
     const aboveGround = Math.max(0, camY - this.terrain.heightAt(this.camera.position.x, this.camera.position.z));
-    const near = clamp(0.25 + aboveGround * 0.02, 0.25, 5);
-    if (Math.abs(near - this.lastNear) / near > 0.08) {
-      this.lastNear = near;
-      this.camera.near = near;
-      this.camera.far = 9000;
-      this.camera.updateProjectionMatrix();
+    const rawNear = clamp(0.25 + aboveGround * 0.02, 0.25, 5);
+    {
+      let i = this.nearIdx;
+      while (i < NEAR_STEPS.length - 1 && rawNear > NEAR_STEPS[i + 1] * 1.15) i++;
+      while (i > 0 && rawNear < NEAR_STEPS[i] * 0.85) i--;
+      this.nearIdx = i;
+      const near = NEAR_STEPS[i];
+      if (near !== this.lastNear) {
+        this.lastNear = near;
+        this.camera.near = near;
+        this.camera.far = 9000;
+        this.camera.updateProjectionMatrix();
+      }
     }
     this.sky.follow(this.camera);
     this.trees.update(this.camera.position);

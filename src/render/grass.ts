@@ -99,15 +99,15 @@ type Level = {
 type PalKey = [number, number, number, number]; // season, base, mid, tip (sRGB hex)
 // living grass: fresh spring green, blue-green summer tallgrass, olive late season, dull straw-green in winter
 const GREEN_KEYS: PalKey[] = [
-  [0.0, 0x2f5a1e, 0x66a032, 0xa4d05a],
-  [0.5, 0x2a5420, 0x5a9638, 0x98c460],
-  [1.0, 0x234a2c, 0x4c8050, 0x86b084],
-  [1.5, 0x2a4a26, 0x587f40, 0x93b062],
+  [0.0, 0x34502a, 0x72904a, 0xaabf70],
+  [0.5, 0x2f4c2c, 0x6d8c48, 0xa4bc6e],
+  [1.0, 0x2c4a34, 0x688848, 0x9db476],
+  [1.5, 0x2e4a2a, 0x66833f, 0x9aae62],
   [2.0, 0x33452a, 0x66773a, 0x9aa05a],
   [2.5, 0x3a4528, 0x6d703a, 0x9c9a58],
   [3.0, 0x44482a, 0x74763e, 0x9c9a5c],
   [3.5, 0x44482a, 0x74763e, 0x9c9a5c],
-  [4.0, 0x2f5a1e, 0x6aa332, 0xa8d45a],
+  [4.0, 0x34502a, 0x72904a, 0xaabf70],
 ];
 // cured grass: thatch, early straw-gold, concept-art gold, amber, russet, pale winter straw
 const DRY_KEYS: PalKey[] = [
@@ -118,8 +118,8 @@ const DRY_KEYS: PalKey[] = [
   [1.9, 0x74481a, 0xcc8c2e, 0xf0bc62],
   [2.3, 0x6a3c16, 0xb8742a, 0xe09a48],
   [2.7, 0x5a2c12, 0xa4562a, 0xd07e3c],
-  [3.1, 0x80704a, 0xbfae7e, 0xdccfa2],
-  [3.6, 0x80704a, 0xbfae7e, 0xdccfa2],
+  [3.1, 0x6e6046, 0xab9b78, 0xd0c4a0],
+  [3.6, 0x6e6046, 0xab9b78, 0xd0c4a0],
   [4.0, 0x5a4a28, 0x8f7a4a, 0xbba46a],
 ];
 // how cured the grass is across the year: [season, cure]
@@ -688,11 +688,13 @@ void main() {
 #endif
   }
   albedo = mix(albedo, uAsh, burn);
+  // moonlit grass stays grass: a little darker and cooler toward teal, never silver
+  albedo *= mix(vec3(1.0), vec3(0.74, 0.95, 0.93), uMoon);
   // snow on the blades: starts at the tips and in the patches where it settles first, so the field greys and whitens gradually
   {
     float snowPatch = 0.3 + 0.7 * vP2.w;
     float snowK = clamp(uSnow * 1.35 - 0.1 - (1.0 - snowPatch) * 0.55, 0.0, 1.0) * (0.3 + 0.7 * smoothstep(0.2, 1.0, v)) * (1.0 - burn);
-    albedo = mix(albedo, vec3(0.8, 0.8, 0.82), snowK * 0.78);
+    albedo = mix(albedo, vec3(0.8, 0.81, 0.85), snowK * 0.78);
   }
 
   // ---- lighting
@@ -708,7 +710,7 @@ void main() {
   vec3 Nl = sn(mix(Nf, Ng, mix(0.4 + 0.5 * farK, 0.97, uMoon)));
   float ndl = dot(Nl, L);
   float wrap = saturate(ndl * 0.8 + 0.2);
-  wrap = mix(wrap, max(wrap, 0.62), max(farK, uMoon));
+  wrap = mix(wrap, max(wrap, mix(0.62, 0.48, uMoon)), max(farK, uMoon));
   vec3 diffuse = albedo * uSunColor * wrap * RECIPROCAL_PI * shadow;
 
   float canopyT = mix(0.35, 1.0, smoothstep(0.0, 0.8, vP2.x));

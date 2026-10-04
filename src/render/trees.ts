@@ -101,7 +101,7 @@ function shellE(x: number, y: number, z: number): number {
   return (x * x + z * z) / (CROWN_A * CROWN_A) + dy * dy;
 }
 
-function buildTreeBark(seed: number, maxLevel: number): THREE.BufferGeometry {
+function buildTreeBark(seed: number, maxLevel: number, tipsOut?: number[]): THREE.BufferGeometry {
   const rng = mulberry32(seed * 104729 + 7);
   const pos: number[] = [], nrm: number[] = [], tw: number[] = [], bas: number[] = [], idx: number[] = [];
   const V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
@@ -178,6 +178,7 @@ function buildTreeBark(seed: number, maxLevel: number): THREE.BufferGeometry {
     const tip = pts[pts.length - 1];
     const outer = shellE(tip.x, tip.y, tip.z) > 0.55;
     tube(pts, radii, maxLevel <= 1 ? 3 : maxLevel <= 2 ? Math.min(L.sides, 4) : L.sides, outer && level >= 3 ? 1 : 0);
+    if (tipsOut && outer && level >= 3) tipsOut.push(tip.x, tip.y, tip.z, pts[0].x, pts[0].y, pts[0].z);
     if (level >= maxLevel) return;
     // children: at the tip, and part way along
     const nKids = level === 1 ? 3 : level === 2 ? 2 + (rng() < 0.5 ? 1 : 0) : 2 + (rng() < 0.6 ? 1 : 0);
@@ -222,6 +223,51 @@ function buildTreeBark(seed: number, maxLevel: number): THREE.BufferGeometry {
   geo.setAttribute('aTw', new THREE.Float32BufferAttribute(tw, 1));
   geo.setAttribute('aBase', new THREE.Float32BufferAttribute(bas, 3));
   geo.setIndex(idx);
+  return geo;
+}
+
+/**
+ * Leaf tufts: one small clump of leaves at the tip of each outer twig (in the bark's own space, so it sits exactly on the twig and
+ * sways with it). When the crown is thin, these are the leaves that cling on, as small clusters at the branch tips; the shell lumps of
+ * the crown take over from a distance. Each carries its twig's base so it grows out with the twig as the leaves drop.
+ */
+function buildTufts(tips: number[], seed: number): THREE.BufferGeometry {
+  const rng = mulberry32(seed * 6151 + 3);
+  const ico = new THREE.IcosahedronGeometry(1, 1);
+  const ip = ico.getAttribute('position');
+  const pos: number[] = [], nrm: number[] = [], occ: number[] = [], lmp: number[] = [], tw: number[] = [], bas: number[] = [];
+  const nTips = tips.length / 6;
+  const stepK = Math.max(1, Math.floor(nTips / 56));
+  const dir = new THREE.Vector3();
+  for (let t = 0; t < nTips; t += stepK) {
+    const tx = tips[t * 6], ty = tips[t * 6 + 1], tz = tips[t * 6 + 2];
+    const bx = tips[t * 6 + 3], by = tips[t * 6 + 4], bz = tips[t * 6 + 5];
+    const rnd = rng();
+    const rad = 0.02 + rng() * 0.014;
+    const ox = (bx - tx) * 0.1, oy = (by - ty) * 0.1 + rad * 0.2, oz = (bz - tz) * 0.1;
+    const sx = 0.9 + rng() * 0.4, sy = 0.75 + rng() * 0.35;
+    for (let v = 0; v < ip.count; v++) {
+      dir.fromBufferAttribute(ip, v).normalize();
+      const n = vnoise2(dir.x * 3.1 + t, dir.y * 2.7 - dir.z * 1.3, seed + 9);
+      const r = rad * (1 + 0.34 * (n - 0.5));
+      pos.push(tx + ox + dir.x * r * sx, ty + oy + dir.y * r * sy, tz + oz + dir.z * r);
+      const nx = dir.x * 0.6, ny = dir.y * 0.6 + 0.3, nz = dir.z * 0.6;
+      const nl = Math.hypot(nx, ny, nz) || 1;
+      nrm.push(nx / nl, ny / nl, nz / nl);
+      occ.push(0.9);
+      lmp.push(rnd);
+      tw.push(1);
+      bas.push(bx, by, bz);
+    }
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  geo.setAttribute('normal', new THREE.Float32BufferAttribute(nrm, 3));
+  geo.setAttribute('aOcc', new THREE.Float32BufferAttribute(occ, 1));
+  geo.setAttribute('aLump', new THREE.Float32BufferAttribute(lmp, 1));
+  geo.setAttribute('aTw', new THREE.Float32BufferAttribute(tw, 1));
+  geo.setAttribute('aBase', new THREE.Float32BufferAttribute(bas, 3));
+  ico.dispose();
   return geo;
 }
 
@@ -296,7 +342,7 @@ const WORLDPOS_GLSL = /* glsl */ `
 vec3 tgFragWorld(){ return cameraPosition + transpose( mat3( viewMatrix ) ) * ( -vViewPosition ); }
 `;
 
-function foliageMaterial(shared: SharedUniforms, shrub: boolean): THREE.MeshStandardMaterial {
+function foliageMaterial(shared: SharedUniforms, shrub: boolean, tuft = false): THREE.MeshStandardMaterial {
   const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 1.0, metalness: 0 });
   // soft cut-out: alpha-to-coverage gives smooth leaf edges on the MSAA scene target instead of screen-door discard
   mat.alphaTest = 0.5;
@@ -312,9 +358,9 @@ function foliageMaterial(shared: SharedUniforms, shrub: boolean): THREE.MeshStan
     shader.vertexShader = shader.vertexShader
       .replace(
         'void main() {',
-        `attribute float aOcc;\nattribute float aLump;\nvarying float vOcc;\nvarying float vLump;\nvarying vec3 vObj;\nuniform float uTime;\nuniform vec3 uWind;\nvoid main() {`,
+        `attribute float aOcc;\nattribute float aLump;\nvarying float vOcc;\nvarying float vLump;\nvarying vec3 vObj;\nuniform float uTime;\nuniform vec3 uWind;\n${tuft ? 'attribute float aTw;\nattribute vec3 aBase;\nuniform float uLeaf;\n' : ''}void main() {`,
       )
-      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvOcc = aOcc; vLump = aLump; vObj = position;')
+      .replace('#include <begin_vertex>', `#include <begin_vertex>\nvOcc = aOcc; vLump = aLump; vObj = position;${tuft ? '\ntransformed = mix( aBase, transformed, smoothstep( 0.82, 0.32, uLeaf ) );' : ''}`)
       .replace('#include <project_vertex>', swayChunk(true));
     const cell = shrub ? '0.42' : '0.5';
     shader.fragmentShader = shader.fragmentShader
@@ -361,7 +407,7 @@ function foliageMaterial(shared: SharedUniforms, shrub: boolean): THREE.MeshStan
           float F1 = 9.0;
           vec3 cid = vec3( 0.0 ), crel = vec3( 0.0 );
           float tone = 0.5, puff = 0.5, puffMask = 1.0;
-          if ( lod < 0.999 ) {
+          if ( lod < 0.999 ${tuft ? '&& false' : ''} ) {
             vec3 pc = wpw / ${cell} - 0.5;
             vec3 ip = floor( pc );
             vec3 fp = pc - ip;
@@ -388,9 +434,27 @@ function foliageMaterial(shared: SharedUniforms, shrub: boolean): THREE.MeshStan
           // leaves: speckle at leaf scale, dropped by the season and more often at silhouettes and on the dark underside
           float fine = tgNoise3( wpw * 8.5 ) * 0.5 + tgNoise3( wpw * 19.0 ) * 0.5;
           float edgeBias = rim * rim * 0.5 + ( 1.0 - occC ) * ${shrub ? '0.12' : '0.2'};
-          float leafThr = keep * 1.05 - edgeBias;
+          ${shrub ? `float leafThr = keep * 1.05 - edgeBias;
           float leafMask = smoothstep( leafThr + 0.07, leafThr - 0.07, fine );
-          float cover = puffMask * leafMask;
+          float cover = puffMask * leafMask;` : `// nearly bare: the last leaves cling in small dense clusters (whole puffs, mostly out at the branch tips) instead of drifting
+          // down one by one into floating dots; the fuller the tree, the more puffs carry leaves and the thinner each one gets
+          float sparse = 1.0 - smoothstep( 0.12, 0.6, keepRaw );
+          float alive = smoothstep( 0.1, 0.17, keepRaw );
+          float cellR = tgHash31( cid + 41.0 );
+          float surv = 0.06 + smoothstep( 0.1, 0.62, keepRaw );
+          float cellOn = 1.0 - smoothstep( surv - 0.08, surv + 0.08, cellR );
+          float keepEff = mix( keep, 0.7 + 0.3 * keep, sparse );
+          float leafThr = keepEff * 1.05 - edgeBias;
+          float leafMask = smoothstep( leafThr + 0.07, leafThr - 0.07, fine );
+          // up close the shell lumps leave a thin crown to the tufts at the twig tips; the shell clusters only show from a distance
+          float shellK = 1.0 - sparse * ( 1.0 - smoothstep( 55.0, 110.0, fdist ) );
+          float cover = puffMask * leafMask * mix( 1.0, cellOn, sparse ) * alive * shellK;
+          ${tuft ? `{
+            float tuftOn = 1.0 - smoothstep( 0.4, 0.62, keepRaw );
+            float survT = 0.2 + 0.8 * smoothstep( 0.1, 0.45, keepRaw );
+            float tuftAlive = 1.0 - smoothstep( survT - 0.06, survT + 0.06, vLump );
+            cover = leafMask * alive * tuftOn * tuftAlive;
+          }` : ''}`}
           gTgFine = fine;
           // distance: a solid canopy with a soft ragged silhouette (a flat partial alpha dithers into smoke under MSAA)
           float farN = tgNoise3( wpw * 1.6 + 4.0 );
@@ -462,16 +526,17 @@ if ( !( dot( normal, normal ) > 0.25 ) ) normal = vec3( 0.0, 1.0, 0.0 );`)
       );
     shader.fragmentShader = injectSafeOutput( shader.fragmentShader );
   };
-  mat.customProgramCacheKey = () => (shrub ? 'tg-shrub-v5' : 'tg-foliage-v5');
+  mat.customProgramCacheKey = () => (shrub ? 'tg-shrub-v5' : tuft ? 'tg-foliage-tuft-v1' : 'tg-foliage-v7');
   return mat;
 }
 
 function barkMaterial(shared: SharedUniforms): THREE.MeshStandardMaterial {
-  const mat = new THREE.MeshStandardMaterial({ color: new THREE.Color('#9a8870'), roughness: 0.96, metalness: 0 });
+  const mat = new THREE.MeshStandardMaterial({ color: new THREE.Color('#aa9c84'), roughness: 0.96, metalness: 0 });
   mat.alphaTest = 0.5;
   mat.alphaToCoverage = true;
   mat.onBeforeCompile = (shader) => {
     injectTerrainShadow(shader, shared);
+    shader.uniforms.uLightDir = shared.lightDir; shader.uniforms.uLightColor = shared.lightColor; shader.uniforms.uSkyMid = shared.skyMid;
     shader.uniforms.uTime = shared.time; shader.uniforms.uWind = shared.wind;
     shader.uniforms.uOccCam = shared.occCam; shader.uniforms.uOccFocus = shared.occFocus; shader.uniforms.uOccParams = shared.occParams;
     shader.uniforms.uLeaf = shared.leafAmount; shader.uniforms.uSnow = shared.snow;
@@ -484,7 +549,7 @@ function barkMaterial(shared: SharedUniforms): THREE.MeshStandardMaterial {
         vBarkPos = transformed;`)
       .replace('#include <project_vertex>', swayChunk(false));
     shader.fragmentShader = shader.fragmentShader
-      .replace('void main() {', `varying vec3 vBarkPos;\nuniform float uSnow;\n${NOISE_GLSL}\n${OCCLUDE_GLSL}\n${WORLDPOS_GLSL}\nvoid main() {`)
+      .replace('void main() {', `varying vec3 vBarkPos;\nuniform float uSnow;\nuniform float uLeaf;\nuniform vec3 uLightDir;\nuniform vec3 uLightColor;\nuniform vec3 uSkyMid;\n${NOISE_GLSL}\n${OCCLUDE_GLSL}\n${WORLDPOS_GLSL}\nvoid main() {`)
       .replace(
         '#include <color_fragment>',
         `#include <color_fragment>
@@ -493,9 +558,9 @@ function barkMaterial(shared: SharedUniforms): THREE.MeshStandardMaterial {
           float fur = tgNoise3(vec3(vBarkPos.x * 160.0, vBarkPos.y * 12.0, vBarkPos.z * 160.0));
           float fur2 = tgNoise3(vec3(vBarkPos.x * 420.0, vBarkPos.y * 30.0, vBarkPos.z * 420.0));
           float lichen = smoothstep(0.72, 0.9, tgNoise3(vBarkPos * 90.0 + 3.0));
-          diffuseColor.rgb *= (0.55 + 0.7 * fur) * (0.85 + 0.3 * fur2);
-          diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.5, 0.55, 0.38), lichen * 0.35);
-          diffuseColor.rgb *= 0.75 + 0.25 * smoothstep(0.0, 0.25, vBarkPos.y);
+          diffuseColor.rgb *= (0.72 + 0.46 * fur) * (0.9 + 0.2 * fur2);
+          diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.5, 0.55, 0.38), lichen * 0.3);
+          diffuseColor.rgb *= 0.86 + 0.14 * smoothstep(0.0, 0.25, vBarkPos.y);
           // twigs and thin branches are paler and warmer toward the tips
           // snow dusting: upward-facing surfaces catch it first (upper sides of limbs, the fork), lightly and unevenly
           vec3 upV = normalize( ( viewMatrix * vec4( 0.0, 1.0, 0.0, 0.0 ) ).xyz );
@@ -504,10 +569,24 @@ function barkMaterial(shared: SharedUniforms): THREE.MeshStandardMaterial {
           diffuseColor.rgb = mix( diffuseColor.rgb, vec3( 0.82, 0.84, 0.88 ), clamp( dust * 1.15, 0.0, 0.92 ) );
           diffuseColor.a = tgOcclusionFade( tgFragWorld() );
         }`,
+      )
+      .replace(
+        '#include <emissivemap_fragment>',
+        `#include <emissivemap_fragment>
+        {
+          // limbs against a low sun keep a grey-brown body (sky and warm ground bounce, so the shaded side is never soot) and a lit rim where the key light grazes past
+          vec3 Lv = normalize( mat3( viewMatrix ) * uLightDir );
+          vec3 Vv = normalize( vViewPosition );
+          float backD = max( dot( -Vv, Lv ), 0.0 );
+          float rimB = 1.0 - abs( dot( normalize( vNormal ), Vv ) );
+          // in full leaf the limbs seen through the gaps sit inside the canopy's own shade: no rim light, less bounce
+          float leafK = smoothstep( 0.35, 0.8, uLeaf );
+          totalEmissiveRadiance += diffuseColor.rgb * ( ( uSkyMid * 0.2 + vec3( 0.07, 0.055, 0.04 ) + uLightColor * 0.04 ) * mix( 1.0, 0.4, leafK ) + uLightColor * pow( backD, 2.0 ) * rimB * rimB * 0.35 * gTgShadow * ( 1.0 - leafK ) );
+        }`,
       );
     shader.fragmentShader = injectSafeOutput( shader.fragmentShader );
   };
-  mat.customProgramCacheKey = () => 'tg-bark-v5';
+  mat.customProgramCacheKey = () => 'tg-bark-v6';
   return mat;
 }
 
@@ -577,10 +656,11 @@ export class Trees {
   constructor(world: World, shared: SharedUniforms, heightAt: (x: number, z: number) => number) {
     this.group.name = 'trees';
     const foliageMat = foliageMaterial(shared, false);
+    const tuftMat = foliageMaterial(shared, false, true);
     const shrubMat = foliageMaterial(shared, true);
     const bark = barkMaterial(shared);
     const depthMat = swayDepthMaterial(shared);
-    this.disposables.push(foliageMat, shrubMat, bark, depthMat);
+    this.disposables.push(foliageMat, tuftMat, shrubMat, bark, depthMat);
 
     // collect tree placements: the valley's own trees, then distant tree lines beyond the rim
     interface P { x: number; z: number; h: number; r: number; far: boolean }
@@ -637,8 +717,21 @@ export class Trees {
         m.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(N * 3), 3);
         crownMeshes.push(m);
       });
-      const barkGeos = [buildTreeBark(v + 1, 4), buildTreeBark(v + 1, 2), buildTreeBark(v + 1, 1)];
+      const tips: number[] = [];
+      const barkGeos = [buildTreeBark(v + 1, 4, tips), buildTreeBark(v + 1, 2), buildTreeBark(v + 1, 1)];
       this.disposables.push(...barkGeos);
+      const tuftGeo = buildTufts(tips, v + 1);
+      this.disposables.push(tuftGeo);
+      const tuftMesh = new THREE.InstancedMesh(tuftGeo, tuftMat, N);
+      tuftMesh.name = `cottonwood-crown-tuft-${v}`;
+      tuftMesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(N * 3), 3);
+      tuftMesh.castShadow = false;
+      tuftMesh.receiveShadow = true;
+      tuftMesh.frustumCulled = false;
+      tuftMesh.count = 0;
+      this.group.add(tuftMesh);
+      this.meshes.push(tuftMesh);
+      this.lods.push(new LodInstances(N, barkMats, cols, pos, [tuftMesh], [48]));
       const barkMeshes = barkGeos.map((g, li) => {
         const m = new THREE.InstancedMesh(g, bark, N);
         m.name = `cottonwood-bark-${v}-lod${li}`;

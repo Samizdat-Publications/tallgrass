@@ -174,6 +174,9 @@ export class Terrain {
   readonly shadowRT: THREE.WebGLRenderTarget;
   readonly shadowFarRT: THREE.WebGLRenderTarget;
   private extHeightTex!: THREE.DataTexture;
+  /** Baked periodic macro-variation maps (see bakeMacro): R/G/B/A fields of tgGround, 2 m texels over a 4096 m repeating tile. */
+  private macroRT: THREE.WebGLRenderTarget[] = [];
+  private macroBaked = false;
   private shadowQuad: FullScreenQuad;
   private shadowMat: THREE.ShaderMaterial;
   private lastLight = new THREE.Vector3(9, 9, 9);
@@ -310,6 +313,15 @@ export class Terrain {
       return inner * (1 - t) + farBase * t + 16 * (mid - 0.5) * midA + 9 * (near - 0.5) * nearA + far * (20 + 90 * big) + d * 0.008;
     };
 
+    for (let i = 0; i < 3; i++) {
+      const rt = new THREE.WebGLRenderTarget(MACRO_RES, MACRO_RES, {
+        minFilter: THREE.LinearMipmapLinearFilter, magFilter: THREE.LinearFilter, depthBuffer: false, type: THREE.UnsignedByteType, generateMipmaps: true,
+      });
+      rt.texture.wrapS = rt.texture.wrapT = THREE.RepeatWrapping;
+      rt.texture.anisotropy = 4;
+      rt.texture.name = 'terrain.macro' + (i + 1);
+      this.macroRT.push(rt);
+    }
     this.heightAt = (x: number, z: number) => (this.axis ? this.meshHeight(x, z) : this.heightFn(x, z));
     this.mesh = this.buildMesh();
     this.mesh.name = 'terrain';
@@ -435,6 +447,7 @@ export class Terrain {
   updateShadow(renderer: THREE.WebGLRenderer, lightDir: THREE.Vector3, force = false): void {
     const u = this.shadowMat.uniforms;
     const prev = renderer.getRenderTarget();
+    if (!this.macroBaked) this.bakeMacro(renderer);
     if (force || this.lastLight.distanceToSquared(lightDir) > 2e-6) {
       this.lastLight.copy(lightDir);
       (u.uLightDir.value as THREE.Vector3).copy(lightDir);
@@ -464,6 +477,73 @@ export class Terrain {
       u.uPen.value = 0.035;
     }
     renderer.setRenderTarget(prev);
+  }
+
+
+  /**
+   * Bake the ground shader's static macro noise once. Every field is periodic over MACRO_PERIOD (the lattice wraps), so the repeating
+   * tile has no seam; the 2 m texels keep everything down to about 5 m wavelengths, and mipmaps stop it shimmering at distance.
+   * R/G/B/A of map 1: ridge/dry modulation (about 20 m), regional (150 m), dirt patches (40 m), mid (120 m).
+   * Map 2: thin winding draws, straw/olive/sage patches at three scales. Map 3: rock outcrops, snow drift, warp, far copses.
+   */
+  private bakeMacro(renderer: THREE.WebGLRenderer): void {
+    this.macroBaked = true;
+    const mat = new THREE.ShaderMaterial({
+      uniforms: { uPass: { value: 0 } },
+      vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }',
+      fragmentShader: /* glsl */ `
+        precision highp float;
+        varying vec2 vUv;
+        uniform float uPass;
+        ${NOISE_GLSL}
+        // value noise on a lattice that wraps every "cells" cells, so the field tiles seamlessly over the unit square
+        float pn(vec2 p, float cells, float seed){
+          vec2 i = floor(p), f = fract(p);
+          vec2 u = f * f * (3.0 - 2.0 * f);
+          vec2 i0 = mod(i, cells), i1 = mod(i + 1.0, cells);
+          vec2 o = vec2(seed * 1.37, seed * 2.11);
+          float a = tgHash21(i0 + o), b = tgHash21(vec2(i1.x, i0.y) + o);
+          float c = tgHash21(vec2(i0.x, i1.y) + o), d = tgHash21(i1 + o);
+          return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
+        }
+        // periodic fbm (octaves double in frequency); shift is in base-lattice cells and must itself be periodic
+        float pf(vec2 uv, vec2 shift, float cells, float seed, int oct){
+          float a = 0.5, s = 0.0, n = 0.0, c = cells;
+          for (int k = 0; k < 4; k++) {
+            if (k >= oct) break;
+            s += a * pn((uv * cells + shift) * exp2(float(k)), c, seed + float(k) * 7.3);
+            n += a; a *= 0.5; c *= 2.0;
+          }
+          return s / n;
+        }
+        void main(){
+          vec2 uv = vUv;
+          vec4 o = vec4(0.0);
+          if (uPass < 0.5) {
+            o = vec4(pf(uv, vec2(0.0), 184.0, 11.0, 3), pf(uv, vec2(0.0), 27.0, 31.0, 4), pf(uv, vec2(0.0), 102.0, 77.0, 3), pf(uv, vec2(0.0), 35.0, 140.0, 4));
+          } else if (uPass < 1.5) {
+            float w = pn(uv * 16.0, 16.0, 3.0) * 1.8;
+            float r = pf(uv, vec2(w, 0.0), 31.0, 40.0, 4);
+            float draw = smoothstep(0.72, 0.96, 1.0 - abs(2.0 * r - 1.0));
+            vec2 sw = 0.00977 * vec2(pn(uv * 25.0, 25.0, 1.0) - 0.5, pn(uv * 25.0, 25.0, 7.0) - 0.5);
+            o = vec4(draw, pf(uv, sw * 45.0, 45.0, 50.0, 4), pf(uv, sw * 111.0, 111.0, 120.0, 3), pf(uv, sw * 16.0, 16.0, 200.0, 3));
+          } else {
+            o = vec4(pf(uv, vec2(0.0), 184.0, 90.0, 3), pf(uv, vec2(0.0), 205.0, 12.0, 3), pn(uv * 45.0, 45.0, 3.0), pf(uv, vec2(0.0), 58.0, 9.0, 2));
+          }
+          gl_FragColor = o;
+        }`,
+      depthTest: false, depthWrite: false,
+    });
+    const quad = new FullScreenQuad(mat);
+    const prev = renderer.getRenderTarget();
+    for (let i = 0; i < 3; i++) {
+      mat.uniforms.uPass.value = i;
+      renderer.setRenderTarget(this.macroRT[i]);
+      quad.render(renderer);
+    }
+    renderer.setRenderTarget(prev);
+    quad.dispose();
+    mat.dispose();
   }
 
   /** Interpolate the mesh the way the GPU does (triangles (a,c,b) and (b,c,d)). */
@@ -590,6 +670,10 @@ export class Terrain {
       u.uSnow = sh.snow;
       u.uWet = sh.wet;
       u.uFear = sh.fearOverlay;
+      u.uNight = sh.night;
+      u.tMacro1 = { value: this.macroRT[0].texture };
+      u.tMacro2 = { value: this.macroRT[1].texture };
+      u.tMacro3 = { value: this.macroRT[2].texture };
       shader.vertexShader = shader.vertexShader
         .replace('void main() {', 'attribute float aCurv;\nvarying float vTgCurv;\nvarying vec3 vTgWorld;\nvarying vec3 vTgNormal;\nvoid main() {')
         .replace('#include <begin_vertex>', '#include <begin_vertex>\nvTgWorld = (modelMatrix * vec4(transformed, 1.0)).xyz;\nvTgNormal = normal;\nvTgCurv = aCurv;');
@@ -623,7 +707,7 @@ export class Terrain {
         );
       shader.fragmentShader = injectSafeOutput( shader.fragmentShader );
     };
-    mat.customProgramCacheKey = () => 'tallgrass-terrain-v4';
+    mat.customProgramCacheKey = () => 'tallgrass-terrain-v5';
 
     const mesh = new THREE.Mesh(geo, mat);
     mesh.castShadow = false;
@@ -640,15 +724,23 @@ export class Terrain {
     this.shadowRT.dispose();
     this.shadowFarRT.dispose();
     this.extHeightTex.dispose();
+    for (const rt of this.macroRT) rt.dispose();
     this.shadowMat.dispose();
     this.shadowQuad.dispose();
   }
 }
 
+/** Edge of the repeating tile (m) the static macro-variation maps cover; the noise they bake is periodic over it, so it never shows a seam. */
+const MACRO_PERIOD = 4096;
+const MACRO_RES = 2048;
+
 const GROUND_PARS = /* glsl */ `
 uniform sampler2D tVeg;
 uniform sampler2D tStatic;
 uniform sampler2D tTrail;
+uniform sampler2D tMacro1;
+uniform sampler2D tMacro2;
+uniform sampler2D tMacro3;
 uniform vec2 uFarStats;
 uniform float uWorldSize;
 uniform float uTime;
@@ -666,6 +758,7 @@ uniform float uFrost;
 uniform float uSnow;
 uniform float uWet;
 uniform float uFear;
+uniform float uNight;
 varying vec3 vTgWorld;
 varying vec3 vTgNormal;
 varying float vTgCurv;
@@ -676,13 +769,14 @@ vec3 gTgEmis = vec3(0.0);
 float gTgGrass = 1.0;
 
 // Oriented value noise: streaks that run along one of four fixed directions, blended by weights ow (so the pattern never shears
-// when the flow direction changes). across / along are frequencies perpendicular to and along the streak.
+// when the flow direction changes). across / along are frequencies perpendicular to and along the streak. Directions with no
+// weight are skipped.
 float tgCombN(vec2 q, vec4 ow, float across, float along, float seed){
   float n = 0.0;
-  n += ow.x * tgNoise2(vec2(q.x * along, q.y * across) + seed);
-  n += ow.y * tgNoise2(vec2((q.x + q.y) * 0.7071 * along, (q.y - q.x) * 0.7071 * across) + seed + 3.1);
-  n += ow.z * tgNoise2(vec2(q.y * along, q.x * across) + seed + 6.7);
-  n += ow.w * tgNoise2(vec2((q.y - q.x) * 0.7071 * along, (q.x + q.y) * 0.7071 * across) + seed + 9.3);
+  if (ow.x > 0.0) n += ow.x * tgNoise2(vec2(q.x * along, q.y * across) + seed);
+  if (ow.y > 0.0) n += ow.y * tgNoise2(vec2((q.x + q.y) * 0.7071 * along, (q.y - q.x) * 0.7071 * across) + seed + 3.1);
+  if (ow.z > 0.0) n += ow.z * tgNoise2(vec2(q.y * along, q.x * across) + seed + 6.7);
+  if (ow.w > 0.0) n += ow.w * tgNoise2(vec2((q.y - q.x) * 0.7071 * along, (q.x + q.y) * 0.7071 * across) + seed + 9.3);
   return n;
 }
 
@@ -697,21 +791,23 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
 
   float lodFine = 1.0 - smoothstep(70.0, 320.0, dist);
   float lodMid = 1.0 - smoothstep(300.0, 1100.0, dist);
-  float nA = mix(0.5, tgFbm2(xz * 0.33), lodMid);
-  float nB = tgFbm2(xz * 0.045 + 11.0);
-  float nC = mix(0.5, tgNoise2(xz * 1.9), lodFine);
-  float nD = tgNoise2(xz * 0.011 + 3.0);
-  float nE = tgFbm2(xz * 0.0065 + 31.0);
+  float nA = 0.5;
+  if (lodMid > 0.002) nA = mix(0.5, tgNoise2(xz * 0.33) * 0.62 + tgNoise2(xz * 0.93 + 5.0) * 0.38, lodMid);
+  float nC = 0.5;
+  if (lodFine > 0.002) nC = mix(0.5, tgNoise2(xz * 1.9), lodFine);
 
   vec4 veg = texture2D(tVeg, cuv);
   vec4 st = texture2D(tStatic, cuv);
-
-  // ---- macro variation at three scales (about 40 m, 120 m, 400 m); all hash noise, so nothing tiles
-  float nM1 = tgFbm2(xz * 0.025 + 77.0);
-  float nM2 = tgFbm2(xz * 0.0085 + 140.0);
-  vec2 dq = xz * 0.0075 + vec2(tgNoise2(xz * 0.004 + 3.0) * 1.8, 0.0);
-  float draw = 1.0 - abs(2.0 * tgFbm2(dq + 40.0) - 1.0);           // ridged: thin winding draws and swales
-  draw = smoothstep(0.72, 0.96, draw);
+  float trod = texture2D(tTrail, cuv).r * (1.0 - edgeW);
+  // ---- macro variation (about 40 m, 120 m and 400 m patches, draws, outcrops, drifts): static hash noise baked once into three
+  // periodic maps (see Terrain.bakeMacro), so the pixel shader pays three fetches instead of a dozen fbm evaluations
+  vec2 muv = xz * (1.0 / ${MACRO_PERIOD}.0);
+  vec4 m1 = texture2D(tMacro1, muv);
+  vec4 m2 = texture2D(tMacro2, muv);
+  vec4 m3 = texture2D(tMacro3, muv);
+  float nB = m1.r, nE = m1.g, nM1 = m1.b, nM2 = m1.a;
+  float draw = m2.r, p1 = m2.g, p2 = m2.b, p3 = m2.a;      // draw: thin winding draws and swales
+  float outN = m3.r, driftLow = m3.g, nD = m3.b, groveN = m3.a;
   float highGround = smoothstep(8.0, 70.0, wp.y);
 
   float farBio = uFarStats.x + 0.3 * (nE - 0.5);
@@ -747,24 +843,27 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
   c2 /= max(length(c2), 1e-3);
   vec4 ow = vec4(0.5 + 0.5 * c2.x, 0.5 + 0.5 * c2.y, 0.5 - 0.5 * c2.x, 0.5 - 0.5 * c2.y);
   ow *= ow;
+  ow = max(ow - 0.06, 0.0);                        // drop the weak directions (smoothly): fewer noise taps per pixel
   ow /= (ow.x + ow.y + ow.z + ow.w);
-  vec2 wq = xz + 18.0 * vec2(tgNoise2(xz * 0.011 + 4.0) - 0.5, tgNoise2(xz * 0.011 + 9.0) - 0.5);
+  vec2 wq = xz + 18.0 * vec2(nD - 0.5, tgNoise2(xz * 0.011 + 9.0) - 0.5);
   float fp = dist * 0.0011;                       // metres covered by one pixel
   float f1 = 1.0 - smoothstep(0.25, 0.6, fp);      // blade-scale strokes fade out beyond about 250 to 550 m
   float f2 = 1.0 - smoothstep(0.45, 1.3, fp);
   float f3 = 1.0 - smoothstep(1.2, 3.5, fp);
-  float s1 = tgCombN(wq, ow, 0.6, 0.11, 1.0);
-  float s2 = tgCombN(wq, ow, 0.2, 0.027, 2.0);
-  float s3 = tgCombN(wq, ow, 0.05, 0.012, 3.0);
-  float s4 = tgCombN(wq, ow, 0.012, 0.0045, 4.0);
+  float s1 = 0.5, s2 = 0.5, s3 = 0.5;
+  if (f1 > 0.002) s1 = tgCombN(wq, ow, 0.6, 0.11, 1.0);
+  if (f2 > 0.002 || uSnow > 0.04) s2 = tgCombN(wq, ow, 0.2, 0.027, 2.0);
+  if (f3 > 0.002) s3 = tgCombN(wq, ow, 0.05, 0.012, 3.0);
+  float s4 = tgNoise2(wq * 0.0065 + 4.0);
   // crisp strokes, not mush: push the mid-scale noise through a contrast curve so hills show distinct combed lines
   float c2s = smoothstep(0.3, 0.7, s2), c3s = smoothstep(0.32, 0.68, s3);
-  float streakTone = (s1 - 0.5) * 0.4 * f1 + (c2s - 0.5) * 0.7 * f2 + (c3s - 0.5) * 0.4 * f3 + (s4 - 0.5) * 0.12;
+  float farCalm = 1.0 - 0.4 * smoothstep(500.0, 2200.0, dist);   // the biggest strokes read as smears from far away: soften them there
+  float streakTone = (s1 - 0.5) * 0.4 * f1 + (c2s - 0.5) * 0.7 * f2 + (c3s - 0.5) * 0.4 * f3 * farCalm + (s4 - 0.5) * 0.12;
   float graze = smoothstep(0.04, 0.3, max(-rayDir.y, 0.0));
   // looking straight down (map view) combed strokes read as fur or smear, so thin them out; they belong to oblique views
   float topK = smoothstep(0.7, 0.96, -rayDir.y);
   streakTone *= mix(1.0, 0.3, topK);
-  gTgH = ((s1 - 0.5) * 0.1 * f1 + (s2 - 0.5) * 0.22 * f2 + (s3 - 0.5) * 0.55 * f3) * mix(0.5, 1.0, graze) * (0.4 + 0.6 * farK) * mix(1.0, 0.3, topK);
+  gTgH = ((s1 - 0.5) * 0.1 * f1 + (s2 - 0.5) * 0.22 * f2 + (s3 - 0.5) * 0.55 * f3 * farCalm) * mix(0.5, 1.0, graze) * (0.4 + 0.6 * farK) * mix(1.0, 0.3, topK);
   // rolling wind waves of light and dark
   vec2 sp = vec2(dot(xz, wv), dot(xz, vec2(-wv.y, wv.x)));
   sp.x += 26.0 * tgNoise2(xz * 0.013) + 6.0 * nD;
@@ -787,10 +886,6 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
   grassCol *= clamp(1.0 + streakTone * 0.7, 0.6, 1.4);
   grassCol *= 1.0 + (wave - 0.5) * 0.22 * (0.35 + uWind.z);
   // tonal patches the way real prairie goes: straw, olive, sage and russet in swaths 40 to 250 m across
-  vec2 pw = xz + 40.0 * vec2(tgNoise2(xz * 0.006 + 1.0) - 0.5, tgNoise2(xz * 0.006 + 7.0) - 0.5);
-  float p1 = tgFbm2(pw * 0.011 + 50.0);
-  float p2 = tgFbm2(pw * 0.027 + 120.0);
-  float p3 = tgFbm2(pw * 0.004 + 200.0);
   vec3 tOl = vec3(0.76, 0.9, 0.56);
   vec3 tSt = vec3(1.1, 1.1, 0.84);
   vec3 tSg = vec3(0.84, 0.97, 0.8);
@@ -805,19 +900,48 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
   // the far field stands in for blades seen from a distance: a touch darker and calmer than the sunlit blade tops
   grassCol *= mix(1.0, 0.97, edgeW);
 
+  // greener drainages: draws, hollows and moist bottoms hold a sage-olive green through the cured season, so a golden hill is
+  // threaded with living grass the way a real prairie is
+  float drainK = clamp(draw * 0.9 + hollowK * 0.55 + (1.0 - up) * 0.15, 0.0, 1.0) * (1.0 - ridgeK);
+  vec3 drainCol = mix(uGrassGreen, uGrassDry, 0.22) * vec3(0.84, 0.98, 0.62) * (0.85 + 0.3 * nA);
+  grassCol = mix(grassCol, drainCol, drainK * smoothstep(0.25, 0.85, uCure) * mix(0.44, 0.26, winterK));
+
   // honey, not orange: dry ridges go lighter and straw-gold, swales and draws go deeper olive-gold, and the redness is capped
   // (the light is already warm, so red ground under red light reads as wine at dusk)
   float dryAmt = dry * (1.0 - riparian);
   grassCol *= 1.0 + 0.24 * up * dryAmt * (0.6 + 0.8 * nM1);
   vec3 swaleC = vec3(0.34, 0.27, 0.07) * (0.8 + 0.4 * nA);
-  grassCol = mix(grassCol, grassCol * vec3(0.84, 0.92, 0.7) * 0.92 + swaleC * 0.16, clamp(draw * 0.75 + (1.0 - up) * 0.14 * smoothstep(0.4, 0.8, nM2), 0.0, 1.0) * dryAmt);
+  grassCol = mix(grassCol, grassCol * vec3(0.84, 0.92, 0.7) * 0.92 + swaleC * 0.16, clamp(draw * 0.5 + (1.0 - up) * 0.14 * smoothstep(0.4, 0.8, nM2), 0.0, 1.0) * dryAmt);
   float lumG0 = dot(grassCol, vec3(0.2126, 0.7152, 0.0722));
   grassCol.r = min(grassCol.r, grassCol.g * mix(2.15, 1.7, autumnK) + 0.003);
   grassCol = mix(vec3(lumG0), grassCol, mix(0.95, 0.76, smoothstep(150.0, 900.0, dist)));
 
+  // distance grain: tufts and clumps whose size follows the pixel footprint (about 4 pixels across), so a far hill keeps a grassy
+  // stipple of olive and straw instead of a smooth dune; far copses of trees are dark dotted patches along the draws
+  float grain = 0.5;
+  float grW = smoothstep(40.0, 220.0, dist) * mix(1.0, 0.4, topK);
+  if (grW > 0.01) {
+    float gk = log2(max(fp * 4.5, 1.0));
+    float gb = floor(gk);
+    float gs = exp2(gb);
+    float gn1 = tgNoise2(xz / gs + 13.0);
+    float gn2 = tgNoise2(xz / (gs * 2.0) + 13.0);
+    grain = mix(gn1, gn2, gk - gb);
+    grassCol *= 1.0 + (grain - 0.5) * 0.46 * grW;
+    grassCol = mix(grassCol, grassCol * vec3(0.9, 1.04, 0.8), (gn2 - 0.5) * 0.8 * grW);
+  }
+  float groveAmt = smoothstep(0.62, 0.74, groveN + 0.12 * (draw - 0.2) - 0.07 * highGround) * edgeW * smoothstep(120.0, 480.0, dist) * smoothstep(0.18, 0.5, grain);
+  grassCol = mix(grassCol, grassCol * vec3(0.46, 0.62, 0.4), groveAmt * 0.85 * (1.0 - 0.55 * winterK));
+
   // blade-scale speckle so ground the grass layer does not cover (beyond the world edge) reads as grass, not as a smooth plane
-  float speck = tgNoise2(xz * 5.5) * 0.6 + tgNoise2(xz * 14.0) * 0.4;
-  grassCol *= 1.0 + (speck - 0.5) * 0.5 * (1.0 - smoothstep(25.0, 110.0, dist)) * (0.35 + 0.65 * edgeW);
+  if (dist < 110.0) {
+    float speck = tgNoise2(xz * 5.5) * 0.6 + tgNoise2(xz * 14.0) * 0.4;
+    grassCol *= 1.0 + (speck - 0.5) * 0.5 * (1.0 - smoothstep(25.0, 110.0, dist)) * (0.35 + 0.65 * edgeW);
+  }
+
+  // winter ground is dull grey-brown straw under the snow, not warm sand
+  float lumW = dot(grassCol, vec3(0.2126, 0.7152, 0.0722));
+  grassCol = mix(grassCol, vec3(lumW) * vec3(1.0, 0.94, 0.86) * 0.9, 0.38 * winterK);
 
   // short grass: a little of the soil shows through, darker and earthier, never light sand
   float soilShow = smoothstep(0.1, 0.0, bio + (nC - 0.5) * 0.05) + dirt * 0.25 * edgeW;
@@ -827,19 +951,22 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
   gTgGrass = 1.0 - soilShow;
 
   // rock only on truly steep faces, and only partly
-  float outcrop = smoothstep(0.7, 0.8, tgFbm2(xz * 0.045 + 90.0)) * smoothstep(0.12, 0.45, slopeG);
+  float outcrop = smoothstep(0.7, 0.8, outN) * smoothstep(0.12, 0.45, slopeG);
   float rock = max(smoothstep(0.78, 1.25, slopeG + (nA - 0.5) * 0.3 + (nD - 0.5) * 0.25), outcrop * 0.85);
   vec3 rockCol = uRock * (0.7 + 0.6 * nC) * (0.85 + 0.3 * nB);
   col = mix(col, rockCol, rock * 0.7);
 
   // herd trails: grass that animals have grazed down and trampled goes darker, browner and flatter, and the ground shows
   // through as churned earth with small hoof-scale pits near the camera
-  float trod = texture2D(tTrail, cuv).r * (1.0 - edgeW);
   float trodK = smoothstep(0.07, 0.55, trod);
-  float hoof = smoothstep(0.55, 0.78, tgNoise2(xz * 2.3 + 3.0) * 0.6 + tgNoise2(xz * 5.9 + 11.0) * 0.4);
-  col = mix(col, col * vec3(0.7, 0.62, 0.5) + uSoil * 0.08, trodK * 0.6);
-  col *= 1.0 - trodK * hoof * 0.35 * (1.0 - smoothstep(25.0, 150.0, dist));
-  gTgGrass *= 1.0 - 0.45 * trodK;
+  if (trodK > 0.003) {
+    col = mix(col, col * vec3(0.7, 0.62, 0.5) + uSoil * 0.08, trodK * 0.6);
+    if (dist < 150.0) {
+      float hoof = smoothstep(0.55, 0.78, tgNoise2(xz * 2.3 + 3.0) * 0.6 + tgNoise2(xz * 5.9 + 11.0) * 0.4);
+      col *= 1.0 - trodK * hoof * 0.35 * (1.0 - smoothstep(25.0, 150.0, dist));
+    }
+    gTgGrass *= 1.0 - 0.45 * trodK;
+  }
 
   // damp banks, mud at the waterline
   float damp = (1.0 - smoothstep(0.0, 9.0, wd)) * (0.6 + 0.4 * nA);
@@ -852,30 +979,35 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
 
   // ---- burn scar: ragged charcoal and ash grey-brown, a scorched halo, a glowing ember front, and regrowth
   // veg.b: 1.0 = burning now, then 0.78 fresh ash decaying to 0 over a year (the engine also fades it as grass regrows)
-  float rag = tgNoise2(xz * 0.9) * 0.5 + tgNoise2(xz * 2.3 + 7.0) * 0.3 + tgNoise2(xz * 5.7 + 3.0) * 0.2;
-  float bR = burn + (rag - 0.5) * 0.8 * smoothstep(0.0, 0.12, burn);
-  float scar = smoothstep(0.12, 0.3, bR);
-  float scorch = smoothstep(0.0, 0.16, bR) * (1.0 - scar);
-  float fresh = smoothstep(0.3, 0.76, burn);
-  vec3 charC = vec3(0.058, 0.046, 0.034);
-  vec3 ashC = vec3(0.37, 0.325, 0.27);
-  float ashPatch = smoothstep(0.35, 0.7, tgFbm2(xz * 0.35 + 19.0));
-  float ashMix = clamp(ashPatch * (0.3 + 0.6 * (1.0 - fresh)) + 0.32 * (1.0 - fresh) + 0.1 * (nC - 0.5), 0.0, 1.0);
-  vec3 scarCol = mix(charC, ashC, ashMix) * (0.72 + 0.5 * nC) * (0.85 + 0.3 * nA);
-  scarCol = mix(scarCol, uSoil * 0.9 + vec3(0.03), (1.0 - fresh) * 0.55);
-  col = mix(col, col * vec3(0.5, 0.4, 0.3), scorch * 0.7);
-  col = mix(col, scarCol, scar);
-  gTgGrass *= (1.0 - scar);
-  float charAmt = scar;
-  // flames: only cells that are burning right now (value 1.0) glow, flickering; the glow spills a little onto the ground around them
-  float flick = 0.55 + 0.45 * tgNoise2(xz * 1.3 + uTime * 1.7) + 0.25 * tgNoise2(xz * 4.1 - uTime * 2.9);
-  float burningNow = smoothstep(0.9, 0.99, burn);
-  float ember = smoothstep(0.86, 1.0, bR) * burningNow * flick;
-  float emberHalo = burningNow * (0.4 + 0.6 * flick);
-  // smouldering: for a while after the flames pass (ash value 0.68 to 0.78) scattered embers still glow in the char and fade out
-  float smold = smoothstep(0.66, 0.77, burn) * (1.0 - burningNow);
-  float spots = smoothstep(0.72, 0.9, tgNoise2(xz * 2.6 + vec2(uTime * 0.12, 3.0)) * 0.6 + tgNoise2(xz * 7.0 - uTime * 0.2) * 0.4);
-  float smolder = smold * spots * (0.5 + 0.5 * tgNoise2(xz * 3.0 + uTime * 1.1));
+  float charAmt = 0.0;
+  float scar = 0.0;
+  float ember = 0.0, emberHalo = 0.0, smolder = 0.0;
+  if (burn > 0.002) {
+    float rag = tgNoise2(xz * 0.9) * 0.5 + tgNoise2(xz * 2.3 + 7.0) * 0.3 + tgNoise2(xz * 5.7 + 3.0) * 0.2;
+    float bR = burn + (rag - 0.5) * 0.8 * smoothstep(0.0, 0.12, burn);
+    scar = smoothstep(0.12, 0.3, bR);
+    float scorch = smoothstep(0.0, 0.16, bR) * (1.0 - scar);
+    float fresh = smoothstep(0.3, 0.76, burn);
+    vec3 charC = vec3(0.058, 0.046, 0.034);
+    vec3 ashC = vec3(0.37, 0.325, 0.27);
+    float ashPatch = smoothstep(0.35, 0.7, tgNoise2(xz * 0.35 + 19.0) * 0.6 + tgNoise2(xz * 0.9 + 3.0) * 0.4);
+    float ashMix = clamp(ashPatch * (0.3 + 0.6 * (1.0 - fresh)) + 0.32 * (1.0 - fresh) + 0.1 * (nC - 0.5), 0.0, 1.0);
+    vec3 scarCol = mix(charC, ashC, ashMix) * (0.72 + 0.5 * nC) * (0.85 + 0.3 * nA);
+    scarCol = mix(scarCol, uSoil * 0.9 + vec3(0.03), (1.0 - fresh) * 0.55);
+    col = mix(col, col * vec3(0.5, 0.4, 0.3), scorch * 0.7);
+    col = mix(col, scarCol, scar);
+    gTgGrass *= (1.0 - scar);
+    charAmt = scar;
+    // flames: only cells that are burning right now (value 1.0) glow, flickering; the glow spills a little onto the ground around them
+    float flick = 0.55 + 0.45 * tgNoise2(xz * 1.3 + uTime * 1.7) + 0.25 * tgNoise2(xz * 4.1 - uTime * 2.9);
+    float burningNow = smoothstep(0.9, 0.99, burn);
+    ember = smoothstep(0.86, 1.0, bR) * burningNow * flick;
+    emberHalo = burningNow * (0.4 + 0.6 * flick);
+    // smouldering: for a while after the flames pass (ash value 0.68 to 0.78) scattered embers still glow in the char and fade out
+    float smold = smoothstep(0.66, 0.77, burn) * (1.0 - burningNow);
+    float spots = smoothstep(0.72, 0.9, tgNoise2(xz * 2.6 + vec2(uTime * 0.12, 3.0)) * 0.6 + tgNoise2(xz * 7.0 - uTime * 0.2) * 0.4);
+    smolder = smold * spots * (0.5 + 0.5 * tgNoise2(xz * 3.0 + uTime * 1.1));
+  }
 
   // winter: frost is a thin cold bloom in the shade, never a snow blanket; snow only when it is snowing
   float shadeAmt = 1.0 - ts;
@@ -883,21 +1015,56 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
   col = mix(col, col * vec3(0.9, 0.97, 1.08) + vec3(0.035, 0.045, 0.06), frost);
   // snow lands on flats and in hollows first, is blown off convex ridges and steep faces, and builds up patchily as it keeps
   // snowing; the ground shows through grass tips, ridges and rock until it is deep
-  float flatK = smoothstep(0.58, 0.93, nrm.y);
-  float drift = tgFbm2(xz * 0.05 + 12.0) * 0.6 + tgFbm2(xz * 0.31 + 4.0) * 0.4;
-  float pot = flatK * 0.62 + drift * 0.5 + hollowK * 0.28 - ridgeK * 0.34 - rock * 0.5 - charAmt * 0.6 + 0.1 * gTgGrass;
-  // The threshold starts above the highest possible potential (about 1.5), so a trace of leftover snow (the eased value never
-  // reaches exactly zero) cannot show as isolated white patches on the flattest, wettest spots: nothing settles until there is real snow.
-  float sn1 = clamp(uSnow, 0.0, 1.0);
-  float Tsn = 1.78 - 1.72 * pow(sn1, 0.75);
-  float snowAmt = smoothstep(Tsn - 0.16, Tsn + 0.1, pot) * smoothstep(0.05, 0.16, uSnow);
-  float tipsPoke = (0.25 * gTgGrass * smoothstep(0.52, 0.8, s2)) * (1.0 - smoothstep(0.5, 1.0, uSnow));
-  float snowCover = clamp(snowAmt * (0.9 - tipsPoke), 0.0, 1.0);
-  vec3 snowC = vec3(0.87, 0.87, 0.885) * (0.93 + 0.07 * nC);
-  snowC = mix(snowC, col * 2.4 + vec3(0.06), 0.1 * (1.0 - snowCover * 0.5));
-  col = mix(col, snowC, snowCover);
-  col = mix(col, col * vec3(0.72, 0.7, 0.68), trodK * snowCover * 0.55);
-  gTgH *= 1.0 - 0.55 * snowCover;
+  float snowCover = 0.0;
+  float spark = 0.0;
+  if (uSnow > 0.04) {
+    float flatK = smoothstep(0.58, 0.93, nrm.y);
+    float dHi = 0.5;
+    if (lodMid > 0.002) dHi = mix(0.5, tgNoise2(xz * 0.31 + 4.0) * 0.65 + tgNoise2(xz * 0.8 + 9.0) * 0.35, lodMid);
+    float drift = driftLow * 0.6 + dHi * 0.4;
+    float pot = flatK * 0.62 + drift * 0.5 + hollowK * 0.28 - ridgeK * 0.34 - rock * 0.5 - charAmt * 0.6 + 0.1 * gTgGrass;
+    // The threshold starts above the highest possible potential (about 1.5), so a trace of leftover snow (the eased value never
+    // reaches exactly zero) cannot show as isolated white patches on the flattest, wettest spots: nothing settles until there is real snow.
+    float sn1 = clamp(uSnow, 0.0, 1.0);
+    float Tsn = 1.78 - 1.74 * pow(sn1, 0.66);
+    float snowAmt = smoothstep(Tsn - 0.16, Tsn + 0.1, pot) * smoothstep(0.05, 0.16, uSnow);
+    float tipsPoke = (0.22 * gTgGrass * smoothstep(0.52, 0.8, s2)) * (1.0 - smoothstep(0.4, 0.9, uSnow));
+    snowCover = clamp(snowAmt * (0.94 - tipsPoke), 0.0, 1.0);
+    // Snow stays white and takes the sky in its shade, even under warm sun: the albedo is rebalanced against the key light's
+    // colour (a golden sun then lights it cream, not sand), and shadowed or sheltered snow turns cool blue.
+    vec3 lc = max(uLightColor, vec3(1e-3));
+    vec3 warmth = lc / max(dot(lc, vec3(0.3333)), 1e-3);
+    vec3 snowAlb = vec3(0.97, 0.955, 0.935) / mix(vec3(1.0), warmth, 0.1);
+    snowAlb = min(snowAlb / max(snowAlb.r, max(snowAlb.g, snowAlb.b)), vec3(1.0)) * 0.97;
+    float cool = clamp((1.0 - ts) * 0.7 + hollowK * 0.15 + (1.0 - nrm.y) * 0.25, 0.0, 1.0);
+    vec3 snowC = snowAlb * mix(vec3(1.0), vec3(0.95, 0.98, 1.03), cool);
+    // fine mottling and wind ripples so it is a surface, not a flat white fill
+    snowC *= 0.94 + 0.08 * nC + 0.05 * (nA - 0.5) + streakTone * 0.12;
+    snowC = mix(snowC, col * 2.0 + vec3(0.05), 0.07 * (1.0 - snowCover * 0.5));
+    col = mix(col, snowC, snowCover);
+    col = mix(col, col * vec3(0.76, 0.76, 0.78), trodK * snowCover * 0.55);
+    // sastrugi-like relief: soft drifts and wind-combed ripples take the light, the grass relief underneath is buried
+    gTgH = mix(gTgH, ((s2 - 0.5) * 0.1 * f2 + (s3 - 0.5) * 0.3 * f3 + (nA - 0.5) * 0.05 * lodFine) * mix(0.6, 1.0, graze), snowCover * 0.8);
+    // glints: sparse ice crystals that flash when their facet lines up with the half vector, near the camera, sunlit snow only
+    if (snowCover > 0.3 && dist < 80.0 && uLightDir.y > 0.02) {
+      vec2 gc = xz * 34.0;
+      vec2 gi = floor(gc);
+      float gh = tgHash21(gi);
+      if (gh > 0.9) {
+        vec3 fnr = vec3(tgHash21(gi + 3.1), tgHash21(gi + 7.7), tgHash21(gi + 1.3)) - 0.5;
+        vec3 fn = normalize(nrm + fnr * 1.9);
+        vec3 hv = normalize(uLightDir - rayDir);
+        float gd = length(fract(gc) - 0.5);
+        spark = pow(max(dot(fn, hv), 0.0), 140.0) * smoothstep(0.5, 0.15, gd) * snowCover * ts * (1.0 - smoothstep(30.0, 80.0, dist));
+      }
+    }
+  }
+
+  // moonlit meadow: grass stays grass, cooler and darker, and the combed strokes stay readable
+  if (uNight > 0.02) {
+    vec3 nCol = col * vec3(0.78, 0.95, 0.95) * 0.8 * (0.88 + streakTone * 0.55);
+    col = mix(col, nCol, uNight * (1.0 - snowCover) * (1.0 - 0.6 * rock));
+  }
 
   // rain darkens and glosses the ground
   col *= mix(1.0, 0.74, uWet * (1.0 - snowCover));
@@ -909,6 +1076,9 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
   float glow = pow(fwd, 3.0) * (0.35 + 0.65 * lowSun) * gTgGrass * (1.0 - rock) * (1.0 - snowCover) * ts * (1.0 - uWet);
   gTgEmis = col * uLightColor * glow * 0.1;
   gTgEmis += vec3(3.4, 0.95, 0.15) * ember + vec3(1.1, 0.22, 0.03) * emberHalo * 0.4 + vec3(1.6, 0.34, 0.05) * smolder;
+  gTgEmis += uLightColor * (spark * 2.2);
+  // snow scatters the sky light into its own shade: a faint cool glow so shadowed snow stays white-blue and never goes grey or beige
+  gTgEmis += col * vec3(0.036, 0.038, 0.042) * snowCover;
 
   if (uFear > 0.001) {
     col = mix(col, vec3(0.85, 0.05, 0.04), fear * uFear * 0.7);

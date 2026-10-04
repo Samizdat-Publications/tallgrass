@@ -227,9 +227,10 @@ class GradePass extends Pass {
           col *= mix(vec3(1.0), uShadowTint, sh) * mix(vec3(1.0), uHighTint, hi);
           float l2 = dot(col, vec3(0.2126, 0.7152, 0.0722));
           col = mix(vec3(l2), col, uSat);
-          // day for night: pull the palette toward silver-blue while keeping luminance
-          vec3 silver = vec3(l2) * vec3(0.74, 0.93, 1.16);
-          col = mix(col, silver + (col - vec3(l2)) * 0.3, uNight * 0.9);
+          // day for night: cool the palette toward blue-teal while keeping luminance and most of the hue, so moonlit grass reads as
+          // dark teal-green grass (as in the concept art) and not as silver snow
+          vec3 teal = vec3(l2) * vec3(0.7, 1.0, 1.06);
+          col = mix(col, teal + (col - vec3(l2)) * 0.26, uNight * 0.85);
           col = pow(max(col / 0.18, vec3(0.0)), vec3(uContrast)) * 0.18;
           vec2 q = (vUv - 0.5) * vec2(uAspect, 1.0) * 0.9;
           float v = smoothstep(0.35, 1.05, length(q));
