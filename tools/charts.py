@@ -125,8 +125,13 @@ class Scenario:
     def title_extra(self) -> str:
         bits = [f"{self.n} seeds"]
         if self.seeds:
-            span = max(self.ticks[s][-1] for s in self.seeds)
-            bits.append(f"{span / YEAR:,.0f} years ({span:,.0f} ticks)")
+            ends = [self.ticks[s][-1] for s in self.seeds]
+            span, short = max(ends), min(ends)
+            if span - short > YEAR * 5:
+                # generation-target runs stop when each world reaches its target, so they end at different years
+                bits.append(f"each world runs until its bison pass the generation target: {short / YEAR:,.0f} to {span / YEAR:,.0f} years")
+            else:
+                bits.append(f"{span / YEAR:,.0f} years ({span:,.0f} ticks)")
         return ", ".join(bits)
 
     # ---- aligned matrices ----
