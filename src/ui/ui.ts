@@ -29,7 +29,7 @@ import { FirstRunTips, TitleCard } from './title';
 import { Toast } from './toast';
 import { cardRank, describeEvent, eventWeight, seasonName, seasonOfTick, yearOfTick, type DescribeContext } from './describe';
 import { FeedFilter } from './feed';
-import { SeasonLines } from './seasonlines';
+import { DecadeLines, SeasonLines } from './seasonlines';
 import { button, h, unitPx } from './dom';
 import { icon } from './icons';
 import { Inspector } from './inspector';
@@ -148,6 +148,7 @@ export class GameUI {
   private queued: QueuedCard | null = null;
   private feed = new FeedFilter();
   private seasons = new SeasonLines();
+  private decades = new DecadeLines();
   private keyDown: (e: KeyboardEvent) => void;
   private keyUp: (e: KeyboardEvent) => void;
 
@@ -330,6 +331,7 @@ export class GameUI {
       this.addSeasonLines(f.history, f.speed);
       this.inspector.setMeans(this.pop.latestTraits());
     }
+    if (f.history.length || f.events.length) this.addDecadeLines(f.history, f.events);
     if (f.events.length) this.handleEvents(f.events, now, f.tick, f.pop);
     this.pop.update(now, f.pop);
     this.inspector.update(f.selected, f.following, f.story, f.storyId);
@@ -754,6 +756,7 @@ export class GameUI {
     this.pop.reset();
     this.tracker.reset();
     this.seasons.reset();
+    this.decades.reset();
     this.inspector.setMeans(null);
     this.chron.clear();
     this.chapterCard.clear();
@@ -769,6 +772,19 @@ export class GameUI {
     this.chron.add(
       lines.map((l) => ({ tick: l.tick, year: l.year, sentence: l.sentence, x: 0, y: 0, sp: l.sp, major: false, weight: l.weight })),
       lines.length <= 2,
+    );
+  }
+
+  /** The long view: a decade summed up under a title ("The Wolf Decade"), and a drought told as one thread. */
+  private addDecadeLines(rows: HistoryRow[], events: SimEvent[]): void {
+    const lines = this.decades.feed(rows, events);
+    if (!lines.length) return;
+    this.chron.add(
+      lines.map((l) => ({
+        tick: l.tick, year: l.year, x: 0, y: 0, sp: l.sp, major: l.kind === 'decade', weight: l.weight,
+        sentence: l.sentence,
+      })),
+      true,
     );
   }
 
