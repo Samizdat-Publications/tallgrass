@@ -36,11 +36,12 @@ from matplotlib.ticker import FuncFormatter  # noqa: E402
 YEAR = 2400.0
 SPECIES = ["bison", "wolf", "raven", "pronghorn", "rabbit", "cougar"]
 LABEL = {"bison": "Bison", "wolf": "Wolf", "raven": "Raven", "pronghorn": "Pronghorn", "rabbit": "Rabbit", "cougar": "Cougar"}
+# the game's own species colours (src/ui/palette.ts), a little deeper so they read on a white chart
 COLOR = {
-    "bison": "#4a2f1e",      # dark brown
-    "wolf": "#5b7083",       # slate blue-grey
-    "raven": "#161616",      # black
-    "pronghorn": "#e0872c",  # tan-orange
+    "bison": "#c27a3c",      # game bison orange-tan
+    "wolf": "#4f86d0",       # game wolf blue
+    "raven": "#9269c8",      # game raven violet
+    "pronghorn": "#2f9f97",  # game pronghorn teal
     "rabbit": "#9a8878",     # grey-brown
     "cougar": "#c79a1a",     # ochre
 }
@@ -701,7 +702,8 @@ def chart_overview(sc: Scenario, meta: dict, log: bool, saved: list[Path]):
     sub = sc.summary.get("description", "")
     commit = meta.get("commit", "")
     mock = "  MOCK SIM" if meta.get("args", {}).get("mock") else ""
-    fig.text(0.01, 0.945, f"{sub}   {sc.title_extra}{gtxt}   commit {commit}{mock}{'   [log scale]' if log else ''}", fontsize=10, color=MUTED, ha="left", va="top")
+    ctext = f"   commit {commit}" if commit else ""
+    fig.text(0.01, 0.945, f"{sub}   {sc.title_extra}{gtxt}{ctext}{mock}{'   [log scale]' if log else ''}", fontsize=10, color=MUTED, ha="left", va="top")
     fig.legend(
         handles=[
             Line2D([0], [0], color=INK, lw=0.7, alpha=0.4, label="each seed"),
@@ -747,7 +749,9 @@ def chart_combined(scs: list[Scenario], meta: dict, root: Path, log: bool, saved
     seeds = scs[0].n
     commit = meta.get("commit", "")
     mock = "  MOCK SIM" if meta.get("args", {}).get("mock") else ""
-    fig.text(0.01, 0.945, f"{seeds} seeds per scenario; thin lines = seeds, bold = median, band = interquartile; dashed red = shock, blue band = prior range; commit {commit}{mock}{'  [log scale]' if log else ''}", fontsize=10, color=MUTED, ha="left", va="top")
+    marks = "; dashed red = shock, blue band = prior range" if any(sc.events() for sc in scs) else ""
+    ctext = f"; commit {commit}" if commit else ""
+    fig.text(0.01, 0.945, f"{seeds} seeds per scenario; thin lines = seeds, bold = median, band = interquartile{marks}{ctext}{mock}{'  [log scale]' if log else ''}", fontsize=10, color=MUTED, ha="left", va="top")
     fig.tight_layout(rect=(0, 0, 1, 0.925))
     save(fig, root / f"stability_overview{suffix(log)}.png", saved)
 

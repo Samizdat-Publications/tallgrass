@@ -121,6 +121,8 @@ The default sim is now **checkpoint v5 on a 2x valley calendar** (since about 06
 | 6 (01:40) | Gemini, video | 4 | 6 | 2 | 7 | 9 | 5 |
 | 7 (07:25) | blind critic, stills + 2x-calendar charts | 7 | 6 | 6 | 4 | 7 | 5 |
 | 7 (07:51) | Gemini, video | 5 | 7 | 2 | 4 | 8 | 3 |
+| 8 (09:05) | blind critic, stills + 2x-calendar charts | 7 | 5 | 6 | 4 | 6 | 5 |
+| 8 (09:10) | Gemini, video | 5 | 6 | 2 | 4 | 8 | 3 |
 
 Every issue and its triage is in `REVIEWS.md`.
 - Round 4's verdict: animals were illegible and looked motionless at drone distance. In the drone shots a wolf is about 20 px tall, so planted feet can't read. The animal work since then targets exactly that, with whole-body motion scaled to camera distance, larger minimum sizes and a kill lunge.

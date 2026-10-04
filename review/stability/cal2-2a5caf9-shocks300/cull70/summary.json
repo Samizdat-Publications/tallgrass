@@ -1,5 +1,6 @@
 {
  "scenario": "cull70",
+ "description": "At 40% of the run, 70% of the bison are removed.",
  "mode": {
   "ticks": 720000,
   "generations": null,
@@ -22,5 +23,3277 @@
  ],
  "priorEvent": 0,
  "recoveryEvent": 0,
+ "columns": [
+  "tick",
+  "year",
+  "pop_bison",
+  "pop_wolf",
+  "pop_raven",
+  "pop_pronghorn",
+  "pop_rabbit",
+  "pop_cougar",
+  "grass_mean",
+  "browse_mean",
+  "soil_mean",
+  "fear_mean",
+  "gen_bison",
+  "gen_wolf",
+  "gen_pronghorn",
+  "trait_bison_speed",
+  "trait_bison_size",
+  "trait_bison_coat",
+  "trait_bison_sight",
+  "trait_bison_herding",
+  "trait_wolf_speed",
+  "trait_wolf_size",
+  "trait_wolf_coat",
+  "trait_wolf_sight",
+  "trait_pronghorn_speed",
+  "trait_pronghorn_coat",
+  "trait_bison_litter",
+  "trait_pronghorn_litter",
+  "juv_bison",
+  "infected_bison",
+  "kills",
+  "kills_pronghorn",
+  "strife_wolf",
+  "kills_cougar",
+  "births_pronghorn",
+  "starved_pronghorn",
+  "chases",
+  "giveups",
+  "births_bison",
+  "births_wolf",
+  "starved_bison",
+  "starved_juv_bison",
+  "starved_wolf",
+  "old_bison",
+  "thirst_bison",
+  "thirst_wolf",
+  "old_wolf",
+  "killed_bison",
+  "packs",
+  "carcasses",
+  "drought"
+ ],
+ "seeds": [
+  {
+   "seed": 1,
+   "csv": "seed_1.csv",
+   "events": [
+    {
+     "label": "cull 70% bison",
+     "kind": "cull",
+     "frac": 0.4,
+     "tick": 288000,
+     "applied": true
+    }
+   ],
+   "metrics": {
+    "seed": 1,
+    "samples": 481,
+    "lastTick": 720000,
+    "totalTicks": 720000,
+    "burnInTick": 108000,
+    "sampleSpacing": 1500,
+    "species": {
+     "bison": {
+      "key": "bison",
+      "initial": 800,
+      "persisted": true,
+      "finalPop": 515,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 1173.2273838630806,
+      "min": 334,
+      "max": 2035,
+      "cv": 0.2484911381690095,
+      "maxOverMean": 1.734531624465979,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 45,
+      "periodTicks": 22500,
+      "periodStrength": 0.188270934809076,
+      "prior": {
+       "lo": 913,
+       "hi": 1543,
+       "median": 1188,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 90000,
+       "minRel": 0.47676767676767673,
+       "maxRel": 1.3207070707070707
+      }
+     },
+     "wolf": {
+      "key": "wolf",
+      "initial": 24,
+      "persisted": true,
+      "finalPop": 56,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 55.775061124694375,
+      "min": 35,
+      "max": 77,
+      "cv": 0.12030612996303343,
+      "maxOverMean": 1.3805453270208663,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 45,
+      "periodTicks": 12000,
+      "periodStrength": 0.2418154966265048,
+      "prior": {
+       "lo": 45,
+       "hi": 61,
+       "median": 53,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 78000,
+       "minRel": 0.8867924528301887,
+       "maxRel": 1.2037735849056603
+      }
+     },
+     "raven": {
+      "key": "raven",
+      "initial": 30,
+      "persisted": true,
+      "finalPop": 312,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 300.83374083129587,
+      "min": 251,
+      "max": 324,
+      "cv": 0.06089634479363701,
+      "maxOverMean": 1.0770068513747448,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 0,
+      "periodTicks": 6000,
+      "periodStrength": 0.9283088464084868,
+      "prior": {
+       "lo": 278,
+       "hi": 321,
+       "median": 307,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": false,
+       "recoveryTicks": 0,
+       "minRel": 0.9394136807817589,
+       "maxRel": 1.003257328990228
+      }
+     },
+     "pronghorn": {
+      "key": "pronghorn",
+      "initial": 350,
+      "persisted": true,
+      "finalPop": 988,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 827.5281173594132,
+      "min": 126,
+      "max": 2070,
+      "cv": 0.4023344367026642,
+      "maxOverMean": 2.50142557887366,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 67,
+      "periodTicks": 9000,
+      "periodStrength": 0.2814862385125041,
+      "prior": {
+       "lo": 500,
+       "hi": 1350,
+       "median": 813,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 90000,
+       "minRel": 0.3810578105781058,
+       "maxRel": 1.4127921279212792
+      }
+     }
+    },
+    "maxGen": 445.9689,
+    "shock": {
+     "priorEndTick": 288000,
+     "recoveryStartTick": 288000,
+     "label": "cull 70% bison"
+    }
+   }
+  },
+  {
+   "seed": 2,
+   "csv": "seed_2.csv",
+   "events": [
+    {
+     "label": "cull 70% bison",
+     "kind": "cull",
+     "frac": 0.4,
+     "tick": 288000,
+     "applied": true
+    }
+   ],
+   "metrics": {
+    "seed": 2,
+    "samples": 481,
+    "lastTick": 720000,
+    "totalTicks": 720000,
+    "burnInTick": 108000,
+    "sampleSpacing": 1500,
+    "species": {
+     "bison": {
+      "key": "bison",
+      "initial": 800,
+      "persisted": true,
+      "finalPop": 859,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 1052.0146699266504,
+      "min": 202,
+      "max": 2046,
+      "cv": 0.29255203862470675,
+      "maxOverMean": 1.9448397997555045,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 41,
+      "periodTicks": 22500,
+      "periodStrength": 0.18048556238471344,
+      "prior": {
+       "lo": 632,
+       "hi": 1360,
+       "median": 974,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 37500,
+       "minRel": 0.5250513347022587,
+       "maxRel": 1.7082135523613962
+      }
+     },
+     "wolf": {
+      "key": "wolf",
+      "initial": 24,
+      "persisted": true,
+      "finalPop": 50,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 53.354523227383865,
+      "min": 35,
+      "max": 70,
+      "cv": 0.1096775829379672,
+      "maxOverMean": 1.3119787370543488,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 37,
+      "periodTicks": 12000,
+      "periodStrength": 0.2959660773918642,
+      "prior": {
+       "lo": 44,
+       "hi": 58,
+       "median": 51,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 216000,
+       "minRel": 0.9411764705882353,
+       "maxRel": 1.2549019607843137
+      }
+     },
+     "raven": {
+      "key": "raven",
+      "initial": 30,
+      "persisted": true,
+      "finalPop": 313,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 300.7334963325183,
+      "min": 243,
+      "max": 325,
+      "cv": 0.06041828332777232,
+      "maxOverMean": 1.0806910569105692,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 0,
+      "periodTicks": 6000,
+      "periodStrength": 0.9306056048564183,
+      "prior": {
+       "lo": 273,
+       "hi": 321,
+       "median": 305,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": false,
+       "recoveryTicks": 0,
+       "minRel": 0.9481967213114754,
+       "maxRel": 1.0170491803278687
+      }
+     },
+     "pronghorn": {
+      "key": "pronghorn",
+      "initial": 350,
+      "persisted": true,
+      "finalPop": 472,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 743.7652811735941,
+      "min": 135,
+      "max": 1854,
+      "cv": 0.3935327972475517,
+      "maxOverMean": 2.4927218934911246,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 62,
+      "periodTicks": 10500,
+      "periodStrength": 0.20999932696888107,
+      "prior": {
+       "lo": 342,
+       "hi": 1074,
+       "median": 648,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 19500,
+       "minRel": 0.6546296296296296,
+       "maxRel": 1.6901234567901235
+      }
+     }
+    },
+    "maxGen": 477.8801,
+    "shock": {
+     "priorEndTick": 288000,
+     "recoveryStartTick": 288000,
+     "label": "cull 70% bison"
+    }
+   }
+  },
+  {
+   "seed": 3,
+   "csv": "seed_3.csv",
+   "events": [
+    {
+     "label": "cull 70% bison",
+     "kind": "cull",
+     "frac": 0.4,
+     "tick": 288000,
+     "applied": true
+    }
+   ],
+   "metrics": {
+    "seed": 3,
+    "samples": 481,
+    "lastTick": 720000,
+    "totalTicks": 720000,
+    "burnInTick": 108000,
+    "sampleSpacing": 1500,
+    "species": {
+     "bison": {
+      "key": "bison",
+      "initial": 800,
+      "persisted": true,
+      "finalPop": 710,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 1017.2933985330073,
+      "min": 344,
+      "max": 1895,
+      "cv": 0.28082289150577655,
+      "maxOverMean": 1.862786097631906,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 46,
+      "periodTicks": 24000,
+      "periodStrength": 0.1598182782647539,
+      "prior": {
+       "lo": 523,
+       "hi": 1217,
+       "median": 872,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 37500,
+       "minRel": 0.7403669724770643,
+       "maxRel": 1.7479357798165138
+      }
+     },
+     "wolf": {
+      "key": "wolf",
+      "initial": 30,
+      "persisted": true,
+      "finalPop": 68,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 60.946210268948654,
+      "min": 43,
+      "max": 79,
+      "cv": 0.09108773569552082,
+      "maxOverMean": 1.2962249769326433,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 28,
+      "periodTicks": 12000,
+      "periodStrength": 0.35148852887841614,
+      "prior": {
+       "lo": 54,
+       "hi": 66,
+       "median": 61,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 240000,
+       "minRel": 0.8721311475409836,
+       "maxRel": 1.0885245901639344
+      }
+     },
+     "raven": {
+      "key": "raven",
+      "initial": 30,
+      "persisted": true,
+      "finalPop": 306,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 300.3838630806846,
+      "min": 251,
+      "max": 328,
+      "cv": 0.06236142698573854,
+      "maxOverMean": 1.0919361534141319,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 0,
+      "periodTicks": 6000,
+      "periodStrength": 0.9118377660013159,
+      "prior": {
+       "lo": 273,
+       "hi": 320,
+       "median": 306,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": false,
+       "recoveryTicks": 0,
+       "minRel": 0.9477124183006536,
+       "maxRel": 1.0098039215686274
+      }
+     },
+     "pronghorn": {
+      "key": "pronghorn",
+      "initial": 350,
+      "persisted": true,
+      "finalPop": 693,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 676.8484107579462,
+      "min": 133,
+      "max": 1712,
+      "cv": 0.3820673770113037,
+      "maxOverMean": 2.529369904382096,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 66,
+      "periodTicks": 10500,
+      "periodStrength": 0.28105456301955917,
+      "prior": {
+       "lo": 315,
+       "hi": 899,
+       "median": 585,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 345000,
+       "minRel": 0.6632478632478632,
+       "maxRel": 1.820854700854701
+      }
+     }
+    },
+    "maxGen": 443.769,
+    "shock": {
+     "priorEndTick": 288000,
+     "recoveryStartTick": 288000,
+     "label": "cull 70% bison"
+    }
+   }
+  },
+  {
+   "seed": 4,
+   "csv": "seed_4.csv",
+   "events": [
+    {
+     "label": "cull 70% bison",
+     "kind": "cull",
+     "frac": 0.4,
+     "tick": 288000,
+     "applied": true
+    }
+   ],
+   "metrics": {
+    "seed": 4,
+    "samples": 481,
+    "lastTick": 720000,
+    "totalTicks": 720000,
+    "burnInTick": 108000,
+    "sampleSpacing": 1500,
+    "species": {
+     "bison": {
+      "key": "bison",
+      "initial": 800,
+      "persisted": true,
+      "finalPop": 665,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 1080.955990220049,
+      "min": 251,
+      "max": 1998,
+      "cv": 0.2697452505497002,
+      "maxOverMean": 1.848363872421179,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 40,
+      "periodTicks": 13500,
+      "periodStrength": 0.275980368918111,
+      "prior": {
+       "lo": 588,
+       "hi": 1329,
+       "median": 895,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 72000,
+       "minRel": 0.6623463687150838,
+       "maxRel": 1.8513966480446928
+      }
+     },
+     "wolf": {
+      "key": "wolf",
+      "initial": 24,
+      "persisted": true,
+      "finalPop": 57,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 60.89242053789731,
+      "min": 44,
+      "max": 77,
+      "cv": 0.09923882103939051,
+      "maxOverMean": 1.2645251957438266,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 29,
+      "periodTicks": 12000,
+      "periodStrength": 0.23990451889363643,
+      "prior": {
+       "lo": 54,
+       "hi": 69,
+       "median": 62,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 234000,
+       "minRel": 0.8096774193548387,
+       "maxRel": 1.1064516129032258
+      }
+     },
+     "raven": {
+      "key": "raven",
+      "initial": 30,
+      "persisted": true,
+      "finalPop": 311,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 300.1540342298288,
+      "min": 237,
+      "max": 328,
+      "cv": 0.06409717321027682,
+      "maxOverMean": 1.0927722522258336,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 1,
+      "periodTicks": 6000,
+      "periodStrength": 0.9323163025197553,
+      "prior": {
+       "lo": 269,
+       "hi": 321,
+       "median": 305,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": false,
+       "recoveryTicks": 0,
+       "minRel": 0.9527868852459017,
+       "maxRel": 1.0131147540983607
+      }
+     },
+     "pronghorn": {
+      "key": "pronghorn",
+      "initial": 350,
+      "persisted": true,
+      "finalPop": 330,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 676.1075794621026,
+      "min": 89,
+      "max": 2277,
+      "cv": 0.47722552334114954,
+      "maxOverMean": 3.3678072383266797,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 59,
+      "periodTicks": 10500,
+      "periodStrength": 0.4344676364927096,
+      "prior": {
+       "lo": 210,
+       "hi": 729,
+       "median": 431,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 24000,
+       "minRel": 0.8190255220417634,
+       "maxRel": 2.630162412993039
+      }
+     }
+    },
+    "maxGen": 383.178,
+    "shock": {
+     "priorEndTick": 288000,
+     "recoveryStartTick": 288000,
+     "label": "cull 70% bison"
+    }
+   }
+  },
+  {
+   "seed": 5,
+   "csv": "seed_5.csv",
+   "events": [
+    {
+     "label": "cull 70% bison",
+     "kind": "cull",
+     "frac": 0.4,
+     "tick": 288000,
+     "applied": true
+    }
+   ],
+   "metrics": {
+    "seed": 5,
+    "samples": 481,
+    "lastTick": 720000,
+    "totalTicks": 720000,
+    "burnInTick": 108000,
+    "sampleSpacing": 1500,
+    "species": {
+     "bison": {
+      "key": "bison",
+      "initial": 800,
+      "persisted": true,
+      "finalPop": 1371,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 1241.0195599022004,
+      "min": 402,
+      "max": 2126,
+      "cv": 0.2640286472741466,
+      "maxOverMean": 1.713107567915804,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 47,
+      "periodTicks": 78000,
+      "periodStrength": 0.1813388507776225,
+      "prior": {
+       "lo": 763,
+       "hi": 1417,
+       "median": 1039,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 15000,
+       "minRel": 0.6816169393647739,
+       "maxRel": 1.7709335899903753
+      }
+     },
+     "wolf": {
+      "key": "wolf",
+      "initial": 24,
+      "persisted": true,
+      "finalPop": 55,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 53.63325183374083,
+      "min": 33,
+      "max": 70,
+      "cv": 0.11525761863957834,
+      "maxOverMean": 1.3051604668125456,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 46,
+      "periodTicks": 6000,
+      "periodStrength": 0.20409721345741946,
+      "prior": {
+       "lo": 45,
+       "hi": 60,
+       "median": 52,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": false,
+       "recoveryTicks": 0,
+       "minRel": 0.8999999999999999,
+       "maxRel": 1.1538461538461537
+      }
+     },
+     "raven": {
+      "key": "raven",
+      "initial": 30,
+      "persisted": true,
+      "finalPop": 311,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 300.40586797066015,
+      "min": 254,
+      "max": 326,
+      "cv": 0.060591290179539695,
+      "maxOverMean": 1.085198508944704,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 0,
+      "periodTicks": 6000,
+      "periodStrength": 0.9245343909719302,
+      "prior": {
+       "lo": 274,
+       "hi": 321,
+       "median": 303,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": false,
+       "recoveryTicks": 0,
+       "minRel": 0.9465346534653466,
+       "maxRel": 1.019141914191419
+      }
+     },
+     "pronghorn": {
+      "key": "pronghorn",
+      "initial": 350,
+      "persisted": true,
+      "finalPop": 1131,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 865.6210268948655,
+      "min": 149,
+      "max": 2009,
+      "cv": 0.37650906976083043,
+      "maxOverMean": 2.320877078513949,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 68,
+      "periodTicks": 9000,
+      "periodStrength": 0.3103405424292679,
+      "prior": {
+       "lo": 484,
+       "hi": 1168,
+       "median": 784,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 309000,
+       "minRel": 0.5278061224489796,
+       "maxRel": 1.5806122448979592
+      }
+     }
+    },
+    "maxGen": 416.5551,
+    "shock": {
+     "priorEndTick": 288000,
+     "recoveryStartTick": 288000,
+     "label": "cull 70% bison"
+    }
+   }
+  },
+  {
+   "seed": 6,
+   "csv": "seed_6.csv",
+   "events": [
+    {
+     "label": "cull 70% bison",
+     "kind": "cull",
+     "frac": 0.4,
+     "tick": 288000,
+     "applied": true
+    }
+   ],
+   "metrics": {
+    "seed": 6,
+    "samples": 481,
+    "lastTick": 720000,
+    "totalTicks": 720000,
+    "burnInTick": 108000,
+    "sampleSpacing": 1500,
+    "species": {
+     "bison": {
+      "key": "bison",
+      "initial": 800,
+      "persisted": true,
+      "finalPop": 700,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 1057.2591687041565,
+      "min": 345,
+      "max": 1932,
+      "cv": 0.26283110391449405,
+      "maxOverMean": 1.8273665125722967,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 41,
+      "periodTicks": 64500,
+      "periodStrength": 0.2528035434252502,
+      "prior": {
+       "lo": 652,
+       "hi": 1084,
+       "median": 849,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 67500,
+       "minRel": 0.7012956419316843,
+       "maxRel": 1.929093050647821
+      }
+     },
+     "wolf": {
+      "key": "wolf",
+      "initial": 24,
+      "persisted": true,
+      "finalPop": 56,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 52.53300733496332,
+      "min": 38,
+      "max": 66,
+      "cv": 0.1010074070298346,
+      "maxOverMean": 1.2563529740296007,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 30,
+      "periodTicks": 6000,
+      "periodStrength": 0.2520948692742781,
+      "prior": {
+       "lo": 44,
+       "hi": 59,
+       "median": 52,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": false,
+       "recoveryTicks": 0,
+       "minRel": 0.8961538461538462,
+       "maxRel": 1.123076923076923
+      }
+     },
+     "raven": {
+      "key": "raven",
+      "initial": 30,
+      "persisted": true,
+      "finalPop": 313,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 300.63080684596576,
+      "min": 260,
+      "max": 325,
+      "cv": 0.05984275016590083,
+      "maxOverMean": 1.0810601994176874,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 0,
+      "periodTicks": 6000,
+      "periodStrength": 0.9219900237203759,
+      "prior": {
+       "lo": 270,
+       "hi": 320,
+       "median": 303,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": false,
+       "recoveryTicks": 0,
+       "minRel": 0.9617161716171616,
+       "maxRel": 1.0250825082508253
+      }
+     },
+     "pronghorn": {
+      "key": "pronghorn",
+      "initial": 350,
+      "persisted": true,
+      "finalPop": 709,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 797.8166259168704,
+      "min": 179,
+      "max": 1857,
+      "cv": 0.38582782896702955,
+      "maxOverMean": 2.327602533810185,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 63,
+      "periodTicks": 9000,
+      "periodStrength": 0.3754652012034315,
+      "prior": {
+       "lo": 418,
+       "hi": 1289,
+       "median": 750,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 36000,
+       "minRel": 0.4802666666666667,
+       "maxRel": 1.3506666666666667
+      }
+     }
+    },
+    "maxGen": 442.8029,
+    "shock": {
+     "priorEndTick": 288000,
+     "recoveryStartTick": 288000,
+     "label": "cull 70% bison"
+    }
+   }
+  },
+  {
+   "seed": 7,
+   "csv": "seed_7.csv",
+   "events": [
+    {
+     "label": "cull 70% bison",
+     "kind": "cull",
+     "frac": 0.4,
+     "tick": 288000,
+     "applied": true
+    }
+   ],
+   "metrics": {
+    "seed": 7,
+    "samples": 481,
+    "lastTick": 720000,
+    "totalTicks": 720000,
+    "burnInTick": 108000,
+    "sampleSpacing": 1500,
+    "species": {
+     "bison": {
+      "key": "bison",
+      "initial": 800,
+      "persisted": true,
+      "finalPop": 826,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 1309.9364303178484,
+      "min": 330,
+      "max": 2579,
+      "cv": 0.2713915050098875,
+      "maxOverMean": 1.968797828894812,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 39,
+      "periodTicks": null,
+      "periodStrength": null,
+      "prior": {
+       "lo": 809,
+       "hi": 1584,
+       "median": 1196,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 15000,
+       "minRel": 0.48110367892976585,
+       "maxRel": 1.6817725752508361
+      }
+     },
+     "wolf": {
+      "key": "wolf",
+      "initial": 24,
+      "persisted": true,
+      "finalPop": 41,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 39.27383863080684,
+      "min": 22,
+      "max": 50,
+      "cv": 0.11367088319646525,
+      "maxOverMean": 1.2731121210234702,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 37,
+      "periodTicks": 12000,
+      "periodStrength": 0.2014543753306818,
+      "prior": {
+       "lo": 32,
+       "hi": 43,
+       "median": 38,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 93000,
+       "minRel": 0.8947368421052632,
+       "maxRel": 1.1631578947368422
+      }
+     },
+     "raven": {
+      "key": "raven",
+      "initial": 30,
+      "persisted": true,
+      "finalPop": 308,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 300.05623471882643,
+      "min": 251,
+      "max": 329,
+      "cv": 0.06201292297939466,
+      "maxOverMean": 1.0964611360543663,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 0,
+      "periodTicks": 6000,
+      "periodStrength": 0.9203641335752347,
+      "prior": {
+       "lo": 272,
+       "hi": 321,
+       "median": 302,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": false,
+       "recoveryTicks": 0,
+       "minRel": 0.9582781456953642,
+       "maxRel": 1.0231788079470199
+      }
+     },
+     "pronghorn": {
+      "key": "pronghorn",
+      "initial": 350,
+      "persisted": true,
+      "finalPop": 766,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 940.2151589242054,
+      "min": 86,
+      "max": 2029,
+      "cv": 0.3743526075110917,
+      "maxOverMean": 2.1580166845231283,
+      "nearZeroFrac": 0.0024449877750611247,
+      "longestNearZeroTicks": 1500,
+      "peaks": 67,
+      "periodTicks": 9000,
+      "periodStrength": 0.2778248400979102,
+      "prior": {
+       "lo": 427,
+       "hi": 1306,
+       "median": 846,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 225000,
+       "minRel": 0.3470449172576832,
+       "maxRel": 1.4851063829787234
+      }
+     }
+    },
+    "maxGen": 424.6102,
+    "shock": {
+     "priorEndTick": 288000,
+     "recoveryStartTick": 288000,
+     "label": "cull 70% bison"
+    }
+   }
+  },
+  {
+   "seed": 8,
+   "csv": "seed_8.csv",
+   "events": [
+    {
+     "label": "cull 70% bison",
+     "kind": "cull",
+     "frac": 0.4,
+     "tick": 288000,
+     "applied": true
+    }
+   ],
+   "metrics": {
+    "seed": 8,
+    "samples": 481,
+    "lastTick": 720000,
+    "totalTicks": 720000,
+    "burnInTick": 108000,
+    "sampleSpacing": 1500,
+    "species": {
+     "bison": {
+      "key": "bison",
+      "initial": 800,
+      "persisted": true,
+      "finalPop": 1603,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 1056.8924205378974,
+      "min": 225,
+      "max": 1802,
+      "cv": 0.2660851359328541,
+      "maxOverMean": 1.7049985078735694,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 37,
+      "periodTicks": 46500,
+      "periodStrength": 0.2007077724930511,
+      "prior": {
+       "lo": 657,
+       "hi": 1263,
+       "median": 935,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 40500,
+       "minRel": 0.5702673796791444,
+       "maxRel": 1.6874866310160428
+      }
+     },
+     "wolf": {
+      "key": "wolf",
+      "initial": 24,
+      "persisted": true,
+      "finalPop": 48,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 47.997555012224936,
+      "min": 37,
+      "max": 62,
+      "cv": 0.09316853575488238,
+      "maxOverMean": 1.2917324639600631,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 26,
+      "periodTicks": 12000,
+      "periodStrength": 0.26346997419114426,
+      "prior": {
+       "lo": 44,
+       "hi": 55,
+       "median": 50,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 15000,
+       "minRel": 0.8440000000000001,
+       "maxRel": 1.048
+      }
+     },
+     "raven": {
+      "key": "raven",
+      "initial": 30,
+      "persisted": true,
+      "finalPop": 315,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 300.70660146699265,
+      "min": 241,
+      "max": 328,
+      "cv": 0.06099929097959467,
+      "maxOverMean": 1.0907642146858663,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 0,
+      "periodTicks": 6000,
+      "periodStrength": 0.9254027215022481,
+      "prior": {
+       "lo": 273,
+       "hi": 321,
+       "median": 305,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": false,
+       "recoveryTicks": 0,
+       "minRel": 0.942295081967213,
+       "maxRel": 1.0163934426229508
+      }
+     },
+     "pronghorn": {
+      "key": "pronghorn",
+      "initial": 350,
+      "persisted": true,
+      "finalPop": 1142,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 750.9315403422983,
+      "min": 188,
+      "max": 1563,
+      "cv": 0.3471164618614646,
+      "maxOverMean": 2.081414770895807,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 63,
+      "periodTicks": 9000,
+      "periodStrength": 0.2350998731882169,
+      "prior": {
+       "lo": 379,
+       "hi": 939,
+       "median": 633,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 73500,
+       "minRel": 0.6499210110584518,
+       "maxRel": 1.6761453396524486
+      }
+     }
+    },
+    "maxGen": 429.4591,
+    "shock": {
+     "priorEndTick": 288000,
+     "recoveryStartTick": 288000,
+     "label": "cull 70% bison"
+    }
+   }
+  },
+  {
+   "seed": 9,
+   "csv": "seed_9.csv",
+   "events": [
+    {
+     "label": "cull 70% bison",
+     "kind": "cull",
+     "frac": 0.4,
+     "tick": 288000,
+     "applied": true
+    }
+   ],
+   "metrics": {
+    "seed": 9,
+    "samples": 481,
+    "lastTick": 720000,
+    "totalTicks": 720000,
+    "burnInTick": 108000,
+    "sampleSpacing": 1500,
+    "species": {
+     "bison": {
+      "key": "bison",
+      "initial": 800,
+      "persisted": true,
+      "finalPop": 1116,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 1015.9315403422983,
+      "min": 270,
+      "max": 1937,
+      "cv": 0.2846806293705869,
+      "maxOverMean": 1.9066245343139614,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 41,
+      "periodTicks": 70500,
+      "periodStrength": 0.2093879896106097,
+      "prior": {
+       "lo": 679,
+       "hi": 1333,
+       "median": 920,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 16500,
+       "minRel": 0.3897826086956522,
+       "maxRel": 1.7284782608695652
+      }
+     },
+     "wolf": {
+      "key": "wolf",
+      "initial": 24,
+      "persisted": true,
+      "finalPop": 53,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 52.97310513447433,
+      "min": 36,
+      "max": 72,
+      "cv": 0.10048479555285302,
+      "maxOverMean": 1.3591802824702297,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 36,
+      "periodTicks": 12000,
+      "periodStrength": 0.23341074317270538,
+      "prior": {
+       "lo": 46,
+       "hi": 58,
+       "median": 52,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 18000,
+       "minRel": 0.8615384615384615,
+       "maxRel": 1.1653846153846155
+      }
+     },
+     "raven": {
+      "key": "raven",
+      "initial": 30,
+      "persisted": true,
+      "finalPop": 310,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 300.1418092909535,
+      "min": 236,
+      "max": 329,
+      "cv": 0.06240629222884,
+      "maxOverMean": 1.0961485198520668,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 1,
+      "periodTicks": 6000,
+      "periodStrength": 0.9215918881595773,
+      "prior": {
+       "lo": 273,
+       "hi": 321,
+       "median": 303,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": false,
+       "recoveryTicks": 0,
+       "minRel": 0.9392739273927393,
+       "maxRel": 1.021122112211221
+      }
+     },
+     "pronghorn": {
+      "key": "pronghorn",
+      "initial": 350,
+      "persisted": true,
+      "finalPop": 900,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 708.2640586797066,
+      "min": 180,
+      "max": 2234,
+      "cv": 0.4145886403485559,
+      "maxOverMean": 3.154190831262082,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 64,
+      "periodTicks": 10500,
+      "periodStrength": 0.24739565599136518,
+      "prior": {
+       "lo": 404,
+       "hi": 1075,
+       "median": 679,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 246000,
+       "minRel": 0.5731958762886598,
+       "maxRel": 1.5225331369661266
+      }
+     }
+    },
+    "maxGen": 467.4946,
+    "shock": {
+     "priorEndTick": 288000,
+     "recoveryStartTick": 288000,
+     "label": "cull 70% bison"
+    }
+   }
+  },
+  {
+   "seed": 10,
+   "csv": "seed_10.csv",
+   "events": [
+    {
+     "label": "cull 70% bison",
+     "kind": "cull",
+     "frac": 0.4,
+     "tick": 288000,
+     "applied": true
+    }
+   ],
+   "metrics": {
+    "seed": 10,
+    "samples": 481,
+    "lastTick": 720000,
+    "totalTicks": 720000,
+    "burnInTick": 108000,
+    "sampleSpacing": 1500,
+    "species": {
+     "bison": {
+      "key": "bison",
+      "initial": 800,
+      "persisted": true,
+      "finalPop": 1192,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 936.6723716381418,
+      "min": 220,
+      "max": 1785,
+      "cv": 0.3274812500854084,
+      "maxOverMean": 1.9056823432063252,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 40,
+      "periodTicks": 12000,
+      "periodStrength": 0.18890671666555986,
+      "prior": {
+       "lo": 437,
+       "hi": 1318,
+       "median": 757,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 88500,
+       "minRel": 0.5730515191545574,
+       "maxRel": 1.905416116248349
+      }
+     },
+     "wolf": {
+      "key": "wolf",
+      "initial": 24,
+      "persisted": true,
+      "finalPop": 70,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 62.119804400978,
+      "min": 43,
+      "max": 81,
+      "cv": 0.10577740615208088,
+      "maxOverMean": 1.303931987247609,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 40,
+      "periodTicks": 12000,
+      "periodStrength": 0.3187810185450426,
+      "prior": {
+       "lo": 51,
+       "hi": 67,
+       "median": 59,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 37500,
+       "minRel": 0.8949152542372881,
+       "maxRel": 1.2033898305084745
+      }
+     },
+     "raven": {
+      "key": "raven",
+      "initial": 30,
+      "persisted": true,
+      "finalPop": 315,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 299.9926650366748,
+      "min": 247,
+      "max": 324,
+      "cv": 0.06273363001875813,
+      "maxOverMean": 1.0800264065136067,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 0,
+      "periodTicks": 6000,
+      "periodStrength": 0.9066083046782659,
+      "prior": {
+       "lo": 270,
+       "hi": 321,
+       "median": 302,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": false,
+       "recoveryTicks": 0,
+       "minRel": 0.952317880794702,
+       "maxRel": 1.0218543046357618
+      }
+     },
+     "pronghorn": {
+      "key": "pronghorn",
+      "initial": 350,
+      "persisted": true,
+      "finalPop": 648,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 701.6185819070905,
+      "min": 59,
+      "max": 1926,
+      "cv": 0.44736751104149425,
+      "maxOverMean": 2.745081230267422,
+      "nearZeroFrac": 0.0024449877750611247,
+      "longestNearZeroTicks": 1500,
+      "peaks": 61,
+      "periodTicks": 10500,
+      "periodStrength": 0.3725944381286936,
+      "prior": {
+       "lo": 270,
+       "hi": 1167,
+       "median": 623,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 88500,
+       "minRel": 0.24911717495987157,
+       "maxRel": 1.6879614767255215
+      }
+     }
+    },
+    "maxGen": 463.0369,
+    "shock": {
+     "priorEndTick": 288000,
+     "recoveryStartTick": 288000,
+     "label": "cull 70% bison"
+    }
+   }
+  },
+  {
+   "seed": 11,
+   "csv": "seed_11.csv",
+   "events": [
+    {
+     "label": "cull 70% bison",
+     "kind": "cull",
+     "frac": 0.4,
+     "tick": 288000,
+     "applied": true
+    }
+   ],
+   "metrics": {
+    "seed": 11,
+    "samples": 92,
+    "lastTick": 136500,
+    "totalTicks": 720000,
+    "burnInTick": 108000,
+    "sampleSpacing": 1500,
+    "species": {
+     "bison": {
+      "key": "bison",
+      "initial": 800,
+      "persisted": false,
+      "finalPop": 0,
+      "extinctionTick": 46500,
+      "everZero": true,
+      "mean": 0,
+      "min": 0,
+      "max": 0,
+      "cv": null,
+      "maxOverMean": null,
+      "nearZeroFrac": 1,
+      "longestNearZeroTicks": 30000,
+      "peaks": 0,
+      "periodTicks": null,
+      "periodStrength": null,
+      "prior": null,
+      "recovery": null
+     },
+     "wolf": {
+      "key": "wolf",
+      "initial": 24,
+      "persisted": false,
+      "finalPop": 0,
+      "extinctionTick": 136500,
+      "everZero": true,
+      "mean": 47.15,
+      "min": 0,
+      "max": 68,
+      "cv": 0.43765828613526425,
+      "maxOverMean": 1.4422057264050903,
+      "nearZeroFrac": 0.1,
+      "longestNearZeroTicks": 3000,
+      "peaks": 2,
+      "periodTicks": null,
+      "periodStrength": null,
+      "prior": null,
+      "recovery": null
+     },
+     "raven": {
+      "key": "raven",
+      "initial": 30,
+      "persisted": false,
+      "finalPop": 0,
+      "extinctionTick": 54000,
+      "everZero": true,
+      "mean": 0,
+      "min": 0,
+      "max": 0,
+      "cv": null,
+      "maxOverMean": null,
+      "nearZeroFrac": 1,
+      "longestNearZeroTicks": 30000,
+      "peaks": 0,
+      "periodTicks": null,
+      "periodStrength": null,
+      "prior": null,
+      "recovery": null
+     },
+     "pronghorn": {
+      "key": "pronghorn",
+      "initial": 350,
+      "persisted": false,
+      "finalPop": 0,
+      "extinctionTick": 136500,
+      "everZero": true,
+      "mean": 365.45,
+      "min": 0,
+      "max": 976,
+      "cv": 0.8069287034394103,
+      "maxOverMean": 2.6706799835818855,
+      "nearZeroFrac": 0.25,
+      "longestNearZeroTicks": 7500,
+      "peaks": 2,
+      "periodTicks": null,
+      "periodStrength": null,
+      "prior": null,
+      "recovery": null
+     }
+    },
+    "maxGen": 16.625,
+    "shock": null
+   }
+  },
+  {
+   "seed": 12,
+   "csv": "seed_12.csv",
+   "events": [
+    {
+     "label": "cull 70% bison",
+     "kind": "cull",
+     "frac": 0.4,
+     "tick": 288000,
+     "applied": true
+    }
+   ],
+   "metrics": {
+    "seed": 12,
+    "samples": 481,
+    "lastTick": 720000,
+    "totalTicks": 720000,
+    "burnInTick": 108000,
+    "sampleSpacing": 1500,
+    "species": {
+     "bison": {
+      "key": "bison",
+      "initial": 800,
+      "persisted": true,
+      "finalPop": 1137,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 1255.205378973105,
+      "min": 388,
+      "max": 2426,
+      "cv": 0.23944174988039926,
+      "maxOverMean": 1.9327514370474834,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 41,
+      "periodTicks": 22500,
+      "periodStrength": 0.20035252010086077,
+      "prior": {
+       "lo": 877,
+       "hi": 1564,
+       "median": 1165,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 99000,
+       "minRel": 0.5138197424892704,
+       "maxRel": 1.600343347639485
+      }
+     },
+     "wolf": {
+      "key": "wolf",
+      "initial": 24,
+      "persisted": true,
+      "finalPop": 62,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 53.080684596577015,
+      "min": 30,
+      "max": 70,
+      "cv": 0.11537701173194974,
+      "maxOverMean": 1.3187471211423307,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 38,
+      "periodTicks": 12000,
+      "periodStrength": 0.3192352143789838,
+      "prior": {
+       "lo": 44,
+       "hi": 59,
+       "median": 52,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 174000,
+       "minRel": 0.8192307692307692,
+       "maxRel": 1.1807692307692308
+      }
+     },
+     "raven": {
+      "key": "raven",
+      "initial": 30,
+      "persisted": true,
+      "finalPop": 315,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 300.09046454767724,
+      "min": 238,
+      "max": 326,
+      "cv": 0.061940123201726906,
+      "maxOverMean": 1.0863390827541817,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 0,
+      "periodTicks": 6000,
+      "periodStrength": 0.9203018016200643,
+      "prior": {
+       "lo": 269,
+       "hi": 320,
+       "median": 303,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": false,
+       "recoveryTicks": 0,
+       "minRel": 0.9498349834983498,
+       "maxRel": 1.023102310231023
+      }
+     },
+     "pronghorn": {
+      "key": "pronghorn",
+      "initial": 350,
+      "persisted": true,
+      "finalPop": 879,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 820.4352078239609,
+      "min": 259,
+      "max": 2008,
+      "cv": 0.3602092853291638,
+      "maxOverMean": 2.4474815084128525,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 64,
+      "periodTicks": 9000,
+      "periodStrength": 0.27316366617482685,
+      "prior": {
+       "lo": 434,
+       "hi": 1125,
+       "median": 734,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 175500,
+       "minRel": 0.6201634877384196,
+       "maxRel": 1.6580381471389645
+      }
+     }
+    },
+    "maxGen": 407.4406,
+    "shock": {
+     "priorEndTick": 288000,
+     "recoveryStartTick": 288000,
+     "label": "cull 70% bison"
+    }
+   }
+  },
+  {
+   "seed": 13,
+   "csv": "seed_13.csv",
+   "events": [
+    {
+     "label": "cull 70% bison",
+     "kind": "cull",
+     "frac": 0.4,
+     "tick": 288000,
+     "applied": true
+    }
+   ],
+   "metrics": {
+    "seed": 13,
+    "samples": 481,
+    "lastTick": 720000,
+    "totalTicks": 720000,
+    "burnInTick": 108000,
+    "sampleSpacing": 1500,
+    "species": {
+     "bison": {
+      "key": "bison",
+      "initial": 800,
+      "persisted": true,
+      "finalPop": 1104,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 1128.5843520782396,
+      "min": 316,
+      "max": 2373,
+      "cv": 0.3096054230119753,
+      "maxOverMean": 2.1026341501459083,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 41,
+      "periodTicks": 12000,
+      "periodStrength": 0.15825297448914477,
+      "prior": {
+       "lo": 607,
+       "hi": 1206,
+       "median": 893,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 16500,
+       "minRel": 0.7903695408734602,
+       "maxRel": 1.9896976483762598
+      }
+     },
+     "wolf": {
+      "key": "wolf",
+      "initial": 24,
+      "persisted": true,
+      "finalPop": 49,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 52.55012224938875,
+      "min": 35,
+      "max": 69,
+      "cv": 0.1072728680452019,
+      "maxOverMean": 1.3130321500023263,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 34,
+      "periodTicks": 6000,
+      "periodStrength": 0.19299727133675143,
+      "prior": {
+       "lo": 45,
+       "hi": 59,
+       "median": 53,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 286500,
+       "minRel": 0.8188679245283018,
+       "maxRel": 1.1132075471698113
+      }
+     },
+     "raven": {
+      "key": "raven",
+      "initial": 30,
+      "persisted": true,
+      "finalPop": 310,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 299.8997555012225,
+      "min": 182,
+      "max": 329,
+      "cv": 0.06689385725415421,
+      "maxOverMean": 1.097033238490449,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 2,
+      "periodTicks": 6000,
+      "periodStrength": 0.8552898851670883,
+      "prior": {
+       "lo": 270,
+       "hi": 321,
+       "median": 303,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": false,
+       "recoveryTicks": 0,
+       "minRel": 0.9128712871287129,
+       "maxRel": 1.0303630363036302
+      }
+     },
+     "pronghorn": {
+      "key": "pronghorn",
+      "initial": 350,
+      "persisted": true,
+      "finalPop": 938,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 773.7359413202934,
+      "min": 150,
+      "max": 2550,
+      "cv": 0.44123887603105705,
+      "maxOverMean": 3.295698007318507,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 62,
+      "periodTicks": 10500,
+      "periodStrength": 0.36387764555398844,
+      "prior": {
+       "lo": 391,
+       "hi": 939,
+       "median": 627,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 58500,
+       "minRel": 0.6590111642743222,
+       "maxRel": 1.8708133971291867
+      }
+     }
+    },
+    "maxGen": 440.8315,
+    "shock": {
+     "priorEndTick": 288000,
+     "recoveryStartTick": 288000,
+     "label": "cull 70% bison"
+    }
+   }
+  },
+  {
+   "seed": 14,
+   "csv": "seed_14.csv",
+   "events": [
+    {
+     "label": "cull 70% bison",
+     "kind": "cull",
+     "frac": 0.4,
+     "tick": 288000,
+     "applied": true
+    }
+   ],
+   "metrics": {
+    "seed": 14,
+    "samples": 481,
+    "lastTick": 720000,
+    "totalTicks": 720000,
+    "burnInTick": 108000,
+    "sampleSpacing": 1500,
+    "species": {
+     "bison": {
+      "key": "bison",
+      "initial": 800,
+      "persisted": true,
+      "finalPop": 1288,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 1102.877750611247,
+      "min": 185,
+      "max": 2076,
+      "cv": 0.27916220430092437,
+      "maxOverMean": 1.8823482465299717,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 45,
+      "periodTicks": 78000,
+      "periodStrength": 0.15725810354147468,
+      "prior": {
+       "lo": 666,
+       "hi": 1357,
+       "median": 940,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 10500,
+       "minRel": 0.46595744680851064,
+       "maxRel": 1.7097872340425533
+      }
+     },
+     "wolf": {
+      "key": "wolf",
+      "initial": 30,
+      "persisted": true,
+      "finalPop": 63,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 59.72616136919316,
+      "min": 42,
+      "max": 76,
+      "cv": 0.09810898766395224,
+      "maxOverMean": 1.272474209923039,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 34,
+      "periodTicks": 12000,
+      "periodStrength": 0.3171567578994705,
+      "prior": {
+       "lo": 51,
+       "hi": 66,
+       "median": 58,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 66000,
+       "minRel": 0.9137931034482759,
+       "maxRel": 1.1482758620689655
+      }
+     },
+     "raven": {
+      "key": "raven",
+      "initial": 30,
+      "persisted": true,
+      "finalPop": 308,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 300.7579462102689,
+      "min": 244,
+      "max": 324,
+      "cv": 0.06218707542491361,
+      "maxOverMean": 1.0772782700593448,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 3,
+      "periodTicks": 6000,
+      "periodStrength": 0.9150397387896726,
+      "prior": {
+       "lo": 271,
+       "hi": 321,
+       "median": 306,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": false,
+       "recoveryTicks": 0,
+       "minRel": 0.9509803921568627,
+       "maxRel": 1.0130718954248366
+      }
+     },
+     "pronghorn": {
+      "key": "pronghorn",
+      "initial": 350,
+      "persisted": true,
+      "finalPop": 700,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 682.3911980440098,
+      "min": 139,
+      "max": 1591,
+      "cv": 0.4114480259936992,
+      "maxOverMean": 2.331507212520333,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 65,
+      "periodTicks": 109500,
+      "periodStrength": 0.17252991830179853,
+      "prior": {
+       "lo": 249,
+       "hi": 862,
+       "median": 508,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 213000,
+       "minRel": 0.6440944881889764,
+       "maxRel": 2.0515748031496064
+      }
+     }
+    },
+    "maxGen": 434.2352,
+    "shock": {
+     "priorEndTick": 288000,
+     "recoveryStartTick": 288000,
+     "label": "cull 70% bison"
+    }
+   }
+  },
+  {
+   "seed": 15,
+   "csv": "seed_15.csv",
+   "events": [
+    {
+     "label": "cull 70% bison",
+     "kind": "cull",
+     "frac": 0.4,
+     "tick": 288000,
+     "applied": true
+    }
+   ],
+   "metrics": {
+    "seed": 15,
+    "samples": 481,
+    "lastTick": 720000,
+    "totalTicks": 720000,
+    "burnInTick": 108000,
+    "sampleSpacing": 1500,
+    "species": {
+     "bison": {
+      "key": "bison",
+      "initial": 800,
+      "persisted": true,
+      "finalPop": 1666,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 1391.3520782396088,
+      "min": 281,
+      "max": 2867,
+      "cv": 0.25904265070235466,
+      "maxOverMean": 2.0605855590681523,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 42,
+      "periodTicks": 168000,
+      "periodStrength": 0.1780727215133482,
+      "prior": {
+       "lo": 895,
+       "hi": 1736,
+       "median": 1337,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 13500,
+       "minRel": 0.4139117427075542,
+       "maxRel": 1.4970830216903515
+      }
+     },
+     "wolf": {
+      "key": "wolf",
+      "initial": 24,
+      "persisted": true,
+      "finalPop": 38,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 41.02689486552567,
+      "min": 28,
+      "max": 55,
+      "cv": 0.1199957238757891,
+      "maxOverMean": 1.3405840286054829,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 41,
+      "periodTicks": 12000,
+      "periodStrength": 0.22514496909081827,
+      "prior": {
+       "lo": 33,
+       "hi": 46,
+       "median": 39,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 339000,
+       "minRel": 0.882051282051282,
+       "maxRel": 1.2564102564102564
+      }
+     },
+     "raven": {
+      "key": "raven",
+      "initial": 30,
+      "persisted": true,
+      "finalPop": 309,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 300.7114914425428,
+      "min": 256,
+      "max": 326,
+      "cv": 0.05839746569405759,
+      "maxOverMean": 1.0840955842297404,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 0,
+      "periodTicks": 6000,
+      "periodStrength": 0.9289451804755053,
+      "prior": {
+       "lo": 277,
+       "hi": 321,
+       "median": 304,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": false,
+       "recoveryTicks": 0,
+       "minRel": 0.9480263157894736,
+       "maxRel": 1.0177631578947368
+      }
+     },
+     "pronghorn": {
+      "key": "pronghorn",
+      "initial": 350,
+      "persisted": true,
+      "finalPop": 1030,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 928.2518337408313,
+      "min": 122,
+      "max": 2131,
+      "cv": 0.3740648621569918,
+      "maxOverMean": 2.295713213312086,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 67,
+      "periodTicks": 9000,
+      "periodStrength": 0.3830163106131967,
+      "prior": {
+       "lo": 462,
+       "hi": 1332,
+       "median": 864,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 108000,
+       "minRel": 0.48935185185185187,
+       "maxRel": 1.4439814814814813
+      }
+     }
+    },
+    "maxGen": 439.4226,
+    "shock": {
+     "priorEndTick": 288000,
+     "recoveryStartTick": 288000,
+     "label": "cull 70% bison"
+    }
+   }
+  },
+  {
+   "seed": 16,
+   "csv": "seed_16.csv",
+   "events": [
+    {
+     "label": "cull 70% bison",
+     "kind": "cull",
+     "frac": 0.4,
+     "tick": 288000,
+     "applied": true
+    }
+   ],
+   "metrics": {
+    "seed": 16,
+    "samples": 481,
+    "lastTick": 720000,
+    "totalTicks": 720000,
+    "burnInTick": 108000,
+    "sampleSpacing": 1500,
+    "species": {
+     "bison": {
+      "key": "bison",
+      "initial": 800,
+      "persisted": true,
+      "finalPop": 1134,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 1066.79706601467,
+      "min": 164,
+      "max": 2209,
+      "cv": 0.3524546087404898,
+      "maxOverMean": 2.070684360102677,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 37,
+      "periodTicks": null,
+      "periodStrength": null,
+      "prior": {
+       "lo": 340,
+       "hi": 1281,
+       "median": 791,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 19500,
+       "minRel": 0.7934260429835651,
+       "maxRel": 2.1855878634639696
+      }
+     },
+     "wolf": {
+      "key": "wolf",
+      "initial": 24,
+      "persisted": true,
+      "finalPop": 58,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 62.54034229828851,
+      "min": 46,
+      "max": 76,
+      "cv": 0.09378850026583534,
+      "maxOverMean": 1.21521560655225,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 30,
+      "periodTicks": 6000,
+      "periodStrength": 0.26231009179364967,
+      "prior": {
+       "lo": 54,
+       "hi": 69,
+       "median": 62,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": false,
+       "recoveryTicks": 0,
+       "minRel": 0.9032258064516129,
+       "maxRel": 1.1096774193548387
+      }
+     },
+     "raven": {
+      "key": "raven",
+      "initial": 30,
+      "persisted": true,
+      "finalPop": 315,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 300.62591687041567,
+      "min": 238,
+      "max": 325,
+      "cv": 0.05999644425804764,
+      "maxOverMean": 1.081077783922704,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 0,
+      "periodTicks": 6000,
+      "periodStrength": 0.9001263058939724,
+      "prior": {
+       "lo": 274,
+       "hi": 321,
+       "median": 306,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": false,
+       "recoveryTicks": 0,
+       "minRel": 0.94640522875817,
+       "maxRel": 1.0130718954248366
+      }
+     },
+     "pronghorn": {
+      "key": "pronghorn",
+      "initial": 350,
+      "persisted": true,
+      "finalPop": 987,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 710.6674816625917,
+      "min": 115,
+      "max": 1804,
+      "cv": 0.3942777273645919,
+      "maxOverMean": 2.5384586273450696,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 65,
+      "periodTicks": 10500,
+      "periodStrength": 0.3093219718628791,
+      "prior": {
+       "lo": 330,
+       "hi": 903,
+       "median": 628,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 16500,
+       "minRel": 0.3477707006369427,
+       "maxRel": 1.7012738853503186
+      }
+     }
+    },
+    "maxGen": 461.5802,
+    "shock": {
+     "priorEndTick": 288000,
+     "recoveryStartTick": 288000,
+     "label": "cull 70% bison"
+    }
+   }
+  },
+  {
+   "seed": 17,
+   "csv": "seed_17.csv",
+   "events": [
+    {
+     "label": "cull 70% bison",
+     "kind": "cull",
+     "frac": 0.4,
+     "tick": 288000,
+     "applied": true
+    }
+   ],
+   "metrics": {
+    "seed": 17,
+    "samples": 481,
+    "lastTick": 720000,
+    "totalTicks": 720000,
+    "burnInTick": 108000,
+    "sampleSpacing": 1500,
+    "species": {
+     "bison": {
+      "key": "bison",
+      "initial": 800,
+      "persisted": true,
+      "finalPop": 967,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 1011.3007334963326,
+      "min": 284,
+      "max": 2004,
+      "cv": 0.2885561414852709,
+      "maxOverMean": 1.9816063942440199,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 40,
+      "periodTicks": 159000,
+      "periodStrength": 0.15756379283306887,
+      "prior": {
+       "lo": 577,
+       "hi": 1209,
+       "median": 859,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 18000,
+       "minRel": 0.5753201396973224,
+       "maxRel": 1.9373690337601863
+      }
+     },
+     "wolf": {
+      "key": "wolf",
+      "initial": 30,
+      "persisted": true,
+      "finalPop": 49,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 52.00488997555012,
+      "min": 37,
+      "max": 66,
+      "cv": 0.09614946025423639,
+      "maxOverMean": 1.269111424541608,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 30,
+      "periodTicks": 6000,
+      "periodStrength": 0.222548455403334,
+      "prior": {
+       "lo": 45,
+       "hi": 57,
+       "median": 52,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 84000,
+       "minRel": 0.8884615384615385,
+       "maxRel": 1.126923076923077
+      }
+     },
+     "raven": {
+      "key": "raven",
+      "initial": 30,
+      "persisted": true,
+      "finalPop": 316,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 300.2493887530562,
+      "min": 257,
+      "max": 329,
+      "cv": 0.06127918580509808,
+      "maxOverMean": 1.095755769450009,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 0,
+      "periodTicks": 6000,
+      "periodStrength": 0.9332669070161956,
+      "prior": {
+       "lo": 269,
+       "hi": 321,
+       "median": 305,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": false,
+       "recoveryTicks": 0,
+       "minRel": 0.9501639344262296,
+       "maxRel": 1.0150819672131148
+      }
+     },
+     "pronghorn": {
+      "key": "pronghorn",
+      "initial": 350,
+      "persisted": true,
+      "finalPop": 527,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 567.3374083129585,
+      "min": 151,
+      "max": 1463,
+      "cv": 0.3933551530629699,
+      "maxOverMean": 2.5787123827254663,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 65,
+      "periodTicks": null,
+      "periodStrength": null,
+      "prior": {
+       "lo": 318,
+       "hi": 886,
+       "median": 567,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 78000,
+       "minRel": 0.4645502645502645,
+       "maxRel": 1.4645502645502646
+      }
+     }
+    },
+    "maxGen": 428.637,
+    "shock": {
+     "priorEndTick": 288000,
+     "recoveryStartTick": 288000,
+     "label": "cull 70% bison"
+    }
+   }
+  },
+  {
+   "seed": 18,
+   "csv": "seed_18.csv",
+   "events": [
+    {
+     "label": "cull 70% bison",
+     "kind": "cull",
+     "frac": 0.4,
+     "tick": 288000,
+     "applied": true
+    }
+   ],
+   "metrics": {
+    "seed": 18,
+    "samples": 481,
+    "lastTick": 720000,
+    "totalTicks": 720000,
+    "burnInTick": 108000,
+    "sampleSpacing": 1500,
+    "species": {
+     "bison": {
+      "key": "bison",
+      "initial": 800,
+      "persisted": true,
+      "finalPop": 1111,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 987.8973105134475,
+      "min": 318,
+      "max": 1818,
+      "cv": 0.26811020152693404,
+      "maxOverMean": 1.840272243534216,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 43,
+      "periodTicks": null,
+      "periodStrength": null,
+      "prior": {
+       "lo": 612,
+       "hi": 1275,
+       "median": 907,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 16500,
+       "minRel": 0.48754134509371555,
+       "maxRel": 1.6421168687982362
+      }
+     },
+     "wolf": {
+      "key": "wolf",
+      "initial": 30,
+      "persisted": true,
+      "finalPop": 69,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 61.63080684596577,
+      "min": 45,
+      "max": 78,
+      "cv": 0.09454719485753481,
+      "maxOverMean": 1.265600825167612,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 31,
+      "periodTicks": 12000,
+      "periodStrength": 0.3094280396552355,
+      "prior": {
+       "lo": 53,
+       "hi": 68,
+       "median": 61,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 79500,
+       "minRel": 0.9081967213114754,
+       "maxRel": 1.1245901639344262
+      }
+     },
+     "raven": {
+      "key": "raven",
+      "initial": 30,
+      "persisted": true,
+      "finalPop": 314,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 299.8630806845966,
+      "min": 251,
+      "max": 327,
+      "cv": 0.06281819670928189,
+      "maxOverMean": 1.0904977006620789,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 0,
+      "periodTicks": 6000,
+      "periodStrength": 0.9290648642688099,
+      "prior": {
+       "lo": 269,
+       "hi": 320,
+       "median": 304,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": false,
+       "recoveryTicks": 0,
+       "minRel": 0.9506578947368421,
+       "maxRel": 1.0171052631578947
+      }
+     },
+     "pronghorn": {
+      "key": "pronghorn",
+      "initial": 350,
+      "persisted": true,
+      "finalPop": 678,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 717.2273838630807,
+      "min": 92,
+      "max": 1634,
+      "cv": 0.389933703457653,
+      "maxOverMean": 2.2782175315156845,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 63,
+      "periodTicks": 10500,
+      "periodStrength": 0.22371696455346143,
+      "prior": {
+       "lo": 345,
+       "hi": 996,
+       "median": 595,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 52500,
+       "minRel": 0.6225210084033613,
+       "maxRel": 1.7337815126050418
+      }
+     }
+    },
+    "maxGen": 410.6013,
+    "shock": {
+     "priorEndTick": 288000,
+     "recoveryStartTick": 288000,
+     "label": "cull 70% bison"
+    }
+   }
+  },
+  {
+   "seed": 19,
+   "csv": "seed_19.csv",
+   "events": [
+    {
+     "label": "cull 70% bison",
+     "kind": "cull",
+     "frac": 0.4,
+     "tick": 288000,
+     "applied": true
+    }
+   ],
+   "metrics": {
+    "seed": 19,
+    "samples": 481,
+    "lastTick": 720000,
+    "totalTicks": 720000,
+    "burnInTick": 108000,
+    "sampleSpacing": 1500,
+    "species": {
+     "bison": {
+      "key": "bison",
+      "initial": 800,
+      "persisted": true,
+      "finalPop": 1152,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 1110.078239608802,
+      "min": 326,
+      "max": 1876,
+      "cv": 0.2603966045413218,
+      "maxOverMean": 1.689970970569708,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 41,
+      "periodTicks": 15000,
+      "periodStrength": 0.16308508051411671,
+      "prior": {
+       "lo": 594,
+       "hi": 1385,
+       "median": 1037,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 25500,
+       "minRel": 0.7097396335583414,
+       "maxRel": 1.5122468659594985
+      }
+     },
+     "wolf": {
+      "key": "wolf",
+      "initial": 24,
+      "persisted": true,
+      "finalPop": 52,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 49.90709046454768,
+      "min": 32,
+      "max": 63,
+      "cv": 0.1021532800410673,
+      "maxOverMean": 1.2623456790123457,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 31,
+      "periodTicks": 6000,
+      "periodStrength": 0.20855420605369931,
+      "prior": {
+       "lo": 42,
+       "hi": 54,
+       "median": 47,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 127500,
+       "minRel": 0.9276595744680851,
+       "maxRel": 1.2042553191489362
+      }
+     },
+     "raven": {
+      "key": "raven",
+      "initial": 30,
+      "persisted": true,
+      "finalPop": 313,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 301.11491442542786,
+      "min": 254,
+      "max": 332,
+      "cv": 0.06004645492765315,
+      "maxOverMean": 1.1025690993536654,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 0,
+      "periodTicks": 6000,
+      "periodStrength": 0.9236140746038066,
+      "prior": {
+       "lo": 272,
+       "hi": 321,
+       "median": 301,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": false,
+       "recoveryTicks": 0,
+       "minRel": 0.9634551495016611,
+       "maxRel": 1.0299003322259137
+      }
+     },
+     "pronghorn": {
+      "key": "pronghorn",
+      "initial": 350,
+      "persisted": true,
+      "finalPop": 818,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 776.3643031784841,
+      "min": 208,
+      "max": 1702,
+      "cv": 0.3410726931930782,
+      "maxOverMean": 2.1922697798339073,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 64,
+      "periodTicks": 10500,
+      "periodStrength": 0.32144297860171295,
+      "prior": {
+       "lo": 351,
+       "hi": 1052,
+       "median": 673,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 85500,
+       "minRel": 0.7087667161961367,
+       "maxRel": 1.597622585438336
+      }
+     }
+    },
+    "maxGen": 423.6467,
+    "shock": {
+     "priorEndTick": 288000,
+     "recoveryStartTick": 288000,
+     "label": "cull 70% bison"
+    }
+   }
+  },
+  {
+   "seed": 20,
+   "csv": "seed_20.csv",
+   "events": [
+    {
+     "label": "cull 70% bison",
+     "kind": "cull",
+     "frac": 0.4,
+     "tick": 288000,
+     "applied": true
+    }
+   ],
+   "metrics": {
+    "seed": 20,
+    "samples": 481,
+    "lastTick": 720000,
+    "totalTicks": 720000,
+    "burnInTick": 108000,
+    "sampleSpacing": 1500,
+    "species": {
+     "bison": {
+      "key": "bison",
+      "initial": 800,
+      "persisted": true,
+      "finalPop": 760,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 1293.1393643031786,
+      "min": 416,
+      "max": 2497,
+      "cv": 0.2690795035088273,
+      "maxOverMean": 1.930959700809614,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 47,
+      "periodTicks": 108000,
+      "periodStrength": 0.1976475671688017,
+      "prior": {
+       "lo": 804,
+       "hi": 1530,
+       "median": 1120,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 112500,
+       "minRel": 0.5744642857142856,
+       "maxRel": 1.7157142857142855
+      }
+     },
+     "wolf": {
+      "key": "wolf",
+      "initial": 24,
+      "persisted": true,
+      "finalPop": 59,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 50.37408312958435,
+      "min": 30,
+      "max": 66,
+      "cv": 0.10435285445753505,
+      "maxOverMean": 1.3101975440469835,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 34,
+      "periodTicks": 12000,
+      "periodStrength": 0.22927418927325197,
+      "prior": {
+       "lo": 43,
+       "hi": 57,
+       "median": 51,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 82500,
+       "minRel": 0.7999999999999999,
+       "maxRel": 1.1098039215686275
+      }
+     },
+     "raven": {
+      "key": "raven",
+      "initial": 30,
+      "persisted": true,
+      "finalPop": 313,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 300.5158924205379,
+      "min": 244,
+      "max": 326,
+      "cv": 0.06192210165113003,
+      "maxOverMean": 1.084801197614534,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 0,
+      "periodTicks": 6000,
+      "periodStrength": 0.9327035480231095,
+      "prior": {
+       "lo": 266,
+       "hi": 321,
+       "median": 308,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": false,
+       "recoveryTicks": 0,
+       "minRel": 0.9383116883116883,
+       "maxRel": 1.011038961038961
+      }
+     },
+     "pronghorn": {
+      "key": "pronghorn",
+      "initial": 350,
+      "persisted": true,
+      "finalPop": 631,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 752.3129584352079,
+      "min": 130,
+      "max": 2362,
+      "cv": 0.4461252353004997,
+      "maxOverMean": 3.1396508241901095,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 68,
+      "periodTicks": 9000,
+      "periodStrength": 0.3693815001816868,
+      "prior": {
+       "lo": 317,
+       "hi": 802,
+       "median": 521,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 25500,
+       "minRel": 0.8483685220729367,
+       "maxRel": 2.3754318618042225
+      }
+     }
+    },
+    "maxGen": 464.3868,
+    "shock": {
+     "priorEndTick": 288000,
+     "recoveryStartTick": 288000,
+     "label": "cull 70% bison"
+    }
+   }
+  }
+ ],
+ "aggregate": {
+  "seeds": 20,
+  "species": {
+   "bison": {
+    "key": "bison",
+    "seedsStarted": 20,
+    "persistedCount": 19,
+    "persistencePct": 95,
+    "medianMean": 1073.8765281173596,
+    "meanOfMeans": 1064.421760391198,
+    "medianCv": 0.2697452505497002,
+    "medianMaxOverMean": 1.9056823432063252,
+    "medianNearZeroFrac": 0,
+    "medianLongestNearZeroTicks": 0,
+    "medianPeaks": 41,
+    "meanPeaks": 39.7,
+    "medianPeriodTicks": 35250,
+    "periodSeeds": 16,
+    "shockSeeds": 19,
+    "leftRangePct": 100,
+    "recoveredPct": 100,
+    "medianRecoveryTicks": 25500,
+    "meanRecoveryTicks": 42710.52631578947
+   },
+   "wolf": {
+    "key": "wolf",
+    "seedsStarted": 20,
+    "persistedCount": 19,
+    "persistencePct": 95,
+    "medianMean": 53.026894865525676,
+    "meanOfMeans": 53.47449266503668,
+    "medianCv": 0.10325306724930117,
+    "medianMaxOverMean": 1.300078482090126,
+    "medianNearZeroFrac": 0,
+    "medianLongestNearZeroTicks": 0,
+    "medianPeaks": 34,
+    "meanPeaks": 32.95,
+    "medianPeriodTicks": 12000,
+    "periodSeeds": 19,
+    "shockSeeds": 19,
+    "leftRangePct": 84.21052631578948,
+    "recoveredPct": 100,
+    "medianRecoveryTicks": 82500,
+    "meanRecoveryTicks": 114236.84210526316
+   },
+   "raven": {
+    "key": "raven",
+    "seedsStarted": 20,
+    "persistedCount": 19,
+    "persistencePct": 95,
+    "medianMean": 300.39486552567234,
+    "meanOfMeans": 285.3933985330073,
+    "medianCv": 0.06192210165113003,
+    "medianMaxOverMean": 1.0863390827541817,
+    "medianNearZeroFrac": 0,
+    "medianLongestNearZeroTicks": 0,
+    "medianPeaks": 0,
+    "meanPeaks": 0.35,
+    "medianPeriodTicks": 6000,
+    "periodSeeds": 19,
+    "shockSeeds": 19,
+    "leftRangePct": 0,
+    "recoveredPct": 100,
+    "medianRecoveryTicks": 0,
+    "meanRecoveryTicks": 0
+   },
+   "pronghorn": {
+    "key": "pronghorn",
+    "seedsStarted": 20,
+    "persistedCount": 19,
+    "persistencePct": 95,
+    "medianMean": 747.3484107579461,
+    "meanOfMeans": 739.1445048899757,
+    "medianCv": 0.3934439751552608,
+    "medianMaxOverMean": 2.4970737361823923,
+    "medianNearZeroFrac": 0,
+    "medianLongestNearZeroTicks": 0,
+    "medianPeaks": 64,
+    "meanPeaks": 61.25,
+    "medianPeriodTicks": 10500,
+    "periodSeeds": 18,
+    "shockSeeds": 19,
+    "leftRangePct": 100,
+    "recoveredPct": 100,
+    "medianRecoveryTicks": 85500,
+    "meanRecoveryTicks": 119447.36842105263
+   }
+  },
+  "maxGen": 477.8801,
+  "medianGen": 436.8289
+ },
+ "verdict": {
+  "bison": {
+   "persistence": true,
+   "nearZero": true,
+   "longestStretch": true,
+   "noExplosion": true,
+   "notFlat": true,
+   "recovered": true,
+   "all": true
+  },
+  "wolf": {
+   "persistence": true,
+   "nearZero": true,
+   "longestStretch": true,
+   "noExplosion": true,
+   "notFlat": true,
+   "recovered": true,
+   "all": true
+  },
+  "raven": {
+   "persistence": true,
+   "nearZero": true,
+   "longestStretch": true,
+   "noExplosion": true,
+   "notFlat": true,
+   "recovered": true,
+   "all": true
+  },
+  "pronghorn": {
+   "persistence": true,
+   "nearZero": true,
+   "longestStretch": true,
+   "noExplosion": true,
+   "notFlat": true,
+   "recovered": true,
+   "all": true
+  }
+ },
  "merged": true
 }

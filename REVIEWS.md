@@ -145,3 +145,24 @@ Round 7 Gemini video (07:51, review/round-07-video/reel.gemini.md): Visual 5, Re
 | G5 | Territory overlay looks like debug UI | FIX | UI builder | Feathered tinted ranges, softer edges. |
 | G6 | Captions lost on bright grass | FIX | UI builder | Soft scrim or shadow. |
 | G7 | Chapter cards over the action | PARTLY | UI builder | Already lower third; smaller at speed. |
+
+## Round 8 (09:05, deployed build dcf4809; stills from a clean worktree; Gemini video 09:10) -> `review/round-08/critique.md`, `review/round-08-video/reel.gemini.md`
+Stills critic: Visual 7, Readability 5, Life 6, Ecosystem 4, UI 6, Keep watching 5. Gemini: Visual 5, Readability 6, Life 2, Ecosystem 4, UI 8, Keep watching 3.
+
+| # | Issue | Triage | Owner | Notes |
+|---|---|---|---|---|
+| 1 | Predators flat; ravens crash in the drought | DEFER (researched) | lead | Hungry wolves scenario shows the predator side working; pronghorn are the blocker. |
+| 2 | Worlds die (seed 11; shocks 17 to 19/20) | DEFER (documented) | lead | |
+| 3 | Evolution converges and stops | DEFER (researched) | lead | evo2, L5 screens. |
+| 4 | Wide-zoom readability: toy-blue wolves, wolves bigger than bison from above, rust bison at dusk | FIX (final quick round) | animals builder | |
+| 5 | Herds in rings around water | RESEARCH | lead | herdNearest re-screen on the 2x calendar running (scratch/hn2). |
+| 6 | Snow cow print, pond glare disc, faceted rocks | FIX (final quick round) | renderer + water builders | |
+| 7 | UI covers the action | FIX (partly) | UI builder | Panels dim when idle; ambient view (H) already exists. |
+| 8 | Territories too faint, stacked graph labels, chart colours and subtitle | FIX | UI builder (overlay, graph), lead (charts: game colours, shock lines and prior bands drawn for the merged suite, honest legend) | Chart part done. |
+| 9 | Opening decade is a settling crash | DEFER | lead | Near-equilibrium start rejected Saturday (cost persistence). |
+| 10 | Chronicle skips events in year 2 | DEFER | lead | Season lines land at season close; acceptable. |
+| G1 | Sliding, instant turns | PARTLY FIXED | animals builder | Path smoothing landed in dcf4809 (speed variation 44% to 25%); Gemini still sees it. |
+| G2 | Kill as bumper cars | FIX (if quick) | animals builder | |
+| G3 | Herd clipping | DEFER | lead | Sim spacing; herdSpacing changes cost persistence before. |
+| G4 | Blurry close ground | FIX (if quick) | renderer builder | |
+| G5 | No idle motion | FIX | animals builder | |

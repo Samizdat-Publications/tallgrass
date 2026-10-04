@@ -55,5 +55,7 @@ for (const scenario of ['cull70', 'drought', 'wolfwipe']) {
     const f = `seed_${s.split(':')[0]}.csv`;
     copyFileSync(path.join(b, scenario, f), path.join(out, f));
   }
-  if (!existsSync(path.join(out, 'summary.json'))) writeFileSync(path.join(out, 'summary.json'), JSON.stringify({ scenario, mode: sumB.mode, params: sumB.params, events: sumB.events, priorEvent: sumB.priorEvent, recoveryEvent: sumB.recoveryEvent, merged: true }, null, 1));
+  // a summary the chart tool can read in full: per-seed shock ticks (the schedule is the same for every seed) and metrics
+  const seedEntries = seeds.map((m) => ({ seed: m.seed, csv: `seed_${m.seed}.csv`, events: evSeed.events, metrics: m }));
+  writeFileSync(path.join(out, 'summary.json'), JSON.stringify({ scenario, description: sumB.description, mode: sumB.mode, params: sumB.params, events: sumB.events, priorEvent: sumB.priorEvent, recoveryEvent: sumB.recoveryEvent, columns: sumB.columns, seeds: seedEntries, aggregate: agg, verdict: verdicts, merged: true }, null, 1));
 }

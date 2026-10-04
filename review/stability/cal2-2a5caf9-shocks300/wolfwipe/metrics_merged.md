@@ -1,7 +1,7 @@
 # Stability metrics: wolfwipe (merged)
 
 - At 35% of the run all wolves are removed; at 50% eight wolves are reintroduced.
-- Seeds: 20 (merged: 14 from review/stability/cal2-2a5caf9-shocks300, 6 re-run in review/stability/cal2-2a5caf9-shocks300-b)
+- Seeds: 20 (merged: 20 from review/stability/cal2-2a5caf9-shocks300, 0 re-run in review/stability/cal2-2a5caf9-shocks300-b)
 - Run length: 720000 ticks; params {"calendarScale":2}
 
 Years are 1 year = 1200 ticks. Statistics exclude the first 15% of each run (burn-in).

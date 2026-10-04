@@ -35,6 +35,7 @@
 | 10-04 03:55 | ElevenLabs text-to-speech `eleven_multilingual_v2`, voice George (stock) | documentary narrator: 1 test line at speed 1.0 (too fast, 226 wpm, kept in scratch/audio), then 18 lines at speed 0.8 -> `public/audio/narration/*.mp3` (script in `tools/narration.py`), then retakes of 4 weak lines (opening with pauses, stampede_1, outbreak_1, introducedWolf_1 twice; first takes kept in scratch/audio/narration_take1) | 24 takes, 1,911 characters | pay-as-you-go: about $0.40 to $0.60 |
 | 10-04 03:56 | Gemini `gemini-3.1-pro-preview` | listen-checks of narrator lines (`scratch/audio/listen_narration.py`) | 24 calls | ~$0.10 |
 | 10-04 07:51 | Gemini `gemini-3.1-pro-preview` | blind video critique of reel.mp4 (80429 KB) | 1 call | ~$0.05 |
+| 10-04 09:10 | Gemini `gemini-3.1-pro-preview` | blind video critique of reel.mp4 (68596 KB) | 1 call | ~$0.05 |
 
 ## Downloaded third-party assets
 | Asset | Source | License | Used in |

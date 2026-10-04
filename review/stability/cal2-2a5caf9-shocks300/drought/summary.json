@@ -1,5 +1,6 @@
 {
  "scenario": "drought",
+ "description": "At 40% of the run, a two-year drought (4800 ticks, severity 0.8).",
  "mode": {
   "ticks": 720000,
   "generations": null,
@@ -22,5 +23,3277 @@
  ],
  "priorEvent": 0,
  "recoveryEvent": 0,
+ "columns": [
+  "tick",
+  "year",
+  "pop_bison",
+  "pop_wolf",
+  "pop_raven",
+  "pop_pronghorn",
+  "pop_rabbit",
+  "pop_cougar",
+  "grass_mean",
+  "browse_mean",
+  "soil_mean",
+  "fear_mean",
+  "gen_bison",
+  "gen_wolf",
+  "gen_pronghorn",
+  "trait_bison_speed",
+  "trait_bison_size",
+  "trait_bison_coat",
+  "trait_bison_sight",
+  "trait_bison_herding",
+  "trait_wolf_speed",
+  "trait_wolf_size",
+  "trait_wolf_coat",
+  "trait_wolf_sight",
+  "trait_pronghorn_speed",
+  "trait_pronghorn_coat",
+  "trait_bison_litter",
+  "trait_pronghorn_litter",
+  "juv_bison",
+  "infected_bison",
+  "kills",
+  "kills_pronghorn",
+  "strife_wolf",
+  "kills_cougar",
+  "births_pronghorn",
+  "starved_pronghorn",
+  "chases",
+  "giveups",
+  "births_bison",
+  "births_wolf",
+  "starved_bison",
+  "starved_juv_bison",
+  "starved_wolf",
+  "old_bison",
+  "thirst_bison",
+  "thirst_wolf",
+  "old_wolf",
+  "killed_bison",
+  "packs",
+  "carcasses",
+  "drought"
+ ],
+ "seeds": [
+  {
+   "seed": 1,
+   "csv": "seed_1.csv",
+   "events": [
+    {
+     "label": "drought (2 yr)",
+     "kind": "drought",
+     "frac": 0.4,
+     "tick": 288000,
+     "applied": true
+    }
+   ],
+   "metrics": {
+    "seed": 1,
+    "samples": 203,
+    "lastTick": 303000,
+    "totalTicks": 720000,
+    "burnInTick": 108000,
+    "sampleSpacing": 1500,
+    "species": {
+     "bison": {
+      "key": "bison",
+      "initial": 800,
+      "persisted": false,
+      "finalPop": 0,
+      "extinctionTick": 295500,
+      "everZero": true,
+      "mean": 1133.7709923664122,
+      "min": 0,
+      "max": 2035,
+      "cv": 0.32375102952739265,
+      "maxOverMean": 1.794895101128437,
+      "nearZeroFrac": 0.05343511450381679,
+      "longestNearZeroTicks": 10500,
+      "peaks": 15,
+      "periodTicks": null,
+      "periodStrength": null,
+      "prior": {
+       "lo": 913,
+       "hi": 1543,
+       "median": 1188,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": null,
+       "minRel": 0,
+       "maxRel": 0.3592592592592593
+      }
+     },
+     "wolf": {
+      "key": "wolf",
+      "initial": 24,
+      "persisted": false,
+      "finalPop": 0,
+      "extinctionTick": 298500,
+      "everZero": true,
+      "mean": 50.48854961832061,
+      "min": 0,
+      "max": 68,
+      "cv": 0.23034977217052283,
+      "maxOverMean": 1.3468400362866646,
+      "nearZeroFrac": 0.03816793893129771,
+      "longestNearZeroTicks": 7500,
+      "peaks": 14,
+      "periodTicks": null,
+      "periodStrength": null,
+      "prior": {
+       "lo": 45,
+       "hi": 61,
+       "median": 53,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": null,
+       "minRel": 0.01509433962264151,
+       "maxRel": 0.9132075471698113
+      }
+     },
+     "raven": {
+      "key": "raven",
+      "initial": 30,
+      "persisted": false,
+      "finalPop": 0,
+      "extinctionTick": 303000,
+      "everZero": true,
+      "mean": 290.8854961832061,
+      "min": 0,
+      "max": 324,
+      "cv": 0.1942671376022189,
+      "maxOverMean": 1.1138403401039207,
+      "nearZeroFrac": 0.022900763358778626,
+      "longestNearZeroTicks": 4500,
+      "peaks": 1,
+      "periodTicks": null,
+      "periodStrength": null,
+      "prior": {
+       "lo": 278,
+       "hi": 321,
+       "median": 307,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": null,
+       "minRel": 0.06710097719869708,
+       "maxRel": 0.9628664495114008
+      }
+     },
+     "pronghorn": {
+      "key": "pronghorn",
+      "initial": 350,
+      "persisted": false,
+      "finalPop": 0,
+      "extinctionTick": 295500,
+      "everZero": true,
+      "mean": 832.5343511450382,
+      "min": 0,
+      "max": 2070,
+      "cv": 0.4976110566888058,
+      "maxOverMean": 2.486383891731309,
+      "nearZeroFrac": 0.061068702290076333,
+      "longestNearZeroTicks": 12000,
+      "peaks": 20,
+      "periodTicks": 9000,
+      "periodStrength": 0.33218220771498963,
+      "prior": {
+       "lo": 500,
+       "hi": 1350,
+       "median": 813,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": null,
+       "minRel": 0,
+       "maxRel": 0.2998769987699877
+      }
+     }
+    },
+    "maxGen": 147.2629,
+    "shock": {
+     "priorEndTick": 288000,
+     "recoveryStartTick": 288000,
+     "label": "drought (2 yr)"
+    }
+   }
+  },
+  {
+   "seed": 2,
+   "csv": "seed_2.csv",
+   "events": [
+    {
+     "label": "drought (2 yr)",
+     "kind": "drought",
+     "frac": 0.4,
+     "tick": 288000,
+     "applied": true
+    }
+   ],
+   "metrics": {
+    "seed": 2,
+    "samples": 481,
+    "lastTick": 720000,
+    "totalTicks": 720000,
+    "burnInTick": 108000,
+    "sampleSpacing": 1500,
+    "species": {
+     "bison": {
+      "key": "bison",
+      "initial": 800,
+      "persisted": true,
+      "finalPop": 746,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 1053.398533007335,
+      "min": 286,
+      "max": 1985,
+      "cv": 0.31365182489622995,
+      "maxOverMean": 1.8843770309163497,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 45,
+      "periodTicks": null,
+      "periodStrength": null,
+      "prior": {
+       "lo": 632,
+       "hi": 1360,
+       "median": 974,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 22500,
+       "minRel": 0.5104722792607803,
+       "maxRel": 1.597741273100616
+      }
+     },
+     "wolf": {
+      "key": "wolf",
+      "initial": 24,
+      "persisted": true,
+      "finalPop": 59,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 51.427872860635695,
+      "min": 35,
+      "max": 67,
+      "cv": 0.10267641969735951,
+      "maxOverMean": 1.3027954739944851,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 36,
+      "periodTicks": 12000,
+      "periodStrength": 0.2823371981699621,
+      "prior": {
+       "lo": 44,
+       "hi": 58,
+       "median": 51,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": false,
+       "recoveryTicks": 0,
+       "minRel": 0.9019607843137255,
+       "maxRel": 1.1254901960784314
+      }
+     },
+     "raven": {
+      "key": "raven",
+      "initial": 30,
+      "persisted": true,
+      "finalPop": 304,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 300.4669926650367,
+      "min": 243,
+      "max": 325,
+      "cv": 0.06111156432460202,
+      "maxOverMean": 1.0816495919147862,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 0,
+      "periodTicks": 6000,
+      "periodStrength": 0.9194129973783033,
+      "prior": {
+       "lo": 273,
+       "hi": 321,
+       "median": 305,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": false,
+       "recoveryTicks": 0,
+       "minRel": 0.9508196721311475,
+       "maxRel": 1.0124590163934426
+      }
+     },
+     "pronghorn": {
+      "key": "pronghorn",
+      "initial": 350,
+      "persisted": true,
+      "finalPop": 511,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 737.6870415647921,
+      "min": 111,
+      "max": 1761,
+      "cv": 0.43660937288433577,
+      "maxOverMean": 2.387191181052255,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 64,
+      "periodTicks": 10500,
+      "periodStrength": 0.31282844832578854,
+      "prior": {
+       "lo": 342,
+       "hi": 1074,
+       "median": 648,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 75000,
+       "minRel": 0.42098765432098767,
+       "maxRel": 1.752469135802469
+      }
+     }
+    },
+    "maxGen": 453.4705,
+    "shock": {
+     "priorEndTick": 288000,
+     "recoveryStartTick": 288000,
+     "label": "drought (2 yr)"
+    }
+   }
+  },
+  {
+   "seed": 3,
+   "csv": "seed_3.csv",
+   "events": [
+    {
+     "label": "drought (2 yr)",
+     "kind": "drought",
+     "frac": 0.4,
+     "tick": 288000,
+     "applied": true
+    }
+   ],
+   "metrics": {
+    "seed": 3,
+    "samples": 481,
+    "lastTick": 720000,
+    "totalTicks": 720000,
+    "burnInTick": 108000,
+    "sampleSpacing": 1500,
+    "species": {
+     "bison": {
+      "key": "bison",
+      "initial": 800,
+      "persisted": true,
+      "finalPop": 403,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 1029.6259168704157,
+      "min": 160,
+      "max": 2036,
+      "cv": 0.31228680050877033,
+      "maxOverMean": 1.9774172023451912,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 43,
+      "periodTicks": null,
+      "periodStrength": null,
+      "prior": {
+       "lo": 523,
+       "hi": 1217,
+       "median": 872,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 22500,
+       "minRel": 0.2830275229357798,
+       "maxRel": 1.8642201834862384
+      }
+     },
+     "wolf": {
+      "key": "wolf",
+      "initial": 30,
+      "persisted": true,
+      "finalPop": 66,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 61.36674816625917,
+      "min": 46,
+      "max": 76,
+      "cv": 0.09606794056315544,
+      "maxOverMean": 1.238455715367146,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 34,
+      "periodTicks": 12000,
+      "periodStrength": 0.28943168311558937,
+      "prior": {
+       "lo": 54,
+       "hi": 66,
+       "median": 61,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 49500,
+       "minRel": 0.9049180327868853,
+       "maxRel": 1.1081967213114754
+      }
+     },
+     "raven": {
+      "key": "raven",
+      "initial": 30,
+      "persisted": true,
+      "finalPop": 310,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 300.66503667481663,
+      "min": 194,
+      "max": 326,
+      "cv": 0.0625358730175996,
+      "maxOverMean": 1.0842630842793481,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 0,
+      "periodTicks": 6000,
+      "periodStrength": 0.87416522715737,
+      "prior": {
+       "lo": 273,
+       "hi": 320,
+       "median": 306,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": false,
+       "recoveryTicks": 0,
+       "minRel": 0.9065359477124182,
+       "maxRel": 1.0098039215686274
+      }
+     },
+     "pronghorn": {
+      "key": "pronghorn",
+      "initial": 350,
+      "persisted": true,
+      "finalPop": 18,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 694.924205378973,
+      "min": 18,
+      "max": 1685,
+      "cv": 0.40433318383521033,
+      "maxOverMean": 2.424724864895294,
+      "nearZeroFrac": 0.004889975550122249,
+      "longestNearZeroTicks": 3000,
+      "peaks": 65,
+      "periodTicks": 10500,
+      "periodStrength": 0.3328384961537188,
+      "prior": {
+       "lo": 315,
+       "hi": 899,
+       "median": 585,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 115500,
+       "minRel": 0.708034188034188,
+       "maxRel": 1.8485470085470086
+      }
+     }
+    },
+    "maxGen": 432.4541,
+    "shock": {
+     "priorEndTick": 288000,
+     "recoveryStartTick": 288000,
+     "label": "drought (2 yr)"
+    }
+   }
+  },
+  {
+   "seed": 4,
+   "csv": "seed_4.csv",
+   "events": [
+    {
+     "label": "drought (2 yr)",
+     "kind": "drought",
+     "frac": 0.4,
+     "tick": 288000,
+     "applied": true
+    }
+   ],
+   "metrics": {
+    "seed": 4,
+    "samples": 481,
+    "lastTick": 720000,
+    "totalTicks": 720000,
+    "burnInTick": 108000,
+    "sampleSpacing": 1500,
+    "species": {
+     "bison": {
+      "key": "bison",
+      "initial": 800,
+      "persisted": true,
+      "finalPop": 1420,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 991.6332518337408,
+      "min": 14,
+      "max": 1909,
+      "cv": 0.33443415012887096,
+      "maxOverMean": 1.9251068844957073,
+      "nearZeroFrac": 0.02689486552567237,
+      "longestNearZeroTicks": 16500,
+      "peaks": 43,
+      "periodTicks": 57000,
+      "periodStrength": 0.1661651828897963,
+      "prior": {
+       "lo": 588,
+       "hi": 1329,
+       "median": 895,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 30000,
+       "minRel": 0.025251396648044693,
+       "maxRel": 1.579217877094972
+      }
+     },
+     "wolf": {
+      "key": "wolf",
+      "initial": 24,
+      "persisted": true,
+      "finalPop": 64,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 63.733496332518335,
+      "min": 36,
+      "max": 83,
+      "cv": 0.11034890260536924,
+      "maxOverMean": 1.3022979245789696,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 41,
+      "periodTicks": 6000,
+      "periodStrength": 0.27796613335531944,
+      "prior": {
+       "lo": 54,
+       "hi": 69,
+       "median": 62,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 36000,
+       "minRel": 0.8161290322580645,
+       "maxRel": 1.1580645161290322
+      }
+     },
+     "raven": {
+      "key": "raven",
+      "initial": 30,
+      "persisted": true,
+      "finalPop": 314,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 297.7677261613692,
+      "min": 40,
+      "max": 326,
+      "cv": 0.09780694987028457,
+      "maxOverMean": 1.0948130752871819,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 7,
+      "periodTicks": 6000,
+      "periodStrength": 0.5718845798063112,
+      "prior": {
+       "lo": 269,
+       "hi": 321,
+       "median": 305,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 28500,
+       "minRel": 0.41180327868852457,
+       "maxRel": 1.0150819672131148
+      }
+     },
+     "pronghorn": {
+      "key": "pronghorn",
+      "initial": 350,
+      "persisted": true,
+      "finalPop": 472,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 489.5745721271394,
+      "min": 85,
+      "max": 1494,
+      "cv": 0.4227379853334627,
+      "maxOverMean": 3.0516290776883275,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 65,
+      "periodTicks": 28500,
+      "periodStrength": 0.24018134497076515,
+      "prior": {
+       "lo": 210,
+       "hi": 729,
+       "median": 431,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 22500,
+       "minRel": 0.41299303944315546,
+       "maxRel": 2.034338747099768
+      }
+     }
+    },
+    "maxGen": 390.7887,
+    "shock": {
+     "priorEndTick": 288000,
+     "recoveryStartTick": 288000,
+     "label": "drought (2 yr)"
+    }
+   }
+  },
+  {
+   "seed": 5,
+   "csv": "seed_5.csv",
+   "events": [
+    {
+     "label": "drought (2 yr)",
+     "kind": "drought",
+     "frac": 0.4,
+     "tick": 288000,
+     "applied": true
+    }
+   ],
+   "metrics": {
+    "seed": 5,
+    "samples": 481,
+    "lastTick": 720000,
+    "totalTicks": 720000,
+    "burnInTick": 108000,
+    "sampleSpacing": 1500,
+    "species": {
+     "bison": {
+      "key": "bison",
+      "initial": 800,
+      "persisted": true,
+      "finalPop": 1214,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 1116.6943765281173,
+      "min": 15,
+      "max": 2280,
+      "cv": 0.3323230201604931,
+      "maxOverMean": 2.0417403793943003,
+      "nearZeroFrac": 0.034229828850855744,
+      "longestNearZeroTicks": 21000,
+      "peaks": 46,
+      "periodTicks": null,
+      "periodStrength": null,
+      "prior": {
+       "lo": 763,
+       "hi": 1417,
+       "median": 1039,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 42000,
+       "minRel": 0.02001924927815207,
+       "maxRel": 1.5946102021174207
+      }
+     },
+     "wolf": {
+      "key": "wolf",
+      "initial": 24,
+      "persisted": true,
+      "finalPop": 49,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 54.36185819070904,
+      "min": 31,
+      "max": 76,
+      "cv": 0.1236918885296592,
+      "maxOverMean": 1.3980390393091662,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 46,
+      "periodTicks": 12000,
+      "periodStrength": 0.25955826624989603,
+      "prior": {
+       "lo": 45,
+       "hi": 60,
+       "median": 52,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 16500,
+       "minRel": 0.8192307692307692,
+       "maxRel": 1.2346153846153847
+      }
+     },
+     "raven": {
+      "key": "raven",
+      "initial": 30,
+      "persisted": true,
+      "finalPop": 313,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 295.42298288508556,
+      "min": 12,
+      "max": 327,
+      "cv": 0.13330491283917506,
+      "maxOverMean": 1.106887476412752,
+      "nearZeroFrac": 0.007334963325183374,
+      "longestNearZeroTicks": 4500,
+      "peaks": 1,
+      "periodTicks": null,
+      "periodStrength": null,
+      "prior": {
+       "lo": 274,
+       "hi": 321,
+       "median": 303,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 28500,
+       "minRel": 0.15247524752475247,
+       "maxRel": 1.0204620462046203
+      }
+     },
+     "pronghorn": {
+      "key": "pronghorn",
+      "initial": 350,
+      "persisted": true,
+      "finalPop": 592,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 839.8337408312958,
+      "min": 67,
+      "max": 3106,
+      "cv": 0.40947746257211276,
+      "maxOverMean": 3.6983510532996404,
+      "nearZeroFrac": 0.004889975550122249,
+      "longestNearZeroTicks": 3000,
+      "peaks": 67,
+      "periodTicks": 9000,
+      "periodStrength": 0.2903495522736755,
+      "prior": {
+       "lo": 484,
+       "hi": 1168,
+       "median": 784,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 19500,
+       "minRel": 0.2191326530612245,
+       "maxRel": 1.6051020408163266
+      }
+     }
+    },
+    "maxGen": 378.0708,
+    "shock": {
+     "priorEndTick": 288000,
+     "recoveryStartTick": 288000,
+     "label": "drought (2 yr)"
+    }
+   }
+  },
+  {
+   "seed": 6,
+   "csv": "seed_6.csv",
+   "events": [
+    {
+     "label": "drought (2 yr)",
+     "kind": "drought",
+     "frac": 0.4,
+     "tick": 288000,
+     "applied": true
+    }
+   ],
+   "metrics": {
+    "seed": 6,
+    "samples": 481,
+    "lastTick": 720000,
+    "totalTicks": 720000,
+    "burnInTick": 108000,
+    "sampleSpacing": 1500,
+    "species": {
+     "bison": {
+      "key": "bison",
+      "initial": 800,
+      "persisted": true,
+      "finalPop": 1335,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 1019.9339853300734,
+      "min": 81,
+      "max": 2734,
+      "cv": 0.3079366995092607,
+      "maxOverMean": 2.680565643780579,
+      "nearZeroFrac": 0.004889975550122249,
+      "longestNearZeroTicks": 3000,
+      "peaks": 39,
+      "periodTicks": null,
+      "periodStrength": null,
+      "prior": {
+       "lo": 652,
+       "hi": 1084,
+       "median": 849,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 30000,
+       "minRel": 0.13898704358068315,
+       "maxRel": 2.2228504122497057
+      }
+     },
+     "wolf": {
+      "key": "wolf",
+      "initial": 24,
+      "persisted": true,
+      "finalPop": 54,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 51.19559902200489,
+      "min": 34,
+      "max": 65,
+      "cv": 0.10241720860313236,
+      "maxOverMean": 1.2696403839724915,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 38,
+      "periodTicks": 12000,
+      "periodStrength": 0.2933048716024878,
+      "prior": {
+       "lo": 44,
+       "hi": 59,
+       "median": 52,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": false,
+       "recoveryTicks": 0,
+       "minRel": 0.8884615384615385,
+       "maxRel": 1.103846153846154
+      }
+     },
+     "raven": {
+      "key": "raven",
+      "initial": 30,
+      "persisted": true,
+      "finalPop": 310,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 300.1320293398533,
+      "min": 196,
+      "max": 326,
+      "cv": 0.06313843830021844,
+      "maxOverMean": 1.0861886374374765,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 0,
+      "periodTicks": 6000,
+      "periodStrength": 0.8825821167357034,
+      "prior": {
+       "lo": 270,
+       "hi": 320,
+       "median": 303,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 16500,
+       "minRel": 0.8871287128712871,
+       "maxRel": 1.0184818481848186
+      }
+     },
+     "pronghorn": {
+      "key": "pronghorn",
+      "initial": 350,
+      "persisted": true,
+      "finalPop": 1188,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 783.4645476772616,
+      "min": 141,
+      "max": 2470,
+      "cv": 0.42185996935794184,
+      "maxOverMean": 3.152663394052497,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 65,
+      "periodTicks": 10500,
+      "periodStrength": 0.31328034331281224,
+      "prior": {
+       "lo": 418,
+       "hi": 1289,
+       "median": 750,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 12000,
+       "minRel": 0.27626666666666666,
+       "maxRel": 1.616
+      }
+     }
+    },
+    "maxGen": 440.3393,
+    "shock": {
+     "priorEndTick": 288000,
+     "recoveryStartTick": 288000,
+     "label": "drought (2 yr)"
+    }
+   }
+  },
+  {
+   "seed": 7,
+   "csv": "seed_7.csv",
+   "events": [
+    {
+     "label": "drought (2 yr)",
+     "kind": "drought",
+     "frac": 0.4,
+     "tick": 288000,
+     "applied": true
+    }
+   ],
+   "metrics": {
+    "seed": 7,
+    "samples": 481,
+    "lastTick": 720000,
+    "totalTicks": 720000,
+    "burnInTick": 108000,
+    "sampleSpacing": 1500,
+    "species": {
+     "bison": {
+      "key": "bison",
+      "initial": 800,
+      "persisted": true,
+      "finalPop": 1348,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 1310.5794621026894,
+      "min": 19,
+      "max": 3532,
+      "cv": 0.3278961970306905,
+      "maxOverMean": 2.694991110522418,
+      "nearZeroFrac": 0.014669926650366748,
+      "longestNearZeroTicks": 9000,
+      "peaks": 39,
+      "periodTicks": 64500,
+      "periodStrength": 0.1602171398760094,
+      "prior": {
+       "lo": 809,
+       "hi": 1584,
+       "median": 1196,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 60000,
+       "minRel": 0.023578595317725753,
+       "maxRel": 1.9461538461538461
+      }
+     },
+     "wolf": {
+      "key": "wolf",
+      "initial": 24,
+      "persisted": true,
+      "finalPop": 42,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 38.20293398533008,
+      "min": 22,
+      "max": 50,
+      "cv": 0.11746376653249282,
+      "maxOverMean": 1.3088,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 33,
+      "periodTicks": 12000,
+      "periodStrength": 0.32312482072019477,
+      "prior": {
+       "lo": 32,
+       "hi": 43,
+       "median": 38,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 27000,
+       "minRel": 0.7894736842105263,
+       "maxRel": 1.1684210526315788
+      }
+     },
+     "raven": {
+      "key": "raven",
+      "initial": 30,
+      "persisted": true,
+      "finalPop": 312,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 297.5745721271394,
+      "min": 8,
+      "max": 327,
+      "cv": 0.11107332951018149,
+      "maxOverMean": 1.0988842146777533,
+      "nearZeroFrac": 0.0024449877750611247,
+      "longestNearZeroTicks": 1500,
+      "peaks": 0,
+      "periodTicks": 12000,
+      "periodStrength": 0.25252626464975353,
+      "prior": {
+       "lo": 272,
+       "hi": 321,
+       "median": 302,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 22500,
+       "minRel": 0.16688741721854305,
+       "maxRel": 1.0264900662251655
+      }
+     },
+     "pronghorn": {
+      "key": "pronghorn",
+      "initial": 350,
+      "persisted": true,
+      "finalPop": 393,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 934.0880195599022,
+      "min": 93,
+      "max": 2201,
+      "cv": 0.36982219762739793,
+      "maxOverMean": 2.3563089922050455,
+      "nearZeroFrac": 0.0024449877750611247,
+      "longestNearZeroTicks": 1500,
+      "peaks": 66,
+      "periodTicks": 9000,
+      "periodStrength": 0.276450575874761,
+      "prior": {
+       "lo": 427,
+       "hi": 1306,
+       "median": 846,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 10500,
+       "minRel": 0.2789598108747045,
+       "maxRel": 1.528841607565012
+      }
+     }
+    },
+    "maxGen": 444.4896,
+    "shock": {
+     "priorEndTick": 288000,
+     "recoveryStartTick": 288000,
+     "label": "drought (2 yr)"
+    }
+   }
+  },
+  {
+   "seed": 8,
+   "csv": "seed_8.csv",
+   "events": [
+    {
+     "label": "drought (2 yr)",
+     "kind": "drought",
+     "frac": 0.4,
+     "tick": 288000,
+     "applied": true
+    }
+   ],
+   "metrics": {
+    "seed": 8,
+    "samples": 481,
+    "lastTick": 720000,
+    "totalTicks": 720000,
+    "burnInTick": 108000,
+    "sampleSpacing": 1500,
+    "species": {
+     "bison": {
+      "key": "bison",
+      "initial": 800,
+      "persisted": false,
+      "finalPop": 0,
+      "extinctionTick": 297000,
+      "everZero": true,
+      "mean": 282.9413202933985,
+      "min": 0,
+      "max": 1762,
+      "cv": 1.5981240565633075,
+      "maxOverMean": 6.227439661951384,
+      "nearZeroFrac": 0.6968215158924206,
+      "longestNearZeroTicks": 427500,
+      "peaks": 16,
+      "periodTicks": null,
+      "periodStrength": null,
+      "prior": {
+       "lo": 657,
+       "hi": 1263,
+       "median": 935,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": null,
+       "minRel": 0,
+       "maxRel": 0.23379679144385027
+      }
+     },
+     "wolf": {
+      "key": "wolf",
+      "initial": 24,
+      "persisted": false,
+      "finalPop": 0,
+      "extinctionTick": 394500,
+      "everZero": true,
+      "mean": 21.677261613691932,
+      "min": 0,
+      "max": 62,
+      "cv": 1.1021283326554447,
+      "maxOverMean": 2.86013986013986,
+      "nearZeroFrac": 0.5354523227383863,
+      "longestNearZeroTicks": 328500,
+      "peaks": 30,
+      "periodTicks": null,
+      "periodStrength": null,
+      "prior": {
+       "lo": 44,
+       "hi": 55,
+       "median": 50,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": null,
+       "minRel": 0,
+       "maxRel": 0.996
+      }
+     },
+     "raven": {
+      "key": "raven",
+      "initial": 30,
+      "persisted": false,
+      "finalPop": 0,
+      "extinctionTick": 315000,
+      "everZero": true,
+      "mean": 94.18337408312958,
+      "min": 0,
+      "max": 323,
+      "cv": 1.4702777111256249,
+      "maxOverMean": 3.429480023883077,
+      "nearZeroFrac": 0.6723716381418093,
+      "longestNearZeroTicks": 412500,
+      "peaks": 32,
+      "periodTicks": null,
+      "periodStrength": null,
+      "prior": {
+       "lo": 273,
+       "hi": 321,
+       "median": 305,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": null,
+       "minRel": 0,
+       "maxRel": 0.9383606557377049
+      }
+     },
+     "pronghorn": {
+      "key": "pronghorn",
+      "initial": 350,
+      "persisted": true,
+      "finalPop": 807,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 861.7237163814181,
+      "min": 31,
+      "max": 3324,
+      "cv": 0.679610978577841,
+      "maxOverMean": 3.857384840187831,
+      "nearZeroFrac": 0.022004889975550123,
+      "longestNearZeroTicks": 4500,
+      "peaks": 63,
+      "periodTicks": 9000,
+      "periodStrength": 0.5743563576524419,
+      "prior": {
+       "lo": 379,
+       "hi": 939,
+       "median": 633,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 39000,
+       "minRel": 0.15955766192733017,
+       "maxRel": 2.28783570300158
+      }
+     }
+    },
+    "maxGen": 142.75,
+    "shock": {
+     "priorEndTick": 288000,
+     "recoveryStartTick": 288000,
+     "label": "drought (2 yr)"
+    }
+   }
+  },
+  {
+   "seed": 9,
+   "csv": "seed_9.csv",
+   "events": [
+    {
+     "label": "drought (2 yr)",
+     "kind": "drought",
+     "frac": 0.4,
+     "tick": 288000,
+     "applied": true
+    }
+   ],
+   "metrics": {
+    "seed": 9,
+    "samples": 481,
+    "lastTick": 720000,
+    "totalTicks": 720000,
+    "burnInTick": 108000,
+    "sampleSpacing": 1500,
+    "species": {
+     "bison": {
+      "key": "bison",
+      "initial": 800,
+      "persisted": true,
+      "finalPop": 1372,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 1072.0855745721271,
+      "min": 135,
+      "max": 2104,
+      "cv": 0.29233373409753877,
+      "maxOverMean": 1.9625299042380207,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 45,
+      "periodTicks": 34500,
+      "periodStrength": 0.16741179631450157,
+      "prior": {
+       "lo": 679,
+       "hi": 1333,
+       "median": 920,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 31500,
+       "minRel": 0.23195652173913045,
+       "maxRel": 1.818695652173913
+      }
+     },
+     "wolf": {
+      "key": "wolf",
+      "initial": 24,
+      "persisted": true,
+      "finalPop": 57,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 53.07334963325184,
+      "min": 32,
+      "max": 67,
+      "cv": 0.10743647191562086,
+      "maxOverMean": 1.2624038328649743,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 40,
+      "periodTicks": 12000,
+      "periodStrength": 0.2942145130805441,
+      "prior": {
+       "lo": 46,
+       "hi": 58,
+       "median": 52,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 241500,
+       "minRel": 0.8884615384615385,
+       "maxRel": 1.1730769230769231
+      }
+     },
+     "raven": {
+      "key": "raven",
+      "initial": 30,
+      "persisted": true,
+      "finalPop": 308,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 300.49877750611245,
+      "min": 187,
+      "max": 324,
+      "cv": 0.06200081068447782,
+      "maxOverMean": 1.0782073813708262,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 0,
+      "periodTicks": 6000,
+      "periodStrength": 0.8910123847928502,
+      "prior": {
+       "lo": 273,
+       "hi": 321,
+       "median": 303,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": false,
+       "recoveryTicks": 0,
+       "minRel": 0.9148514851485148,
+       "maxRel": 1.0250825082508253
+      }
+     },
+     "pronghorn": {
+      "key": "pronghorn",
+      "initial": 350,
+      "persisted": true,
+      "finalPop": 711,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 745.6943765281173,
+      "min": 55,
+      "max": 2118,
+      "cv": 0.40858070694600973,
+      "maxOverMean": 2.840305715943854,
+      "nearZeroFrac": 0.004889975550122249,
+      "longestNearZeroTicks": 3000,
+      "peaks": 64,
+      "periodTicks": 10500,
+      "periodStrength": 0.3897893073719087,
+      "prior": {
+       "lo": 404,
+       "hi": 1075,
+       "median": 679,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 18000,
+       "minRel": 0.21001472754050074,
+       "maxRel": 1.6639175257731957
+      }
+     }
+    },
+    "maxGen": 426.4337,
+    "shock": {
+     "priorEndTick": 288000,
+     "recoveryStartTick": 288000,
+     "label": "drought (2 yr)"
+    }
+   }
+  },
+  {
+   "seed": 10,
+   "csv": "seed_10.csv",
+   "events": [
+    {
+     "label": "drought (2 yr)",
+     "kind": "drought",
+     "frac": 0.4,
+     "tick": 288000,
+     "applied": true
+    }
+   ],
+   "metrics": {
+    "seed": 10,
+    "samples": 481,
+    "lastTick": 720000,
+    "totalTicks": 720000,
+    "burnInTick": 108000,
+    "sampleSpacing": 1500,
+    "species": {
+     "bison": {
+      "key": "bison",
+      "initial": 800,
+      "persisted": true,
+      "finalPop": 1313,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 850.7334963325184,
+      "min": 132,
+      "max": 1902,
+      "cv": 0.36685251877396785,
+      "maxOverMean": 2.235717775542463,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 37,
+      "periodTicks": 12000,
+      "periodStrength": 0.276943424049737,
+      "prior": {
+       "lo": 437,
+       "hi": 1318,
+       "median": 757,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 15000,
+       "minRel": 0.2607661822985469,
+       "maxRel": 1.8758256274768825
+      }
+     },
+     "wolf": {
+      "key": "wolf",
+      "initial": 24,
+      "persisted": true,
+      "finalPop": 50,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 60.33251833740831,
+      "min": 40,
+      "max": 77,
+      "cv": 0.10511234026717776,
+      "maxOverMean": 1.276260333927703,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 38,
+      "periodTicks": 12000,
+      "periodStrength": 0.33021980922861244,
+      "prior": {
+       "lo": 51,
+       "hi": 67,
+       "median": 59,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 24000,
+       "minRel": 0.7559322033898306,
+       "maxRel": 1.152542372881356
+      }
+     },
+     "raven": {
+      "key": "raven",
+      "initial": 30,
+      "persisted": true,
+      "finalPop": 311,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 298.7555012224939,
+      "min": 171,
+      "max": 324,
+      "cv": 0.06997649770521085,
+      "maxOverMean": 1.0844988583447226,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 2,
+      "periodTicks": 6000,
+      "periodStrength": 0.7279034009331242,
+      "prior": {
+       "lo": 270,
+       "hi": 321,
+       "median": 302,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 19500,
+       "minRel": 0.7423841059602648,
+       "maxRel": 1.0218543046357618
+      }
+     },
+     "pronghorn": {
+      "key": "pronghorn",
+      "initial": 350,
+      "persisted": true,
+      "finalPop": 1040,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 661.281173594132,
+      "min": 68,
+      "max": 3591,
+      "cv": 0.5327056908945755,
+      "maxOverMean": 5.430367812352106,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 61,
+      "periodTicks": 12000,
+      "periodStrength": 0.35745737748011464,
+      "prior": {
+       "lo": 270,
+       "hi": 1167,
+       "median": 623,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 33000,
+       "minRel": 0.21733547351524882,
+       "maxRel": 2.112038523274478
+      }
+     }
+    },
+    "maxGen": 443.8949,
+    "shock": {
+     "priorEndTick": 288000,
+     "recoveryStartTick": 288000,
+     "label": "drought (2 yr)"
+    }
+   }
+  },
+  {
+   "seed": 11,
+   "csv": "seed_11.csv",
+   "events": [
+    {
+     "label": "drought (2 yr)",
+     "kind": "drought",
+     "frac": 0.4,
+     "tick": 288000,
+     "applied": true
+    }
+   ],
+   "metrics": {
+    "seed": 11,
+    "samples": 92,
+    "lastTick": 136500,
+    "totalTicks": 720000,
+    "burnInTick": 108000,
+    "sampleSpacing": 1500,
+    "species": {
+     "bison": {
+      "key": "bison",
+      "initial": 800,
+      "persisted": false,
+      "finalPop": 0,
+      "extinctionTick": 46500,
+      "everZero": true,
+      "mean": 0,
+      "min": 0,
+      "max": 0,
+      "cv": null,
+      "maxOverMean": null,
+      "nearZeroFrac": 1,
+      "longestNearZeroTicks": 30000,
+      "peaks": 0,
+      "periodTicks": null,
+      "periodStrength": null,
+      "prior": null,
+      "recovery": null
+     },
+     "wolf": {
+      "key": "wolf",
+      "initial": 24,
+      "persisted": false,
+      "finalPop": 0,
+      "extinctionTick": 136500,
+      "everZero": true,
+      "mean": 47.15,
+      "min": 0,
+      "max": 68,
+      "cv": 0.43765828613526425,
+      "maxOverMean": 1.4422057264050903,
+      "nearZeroFrac": 0.1,
+      "longestNearZeroTicks": 3000,
+      "peaks": 2,
+      "periodTicks": null,
+      "periodStrength": null,
+      "prior": null,
+      "recovery": null
+     },
+     "raven": {
+      "key": "raven",
+      "initial": 30,
+      "persisted": false,
+      "finalPop": 0,
+      "extinctionTick": 54000,
+      "everZero": true,
+      "mean": 0,
+      "min": 0,
+      "max": 0,
+      "cv": null,
+      "maxOverMean": null,
+      "nearZeroFrac": 1,
+      "longestNearZeroTicks": 30000,
+      "peaks": 0,
+      "periodTicks": null,
+      "periodStrength": null,
+      "prior": null,
+      "recovery": null
+     },
+     "pronghorn": {
+      "key": "pronghorn",
+      "initial": 350,
+      "persisted": false,
+      "finalPop": 0,
+      "extinctionTick": 136500,
+      "everZero": true,
+      "mean": 365.45,
+      "min": 0,
+      "max": 976,
+      "cv": 0.8069287034394103,
+      "maxOverMean": 2.6706799835818855,
+      "nearZeroFrac": 0.25,
+      "longestNearZeroTicks": 7500,
+      "peaks": 2,
+      "periodTicks": null,
+      "periodStrength": null,
+      "prior": null,
+      "recovery": null
+     }
+    },
+    "maxGen": 16.625,
+    "shock": null
+   }
+  },
+  {
+   "seed": 12,
+   "csv": "seed_12.csv",
+   "events": [
+    {
+     "label": "drought (2 yr)",
+     "kind": "drought",
+     "frac": 0.4,
+     "tick": 288000,
+     "applied": true
+    }
+   ],
+   "metrics": {
+    "seed": 12,
+    "samples": 481,
+    "lastTick": 720000,
+    "totalTicks": 720000,
+    "burnInTick": 108000,
+    "sampleSpacing": 1500,
+    "species": {
+     "bison": {
+      "key": "bison",
+      "initial": 800,
+      "persisted": true,
+      "finalPop": 1226,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 1254.3349633251835,
+      "min": 93,
+      "max": 2093,
+      "cv": 0.25989508280127865,
+      "maxOverMean": 1.668613298039269,
+      "nearZeroFrac": 0.007334963325183374,
+      "longestNearZeroTicks": 4500,
+      "peaks": 40,
+      "periodTicks": null,
+      "periodStrength": null,
+      "prior": {
+       "lo": 877,
+       "hi": 1564,
+       "median": 1165,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 27000,
+       "minRel": 0.135793991416309,
+       "maxRel": 1.4794849785407724
+      }
+     },
+     "wolf": {
+      "key": "wolf",
+      "initial": 24,
+      "persisted": true,
+      "finalPop": 54,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 51.79951100244499,
+      "min": 36,
+      "max": 65,
+      "cv": 0.10162390012158702,
+      "maxOverMean": 1.2548381006324931,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 38,
+      "periodTicks": 6000,
+      "periodStrength": 0.21209777670067254,
+      "prior": {
+       "lo": 44,
+       "hi": 59,
+       "median": 52,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": false,
+       "recoveryTicks": 0,
+       "minRel": 0.8576923076923078,
+       "maxRel": 1.123076923076923
+      }
+     },
+     "raven": {
+      "key": "raven",
+      "initial": 30,
+      "persisted": true,
+      "finalPop": 312,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 299.46454767726163,
+      "min": 179,
+      "max": 324,
+      "cv": 0.06751864390447117,
+      "maxOverMean": 1.081931075023881,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 0,
+      "periodTicks": 6000,
+      "periodStrength": 0.8297897403102183,
+      "prior": {
+       "lo": 269,
+       "hi": 320,
+       "median": 303,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 16500,
+       "minRel": 0.8567656765676568,
+       "maxRel": 1.0184818481848186
+      }
+     },
+     "pronghorn": {
+      "key": "pronghorn",
+      "initial": 350,
+      "persisted": true,
+      "finalPop": 395,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 824.4572127139364,
+      "min": 108,
+      "max": 2366,
+      "cv": 0.39827254345811924,
+      "maxOverMean": 2.8697668763326543,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 69,
+      "periodTicks": 9000,
+      "periodStrength": 0.3537524580378616,
+      "prior": {
+       "lo": 434,
+       "hi": 1125,
+       "median": 734,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 10500,
+       "minRel": 0.5049046321525886,
+       "maxRel": 1.5471389645776565
+      }
+     }
+    },
+    "maxGen": 415.3287,
+    "shock": {
+     "priorEndTick": 288000,
+     "recoveryStartTick": 288000,
+     "label": "drought (2 yr)"
+    }
+   }
+  },
+  {
+   "seed": 13,
+   "csv": "seed_13.csv",
+   "events": [
+    {
+     "label": "drought (2 yr)",
+     "kind": "drought",
+     "frac": 0.4,
+     "tick": 288000,
+     "applied": true
+    }
+   ],
+   "metrics": {
+    "seed": 13,
+    "samples": 481,
+    "lastTick": 720000,
+    "totalTicks": 720000,
+    "burnInTick": 108000,
+    "sampleSpacing": 1500,
+    "species": {
+     "bison": {
+      "key": "bison",
+      "initial": 800,
+      "persisted": true,
+      "finalPop": 786,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 1022.6992665036674,
+      "min": 190,
+      "max": 1831,
+      "cv": 0.29515731471525375,
+      "maxOverMean": 1.7903601380879977,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 46,
+      "periodTicks": null,
+      "periodStrength": null,
+      "prior": {
+       "lo": 607,
+       "hi": 1206,
+       "median": 893,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 13500,
+       "minRel": 0.33773796192609185,
+       "maxRel": 1.7751399776035834
+      }
+     },
+     "wolf": {
+      "key": "wolf",
+      "initial": 24,
+      "persisted": true,
+      "finalPop": 55,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 52.76772616136919,
+      "min": 36,
+      "max": 71,
+      "cv": 0.10664009188986727,
+      "maxOverMean": 1.345519414326754,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 35,
+      "periodTicks": 6000,
+      "periodStrength": 0.17623452332643502,
+      "prior": {
+       "lo": 45,
+       "hi": 59,
+       "median": 53,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 138000,
+       "minRel": 0.8603773584905661,
+       "maxRel": 1.120754716981132
+      }
+     },
+     "raven": {
+      "key": "raven",
+      "initial": 30,
+      "persisted": true,
+      "finalPop": 309,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 299.80929095354526,
+      "min": 235,
+      "max": 328,
+      "cv": 0.0633246967581058,
+      "maxOverMean": 1.0940288039666617,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 1,
+      "periodTicks": 6000,
+      "periodStrength": 0.8941272116981203,
+      "prior": {
+       "lo": 270,
+       "hi": 321,
+       "median": 303,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": false,
+       "recoveryTicks": 0,
+       "minRel": 0.9478547854785478,
+       "maxRel": 1.0184818481848186
+      }
+     },
+     "pronghorn": {
+      "key": "pronghorn",
+      "initial": 350,
+      "persisted": true,
+      "finalPop": 626,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 756.6601466992665,
+      "min": 114,
+      "max": 1769,
+      "cv": 0.40356102999868876,
+      "maxOverMean": 2.337905607579312,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 66,
+      "periodTicks": 10500,
+      "periodStrength": 0.24613019580363887,
+      "prior": {
+       "lo": 391,
+       "hi": 939,
+       "median": 627,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 9000,
+       "minRel": 0.4934609250398724,
+       "maxRel": 1.7901116427432218
+      }
+     }
+    },
+    "maxGen": 443.7061,
+    "shock": {
+     "priorEndTick": 288000,
+     "recoveryStartTick": 288000,
+     "label": "drought (2 yr)"
+    }
+   }
+  },
+  {
+   "seed": 14,
+   "csv": "seed_14.csv",
+   "events": [
+    {
+     "label": "drought (2 yr)",
+     "kind": "drought",
+     "frac": 0.4,
+     "tick": 288000,
+     "applied": true
+    }
+   ],
+   "metrics": {
+    "seed": 14,
+    "samples": 481,
+    "lastTick": 720000,
+    "totalTicks": 720000,
+    "burnInTick": 108000,
+    "sampleSpacing": 1500,
+    "species": {
+     "bison": {
+      "key": "bison",
+      "initial": 800,
+      "persisted": true,
+      "finalPop": 1297,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 1032.992665036675,
+      "min": 144,
+      "max": 2123,
+      "cv": 0.3060237042413368,
+      "maxOverMean": 2.0551936832239037,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 44,
+      "periodTicks": null,
+      "periodStrength": null,
+      "prior": {
+       "lo": 666,
+       "hi": 1357,
+       "median": 940,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 18000,
+       "minRel": 0.1853191489361702,
+       "maxRel": 1.6436170212765957
+      }
+     },
+     "wolf": {
+      "key": "wolf",
+      "initial": 30,
+      "persisted": true,
+      "finalPop": 63,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 60.93643031784841,
+      "min": 43,
+      "max": 77,
+      "cv": 0.0963075934281021,
+      "maxOverMean": 1.2636119247281627,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 22,
+      "periodTicks": 12000,
+      "periodStrength": 0.3260297308786038,
+      "prior": {
+       "lo": 51,
+       "hi": 66,
+       "median": 58,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 36000,
+       "minRel": 0.9275862068965517,
+       "maxRel": 1.186206896551724
+      }
+     },
+     "raven": {
+      "key": "raven",
+      "initial": 30,
+      "persisted": true,
+      "finalPop": 310,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 299.7237163814181,
+      "min": 173,
+      "max": 326,
+      "cv": 0.06788577485284936,
+      "maxOverMean": 1.0876683498250221,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 4,
+      "periodTicks": 6000,
+      "periodStrength": 0.8846528701481488,
+      "prior": {
+       "lo": 271,
+       "hi": 321,
+       "median": 306,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 16500,
+       "minRel": 0.8725490196078431,
+       "maxRel": 1.007843137254902
+      }
+     },
+     "pronghorn": {
+      "key": "pronghorn",
+      "initial": 350,
+      "persisted": true,
+      "finalPop": 1061,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 639.6601466992665,
+      "min": 127,
+      "max": 1684,
+      "cv": 0.4449543259923655,
+      "maxOverMean": 2.6326479907958458,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 63,
+      "periodTicks": 10500,
+      "periodStrength": 0.28749804868309115,
+      "prior": {
+       "lo": 249,
+       "hi": 862,
+       "median": 508,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 9000,
+       "minRel": 0.46535433070866145,
+       "maxRel": 2.2460629921259843
+      }
+     }
+    },
+    "maxGen": 426.1658,
+    "shock": {
+     "priorEndTick": 288000,
+     "recoveryStartTick": 288000,
+     "label": "drought (2 yr)"
+    }
+   }
+  },
+  {
+   "seed": 15,
+   "csv": "seed_15.csv",
+   "events": [
+    {
+     "label": "drought (2 yr)",
+     "kind": "drought",
+     "frac": 0.4,
+     "tick": 288000,
+     "applied": true
+    }
+   ],
+   "metrics": {
+    "seed": 15,
+    "samples": 481,
+    "lastTick": 720000,
+    "totalTicks": 720000,
+    "burnInTick": 108000,
+    "sampleSpacing": 1500,
+    "species": {
+     "bison": {
+      "key": "bison",
+      "initial": 800,
+      "persisted": true,
+      "finalPop": 1198,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 1462.7017114914424,
+      "min": 48,
+      "max": 4783,
+      "cv": 0.3075947125824915,
+      "maxOverMean": 3.269976347483055,
+      "nearZeroFrac": 0.009779951100244499,
+      "longestNearZeroTicks": 6000,
+      "peaks": 48,
+      "periodTicks": null,
+      "periodStrength": null,
+      "prior": {
+       "lo": 895,
+       "hi": 1736,
+       "median": 1337,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 27000,
+       "minRel": 0.07464472700074794,
+       "maxRel": 2.1591623036649215
+      }
+     },
+     "wolf": {
+      "key": "wolf",
+      "initial": 24,
+      "persisted": true,
+      "finalPop": 45,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 40.034229828850854,
+      "min": 27,
+      "max": 52,
+      "cv": 0.11501500498442178,
+      "maxOverMean": 1.298888481739343,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 37,
+      "periodTicks": 12000,
+      "periodStrength": 0.23436212365438816,
+      "prior": {
+       "lo": 33,
+       "hi": 46,
+       "median": 39,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 10500,
+       "minRel": 0.8307692307692307,
+       "maxRel": 1.1538461538461537
+      }
+     },
+     "raven": {
+      "key": "raven",
+      "initial": 30,
+      "persisted": true,
+      "finalPop": 312,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 298.63569682151586,
+      "min": 79,
+      "max": 326,
+      "cv": 0.0899889467527265,
+      "maxOverMean": 1.0916310523816541,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 0,
+      "periodTicks": 12000,
+      "periodStrength": 0.4131559996009546,
+      "prior": {
+       "lo": 277,
+       "hi": 321,
+       "median": 304,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 21000,
+       "minRel": 0.41776315789473684,
+       "maxRel": 1.0151315789473685
+      }
+     },
+     "pronghorn": {
+      "key": "pronghorn",
+      "initial": 350,
+      "persisted": true,
+      "finalPop": 697,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 907.2127139364303,
+      "min": 74,
+      "max": 2662,
+      "cv": 0.4094790642576646,
+      "maxOverMean": 2.9342622288101334,
+      "nearZeroFrac": 0.004889975550122249,
+      "longestNearZeroTicks": 3000,
+      "peaks": 68,
+      "periodTicks": 9000,
+      "periodStrength": 0.32129435000065065,
+      "prior": {
+       "lo": 462,
+       "hi": 1332,
+       "median": 864,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 12000,
+       "minRel": 0.1965277777777778,
+       "maxRel": 1.4641203703703705
+      }
+     }
+    },
+    "maxGen": 478.6619,
+    "shock": {
+     "priorEndTick": 288000,
+     "recoveryStartTick": 288000,
+     "label": "drought (2 yr)"
+    }
+   }
+  },
+  {
+   "seed": 16,
+   "csv": "seed_16.csv",
+   "events": [
+    {
+     "label": "drought (2 yr)",
+     "kind": "drought",
+     "frac": 0.4,
+     "tick": 288000,
+     "applied": true
+    }
+   ],
+   "metrics": {
+    "seed": 16,
+    "samples": 481,
+    "lastTick": 720000,
+    "totalTicks": 720000,
+    "burnInTick": 108000,
+    "sampleSpacing": 1500,
+    "species": {
+     "bison": {
+      "key": "bison",
+      "initial": 800,
+      "persisted": true,
+      "finalPop": 1135,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 982.19804400978,
+      "min": 87,
+      "max": 2332,
+      "cv": 0.38532196075130526,
+      "maxOverMean": 2.3742665893323442,
+      "nearZeroFrac": 0.0024449877750611247,
+      "longestNearZeroTicks": 1500,
+      "peaks": 36,
+      "periodTicks": null,
+      "periodStrength": null,
+      "prior": {
+       "lo": 340,
+       "hi": 1281,
+       "median": 791,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 37500,
+       "minRel": 0.24652338811630847,
+       "maxRel": 2.3694058154235145
+      }
+     },
+     "wolf": {
+      "key": "wolf",
+      "initial": 24,
+      "persisted": true,
+      "finalPop": 69,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 63.039119804400976,
+      "min": 42,
+      "max": 80,
+      "cv": 0.10340588861143592,
+      "maxOverMean": 1.269053252142885,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 37,
+      "periodTicks": 12000,
+      "periodStrength": 0.30212483436618204,
+      "prior": {
+       "lo": 54,
+       "hi": 69,
+       "median": 62,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 82500,
+       "minRel": 0.8516129032258064,
+       "maxRel": 1.1516129032258065
+      }
+     },
+     "raven": {
+      "key": "raven",
+      "initial": 30,
+      "persisted": true,
+      "finalPop": 317,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 300.53056234718827,
+      "min": 207,
+      "max": 325,
+      "cv": 0.061161977319620205,
+      "maxOverMean": 1.0814207961469935,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 2,
+      "periodTicks": 6000,
+      "periodStrength": 0.8671891500415326,
+      "prior": {
+       "lo": 274,
+       "hi": 321,
+       "median": 306,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": false,
+       "recoveryTicks": 0,
+       "minRel": 0.9196078431372549,
+       "maxRel": 1.0117647058823531
+      }
+     },
+     "pronghorn": {
+      "key": "pronghorn",
+      "initial": 350,
+      "persisted": true,
+      "finalPop": 813,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 667.7872860635697,
+      "min": 74,
+      "max": 2521,
+      "cv": 0.44954509261582354,
+      "maxOverMean": 3.775154233409611,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 61,
+      "periodTicks": 12000,
+      "periodStrength": 0.22712385172270658,
+      "prior": {
+       "lo": 330,
+       "hi": 903,
+       "median": 628,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 22500,
+       "minRel": 0.2576433121019108,
+       "maxRel": 1.907324840764331
+      }
+     }
+    },
+    "maxGen": 457.5533,
+    "shock": {
+     "priorEndTick": 288000,
+     "recoveryStartTick": 288000,
+     "label": "drought (2 yr)"
+    }
+   }
+  },
+  {
+   "seed": 17,
+   "csv": "seed_17.csv",
+   "events": [
+    {
+     "label": "drought (2 yr)",
+     "kind": "drought",
+     "frac": 0.4,
+     "tick": 288000,
+     "applied": true
+    }
+   ],
+   "metrics": {
+    "seed": 17,
+    "samples": 481,
+    "lastTick": 720000,
+    "totalTicks": 720000,
+    "burnInTick": 108000,
+    "sampleSpacing": 1500,
+    "species": {
+     "bison": {
+      "key": "bison",
+      "initial": 800,
+      "persisted": true,
+      "finalPop": 858,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 1014.6748166259168,
+      "min": 121,
+      "max": 2011,
+      "cv": 0.2986841738931838,
+      "maxOverMean": 1.9819157498036155,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 43,
+      "periodTicks": 36000,
+      "periodStrength": 0.15231160955739484,
+      "prior": {
+       "lo": 577,
+       "hi": 1209,
+       "median": 859,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 37500,
+       "minRel": 0.21955762514551805,
+       "maxRel": 1.7131548311990685
+      }
+     },
+     "wolf": {
+      "key": "wolf",
+      "initial": 30,
+      "persisted": true,
+      "finalPop": 49,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 51.826405867970664,
+      "min": 34,
+      "max": 65,
+      "cv": 0.10058555920018457,
+      "maxOverMean": 1.25418691324244,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 40,
+      "periodTicks": 12000,
+      "periodStrength": 0.2836979027280944,
+      "prior": {
+       "lo": 45,
+       "hi": 57,
+       "median": 52,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 16500,
+       "minRel": 0.8500000000000001,
+       "maxRel": 1.1538461538461537
+      }
+     },
+     "raven": {
+      "key": "raven",
+      "initial": 30,
+      "persisted": true,
+      "finalPop": 317,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 300.3911980440098,
+      "min": 213,
+      "max": 326,
+      "cv": 0.06261285544521066,
+      "maxOverMean": 1.0852515057789354,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 0,
+      "periodTicks": 6000,
+      "periodStrength": 0.900124886117041,
+      "prior": {
+       "lo": 269,
+       "hi": 321,
+       "median": 305,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": false,
+       "recoveryTicks": 0,
+       "minRel": 0.9363934426229509,
+       "maxRel": 1.0157377049180327
+      }
+     },
+     "pronghorn": {
+      "key": "pronghorn",
+      "initial": 350,
+      "persisted": true,
+      "finalPop": 895,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 709.9975550122249,
+      "min": 44,
+      "max": 1719,
+      "cv": 0.4041706698131183,
+      "maxOverMean": 2.4211350980925586,
+      "nearZeroFrac": 0.0024449877750611247,
+      "longestNearZeroTicks": 1500,
+      "peaks": 66,
+      "periodTicks": 10500,
+      "periodStrength": 0.20301060021954853,
+      "prior": {
+       "lo": 318,
+       "hi": 886,
+       "median": 567,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 18000,
+       "minRel": 0.3326278659611993,
+       "maxRel": 1.9763668430335095
+      }
+     }
+    },
+    "maxGen": 424.9814,
+    "shock": {
+     "priorEndTick": 288000,
+     "recoveryStartTick": 288000,
+     "label": "drought (2 yr)"
+    }
+   }
+  },
+  {
+   "seed": 18,
+   "csv": "seed_18.csv",
+   "events": [
+    {
+     "label": "drought (2 yr)",
+     "kind": "drought",
+     "frac": 0.4,
+     "tick": 288000,
+     "applied": true
+    }
+   ],
+   "metrics": {
+    "seed": 18,
+    "samples": 481,
+    "lastTick": 720000,
+    "totalTicks": 720000,
+    "burnInTick": 108000,
+    "sampleSpacing": 1500,
+    "species": {
+     "bison": {
+      "key": "bison",
+      "initial": 800,
+      "persisted": true,
+      "finalPop": 520,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 921.1515892420538,
+      "min": 167,
+      "max": 1818,
+      "cv": 0.29253085444804683,
+      "maxOverMean": 1.9736165265652912,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 42,
+      "periodTicks": 36000,
+      "periodStrength": 0.16281039590046048,
+      "prior": {
+       "lo": 612,
+       "hi": 1275,
+       "median": 907,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 24000,
+       "minRel": 0.29283351708930544,
+       "maxRel": 1.4868798235942666
+      }
+     },
+     "wolf": {
+      "key": "wolf",
+      "initial": 30,
+      "persisted": true,
+      "finalPop": 64,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 60.50611246943765,
+      "min": 39,
+      "max": 74,
+      "cv": 0.09362160671219483,
+      "maxOverMean": 1.2230169313452135,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 25,
+      "periodTicks": 6000,
+      "periodStrength": 0.28367643623918193,
+      "prior": {
+       "lo": 53,
+       "hi": 68,
+       "median": 61,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 10500,
+       "minRel": 0.8590163934426229,
+       "maxRel": 1.1016393442622952
+      }
+     },
+     "raven": {
+      "key": "raven",
+      "initial": 30,
+      "persisted": true,
+      "finalPop": 313,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 299.43520782396087,
+      "min": 199,
+      "max": 329,
+      "cv": 0.0645971229442943,
+      "maxOverMean": 1.098735190129747,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 0,
+      "periodTicks": 6000,
+      "periodStrength": 0.8693779858821286,
+      "prior": {
+       "lo": 269,
+       "hi": 320,
+       "median": 304,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": false,
+       "recoveryTicks": 0,
+       "minRel": 0.8875000000000001,
+       "maxRel": 1.0138157894736841
+      }
+     },
+     "pronghorn": {
+      "key": "pronghorn",
+      "initial": 350,
+      "persisted": true,
+      "finalPop": 375,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 674.6112469437653,
+      "min": 92,
+      "max": 1562,
+      "cv": 0.4026443277362547,
+      "maxOverMean": 2.3154075878165816,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 61,
+      "periodTicks": 12000,
+      "periodStrength": 0.30777931068167963,
+      "prior": {
+       "lo": 345,
+       "hi": 996,
+       "median": 595,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 12000,
+       "minRel": 0.39226890756302524,
+       "maxRel": 1.6450420168067226
+      }
+     }
+    },
+    "maxGen": 405.7923,
+    "shock": {
+     "priorEndTick": 288000,
+     "recoveryStartTick": 288000,
+     "label": "drought (2 yr)"
+    }
+   }
+  },
+  {
+   "seed": 19,
+   "csv": "seed_19.csv",
+   "events": [
+    {
+     "label": "drought (2 yr)",
+     "kind": "drought",
+     "frac": 0.4,
+     "tick": 288000,
+     "applied": true
+    }
+   ],
+   "metrics": {
+    "seed": 19,
+    "samples": 481,
+    "lastTick": 720000,
+    "totalTicks": 720000,
+    "burnInTick": 108000,
+    "sampleSpacing": 1500,
+    "species": {
+     "bison": {
+      "key": "bison",
+      "initial": 800,
+      "persisted": true,
+      "finalPop": 1330,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 1098.8973105134473,
+      "min": 144,
+      "max": 2292,
+      "cv": 0.2906374974371704,
+      "maxOverMean": 2.085727190404251,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 41,
+      "periodTicks": 18000,
+      "periodStrength": 0.21800561947938268,
+      "prior": {
+       "lo": 594,
+       "hi": 1385,
+       "median": 1037,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 42000,
+       "minRel": 0.19922854387656702,
+       "maxRel": 1.6387656702025073
+      }
+     },
+     "wolf": {
+      "key": "wolf",
+      "initial": 24,
+      "persisted": true,
+      "finalPop": 51,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 50.33740831295844,
+      "min": 32,
+      "max": 63,
+      "cv": 0.11096788175298376,
+      "maxOverMean": 1.2515543034777539,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 36,
+      "periodTicks": 12000,
+      "periodStrength": 0.23429246177555568,
+      "prior": {
+       "lo": 42,
+       "hi": 54,
+       "median": 47,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 13500,
+       "minRel": 0.8808510638297872,
+       "maxRel": 1.2595744680851064
+      }
+     },
+     "raven": {
+      "key": "raven",
+      "initial": 30,
+      "persisted": true,
+      "finalPop": 309,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 300.158924205379,
+      "min": 127,
+      "max": 324,
+      "cv": 0.06792669772054227,
+      "maxOverMean": 1.079428175783,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 0,
+      "periodTicks": 6000,
+      "periodStrength": 0.7299359237319735,
+      "prior": {
+       "lo": 272,
+       "hi": 321,
+       "median": 301,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 16500,
+       "minRel": 0.8232558139534885,
+       "maxRel": 1.0292358803986712
+      }
+     },
+     "pronghorn": {
+      "key": "pronghorn",
+      "initial": 350,
+      "persisted": true,
+      "finalPop": 972,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 778.9095354523228,
+      "min": 189,
+      "max": 3160,
+      "cv": 0.4240066548450119,
+      "maxOverMean": 4.056953800372912,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 61,
+      "periodTicks": 9000,
+      "periodStrength": 0.2571346398035598,
+      "prior": {
+       "lo": 351,
+       "hi": 1052,
+       "median": 673,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 18000,
+       "minRel": 0.5334323922734027,
+       "maxRel": 1.723922734026746
+      }
+     }
+    },
+    "maxGen": 447.4797,
+    "shock": {
+     "priorEndTick": 288000,
+     "recoveryStartTick": 288000,
+     "label": "drought (2 yr)"
+    }
+   }
+  },
+  {
+   "seed": 20,
+   "csv": "seed_20.csv",
+   "events": [
+    {
+     "label": "drought (2 yr)",
+     "kind": "drought",
+     "frac": 0.4,
+     "tick": 288000,
+     "applied": true
+    }
+   ],
+   "metrics": {
+    "seed": 20,
+    "samples": 481,
+    "lastTick": 720000,
+    "totalTicks": 720000,
+    "burnInTick": 108000,
+    "sampleSpacing": 1500,
+    "species": {
+     "bison": {
+      "key": "bison",
+      "initial": 800,
+      "persisted": true,
+      "finalPop": 1313,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 1177.4694376528118,
+      "min": 36,
+      "max": 2644,
+      "cv": 0.29719803349688234,
+      "maxOverMean": 2.245493526584092,
+      "nearZeroFrac": 0.012224938875305624,
+      "longestNearZeroTicks": 7500,
+      "peaks": 46,
+      "periodTicks": 99000,
+      "periodStrength": 0.16541397012214223,
+      "prior": {
+       "lo": 804,
+       "hi": 1530,
+       "median": 1120,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 28500,
+       "minRel": 0.0425,
+       "maxRel": 1.831964285714286
+      }
+     },
+     "wolf": {
+      "key": "wolf",
+      "initial": 24,
+      "persisted": true,
+      "finalPop": 57,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 50.93154034229829,
+      "min": 37,
+      "max": 65,
+      "cv": 0.102763691408082,
+      "maxOverMean": 1.2762229369689404,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 39,
+      "periodTicks": 6000,
+      "periodStrength": 0.20662027623080956,
+      "prior": {
+       "lo": 43,
+       "hi": 57,
+       "median": 51,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 15000,
+       "minRel": 0.8352941176470589,
+       "maxRel": 1.1333333333333333
+      }
+     },
+     "raven": {
+      "key": "raven",
+      "initial": 30,
+      "persisted": true,
+      "finalPop": 311,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 299.56968215158923,
+      "min": 112,
+      "max": 328,
+      "cv": 0.07359177935664779,
+      "maxOverMean": 1.0949038555711534,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 1,
+      "periodTicks": 6000,
+      "periodStrength": 0.6241111061229806,
+      "prior": {
+       "lo": 266,
+       "hi": 321,
+       "median": 308,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 18000,
+       "minRel": 0.687012987012987,
+       "maxRel": 1.009090909090909
+      }
+     },
+     "pronghorn": {
+      "key": "pronghorn",
+      "initial": 350,
+      "persisted": true,
+      "finalPop": 830,
+      "extinctionTick": null,
+      "everZero": false,
+      "mean": 736.682151589242,
+      "min": 168,
+      "max": 2259,
+      "cv": 0.459164989829677,
+      "maxOverMean": 3.0664513795083357,
+      "nearZeroFrac": 0,
+      "longestNearZeroTicks": 0,
+      "peaks": 68,
+      "periodTicks": 9000,
+      "periodStrength": 0.4031903702304544,
+      "prior": {
+       "lo": 317,
+       "hi": 802,
+       "median": 521,
+       "samples": 121,
+       "startTick": 108000,
+       "endTick": 288000
+      },
+      "recovery": {
+       "leftRange": true,
+       "recoveryTicks": 196500,
+       "minRel": 0.5301343570057582,
+       "maxRel": 2.3754318618042225
+      }
+     }
+    },
+    "maxGen": 434.7738,
+    "shock": {
+     "priorEndTick": 288000,
+     "recoveryStartTick": 288000,
+     "label": "drought (2 yr)"
+    }
+   }
+  }
+ ],
+ "aggregate": {
+  "seeds": 20,
+  "species": {
+   "bison": {
+    "key": "bison",
+    "seedsStarted": 20,
+    "persistedCount": 17,
+    "persistencePct": 85,
+    "medianMean": 1031.3092909535453,
+    "meanOfMeans": 991.4258356818902,
+    "medianCv": 0.3079366995092607,
+    "medianMaxOverMean": 2.0417403793943003,
+    "medianNearZeroFrac": 0.003667481662591687,
+    "medianLongestNearZeroTicks": 2250,
+    "medianPeaks": 42.5,
+    "meanPeaks": 37.7,
+    "medianPeriodTicks": 36000,
+    "periodSeeds": 8,
+    "shockSeeds": 19,
+    "leftRangePct": 100,
+    "recoveredPct": 89.47368421052632,
+    "medianRecoveryTicks": 28500,
+    "meanRecoveryTicks": 29911.764705882353
+   },
+   "wolf": {
+    "key": "wolf",
+    "seedsStarted": 20,
+    "persistedCount": 17,
+    "persistencePct": 85,
+    "medianMean": 51.812958435207825,
+    "meanOfMeans": 51.759433593385474,
+    "medianCv": 0.10587621607852252,
+    "medianMaxOverMean": 1.2762416354483217,
+    "medianNearZeroFrac": 0,
+    "medianLongestNearZeroTicks": 0,
+    "medianPeaks": 36.5,
+    "meanPeaks": 33.05,
+    "medianPeriodTicks": 12000,
+    "periodSeeds": 17,
+    "shockSeeds": 19,
+    "leftRangePct": 84.21052631578948,
+    "recoveredPct": 89.47368421052632,
+    "medianRecoveryTicks": 16500,
+    "meanRecoveryTicks": 42176.470588235294
+   },
+   "raven": {
+    "key": "raven",
+    "seedsStarted": 20,
+    "persistedCount": 17,
+    "persistencePct": 85,
+    "medianMean": 299.5171149144254,
+    "meanOfMeans": 273.7035657627055,
+    "medianCv": 0.06788577485284936,
+    "medianMaxOverMean": 1.0876683498250221,
+    "medianNearZeroFrac": 0,
+    "medianLongestNearZeroTicks": 0,
+    "medianPeaks": 0,
+    "meanPeaks": 2.55,
+    "medianPeriodTicks": 6000,
+    "periodSeeds": 16,
+    "shockSeeds": 19,
+    "leftRangePct": 63.1578947368421,
+    "recoveredPct": 89.47368421052632,
+    "medianRecoveryTicks": 16500,
+    "meanRecoveryTicks": 12000
+   },
+   "pronghorn": {
+    "key": "pronghorn",
+    "seedsStarted": 20,
+    "persistedCount": 18,
+    "persistencePct": 90,
+    "medianMean": 741.6907090464547,
+    "meanOfMeans": 732.1116869949049,
+    "medianCv": 0.42229897734570226,
+    "medianMaxOverMean": 2.855036296138254,
+    "medianNearZeroFrac": 0,
+    "medianLongestNearZeroTicks": 0,
+    "medianPeaks": 64.5,
+    "meanPeaks": 59.25,
+    "medianPeriodTicks": 10500,
+    "periodSeeds": 19,
+    "shockSeeds": 19,
+    "leftRangePct": 100,
+    "recoveredPct": 94.73684210526316,
+    "medianRecoveryTicks": 18000,
+    "meanRecoveryTicks": 36250
+   }
+  },
+  "maxGen": 478.6619,
+  "medianGen": 429.4439
+ },
+ "verdict": {
+  "bison": {
+   "persistence": true,
+   "nearZero": true,
+   "longestStretch": true,
+   "noExplosion": true,
+   "notFlat": true,
+   "recovered": true,
+   "all": true
+  },
+  "wolf": {
+   "persistence": true,
+   "nearZero": true,
+   "longestStretch": true,
+   "noExplosion": true,
+   "notFlat": true,
+   "recovered": true,
+   "all": true
+  },
+  "raven": {
+   "persistence": true,
+   "nearZero": true,
+   "longestStretch": true,
+   "noExplosion": true,
+   "notFlat": true,
+   "recovered": true,
+   "all": true
+  },
+  "pronghorn": {
+   "persistence": true,
+   "nearZero": true,
+   "longestStretch": true,
+   "noExplosion": true,
+   "notFlat": true,
+   "recovered": true,
+   "all": true
+  }
+ },
  "merged": true
 }
