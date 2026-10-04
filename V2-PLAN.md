@@ -394,7 +394,7 @@ Make the code safe for many new species and for changes that stay identical whil
 - `SPECIES_COUNT` stays 6 in S0.
 
 **Steps:**
-- [ ] **1. Golden hash first.** Do this before any refactor, then commit.
+- [x] **1. Golden hash first.** Do this before any refactor, then commit.
   - Write `src/headless/hash.ts` (below).
   - Record seeds 3, 7 and 11 at 24,000 ticks with default params in `tools/golden.json`.
   ```ts
@@ -413,13 +413,13 @@ Make the code safe for many new species and for changes that stay identical whil
   for (let c = 0; c < sim.veg.grass.length; c += 7) mixF(sim.veg.grass[c]);
   console.log(`seed=${seed} ticks=${ticks} hash=${h.toString(16).padStart(8, '0')}`);
   ```
-- [ ] **2. Test runner.** `tools/run-tests.ts` runs, in order:
+- [x] **2. Test runner.** `tools/run-tests.ts` runs, in order:
   - every `src/**/*.test.ts` through tsx
   - `src/headless/metrics.ts --selftest`
   - the golden check
 
   It exits non-zero on any failure. `"test": "tsx tools/run-tests.ts"`.
-- [ ] **3. Species registry.** `src/sim/species.ts`:
+- [x] **3. Species registry.** `src/sim/species.ts`:
   ```ts
   export interface SpeciesDef {
     id: number; key: string; name: string; plural: string;
@@ -436,7 +436,7 @@ Make the code safe for many new species and for changes that stay identical whil
   - Size the worker's `TRAIT_SERIES` and trait grid by `SPECIES_COUNT`.
   - Python tools read species from the CSV header (`pop_*` columns).
   - The golden hash must not move.
-- [ ] **4. Event serial.**
+- [x] **4. Event serial.**
   ```ts
   eventSerial = 0; // sim.ts: total events ever emitted; events[0] has serial eventSerial - events.length
   // in event(): push, then this.eventSerial++
@@ -444,11 +444,11 @@ Make the code safe for many new species and for changes that stay identical whil
   //   const fresh = sim.events.slice(Math.max(0, lastSerial - base)); lastSerial = sim.eventSerial;
   // skip loop (237-244): remember the start serial, not the array index
   ```
-- [ ] **5. Contract additions** (unused until later WPs, so the hash doesn't move).
+- [x] **5. Contract additions** (unused until later WPs, so the hash doesn't move).
   - The new agent fields must be copied when the agent pool grows.
   - `describe.ts` must ignore unknown event kinds without crashing.
-- [ ] **6. Elder text.** In `describe.ts`, "elder" fires at the animal's death (sim.ts:878-880), so its text must say it died at a great age, not that it "still roams".
-- [ ] **7. Smoke tool.** `tools/smoke.mjs`:
+- [x] **6. Elder text.** In `describe.ts`, "elder" fires at the animal's death (sim.ts:878-880), so its text must say it died at a great age, not that it "still roams".
+- [x] **7. Smoke tool.** `tools/smoke.mjs`:
   - starts Vite and headless Chromium (any GL)
   - loads `index.html?grass=0&q=medium&autocam=0`
   - waits for `__ready`
@@ -463,13 +463,13 @@ Make the code safe for many new species and for changes that stay identical whil
 - Track R, after merging: the game runs 5 minutes at 10x with no console errors.
 
 ### R0. Render baseline and quick wins [Track R, GPU, M]
-- [ ] **1. Bench tool `tools/gpubench.mjs`.**
+- [x] **1. Bench tool `tools/gpubench.mjs`.**
   - Promote `scratch/b1/gpubench.mjs`. Fix it so it passes `autoscale=0` and drops the nonexistent `setAdaptiveScale`.
   - Views: wide-golden, low-golden, herd, top, winter, night (R4 adds storm).
   - Measurement: `EXT_disjoint_timer_query_webgl2`, median of 40 frames.
   - `--ab <dirA> <dirB>` runs A,B,B,A and reports the mean paired delta.
   - Commit the baseline as `review/perf/baseline-<hash>.json`.
-- [ ] **2. Registry-safe render and UI.** These tables read `SPECIES`:
+- [x] **2. Registry-safe render and UI.** These tables read `SPECIES`:
   - `animals.ts`: `INITIAL_CAPACITY` (:22), `DUST` (:37), `TURN` (:84), `BANK_MAX` (:93), `speciesScale` (:285), and the raven and predator branches at 516-899
   - `fx.ts`: `MARKER` (:423), `PING_TINT` (:442), grid sized by `SPECIES_COUNT` (:500)
   - `models/index.ts`
@@ -481,18 +481,18 @@ Make the code safe for many new species and for changes that stay identical whil
   - A species with no model is not drawn.
   - A species never present has no graph row.
   - Check with `?p=rabbit.initial:20`: rabbits draw with the rabbit model and get a graph row, with no errors.
-- [ ] **3. Tone mapping.**
+- [x] **3. Tone mapping.**
   - Make a side-by-side sheet of ACES (the current default, engine.ts:177), AgX and neutral against the concept image, in the same views.
   - Adopt the closest, judged by the lead's eye plus the item 5 concept score. Retune GradePass (post.ts:186-276) if needed.
   - Log the choice in DECISIONS.md.
-- [ ] **4. Hill shadows on animals.** Animals get the terrain horizon shadow (`injectTerrainShadow` on the animal material and its depth material). Budget ≤ +0.2 ms.
-- [ ] **5. Concept tool `tools/concept_compare.py`.**
+- [x] **4. Hill shadows on animals.** Animals get the terrain horizon shadow (`injectTerrainShadow` on the animal material and its depth material). Budget ≤ +0.2 ms.
+- [x] **5. Concept tool `tools/concept_compare.py`.**
   - Sends the concept image plus a build still to Gemini (vision model picked from the live list).
   - Asks for a 1-10 match each on light, palette, haze, water, trees, grass and composition, an overall score, and the top 5 differences.
   - Writes the result to `<still>.concept.md`.
   - Window hook `__concept()` frames the concept's view: the creek bend with groves, a high oblique angle, low sun from the left, late summer, dayFrac about 0.28.
   - Record the baseline score in MORNING.md.
-- [ ] **6. JPEG stills.** `tools/stills.mjs` and `tools/video.mjs` stills default to JPEG q90.
+- [x] **6. JPEG stills.** `tools/stills.mjs` and `tools/video.mjs` stills default to JPEG q90.
 
 **Gates:**
 - The baseline is committed and the registry check passes.
@@ -522,23 +522,23 @@ Animals can leave and enter the valley through corridors. All params ship off; S
 
 The existing `wolfImmigration` and `cougarImmigration` stay as they are.
 
-- [ ] **1. Corridors.** World generation computes 8 border entry points:
+- [x] **1. Corridors.** World generation computes 8 border entry points:
   - the creek inlet and outlet
   - the lowest border cell in each eighth of the rim
 
   This adds new arrays only, so existing ones are untouched.
-- [ ] **2. Regional pool (`region.ts`).**
+- [x] **2. Regional pool (`region.ts`).**
   - Per species, a running mean and variance per gene, starting from the founders.
   - `absorb(sp, genes)`: an emigrant pulls the pool toward its genes by 2%.
   - `draw(sp, rng, out)`: genes for an immigrant come from the pool. This is gene flow.
-- [ ] **3. Migrate state.**
+- [x] **3. Migrate state.**
   - The animal heads to the nearest corridor at 0.5× its run speed.
   - Within 4 m of the border it is removed, with death cause `emigrated`: no carcass, counted in `cEmig[sp]`, and `region.absorb`.
   - Immigrants spawn at a corridor with `F_MIGRANT` set until they are 30 m inside.
-- [ ] **4. Wolves.**
+- [x] **4. Wolves.**
   - **Leaving:** a pack-less adult that has wandered longer than `wolfOutAfter` leaves.
   - **Arriving:** every 100 ticks, roll `rng < wolfInRate * 100 / BASE_YEAR_TICKS`. On success, if `findDenSite()` returns a site, an adult pair (genes from the pool, `origin = 1`) enters at the nearest corridor. On arrival the pair founds a pack and emits `immigrated` (sp Wolf, a = 2).
-- [ ] **5. Pronghorn.**
+- [x] **5. Pronghorn.**
   - **Autumn exodus (season 2.6, once per valley year):**
     - B = browse per pronghorn.
     - f = clamp(deerOutK × (1 − B/Bref), 0, 0.5).
@@ -549,7 +549,7 @@ The existing `wolfImmigration` and `cougarImmigration` stay as they are.
     - If pop < 20, n = max(n, deerRescue).
     - They arrive as one group and emit `immigrated`.
   - **Calibrating Bref and Kb:** measure them from a 32-seed default run (mean autumn browse per capita, and the equilibrium population). Write the values as param defaults.
-- [ ] **6. Vagrant ravens.**
+- [x] **6. Vagrant ravens.**
   ```ts
   // every 50 ticks when ravenVagrants > 0
   const carrion = sumRemainingMeat();                                  // same units as cMeat
@@ -559,8 +559,8 @@ The existing `wolfImmigration` and `cougarImmigration` stay as they are.
   else if (carrion < 0.2 * target / p.ravenVagrantK) sendHome(Math.ceil(vagrants * 0.05));  // fly to the nearest edge, removed there
   ```
   - Vagrants have `origin = 2` and never breed (check it in `thinkRaven` at sim.ts:1803).
-- [ ] **7. Recolonization.** When a species with `everPresent = 0` gains animals through immigration, emit `recolonized`.
-- [ ] **8. Metrics** (`metrics.ts` and `dynamics.py`):
+- [x] **7. Recolonization.** When a species with `everPresent = 0` gains animals through immigration, emit `recolonized`.
+- [x] **8. Metrics** (`metrics.ts` and `dynamics.py`):
   - presence fraction (share of samples with pop > 0)
   - local extinctions per 1,000 years
   - years absent
@@ -657,12 +657,12 @@ Fix the complaint every Gemini round repeats: sliding feet, stiff animals, wolve
 
 **Files:** `src/render/animals.ts`, `src/render/models/shader.ts`, `src/render/models/builder.ts`, `dev/animals.ts`.
 
-- [ ] **1. Foot-slip rig** in `dev/animals.html`.
+- [x] **1. Foot-slip rig** in `dev/animals.html`.
   - A CPU mirror of the leg math.
   - Cases: each species, walk, trot and gallop, 1x and 10x, flat ground and a 20° slope.
   - Prints the stance slip (mean foot motion during stance ÷ body motion) and the foot-to-ground error.
   - Saves image strips.
-- [ ] **2. Exact foot lock.**
+- [x] **2. Exact foot lock.**
   - Today the phase already advances by distance drawn ÷ stride (animals.ts:737), but a sinusoidal hip swing can't hold a planted foot still.
   - Replace it with a linear foot path during stance:
   ```glsl
@@ -677,7 +677,7 @@ Fix the complaint every Gemini round repeats: sliding feet, stiff animals, wolve
   - S must include the drawn model scale, including the distance size boost.
   - Blend gait parameters across walk, trot and gallop, and never reset the phase.
   - Raise `MAX_CADENCE` so it never binds below a real gallop cadence.
-- [ ] **3. Slope contact,** within 45 m of the camera.
+- [x] **3. Slope contact,** within 45 m of the camera.
   - During stance, each leg reads the ground height at its foot's world position from the height texture.
   - A two-bone analytic IK (hip, knee, foot) reaches it within ±25% of the leg length.
   - Body height = mean stance-foot height + rest leg height.
@@ -724,24 +724,24 @@ For every item:
 
 Budget for the whole WP: ≤ +1.0 ms at 1440p in every view.
 
-- [ ] **0. One source for the season curves.** Move `CURE_KEYS`, `keyCurve` and the winter and riparian curves into one shared module (today they are duplicated across grass.ts:126, engine.ts:58 and terrain.ts:952).
-- [ ] **1. Water.**
+- [x] **0. One source for the season curves.** Move `CURE_KEYS`, `keyCurve` and the winter and riparian curves into one shared module (today they are duplicated across grass.ts:126, engine.ts:58 and terrain.ts:952).
+- [x] **1. Water.**
   - The creek and ponds read silver from the drone.
   - Reflect the real sky radiance in the reflected direction (the sky dome function in sky.ts) with Fresnel.
   - Beyond 80 m and at incidence above 60°, apply an artistic reflectance floor of 0.35.
   - Up close, keep the bed and depth look (water.ts:450-488 and 635-675).
   - From the v1 backlog: a bare apron on the shaded side of ponds, and more width variation along the creek channel.
-- [ ] **2. Aerial perspective** (FogPass, post.ts:75-184):
+- [x] **2. Aerial perspective** (FogPass, post.ts:75-184):
   - distance haze with a forward-scattering lobe toward the sun (Henyey-Greenstein, g 0.75)
   - tinted by the sun colour
   - stronger in summer and drought (dust)
   - a horizon glow
   - weaker at night
-- [ ] **3. Mid and far terrain** (`tgGround`, terrain.ts:902-1294):
+- [x] **3. Mid and far terrain** (`tgGround`, terrain.ts:902-1294):
   - Halve the macro mottling beyond 60 m.
   - Add broad, smooth tonal bands by slope aspect: sun-facing slopes pale gold, shaded slopes deeper ochre.
   - In late summer, the uplands turn more cured gold; green stays in the riparian ribbon and the swales.
-- [ ] **4. Drought ground.** A drought term in the terrain and grass shaders, driven by env drought severity: pale straw grass and dusty tan soil, never mauve.
+- [x] **4. Drought ground.** A drought term in the terrain and grass shaders, driven by env drought severity: pale straw grass and dusty tan soil, never mauve.
 - [ ] **5. Cloud shadows.**
   - A ground mask from the same fbm as the sky's cloud layer (sky.ts:271-349), projected along the sun and moved by the wind.
   - It multiplies direct sun on terrain, grass, trees and animals.
@@ -1285,7 +1285,7 @@ Render-side only, driven by sim state plus an id hash; no sim change.
 
 ### Sound and lens
 
-**R14. Music and sound** [R, M]
+**R14. Music and sound** [R, M] (done 2026-10-04: music via ElevenLabs, rut, cranes audio, blizzard, grasshoppers; crane V-formation render still to do)
 - **Music:** use ElevenLabs if its music API is available.
   - 5 cues, 60 to 120 s loops: dawn, day, tension, night, storm or winter.
   - A tension index (chases, kills, die-offs, storms) drives the crossfades.

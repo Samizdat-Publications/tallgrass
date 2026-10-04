@@ -3,6 +3,10 @@
 import * as THREE from 'three';
 import type { DroneCamera } from './render/camera';
 import { AGENT_STRIDE, CARCASS_STRIDE, Sp, St } from './sim/types';
+import { SPECIES, isPredator } from './sim/species';
+
+/** A land hunter by the registry (wolf, cougar, later coyote): worth a hunt shot when it is in a chase. Fliers hunt too high and fast to film. */
+const isLandHunter = (sp: number): boolean => isPredator(sp) && SPECIES[sp]?.flies === false;
 
 export interface DirectorFrame {
   count: number;
@@ -135,7 +139,7 @@ export class Director {
   private findHunt(f: DirectorFrame): Shot | null {
     for (let k = 0; k < f.count; k++) {
       const o = k * AGENT_STRIDE;
-      if (f.agents[o] === Sp.Wolf && f.agents[o + 7] === St.Chase) {
+      if (isLandHunter(f.agents[o]) && f.agents[o + 7] === St.Chase) {
         return { kind: 'hunt', id: f.ids[k], x: 0, y: 0, dist: 38 + this.rand() * 18, pitch: 14 + this.rand() * 8, yaw: this.rand() * 360, hold: 14 };
       }
     }

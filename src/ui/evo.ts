@@ -4,7 +4,7 @@ import { YEAR_TICKS } from '../sim/types';
 import { niceStep, niceStepInt, roundRect } from './chartutil';
 import { PAPER_DIM, SANS, SERIF, SPECIES_COLORS } from './palette';
 import { yearOfTick, yearStartTick } from './describe';
-import { TRAITS, coatColor } from './traits';
+import { TRAITS, coatColor, traitIndex } from './traits';
 
 export interface EvoData {
   ticks: number[];
@@ -14,9 +14,9 @@ export interface EvoData {
 
 /** Hero lines in the order the legend lists them. */
 export const HERO = [
-  { index: 3, name: 'Wolf', sp: 1 },
-  { index: 0, name: 'Bison', sp: 0 },
-  { index: 6, name: 'Pronghorn', sp: 3 },
+  { index: traitIndex(1, 'speed'), name: 'Wolf', sp: 1 },
+  { index: traitIndex(0, 'speed'), name: 'Bison', sp: 0 },
+  { index: traitIndex(3, 'speed'), name: 'Pronghorn', sp: 3 },
 ];
 
 const pct = (v: number): number => (v - 1) * 100;
@@ -50,10 +50,10 @@ interface Panel {
 
 function panelsFor(d: EvoData): Panel[] {
   const all: Panel[] = [
-    { title: 'Size', indices: [1, 4] },
-    { title: 'Bison coat', indices: [2], coatSp: 0 },
-    { title: 'Wolf coat', indices: [5], coatSp: 1 },
-    { title: 'Pronghorn coat', indices: [7], coatSp: 3 },
+    { title: 'Size', indices: [traitIndex(0, 'size'), traitIndex(1, 'size')] },
+    { title: 'Bison coat', indices: [traitIndex(0, 'coat')], coatSp: 0 },
+    { title: 'Wolf coat', indices: [traitIndex(1, 'coat')], coatSp: 1 },
+    { title: 'Pronghorn coat', indices: [traitIndex(3, 'coat')], coatSp: 3 },
   ];
   return all.map((p) => ({ ...p, indices: p.indices.filter((i) => hasData(d, i)) })).filter((p) => p.indices.length > 0);
 }

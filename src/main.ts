@@ -13,9 +13,11 @@ import { challengeById } from './challenges';
 import { Director } from './director';
 import { AudioDirector } from './audio/audio';
 import { Narrator } from './audio/narrator';
-import { countNearby, nearWater01 } from './audio/inputs';
+import { countNearby, nearWater01, scanTension } from './audio/inputs';
+import type { TensionSample } from './audio/music';
 import { DAY_TICKS, setCalendarScale, Sp, YEAR_TICKS, type Intervention, type Snapshot } from './sim/types';
 import { applyOverrides, defaultParams } from './sim/params';
+import { isPredator } from './sim/species';
 import type { FromWorker, ToWorker } from './sim/worker';
 
 const q = new URLSearchParams(location.search);
@@ -288,6 +290,7 @@ const sun = { dir: engine.uniforms.lightDir.value, color: engine.uniforms.lightC
 let fpsAcc = 0, fpsN = 0;
 let audioFrame = 0;
 let nearbyCache = { bison: 0, wolf: 0, raven: 0, pronghorn: 0 };
+let tensionCache: TensionSample | null = null;
 const heardDeaths = new Map<number, number>();
 // field notes: a fresh carcass with a predator beside it is a kill; one the documentary camera caught close to its focus
 // earns "The documentary camera films a kill"
@@ -297,7 +300,7 @@ function predatorWithin(x: number, y: number, r: number): boolean {
   const A = pending.agents;
   for (let k = 0; k < pending.count; k++) {
     const o = k * 12;
-    if (A[o] !== Sp.Wolf && A[o] !== Sp.Cougar) continue;
+    if (!isPredator(A[o])) continue; // any registry predator (wolf, cougar, and later coyote and the raptors)
     if (Math.hypot(A[o + 1] - x, A[o + 2] - y) < r) return true;
   }
   return false;
@@ -330,8 +333,8 @@ engine.onFrame((dt, t) => {
     const cp = engine.camera.position; // three x = sim x, three z = sim y
     const camHeight = Math.max(0, cp.y - engine.groundHeight(cp.x, cp.z));
     audioFrame++;
-    if ((audioFrame & 3) === 0) nearbyCache = countNearby(pending.agents, pending.count, cp.x, cp.z, 250);
-    audio.update(dt, { env: pending.env, camX: cp.x, camY: cp.z, camHeight, speed: pending.speed, nearby: nearbyCache, nearWater: nearWater01(world, cp.x, cp.z) });
+    if ((audioFrame & 3) === 0) { nearbyCache = countNearby(pending.agents, pending.count, cp.x, cp.z, 250); tensionCache = scanTension(pending.agents, pending.count, cp.x, cp.z, pending.carcasses, pending.carcassCount); }
+    audio.update(dt, { env: pending.env, camX: cp.x, camY: cp.z, camHeight, speed: pending.speed, nearby: nearbyCache, nearWater: nearWater01(world, cp.x, cp.z), tension: tensionCache });
     if (!skipping) for (const ev of pendingEvents) if (ev.x !== 0 || ev.y !== 0) audio.onEvent(ev, Math.hypot(ev.x - cp.x, ev.y - cp.z, camHeight));
     if (!skipping) narrator.onEvents(pendingEvents, pending.tick);
     narrator.update({ filming: autoCam || cinematicOn, speed: pending.speed });
@@ -368,6 +371,42 @@ w.__speed = (s: number) => { speed = s; send({ type: 'speed', speed: s }); };
 w.__step = (ticks: number) => send({ type: 'step', ticks });
 w.__ui = ui;
 w.__focusHerd = () => { if (pending) focusHerd(pending.agents, pending.count, true); };
+/**
+ * Frame the concept art's view (art/concept/00_prairie_golden_hour.jpg): the sharpest creek bend that has cottonwoods beside it, a high
+ * oblique angle, low sun from the left, late summer. Pauses the sim and holds the env so a capture is repeatable. Returns the values used.
+ */
+let conceptHoldOn = false;
+let conceptEnv: Partial<typeof engine.env> = {};
+w.__concept = (o: { dist?: number; pitch?: number; sunOff?: number; shift?: number; side?: number; day?: number; season?: number } = {}) => {
+  const cr = world.creek, tr = world.trees, S = world.size;
+  let best = -1, bx = S / 2, bz = S / 2, bdx = 1, bdz = 0;
+  for (let k = 5; k < cr.length / 2 - 5; k++) {
+    const x = cr[2 * k], z = cr[2 * k + 1];
+    if (x < 70 || z < 70 || x > S - 70 || z > S - 70) continue;
+    const ax = x - cr[2 * k - 10], az = z - cr[2 * k - 9], cx = cr[2 * k + 10] - x, cz = cr[2 * k + 11] - z;
+    const turn = Math.abs(Math.atan2(ax * cz - az * cx, ax * cx + az * cz));
+    let n = 0;
+    for (let i = 0; i < tr.length; i += 4) if (Math.hypot(tr[i] - x, tr[i + 1] - z) < 70) n++;
+    const score = turn * n;
+    if (score > best) { best = score; bx = x; bz = z; bdx = ax + cx; bdz = az + cz; }
+  }
+  const day = o.day ?? 0.28, season = o.season ?? 1.8;
+  const hold: Partial<typeof engine.env> = { dayFrac: day, season, weather: 0, rain: 0, warmth: 0.7 };
+  speed = 0; send({ type: 'speed', speed: 0 });
+  following = null; lastCamInput = performance.now();
+  const e = engine;
+  if (!conceptHoldOn) { conceptHoldOn = true; e.onFrame(() => e.setEnv(conceptEnv)); }
+  conceptEnv = hold;
+  e.setEnv(hold); e.applyEnvNow();
+  // sun to the left of the view direction (same convention as the 'wide' preset): camera sits behind the target, looking along fwd
+  const sunAz = Math.atan2(e.uniforms.lightDir.value.x, e.uniforms.lightDir.value.z);
+  const fwd = sunAz - (o.sunOff ?? 35) * Math.PI / 180;
+  const dist = o.dist ?? 200, pitch = o.pitch ?? 19;
+  const sh = (o.shift ?? 0) * dist; // slide the target along the view direction (negative = toward the camera)
+  const sd = o.side ?? -40; // sideways slide of the target (m): negative puts the bend mid-left of the frame, positive mid-right
+  e.cam.setView({ x: bx + Math.sin(fwd) * sh + Math.cos(fwd) * sd, y: bz + Math.cos(fwd) * sh - Math.sin(fwd) * sd, yawDeg: (fwd + Math.PI) * 180 / Math.PI, pitchDeg: pitch, distance: dist }, true);
+  return { bend: [Math.round(bx), Math.round(bz)], creekDir: [Math.round(bdx), Math.round(bdz)], day, season, sunAzDeg: Math.round(sunAz * 180 / Math.PI), yawDeg: e.cam.yawDeg, pitch, dist };
+};
 w.__select = select;
 w.__animals = animals;
 w.__grass = grass;

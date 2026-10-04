@@ -1,7 +1,8 @@
-// Scripted still capture of the real game: one page load, a sequence of steps, a named PNG per step.
+// Scripted still capture of the real game: one page load, a sequence of steps, a named JPEG (quality 90) per step.
 // Headless Chromium on the real GPU (same flags as capture.mjs). Never an OS screen grab.
 //
-// Usage: node tools/stills.mjs --out review/round-01 [--set review] [--query "seed=tallgrass"] [--size 1600x900]
+// Usage: node tools/stills.mjs --out review/round-01 [--set review] [--query "seed=tallgrass"] [--size 1600x900] [--png]
+// --png writes lossless .png instead of the default .jpg.
 // Steps run in order; each may evaluate JS in the page (hooks from src/main.ts: __cam, __speed, __timeOfDay,
 // __find, __followId, __select, __engine, __ui, __focusHerd) and then wait before the shot.
 import { chromium } from 'playwright';
@@ -16,6 +17,8 @@ const set = arg('set', 'review');
 const query = arg('query', '');
 const [W, H] = arg('size', '1600x900').split('x').map(Number);
 const loadTimeout = Number(arg('timeout', 90000));
+const png = argv.includes('--png'); // default is JPEG quality 90 (much smaller, fine for review); --png opts back into lossless
+const ext = png ? 'png' : 'jpg';
 
 // St: 1 graze, 3 run, 4 flee, 5 chase, 6 eat, 9 fly, 10 stalk. Sp: 0 bison, 1 wolf, 2 raven, 3 pronghorn.
 const SETS = {
@@ -165,8 +168,8 @@ try {
   for (const s of steps) {
     if (s.eval) await page.evaluate(s.eval);
     await page.waitForTimeout(s.wait ?? 2500);
-    const p = `${out}/${s.name}.png`;
-    await page.screenshot({ path: p });
+    const p = `${out}/${s.name}.${ext}`;
+    await page.screenshot(png ? { path: p } : { path: p, type: 'jpeg', quality: 90 });
     console.log('saved', p);
   }
 } catch (e) {

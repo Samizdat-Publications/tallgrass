@@ -1,4 +1,5 @@
 // Left rail: the god tools. Round icon buttons, labels slide out on hover or focus.
+import { Sp } from '../sim/types';
 import { button, h } from './dom';
 import { icon } from './icons';
 import { POSITIONAL_TOOLS, type ToolId, type UIActions } from './types';
@@ -27,9 +28,9 @@ export const TOOL_DEFS: ToolDef[] = [
   { id: 'fire', short: 'Fire', label: 'Start a fire', hint: 'Pick a spot on the ground', armedHint: 'Click the ground. Esc cancels', danger: true, group: 1 },
   { id: 'plague', short: 'Plague', label: 'Spread plague', hint: 'Sickness runs through the herds', armedHint: '', danger: true, group: 1 },
   { id: 'cull', short: 'Cull', label: 'Cull the herd', hint: 'Thins out the bison', armedHint: '', danger: true, group: 1 },
-  { id: 'addWolves', short: 'Add wolves', species: 1, label: 'Bring in wolves', hint: 'Pick a spot on the ground', armedHint: 'Click the ground. Esc cancels', group: 2 },
-  { id: 'addBison', short: 'Add bison', species: 0, label: 'Bring in bison', hint: 'Pick a spot on the ground', armedHint: 'Click the ground. Esc cancels', group: 2 },
-  { id: 'removeWolves', short: 'Remove wolves', species: 1, label: 'Remove the wolves', hint: 'Every wolf leaves the valley', armedHint: '', group: 2 },
+  { id: 'addWolves', short: 'Add wolves', species: Sp.Wolf, label: 'Bring in wolves', hint: 'Pick a spot on the ground', armedHint: 'Click the ground. Esc cancels', group: 2 },
+  { id: 'addBison', short: 'Add bison', species: Sp.Bison, label: 'Bring in bison', hint: 'Pick a spot on the ground', armedHint: 'Click the ground. Esc cancels', group: 2 },
+  { id: 'removeWolves', short: 'Remove wolves', species: Sp.Wolf, label: 'Remove the wolves', hint: 'Every wolf leaves the valley', armedHint: '', group: 2 },
 ];
 
 export class ToolRail {

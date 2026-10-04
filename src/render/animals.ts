@@ -6,20 +6,38 @@
 // between the previous and current snapshot by id.
 //
 // Foot-lock: the leg cycle advances by (distance drawn this frame / stride), never by time, so a planted foot stands
-// still on the ground at any sim rate or frame rate (the stride comes from the gait, see models/types.ts plantedStride).
+// still on the ground at any sim rate or frame rate (the stride is the one the foot path uses, see models/legmath.ts gaitMix).
+// Within 45 m of the camera the legs also read the ground under each foot (two-bone IK in the vertex shader) and the body
+// height follows the mean height of the stance feet (stanceBodyDy below, eased here because a shader keeps no state).
 import * as THREE from 'three';
 import { AGENT_STRIDE, CARCASS_STRIDE, F_INFECTED, SPECIES_COUNT, Sp, St } from '../sim/types';
 import type { Snapshot } from '../sim/types';
+import { SPECIES } from '../sim/species';
 import { sampleHeight } from '../sim/world';
 import type { World } from '../sim/world';
 import { getModel } from './models';
 import type { AnimParams, ModelDef } from './models';
-import { plantedStride } from './models/types';
+import { IK_FAR, IK_NEAR, gaitMix, gaitStride, legRigOf, stanceBodyDy } from './models/legmath';
+import type { LegRig } from './models/legmath';
 import { makeAnimalMaterials } from './models/shader';
 import type { AnimalShared } from './models/shader';
 import { Dust, KillSites, Markers, SceneLit } from './models/fx';
+import { injectTerrainShadow } from './common';
+import type { SharedUniforms } from './common';
 
-const INITIAL_CAPACITY = [2048, 512, 512, 1024, 1024, 128]; // by species id
+// Per-species render tables are authored by registry key and expanded to arrays indexed by species id, so a species added
+// to SPECIES (src/sim/species.ts) gets a sane default here until it earns its own entry.
+const byId = <T>(authored: Record<string, T>, fallback: (s: (typeof SPECIES)[number]) => T): T[] => SPECIES.map((s) => authored[s.key] ?? fallback(s));
+
+const INITIAL_CAPACITY: number[] = byId({ bison: 2048, wolf: 512, raven: 512, pronghorn: 1024, rabbit: 1024, cougar: 128 }, () => 256);
+
+/** Land hunters: the predators that pounce and are chased by the kill-site reactions (wolf, cougar; later coyote). Fliers hunt differently. */
+const HUNTER: boolean[] = SPECIES.map((s) => (s.guild === 'predator' || s.guild === 'mesopredator') && !s.flies);
+/** Fliers: drawn at their altitude, banked into turns, folded on the ground (raven; later eagle, hawk). */
+const FLIES: boolean[] = SPECIES.map((s) => s.flies);
+/** Prey a lunging hunter goes for: grazers that are neither fliers nor the small ones (rabbit, prairie dog, beaver). */
+const SMALL_KEYS = new Set(['rabbit', 'prairiedog', 'beaver']);
+const LUNGE_TARGET: boolean[] = SPECIES.map((s) => s.prey && !HUNTER[s.id] && !s.flies && !SMALL_KEYS.has(s.key));
 
 const clamp = (x: number, a: number, b: number): number => (x < a ? a : x > b ? b : x);
 const wrapPi = (a: number): number => {
@@ -34,14 +52,17 @@ const hash01 = (n: number): number => (Math.imul(n | 0, 0x9e3779b1) >>> 8) / 167
  * animal's own scale), alpha, min life s, max life s]. Wolves, pronghorn and cougars get a few short-lived round
  * puffs at the feet; only a bison herd makes a real dust cloud.
  */
-const DUST: Array<[number, number, number, number, number, number] | null> = [
-  [4.5, 1.5, 2.6, 0.3, 1.3, 2.1], // bison
-  [5.5, 0.5, 0.75, 0.2, 0.7, 1.1], // wolf
-  null, // raven
-  [6, 0.4, 0.95, 0.2, 0.8, 1.2], // pronghorn
-  null, // rabbit
-  [5.5, 0.4, 0.8, 0.2, 0.7, 1.1], // cougar
-];
+const DUST: Array<[number, number, number, number, number, number] | null> = byId<[number, number, number, number, number, number] | null>(
+  {
+    bison: [4.5, 1.5, 2.6, 0.3, 1.3, 2.1],
+    wolf: [5.5, 0.5, 0.75, 0.2, 0.7, 1.1],
+    raven: null,
+    pronghorn: [6, 0.4, 0.95, 0.2, 0.8, 1.2],
+    rabbit: null,
+    cougar: [5.5, 0.4, 0.8, 0.2, 0.7, 1.1],
+  },
+  () => null, // no dust until a species is given a table
+);
 
 /** On-screen metres per second of sim speed at 1x (DT 0.15 s of motion per tick, 10 ticks per second). */
 const VIS_PER_SIM = 1.5;
@@ -53,44 +74,51 @@ const smoothstep = (a: number, b: number, x: number): number => {
 
 /**
  * Metres of ground covered per leg cycle at a gait pace (the pace the animal moves at in its own world, on-screen m/s at
- * 1x). The gait mix is the one the vertex shader uses. Quadrupeds use the stride that leaves a planted foot standing
- * still on the ground (see plantedStride); hoppers and birds interpolate their authored strides.
+ * 1x). Quadrupeds use the stride of the blended gait that the vertex shader's foot path uses (legmath.ts gaitMix), which is
+ * what leaves a planted foot standing still on the ground; hoppers and birds interpolate their authored strides.
  */
 function strideFor(p: AnimParams, gaitSpd: number): number {
   if (p.kind !== 0) {
     const u = clamp(gaitSpd / p.strideSpeedMax, 0, 1);
     return p.strideW + (p.strideG - p.strideW) * u * u * (3 - 2 * u);
   }
-  const s1 = smoothstep(p.trot0, p.trot1, gaitSpd);
-  const wG = smoothstep(p.gal0, p.gal1, gaitSpd);
-  const wT = s1 * (1 - wG);
-  const wW = smoothstep(0.08, 0.4, gaitSpd) * (1 - s1);
-  const sum = wW + wT + wG;
-  if (sum < 1e-3) return plantedStride(p, 0);
-  return (wW * plantedStride(p, 0) + wT * plantedStride(p, 1) + wG * plantedStride(p, 2, gaitSpd)) / sum;
+  return gaitStride(p, gaitSpd);
 }
 
 /**
- * Most leg cycles per second the cadence may reach (faster than this the legs alias on screen). Raised from 6: the fastest
- * gallops (a pronghorn in flight, a wolf closing at 25 m/s on screen) need about 5 to 6 Hz even with the long fast-gallop stride.
+ * The scale the vertex shader gives an animal of drawn scale `vs` at camera distance `camD` so it is never smaller than minPx pixels
+ * (see the distance readability line at the end of tgAnimate). Its legs grow with it, so its stride does too.
  */
-const MAX_CADENCE = 7.5;
+function legBoost(p: AnimParams, vs: number, camD: number, uPxK: number): number {
+  const px = (p.boostLen * vs * uPxK) / Math.max(camD, 1);
+  return clamp(p.minPx / Math.max(px, 0.01), 1, 7);
+}
+
+/**
+ * Most leg cycles per second the cadence may reach (faster than this the legs alias on screen). It must never bind at 1x: the
+ * fastest real gallop (a pronghorn in flight, a wolf closing at 25 m/s on screen) is about 4 to 6 Hz with the blended stride.
+ * Only a time-lapse (10x and up, where the body covers ten times the ground per frame) can hit it, and then the feet slide.
+ */
+const MAX_CADENCE = 12;
 
 /**
  * Render-side heading dynamics per species: natural frequency (rad/s) of the critically damped spring that chases the sim
  * heading, and the fastest the body may turn (rad/s). The sim re-aims instantly; the body does not, so an animal carries
  * its momentum through a turn and leans into it.
  */
-const TURN: Array<[number, number]> = [
-  [4.2, 2.3], // bison
-  [7, 6], // wolf
-  [3.5, 2.6], // raven (banks through wide circles)
-  [7, 6], // pronghorn
-  [9, 8], // rabbit
-  [7, 6], // cougar
-];
+const TURN: Array<[number, number]> = byId<[number, number]>(
+  {
+    bison: [4.2, 2.3],
+    wolf: [7, 6],
+    raven: [3.5, 2.6], // banks through wide circles
+    pronghorn: [7, 6],
+    rabbit: [9, 8],
+    cougar: [7, 6],
+  },
+  (s) => (s.flies ? [3.5, 2.6] : [7, 6]),
+);
 /** Largest lean (rad) into a turn at speed. */
-const BANK_MAX = [0.2, 0.42, 0.75, 0.42, 0.3, 0.42];
+const BANK_MAX: number[] = byId({ bison: 0.2, wolf: 0.42, raven: 0.75, pronghorn: 0.42, rabbit: 0.3, cougar: 0.42 }, (s) => (s.flies ? 0.75 : 0.42));
 
 /** How the whole fall of a carcass plays out, in seconds. */
 const FALL_TIME = 2.4;
@@ -209,6 +237,9 @@ class Slots {
   /** Where the animal was drawn last frame (the foot-lock measures the distance covered from this) and the velocity of the drawn path. */
   px = new Float32Array(this.cap);
   pz = new Float32Array(this.cap);
+  /** Terrain height under the body last frame (the foot-lock measures the distance along the ground from it) and the eased body-height offset (m, model units). */
+  pgy = new Float32Array(this.cap);
+  bdy = new Float32Array(this.cap);
   svx = new Float32Array(this.cap);
   svz = new Float32Array(this.cap);
   /** Feeding tug and hunting weights, eased. */
@@ -253,6 +284,8 @@ class Slots {
     this.vis = g(this.vis, Float32Array);
     this.px = g(this.px, Float32Array);
     this.pz = g(this.pz, Float32Array);
+    this.pgy = g(this.pgy, Float32Array);
+    this.bdy = g(this.bdy, Float32Array);
     this.svx = g(this.svx, Float32Array);
     this.svz = g(this.svz, Float32Array);
     this.tug = g(this.tug, Float32Array);
@@ -282,17 +315,22 @@ export class AnimalLayer {
   /** Sim speed multiplier (1 = real time, 0 = paused). Scales gait frequency so legs match visible speed. */
   timeScale = 1;
   /** Per species visual size multiplier by species id (readability boost for small animals: wolf 1.35 (the concept art wolves read at ~0.65 of a bison), raven 1.7 (circling ravens are the "kill here" tell), rabbit 1.2, cougar 1.05). */
-  readonly speciesScale: number[] = [1, 1.35, 1.7, 1, 1.2, 1.05];
+  readonly speciesScale: number[] = byId({ bison: 1, wolf: 1.35, raven: 1.7, pronghorn: 1, rabbit: 1.2, cougar: 1.05 }, () => 1);
 
   private world: World;
-  private batches: Batch[] = [];
+  /** Draw batch by species id; null for a species with no model (it is simply not drawn). */
+  private batches: Array<Batch | null> = [];
+  /** The non-null batches, for loops over every drawn species. */
+  private live: Batch[] = [];
   private uTime = { value: 0 };
   private shared: AnimalShared = {
     uTime: this.uTime, uCamPos: { value: new THREE.Vector3(256, 400, 256) }, uPxK: { value: 900 / (2 * Math.tan((45 * Math.PI) / 360)) },
+    tHeight: { value: null }, uCell: { value: 1 }, uHN: { value: 2 },
     uLow: { value: 0 },
     uAmb: { value: new THREE.Vector3(0.6, 0.55, 0.45) },
     probe: (scene, exposure) => {
       this.lit.probe(scene);
+      this.bindTerrainShadow(scene);
       const v = this.lit.value;
       this.shared.uAmb.value.copy(v);
       // dark scene: little light reaches the animals, or the camera has opened up (exposure rises at dusk and night, which is
@@ -301,6 +339,14 @@ export class AnimalLayer {
     },
   };
   private lit = new SceneLit();
+  /** The engine's shared uniforms (scene.userData.tgUniforms), found on the first main-view draw; feeds the hill-shadow lookup. */
+  private tg: SharedUniforms | null = null;
+  /** A species material compiled before `tg` was known (it has no hill shadow until it is rebuilt). */
+  private tgMissed = false;
+  /** Terrain heights as a texture for the vertex shader (the legs read the ground under their feet within 45 m). */
+  private heightTex: THREE.DataTexture;
+  /** Rest-pose leg bones by species (quadrupeds only), read from the meshes. */
+  private rigs: Array<LegRig | null> = [];
   private dust: Dust;
   private kills: KillSites;
   private markers: Markers;
@@ -332,13 +378,41 @@ export class AnimalLayer {
   private ringMat: THREE.ShaderMaterial;
   private selInfo = { found: false, x: 0, y: 0, z: 0, r: 1 };
 
+  private bindTerrainShadow(scene: THREE.Object3D): void {
+    if (this.tg) return;
+    const tu = scene.userData?.tgUniforms as SharedUniforms | undefined;
+    if (!tu) return;
+    this.tg = tu;
+    if (this.tgMissed) for (const b of this.live) b.material.needsUpdate = true;
+  }
+
   constructor(world: World) {
     this.world = world;
     this.object3D.name = 'AnimalLayer';
+    this.heightTex = new THREE.DataTexture(new Float32Array(world.height), world.hn, world.hn, THREE.RedFormat, THREE.FloatType);
+    this.heightTex.needsUpdate = true;
+    this.shared.tHeight.value = this.heightTex;
+    this.shared.uCell.value = world.cell;
+    this.shared.uHN.value = world.hn;
     for (let sp = 0; sp < SPECIES_COUNT; sp++) {
       const def = getModel(sp);
+      if (!def) {
+        this.batches.push(null);
+        this.rigs.push(null);
+        continue;
+      }
+      this.rigs.push(def.params.kind === 0 ? legRigOf(def.geometry) : null);
       const { material, depth } = makeAnimalMaterials(sp, def, this.shared);
-      this.batches.push(new Batch(sp, def, material, depth, this.object3D, INITIAL_CAPACITY[sp], this.shared));
+      // animals sit in hill shadow like the terrain and trees do (the depth material casts only, so it needs nothing)
+      const baseCompile = material.onBeforeCompile;
+      material.onBeforeCompile = (shader, renderer) => {
+        baseCompile.call(material, shader, renderer);
+        if (this.tg) injectTerrainShadow(shader, this.tg);
+        else this.tgMissed = true;
+      };
+      const batch = new Batch(sp, def, material, depth, this.object3D, INITIAL_CAPACITY[sp] ?? 256, this.shared);
+      this.batches.push(batch);
+      this.live.push(batch);
     }
     this.kills = new KillSites(world, this.lit);
     this.dust = new Dust(this.lit);
@@ -448,7 +522,7 @@ export class AnimalLayer {
       const sp = Math.round(snap.carcasses[k * CARCASS_STRIDE + 3]);
       if (sp >= 0 && sp < SPECIES_COUNT) this.carcassCounts[sp]++;
     }
-    for (let sp = 0; sp < SPECIES_COUNT; sp++) this.batches[sp].ensure(this.counts[sp] + this.carcassCounts[sp], this.object3D);
+    for (let sp = 0; sp < SPECIES_COUNT; sp++) this.batches[sp]?.ensure(this.counts[sp] + this.carcassCounts[sp], this.object3D);
     this.kills.setSnapshot(snap);
     this.trackFalls(snap, this.prev === null);
     this.lungeScan(snap);
@@ -531,7 +605,7 @@ export class AnimalLayer {
     for (let i = 0; i < snap.count; i++) {
       const o = i * AGENT_STRIDE;
       const s = A[o] | 0;
-      if (s !== Sp.Wolf && s !== Sp.Cougar) continue;
+      if (!HUNTER[s]) continue;
       const st = A[o + 7] | 0;
       if (st !== St.Chase && st !== St.Stalk && st !== St.Eat) continue;
       const dx = A[o + 1] - cx, dz = A[o + 2] - cz;
@@ -553,14 +627,14 @@ export class AnimalLayer {
     for (let i = 0; i < n; i++) {
       const o = i * AGENT_STRIDE;
       const sp = A[o] | 0;
-      if ((sp !== Sp.Wolf && sp !== Sp.Cougar) || (A[o + 7] | 0) !== St.Chase) continue;
+      if (!HUNTER[sp] || (A[o + 7] | 0) !== St.Chase) continue;
       const slot = this.currSlot[i];
       if (S.pounce[slot] >= 0) continue; // already lunging or cooling down
       const x = A[o + 1], z = A[o + 2], hx = Math.cos(A[o + 3]), hz = Math.sin(A[o + 3]);
       for (let j = 0; j < n; j++) {
         const q = j * AGENT_STRIDE;
         const s2 = A[q] | 0;
-        if (s2 === Sp.Wolf || s2 === Sp.Cougar || s2 === Sp.Raven || s2 === Sp.Rabbit) continue;
+        if (!LUNGE_TARGET[s2]) continue;
         const dx = A[q + 1] - x, dz = A[q + 2] - z;
         const d2 = dx * dx + dz * dz;
         if (d2 > 3.6 * 3.6 || d2 < 0.2) continue;
@@ -598,12 +672,14 @@ export class AnimalLayer {
     const sel = this.selectedId;
     this.selInfo.found = false;
     const kSick = 1 - Math.exp(-dt / 2.5);
+    const kBdy = 1 - Math.exp(-dt / 0.12);
+    const groundAt = (gx: number, gz: number): number => sampleHeight(H, hn, cell, gx, gz);
     const running = this.timeScale > 0 ? dt : 0;
     this.dust.update(running);
     this.markers.begin();
     const dustRate = Math.min(this.timeScale, 3);
 
-    for (const b of this.batches) {
+    for (const b of this.live) {
       b.count = 0;
       b.alive = 0;
     }
@@ -614,6 +690,7 @@ export class AnimalLayer {
       const sp = A[o] | 0;
       if (sp < 0 || sp >= SPECIES_COUNT) continue;
       const b = this.batches[sp];
+      if (!b) continue; // no model for this species: not drawn
       const pr = b.def.params;
       const id = snap.ids[i];
       const slot = this.currSlot[i];
@@ -655,6 +732,9 @@ export class AnimalLayer {
         } else { S.svx[slot] = 0; S.svz[slot] = 0; }
       }
 
+      // the terrain under the drawn position: the leg cycle runs on the distance along the ground, and the pose below uses it
+      const g0 = sampleHeight(H, hn, cell, x, z);
+
       // animation state targets
       // gait style follows the animal's own pace (walk, trot, gallop), not the time-lapse factor
       const spdT = this.timeScale > 0 ? spd1 * VIS_PER_SIM : 0;
@@ -663,7 +743,7 @@ export class AnimalLayer {
       if (state === St.Graze || state === St.Eat || state === St.Drink) hdT = 1;
       if (state === St.Rest) lieT = 1;
       if (state === St.Stalk) crT = 1;
-      if (sp === Sp.Raven) {
+      if (FLIES[sp]) {
         const grounded = alt < 0.3 && state !== St.Fly;
         crT = grounded ? 1 : 0; // wing fold
         hdT = grounded && state === St.Eat ? 1 : 0;
@@ -674,6 +754,8 @@ export class AnimalLayer {
         S.fresh[slot] = 0;
         S.px[slot] = x;
         S.pz[slot] = z;
+        S.pgy[slot] = g0;
+        S.bdy[slot] = 0;
         S.hs[slot] = h;
         S.hw[slot] = 0;
         S.spd[slot] = spdT;
@@ -689,14 +771,17 @@ export class AnimalLayer {
       // planted foot stands still on the ground whatever the sim rate, time scale or snapshot jitter.
       let ds = Math.hypot(x - S.px[slot], z - S.pz[slot]);
       if (ds > 30) ds = 0; // a teleport (respawn, new world), not a step
+      // on a slope the body travels further along the ground than its shadow does (1 / cos(20 deg) = +6%): the feet move by that
+      const dsGround = pr.kind === 0 && ds > 0 ? Math.hypot(ds, g0 - S.pgy[slot]) : ds;
       S.px[slot] = x;
       S.pz[slot] = z;
+      S.pgy[slot] = g0;
       const visT = dt > 1e-4 ? ds / dt : 0;
-      const feeding = state === St.Eat && (sp === Sp.Wolf || sp === Sp.Cougar || (sp === Sp.Raven && hdT > 0)) && this.timeScale > 0;
-      const hunting = (sp === Sp.Wolf || sp === Sp.Cougar) && this.timeScale > 0 ? (state === St.Chase || state === St.Stalk ? 1 : state === St.Eat ? 0.6 : 0) : 0;
+      const feeding = state === St.Eat && (HUNTER[sp] || (FLIES[sp] && hdT > 0)) && this.timeScale > 0;
+      const hunting = HUNTER[sp] && this.timeScale > 0 ? (state === St.Chase || state === St.Stalk ? 1 : state === St.Eat ? 0.6 : 0) : 0;
       S.tug[slot] += ((feeding ? 1 : 0) - S.tug[slot]) * kHead;
       // predators: how hard it is hunting; ravens: how hard they are climbing (they flap steadily then, glide otherwise)
-      const huntT = sp === Sp.Raven ? (alt > 0.3 ? clamp(climb / 1.2, 0, 1) : 0) : hunting;
+      const huntT = FLIES[sp] ? (alt > 0.3 ? clamp(climb / 1.2, 0, 1) : 0) : hunting;
       S.hunt[slot] += (huntT - S.hunt[slot]) * kHead;
       S.spd[slot] += (spdT - S.spd[slot]) * k8;
       S.vis[slot] += (visT - S.vis[slot]) * k8;
@@ -734,7 +819,12 @@ export class AnimalLayer {
       const gaitSpd = Math.min(spdS, S.vis[slot] * 1.6 + 0.15);
       // the model is drawn scaled (species readability boost, age, size), and its stride scales with it
       const vs = sc * this.speciesScale[sp];
-      S.phase[slot] = (S.phase[slot] + Math.min(ds / (strideFor(pr, gaitSpd) * vs), MAX_CADENCE * dt)) % 1;
+      // the vertex shader scales an animal that would be a few pixels long (distance readability, ModelDef.minPx): its stride
+      // grows with it, so the legs run at the matching slower cadence
+      const camP = this.shared.uCamPos.value;
+      const camD = Math.hypot(x - camP.x, g0 - camP.y, z - camP.z);
+      const sizeBoost = pr.kind === 0 ? legBoost(pr, vs, camD, this.shared.uPxK.value) : 1;
+      S.phase[slot] = (S.phase[slot] + Math.min(dsGround / (strideFor(pr, gaitSpd) * vs * sizeBoost), MAX_CADENCE * dt)) % 1;
 
       // The drawn heading is a critically damped follower of the sim heading, rate limited, so a turn is a curve with some
       // momentum behind it rather than a snap on a central pivot.
@@ -756,9 +846,9 @@ export class AnimalLayer {
 
       // pose on the terrain
       const ch = Math.cos(hd), sh = Math.sin(hd);
-      const ground = sampleHeight(H, hn, cell, x, z);
+      const ground = g0;
       let pitch = 0, roll = 0, y = ground;
-      if (sp === Sp.Raven) {
+      if (FLIES[sp]) {
         y = ground + alt;
         const v = Math.max(spdT, 0.5);
         const bankT = clamp(Math.atan((v * turnRate) / 9.81), -BANK_MAX[sp], BANK_MAX[sp]);
@@ -800,7 +890,7 @@ export class AnimalLayer {
       }
       // wading: in a water cell the animal stands on the bed while the water is shallower than its belly; in deeper
       // water it rides with the belly at the surface (a gentle bob, level pose) instead of looking like it stands on it
-      if (sp !== Sp.Raven || alt <= 0.3) {
+      if (!FLIES[sp] || alt <= 0.3) {
         const wc = Math.min(world.n - 1, Math.max(0, Math.floor(z / cell))) * world.n + Math.min(world.n - 1, Math.max(0, Math.floor(x / cell)));
         if (world.water[wc]) {
           const surf = world.waterHeight[wc];
@@ -813,10 +903,20 @@ export class AnimalLayer {
         }
       }
       this.writeInstance(b, x, y, z, ch, sh, pitch, roll, vs);
+      // Body height: the body rides at the mean height of the ground under the stance feet (within 45 m of the camera, where the
+      // legs reach for the real ground; eased to 0 beyond, and while lying). The shader raises the whole body by it.
+      if (pr.kind === 0) {
+        const ikK = 1 - smoothstep(IK_NEAR, IK_FAR, camD);
+        let bT = 0;
+        if (ikK > 0.001 && S.lie[slot] < 0.98) {
+          bT = stanceBodyDy(pr, this.rigs[sp]!, gaitMix(pr, gaitSpd), S.phase[slot], { x, y, z, ch, sh, pitch, roll, s: vs }, groundAt) * ikK * (1 - S.lie[slot]);
+        }
+        S.bdy[slot] += (bT - S.bdy[slot]) * kBdy;
+      }
 
-      this.markers.add(sp, x, y + (sp === Sp.Raven ? 0.3 : pr.height * 0.6 * vs), z, pr.boostLen, vs);
+      this.markers.add(sp, x, y + (FLIES[sp] ? 0.3 : pr.height * 0.6 * vs), z, pr.boostLen, vs);
       // from the wide view, a faint ripple where a predator is actually chasing
-      if (state === St.Chase && (sp === Sp.Wolf || sp === Sp.Cougar)) this.markers.addPing(sp, x, y + 0.3, z);
+      if (state === St.Chase && HUNTER[sp]) this.markers.addPing(sp, x, y + 0.3, z);
 
       // dust kicked up by fast movers
       const dp = DUST[sp];
@@ -851,12 +951,12 @@ export class AnimalLayer {
       const look = b.look.array as Float32Array;
       gait[gp] = S.phase[slot];
       gait[gp + 1] = gaitSpd;
-      gait[gp + 2] = sp === Sp.Raven ? (S.hdn[slot] > 0.5 ? 1 : S.flap[slot]) : S.hdn[slot];
+      gait[gp + 2] = FLIES[sp] ? (S.hdn[slot] > 0.5 ? 1 : S.flap[slot]) : S.hdn[slot];
       gait[gp + 3] = S.lie[slot];
       // feeding tug (head hauls and shakes, ravens peck), altitude (a bird in flight casts no shadow), hunting weight
       const fx = b.fx.array as Float32Array;
       fx[gp] = S.tug[slot];
-      fx[gp + 1] = sp === Sp.Raven ? alt : 0;
+      fx[gp + 1] = FLIES[sp] ? alt : pr.kind === 0 ? S.bdy[slot] : 0;
       fx[gp + 2] = S.hunt[slot];
       fx[gp + 3] = pounceE;
       look[gp] = clamp(coat, 0, 1);
@@ -865,7 +965,7 @@ export class AnimalLayer {
       look[gp + 3] = (id === sel ? 1 : 0) + sickK;
       // pick sphere
       const c = k * 4;
-      const cy = y + (sp === Sp.Raven ? 0.15 * vs : pr.height * 0.5 * vs);
+      const cy = y + (FLIES[sp] ? 0.15 * vs : pr.height * 0.5 * vs);
       b.centers[c] = x;
       b.centers[c + 1] = cy;
       b.centers[c + 2] = z;
@@ -886,6 +986,7 @@ export class AnimalLayer {
       const sp = Math.round(snap.carcasses[o + 3]);
       if (sp < 0 || sp >= SPECIES_COUNT) continue;
       const b = this.batches[sp];
+      if (!b) continue;
       const x = snap.carcasses[o], z = snap.carcasses[o + 1], rem = snap.carcasses[o + 2];
       const seed = hash01((Math.floor(x * 13) * 73856093) ^ (Math.floor(z * 13) * 19349663));
       const fi = this.falls.get(Math.floor(x * 8) * 65536 + Math.floor(z * 8));
@@ -957,7 +1058,7 @@ export class AnimalLayer {
       b.centers[k * 4 + 3] = 0; // not pickable
     }
 
-    for (const b of this.batches) {
+    for (const b of this.live) {
       const m = b.mesh;
       m.count = b.count;
       m.visible = b.count > 0;
@@ -1023,7 +1124,7 @@ export class AnimalLayer {
     const dx = ray.direction.x, dy = ray.direction.y, dz = ray.direction.z;
     let best = Infinity;
     let bestId: number | null = null;
-    for (const b of this.batches) {
+    for (const b of this.live) {
       const C = b.centers;
       for (let k = 0; k < b.alive; k++) {
         const c = k * 4;
@@ -1085,17 +1186,18 @@ export class AnimalLayer {
   /** Total triangles currently submitted (for stats). */
   get triangleCount(): number {
     let t = 0;
-    for (const b of this.batches) t += b.count * b.def.triangles;
+    for (const b of this.live) t += b.count * b.def.triangles;
     return t;
   }
 
   dispose(): void {
-    for (const b of this.batches) {
+    for (const b of this.live) {
       b.mesh.dispose();
       b.geometry.dispose();
       b.material.dispose();
       b.depth.dispose();
     }
+    this.heightTex.dispose();
     this.markers.dispose();
     this.dust.dispose();
     this.kills.dispose();

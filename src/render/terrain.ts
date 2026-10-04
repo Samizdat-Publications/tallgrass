@@ -6,8 +6,9 @@ import { FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
 import type { World } from '../sim/world';
 import { sampleHeight } from '../sim/world';
 import {
-  HEIGHT_GLSL, NOISE_GLSL, SharedUniforms, clamp, fbm2, injectSafeOutput, injectTerrainShadow, smoothstep, vnoise2,
+  HEIGHT_GLSL, NOISE_GLSL, POND_GLSL, SharedUniforms, clamp, fbm2, injectSafeOutput, injectTerrainShadow, makePondUniform, smoothstep, vnoise2,
 } from './common';
+import { SEASON_GLSL } from './season';
 
 const SHADOW_RES = 512;
 const FAR_RES = 512;
@@ -77,8 +78,10 @@ function shapeCreek(world: World): { height: Float32Array; creekDist: Float32Arr
     const sim = world.height[v];
     let h: number;
     const along = arcAt[v];
-    // channel half-width wanders 3.0 to 5.6 m and the bank height varies, so the creek never reads as a straight canal
-    const W = 3.0 + 2.6 * vnoise2(along * 0.028, 3.7, 5);
+    // channel half-width wanders 2.4 to 6.2 m and the bank height varies, so the creek never reads as a straight canal: long reaches
+    // (about 80 m) swing between a narrow run and a broad pool (the water mesh reaches 7.5 m from the centerline, so 6.2 is the cap),
+    // with a shorter wobble on top. water.ts measures the half-width from these heights, so its current and bars follow.
+    const W = 2.4 + 2.8 * smoothstep(0.22, 0.78, vnoise2(along * 0.013, 3.7, 5)) + 1.0 * vnoise2(along * 0.045 + 20.0, 8.1, 11);
     const bankH = 0.28 + 0.42 * vnoise2(along * 0.06 + 9.0, 1.3, 9);
     if (d < W) {
       const u = d / W;
@@ -751,9 +754,11 @@ export class Terrain {
 
     const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.95, metalness: 0 });
     const sh = this.shared;
+    const pondU = makePondUniform(this.world.ponds);
     mat.onBeforeCompile = (shader) => {
       injectTerrainShadow(shader, sh);
       const u = shader.uniforms;
+      u.uPonds = pondU;
       u.tVeg = sh.vegTex;
       u.tStatic = sh.staticTex;
       u.tTrail = sh.trailTex;
@@ -771,6 +776,7 @@ export class Terrain {
       u.uGrassGreen = sh.grassGreen;
       u.uGrassDry = sh.grassDry;
       u.uCure = sh.cure;
+      u.uDrought = sh.drought;
       u.uSeason = sh.season;
       u.uFrost = sh.frost;
       u.uSnow = sh.snow;
@@ -782,8 +788,9 @@ export class Terrain {
       u.tMacro3 = { value: this.macroRT[2].texture };
       u.tDetail = { value: this.detailTex };
       shader.vertexShader = shader.vertexShader
-        .replace('void main() {', 'attribute float aCurv;\nvarying float vTgCurv;\nvarying vec3 vTgWorld;\nvarying vec3 vTgNormal;\nvoid main() {')
-        .replace('#include <begin_vertex>', '#include <begin_vertex>\nvTgWorld = (modelMatrix * vec4(transformed, 1.0)).xyz;\nvTgNormal = normal;\nvTgCurv = aCurv;');
+        .replace('void main() {', `attribute float aCurv;\nvarying float vTgCurv;\nvarying vec3 vTgWorld;\nvarying vec3 vTgNormal;\nvarying vec4 vTgAsp;\nuniform vec3 uLightDir;\n${SEASON_GLSL}\nvoid main() {`)
+        // the sun-aspect band depends only on the slope and the light, so it is a per-vertex varying (the pixel shader scales it by dryness)
+        .replace('#include <begin_vertex>', '#include <begin_vertex>\nvTgWorld = (modelMatrix * vec4(transformed, 1.0)).xyz;\nvTgNormal = normal;\nvTgCurv = aCurv;\nvTgAsp = tgAspectBand(normal, normalize(uLightDir));');
       shader.fragmentShader = shader.fragmentShader
         .replace('void main() {', GROUND_PARS + '\nvoid main() {')
         .replace(
@@ -814,7 +821,7 @@ export class Terrain {
         );
       shader.fragmentShader = injectSafeOutput( shader.fragmentShader );
     };
-    mat.customProgramCacheKey = () => 'tallgrass-terrain-v5';
+    mat.customProgramCacheKey = () => 'tallgrass-terrain-v6';
 
     const mesh = new THREE.Mesh(geo, mat);
     mesh.castShadow = false;
@@ -869,6 +876,7 @@ uniform vec3 uLightColor;
 uniform vec3 uGrassGreen;
 uniform vec3 uGrassDry;
 uniform float uCure;
+uniform float uDrought;
 uniform float uSeason;
 uniform vec3 uStubble;
 uniform vec3 uSoil;
@@ -881,7 +889,10 @@ uniform float uNight;
 varying vec3 vTgWorld;
 varying vec3 vTgNormal;
 varying float vTgCurv;
+varying vec4 vTgAsp;
 ${NOISE_GLSL}
+${SEASON_GLSL}
+${POND_GLSL}
 float gTgRough = 0.95;
 float gTgH = 0.0;
 vec3 gTgEmis = vec3(0.0);
@@ -913,6 +924,8 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
   // 1 inside the playable square, 0 a few metres outside: for data that must not repeat (trails, burn, fear, canopy, water distance)
   float inS = 1.0 - smoothstep(0.0, 16.0, sd);
 
+  // macro mottling (patch tints, dirt, dry-noise) halves from about 60 m out to 220 m: broad bands carry the far hills, not blotches
+  float mot = 1.0 - 0.5 * smoothstep(60.0, 220.0, dist);
   float lodFine = 1.0 - smoothstep(70.0, 320.0, dist);
   float lodMid = 1.0 - smoothstep(300.0, 1100.0, dist);
   float nA = 0.5;
@@ -938,6 +951,7 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
   float bio = mix(veg.r, farBio, edgeW);
   // bare dirt patches: where the macro noise peaks the grass thins out (a little in the valley, a lot in the far field)
   float dirt = smoothstep(0.64, 0.8, nM1 + 0.1 * (nM2 - 0.5));
+  dirt *= mot;
   bio *= 1.0 - dirt * mix(0.4, 0.5, edgeW);
   float fert = mix(veg.g, 0.6, edgeW);
   float burn = veg.b * inS;
@@ -949,7 +963,7 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
   float wd = mix(90.0, st.a * 64.0, inS);
 
   float slopeG = sqrt(max(1.0 - nrm.y * nrm.y, 0.0)) / max(nrm.y, 0.05);
-  float winterK = smoothstep(2.5, 3.0, uSeason) * (1.0 - smoothstep(3.6, 3.95, uSeason));
+  float winterK = tgWinterK(uSeason);
   float autumnK = smoothstep(1.8, 2.2, uSeason) * (1.0 - smoothstep(2.6, 3.0, uSeason));
   float curv = vTgCurv;
   float ridgeK = smoothstep(0.04, 0.7, curv);
@@ -1014,10 +1028,13 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
   if (wd < 58.0) {   // the belt never reaches past about 57 m (the distance texture holds 64), so the open prairie skips the noise
     float ripBroad = tgNoise2(xz * 0.011 + vec2(31.7, 12.3)) * 0.6 + tgNoise2(xz * 0.027 + vec2(7.3, 55.1)) * 0.4;
     float ripW = mix(20.0, 50.0, smoothstep(0.22, 0.66, ripBroad)) * (0.85 + 0.3 * tgNoise2(xz * 0.07 + vec2(3.1, 91.7)));
-    riparian = (1.0 - smoothstep(0.3 * ripW, ripW, wd)) * mix(1.0, 0.8, uCure) * (1.0 - 0.9 * winterK);
+    riparian = tgRiparian(1.0 - smoothstep(0.3 * ripW, ripW, wd), uCure, winterK);
+    riparian = tgDroughtRip(riparian, uDrought);
   }
-  float dry = clamp(uCure + (0.55 - moist) * 1.1 + stubA * 0.55 + 0.3 * up + (nB - 0.5) * 0.24 + (nM2 - 0.5) * 0.26 - mix(0.5, 0.3, edgeW) * draw * (0.4 + 0.6 * (1.0 - uCure)) - 0.2 * (nM1 - 0.5), 0.0, 1.0);
-  dry = mix(dry, min(dry, 0.02 + 0.12 * uCure + 0.4 * stubA), riparian);
+  float dry = clamp(uCure + (0.55 - moist) * 1.1 + stubA * 0.55 + 0.3 * up + ((nB - 0.5) * 0.24 + (nM2 - 0.5) * 0.26 - 0.2 * (nM1 - 0.5)) * mot - mix(0.5, 0.3, edgeW) * draw * (0.4 + 0.6 * (1.0 - uCure)), 0.0, 1.0);
+  dry = tgCuredFloor(dry, uCure, riparian);     // late summer: the uplands cure to gold, green is left to the belt and the swales
+  dry = tgDroughtDry(dry, uDrought, riparian);  // drought: dry grass everywhere but a thinned belt
+  dry = tgRiparianDry(dry, uCure, stubA, riparian);
   vec3 grassCol = mix(uGrassGreen, uGrassDry, dry) * vec3(1.0 + 0.08 * up * dry, 1.0 - 0.07 * up * dry, 1.0 - 0.16 * up * dry);
   // the blades add their own shading; the far-field ground is the canopy average: slightly olive and a little less saturated
   grassCol *= vec3(1.04, 1.01, 0.86);
@@ -1031,7 +1048,9 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
   vec3 tSg = vec3(0.84, 0.97, 0.8);
   vec3 tRu = vec3(1.0, 0.92, 0.76);
   vec3 tint = mix(mix(tOl, tSt, smoothstep(0.38, 0.62, p1)), mix(tSg, tRu, smoothstep(0.4, 0.62, p2)), smoothstep(0.35, 0.65, p3));
-  grassCol *= mix(vec3(1.0), tint, mix(0.6, 1.0, farK) * (1.0 - 0.75 * winterK));
+  grassCol *= mix(vec3(1.0), tint, mix(0.6, 1.0, farK) * mot * (1.0 - 0.75 * winterK));
+  // broad tonal bands by aspect: sun-facing slopes pale gold, shaded slopes deeper ochre (the blade layer runs the same function)
+  grassCol *= tgAspectApply(vTgAsp, dry * (1.0 - riparian) * (1.0 - uNight) * (1.0 - 0.6 * winterK));
   // sunlit ridges go pale and dry, draws and hollows go deep olive
   grassCol *= 1.0 + 0.26 * ridgeK * (0.5 + 0.5 * dry) - 0.22 * hollowK;
   grassCol = mix(grassCol, grassCol * vec3(0.76, 0.92, 0.56), hollowK * 0.4 * (1.0 - 0.75 * winterK));
@@ -1057,7 +1076,16 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
   grassCol = mix(grassCol, grassCol * vec3(0.84, 0.92, 0.7) * 0.92 + swaleC * 0.16, clamp(draw * 0.5 + (1.0 - up) * 0.14 * smoothstep(0.4, 0.8, nM2), 0.0, 1.0) * dryAmt);
   float lumG0 = dot(grassCol, vec3(0.2126, 0.7152, 0.0722));
   grassCol.r = min(grassCol.r, grassCol.g * mix(2.15, 1.7, autumnK) + 0.003);
-  grassCol = mix(vec3(lumG0), grassCol, mix(0.95, 0.76, smoothstep(150.0, 900.0, dist)));
+  grassCol = mix(vec3(lumG0), grassCol, mix(0.95, 0.88, smoothstep(150.0, 900.0, dist)));   // the aerial haze (FogPass) greys the far hills; the ground itself stays golden
+  // far cured ground stands in for the golden blades seen from afar, so it keeps their ochre and chroma instead of greying to tan
+  // (autumn is already russet and winter is deliberately dull, so both are left alone)
+  {
+    float ochreK = smoothstep(60.0, 250.0, dist) * dryAmt * (1.0 - autumnK) * (1.0 - winterK) * (1.0 - uNight) * (1.0 - uDrought);
+    float lumO = dot(grassCol, vec3(0.2126, 0.7152, 0.0722));
+    grassCol = mix(vec3(lumO), grassCol, 1.0 + 0.2 * ochreK) * mix(vec3(1.0), vec3(1.04, 1.0, 0.86), 0.5 * ochreK);
+  }
+  // drought: bleached pale straw (same luminance, leaning yellow, so never mauve), thinned in the belt
+  if (uDrought > 0.001) grassCol = tgDroughtTint(grassCol, uDrought, riparian);
 
   // distance grain: tufts and clumps whose size follows the pixel footprint (two to eight pixels across), so a far hill keeps a
   // grassy stipple of olive and straw instead of a smooth dune; far copses of trees are dark dotted patches along the draws
@@ -1074,7 +1102,7 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
     // contrast restore: a crossfade of two noises is flatter than either alone (about 0.7 at the midpoint)
     fine = 0.5 + (fine - 0.5) * (1.0 + 0.42 * (1.0 - abs(2.0 * gf - 1.0)));
     grain = fine * 0.65 + coarse * 0.35;
-    float amp = mix(0.62, 0.3, topK) * grW * (1.0 - 0.8 * uNight);   // at night the stipple reads as ripples on water: keep only a trace
+    float amp = mix(0.62, 0.3, topK) * grW * (1.0 - 0.8 * uNight) * (1.0 - 0.25 * smoothstep(150.0, 500.0, dist));   // at night the stipple reads as ripples on water: keep only a trace
     grassCol *= 1.0 + (grain - 0.5) * amp + (fine - 0.5) * 0.3 * grW * (1.0 - topK);
     grassCol = mix(grassCol, grassCol * vec3(0.88, 1.05, 0.78), (fine - 0.5) * 0.6 * grW * (1.0 - 0.8 * uNight));
     // pale seed heads and dry tufts catch the sun: sparse bright flecks in the finest octave
@@ -1120,6 +1148,10 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
   // short grass: a little of the soil shows through, darker and earthier, never light sand
   float soilShow = smoothstep(0.1, 0.0, bio + (nC - 0.5) * 0.05) + dirt * 0.25 * edgeW;
   soilShow = clamp(soilShow * (1.0 - 0.45 * riparian), 0.0, 1.0);   // bare shore is partly grassed over where the riparian belt is
+  soilShow = clamp(soilShow + uDrought * 0.14 * (0.4 + 0.6 * nM1) * (1.0 - riparian), 0.0, 1.0);   // a drought thins the sward: more ground shows
+  // the bare apron on the shaded side of a pond (common.ts): trampled, dusty ground between the waterline and the grass
+  float apron = tgPondApron(xz, wd);
+  soilShow = max(soilShow, apron);
   vec3 shortGrass = mix(grassCol, grassCol * vec3(0.9, 0.84, 0.74) + uSoil * 0.12, stubA * 0.5);
   // grazed ground is stubble, not a smooth plane: short blade flecks (dark gaps, pale cut ends) at close and middle range
   if (stubA > 0.05 && dist < 220.0) {
@@ -1128,7 +1160,17 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
     shortGrass *= 1.0 + (sb - 0.5) * 0.5 * sbk;
     shortGrass = mix(shortGrass, shortGrass * vec3(1.14, 1.06, 0.84), smoothstep(0.62, 0.9, sb) * 0.5 * sbk);
   }
-  vec3 col = mix(shortGrass, uSoil * (0.8 + 0.5 * nA), soilShow * 0.85);
+  // drought soil is dry dusty tan, not dark earth
+  vec3 soilCol = uDrought > 0.001 ? tgDroughtSoil(uSoil, uDrought) : uSoil;
+  vec3 col = mix(shortGrass, soilCol * (0.8 + 0.5 * nA), soilShow * 0.85);
+  // the apron is dry, pale, dusty earth (lighter than the damp mud at the waterline, which the wet line below darkens again)
+  if (apron > 0.003) {
+    float ag = tgNoise2(xz * 2.3 + 5.0) * 0.6 + tgNoise2(xz * 7.1 + 1.0) * 0.4;
+    vec3 dust = vec3(0.33, 0.25, 0.15) * (0.72 + 0.5 * nA) * (0.8 + 0.4 * ag);
+    // sparse hoof pits and cracked-mud flecks near the camera
+    dust *= 1.0 - 0.3 * smoothstep(0.6, 0.85, tgNoise2(xz * 3.7 + 11.0)) * (1.0 - smoothstep(30.0, 140.0, dist));
+    col = mix(col, dust, apron * 0.82);
+  }
   gTgGrass = 1.0 - soilShow;
 
   // rock only on truly steep faces, and only partly
@@ -1160,7 +1202,9 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
     lipN = mix(0.5, lipN, 1.0 - smoothstep(120.0, 420.0, dist));
     float lipW = 0.3 + 1.6 * smoothstep(0.38, 0.72, lipN);
     float mud = 1.0 - smoothstep(0.0, lipW, wd + (nC - 0.5) * 0.9);
-    col = mix(col, vec3(0.22, 0.175, 0.125) * (0.8 + 0.4 * nC), mud * 0.62);
+    // from the drone the mud lip reads as a pale dirt bank (dry cut bank and sand), as in the concept, not a dark ring
+    vec3 mudC = mix(vec3(0.22, 0.175, 0.125), vec3(0.46, 0.37, 0.25), smoothstep(70.0, 180.0, dist) * (1.0 - riparian * 0.4));
+    col = mix(col, mudC * (0.8 + 0.4 * nC), mud * 0.62);
   }
 
   // under tree and shrub cover: cooler, darker, leaf litter

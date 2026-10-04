@@ -10,8 +10,10 @@
 // - banks: the draped skirt darkens the wet ground and sedge fringe above the waterline with a dark wet lip at the edge, the
 //   creek laps it with a broken foam line and breaks white over riffles, and the reflection marches the height field and a
 //   crown map, so banks, tallgrass and cottonwoods are mirrored in the water and crowns shade it
-// - distance: the mirror is held below the brightness of the land around it (a deep teal cast, never a pale road or a lavender
-//   path), except where the current or a gust roughens the surface, which goes silvery and spreads the sun's glitter
+// - distance: within about 80 m the mirror is held below the brightness of the land around it (a deep teal cast, never a pale road
+//   or a lavender path), except where the current or a gust roughens the surface, which goes silvery and spreads the sun's glitter;
+//   beyond it, at grazing angles, the water mirrors the dome's real sky radiance with a 0.35 reflectance floor, so from the drone
+//   the creek and ponds read silver (pale, desaturated, with the thin bank strips blurred into the sky)
 // - light: Fresnel sky reflection, sun or moon glitter, a silver sheen under the moon; rain dulls and darkens the surface with
 //   rings near the camera; in winter still water freezes from the shore inward (the creek's channel stays open longest).
 // Output is premultiplied: colour = reflected and scattered light, alpha = how much of the terrain behind is hidden.
@@ -21,7 +23,7 @@ import { HEIGHT_GLSL, NOISE_GLSL, SKY_GLSL, SharedUniforms } from './common';
 
 /** Mean surface speed of the creek (m/s) at an average channel width; narrower stretches run faster. */
 const V_REF = 0.55;
-/** Average channel half-width (m) the speed is referenced to (see shapeCreek in terrain.ts: 3.0 to 5.6 m). */
+/** Average channel half-width (m) the speed is referenced to (see shapeCreek in terrain.ts: 2.4 to 6.2 m). */
 const HW_REF = 4.3;
 
 export class Water {
@@ -550,7 +552,7 @@ export class Water {
             {
               float clump = tgNoise2(p * 0.8 + 3.0) * 0.6 + tgNoise2(p * 2.6 + 1.0) * 0.4;
               float frH = mix(0.36, 0.5, farK) * (0.75 + 0.5 * clump);
-              float fr = (1.0 - smoothstep(frH * 0.4, frH, hA)) * (0.5 + 0.5 * smoothstep(0.3, 0.7, clump)) * mix(0.5, 0.62, farK) * mix(0.35, 1.0, isCreek);
+              float fr = (1.0 - smoothstep(frH * 0.4, frH, hA)) * (0.5 + 0.5 * smoothstep(0.3, 0.7, clump)) * mix(0.5, 0.34, farK) * mix(0.35, 1.0, isCreek);
               fr *= 1.0 - 0.85 * uSnow;
               src *= 1.0 - fr;
               a = a + fr * (1.0 - a);
@@ -585,13 +587,16 @@ export class Water {
             float lens = tgNoise2(vec2(vFlow.x * 0.035, 1.3));
             barRise = 0.62 * smoothstep(0.0, 0.9, sideB) * smoothstep(0.45, 0.95, abs(pref)) * (0.45 + 0.75 * lens);
             barRise += riffle * 0.3 * smoothstep(0.5, 0.8, tgNoise2(vec2(vFlow.x * 0.2, vFlow.y * 0.55) + 19.0));
-            barRise *= (0.85 + 0.3 * tgNoise2(p * 0.5 + 4.0)) * (1.0 - 0.75 * farK);
+            // the bars stay (mostly) in the far view: pale sand on the inside of the bends is part of how a stream reads from the drone
+            barRise *= (0.85 + 0.3 * tgNoise2(p * 0.5 + 4.0)) * (1.0 - 0.3 * farK);
           }
           float barTop = barRise - depth;
           if (barTop > 0.0) {
             float n = tgNoise2(p * 1.3 + 2.0), n2 = tgNoise2(p * 5.0 + 9.0);
             vec3 wetC = vec3(0.07, 0.06, 0.042), dryC = vec3(0.17, 0.145, 0.105);
             vec3 barC = mix(wetC, dryC, smoothstep(0.02, 0.2, barTop + (n - 0.5) * 0.1)) * (0.8 + 0.35 * n2);
+            // seen from afar the dry sand is pale (sun-bleached), the way the bars in the concept are
+            barC = mix(barC, vec3(0.5, 0.43, 0.31) * (0.85 + 0.3 * n), 0.75 * smoothstep(50.0, 160.0, dist) * smoothstep(0.015, 0.1, barTop));
             // sedge and grass take hold on the higher, older part of the bar
             float tuft = smoothstep(0.12, 0.3, barTop + (n - 0.5) * 0.25) * smoothstep(0.4, 0.7, tgNoise2(p * 0.9 + 17.0));
             barC = mix(barC, mix(uGrassGreen, uGrassDry, uCure) * 0.75, tuft * (1.0 - uSnow));
@@ -636,16 +641,27 @@ export class Water {
           vec3 R = reflect(-V, N);
           R.y = abs(R.y);
           float cosV = clamp(dot(N, V), 0.0, 1.0);
+          // Schlick Fresnel (water F0 = 0.02), plus an artistic reflectance floor: beyond about 80 m (ramped in over 78 to 118 m) and at
+          // incidence above 60 degrees (ramped over 55 to 68, measured on the flat surface so ripples never change it) the water mirrors
+          // at least 35% of the sky, which is what makes a stream read silver from the drone instead of as the dark bed under it.
+          // Open water only: ice keeps its own look. Everything below that is keyed on mirK leaves the close-up look untouched.
           float F = 0.02 + 0.98 * pow(1.0 - cosV, 5.0);
+          float mirK = smoothstep(74.0, 110.0, dist) * smoothstep(0.62, 0.4, V.y);
+          F = max(F, 0.35 * mirK * (1.0 - ice));
           // a rain-roughened surface turns its micro-facets toward the viewer: the grazing mirror dulls
           F *= 1.0 - 0.4 * rain * (1.0 - ice);
           // distant cat's paws scatter the bright sky a little: they read as darker drifting patches
           F *= 1.0 - 0.3 * gust * uWind.z * (1.0 - w3) * (1.0 - ice);
-          // the reflected sky, with its bright low-sun glow compressed: water reads as water (darker than the sky it mirrors, the
-          // ripples and the dark bed breaking it up), and only the sun's own path glints
-          vec3 sky = tgSkyBase(normalize(vec3(R.x, max(R.y * 0.85, 0.02), R.z)));
+          // the real sky radiance in the reflected direction (the dome's own function, glow around the sun included). Near the camera
+          // the bright low-sun glow is still compressed so a pond never turns into a white disc; from afar it is mirrored in full
+          // (ripples spread the mirror over a fan of angles and Fresnel favours the grazing ones, so from afar it picks up the bright
+          // sky nearer the horizon than the mean reflection direction)
+          vec3 sky = tgSkyBase(normalize(vec3(R.x, max(R.y * mix(0.85, 0.5, mirK), 0.02), R.z)));
           float sL = dot(sky, vec3(0.2126, 0.7152, 0.0722));
-          sky *= sL > 0.45 ? (0.45 + (sL - 0.45) / (1.0 + 1.8 * (sL - 0.45))) / sL : 1.0;
+          float sKnee = mix(0.45, 1.4, mirK);
+          sky *= sL > sKnee ? (sKnee + (sL - sKnee) / (1.0 + 1.8 * (sL - sKnee))) / sL : 1.0;
+          // silver: from afar the mirror is paler and less saturated than the dome (wavelets and haze scatter white into it)
+          sky = mix(sky, vec3(dot(sky, vec3(0.2126, 0.7152, 0.0722))) * 1.25 + 0.015, 0.4 * mirK * (1.0 - uNight));
           // under the moon the mirrored sky is a dark grey-blue, not a bright blue stripe
           sky = mix(sky, vec3(min(sL, 1.0)) * vec3(0.8, 0.9, 1.1), 0.55 * uNight);
           // a grey rain sky is mirrored dim and flat, never as a white sheet
@@ -653,9 +669,11 @@ export class Water {
           sky = mix(sky, vec3(dot(sky, vec3(0.3333))), 0.5 * rain);
           vec4 hit = F > 0.03 ? mirrorHit(p, R, vLevel, ambC, farK) : vec4(0.0);
           hit.a *= 1.0 - 0.5 * rain;
+          // from the drone a stream is mostly mirrored sky: the thin strips of bank and grass in it blur into the sky's light
+          hit.a *= 1.0 - 0.6 * mirK;
           vec3 refl = mix(sky, hit.rgb, hit.a);
           // from afar the mirror takes a deep teal cast, so the creek reads as water rather than a neutral grey strip
-          refl = mix(refl, refl * vec3(0.55, 0.92, 1.2), 0.75 * farK * (1.0 - uNight));
+          refl = mix(refl, refl * vec3(0.55, 0.92, 1.2), mix(0.75 * farK, 0.22 * farK, mirK) * (1.0 - uNight));
           // From afar a stream is never one tone: calm reaches mirror the dark banks, and where the current or a gust roughens
           // the surface it scatters the bright low sky and goes silvery. The pattern drifts slowly downstream.
           float roughD = 0.0;
@@ -669,7 +687,8 @@ export class Water {
           {
             float landL = 0.06 * dot(irr, vec3(0.2126, 0.7152, 0.0722));
             // calm reaches stay darker than the land around them; the roughened, silvery reaches may come up to about its level
-            float capL = max(landL * mix(2.4, 0.42, farK) * (1.0 + 1.8 * roughD), 1e-4);
+            // (the far mirror's floor lifts this: a silver stream may be brighter than the grass beside it, but never under the moon)
+            float capL = max(landL * mix(mix(2.4, 0.42, farK), 9.0 * (1.0 - 0.5 * uNight), mirK) * (1.0 + 1.8 * roughD), 1e-4);
             float rL = F * dot(refl, vec3(0.2126, 0.7152, 0.0722));
             refl *= rL > 1e-5 ? capL * (1.0 - exp(-rL / capL)) / rL : 1.0;
           }
@@ -818,7 +837,7 @@ export class Water {
           {
             vec3 irrSun = ambC + uLightColor * max(uLightDir.y, 0.0);
             float landLit = 0.2 * INV_PI * dot(irrSun, vec3(0.2126, 0.7152, 0.0722));
-            float capS = max(landLit * mix(mix(3.0, 1.6, farK), 1.1, smoothstep(0.0, 0.5, 1.0 - w3)), 1e-4);
+            float capS = max(landLit * mix(mix(mix(3.0, 1.6, farK), 1.1, smoothstep(0.0, 0.5, 1.0 - w3)), 9.0 * (1.0 - 0.5 * uNight), mirK), 1e-4);
             float sLum = dot(src, vec3(0.2126, 0.7152, 0.0722));
             // ice and snow lying on it keep their own brightness (snow on the land is far brighter than this bound)
             src *= mix(sLum > 1e-5 ? capS * (1.0 - exp(-sLum / capS)) / sLum : 1.0, 1.0, ice);

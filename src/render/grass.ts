@@ -19,6 +19,8 @@
 import * as THREE from 'three';
 import type { World } from '../sim/world';
 import type { EnvState } from '../sim/types';
+import { CURE_KEYS, SEED_KEYS, SEASON_GLSL, keyCurve, smooth01, winterK } from './season';
+import { POND_GLSL, makePondUniform } from './common';
 
 export interface GrassOptions {
   quality?: 'high' | 'medium';
@@ -122,33 +124,7 @@ const DRY_KEYS: PalKey[] = [
   [3.6, 0x6e6046, 0xab9b78, 0xd0c4a0],
   [4.0, 0x5a4a28, 0x8f7a4a, 0xbba46a],
 ];
-// how cured the grass is across the year: [season, cure]
-const CURE_KEYS: [number, number][] = [
-  [0, 0.03], [0.6, 0.06], [1.0, 0.12], [1.25, 0.24], [1.5, 0.6], [1.8, 0.92], [2.0, 1.0], [3.5, 1.0], [3.8, 0.5], [4.0, 0.03],
-];
-// fraction of tall blades carrying a seed head
-const SEED_KEYS: [number, number][] = [
-  [0, 0.0], [0.9, 0.0], [1.3, 0.04], [1.8, 0.12], [2.2, 0.18], [3.0, 0.14], [3.6, 0.04], [4.0, 0.0],
-];
-
-function smooth01(t: number): number {
-  t = Math.max(0, Math.min(1, t));
-  return t * t * (3 - 2 * t);
-}
-
-function keyCurve(keys: [number, number][], s: number): number {
-  const t = ((s % 4) + 4) % 4;
-  for (let i = 0; i < keys.length - 1; i++) {
-    const [a, va] = keys[i];
-    const [b, vb] = keys[i + 1];
-    if (t >= a && t <= b) {
-      const f = (t - a) / (b - a);
-      const e = f * f * (3 - 2 * f);
-      return va + (vb - va) * e;
-    }
-  }
-  return keys[keys.length - 1][1];
-}
+// the cure, seed-head and winter curves and the riparian season factors live in season.ts (shared with the ground shader and engine)
 
 const _c0 = new THREE.Color();
 const _c1 = new THREE.Color();
@@ -286,6 +262,7 @@ uniform float uPixW;
 uniform float uMaxH;
 uniform float uBladeW;
 uniform float uCure;
+uniform float uDrought;
 uniform float uWinterK;
 uniform float uSeedFrac;
 uniform float uMoistK;
@@ -301,6 +278,9 @@ varying vec4 vP2;
 varying float vTS;
 varying vec4 vP3;
 varying float vRip;
+varying vec3 vAsp;
+uniform vec3 uSunDir;
+uniform float uMoon;
 
 uint pcg(uint v) {
   uint s = v * 747796405u + 2891336453u;
@@ -309,6 +289,8 @@ uint pcg(uint v) {
 }
 float u01(uint h) { return float(h) * (1.0 / 4294967296.0); }
 
+${SEASON_GLSL}
+${POND_GLSL}
 // same hash and value noise as the ground shader (common.ts NOISE_GLSL), for the riparian belt's width
 float rpHash(vec2 p) { vec3 p3 = fract(vec3(p.xyx) * .1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
 float rpNoise(vec2 p) {
@@ -420,6 +402,8 @@ void main() {
   float ridge = max(1.0 - smoothstep(0.40, 0.66, moist), 0.8 * smoothstep(0.22, 0.5, slopeM));
   float pres = smoothstep(0.015, 0.14, bioEff) * (1.0 - 0.72 * cover) * (1.0 - smoothstep(0.3, 0.7, water)) * (1.0 - 0.5 * burn);
   pres *= mix(0.62, 1.0, smoothstep(0.28, 0.62, tusC)) * (1.0 - 0.18 * ridge);
+  // the bare apron on the shaded side of a pond (common.ts): almost no blades, only a few sedge stalks
+  if (st1.g > 0.5) pres *= 1.0 - 0.94 * tgPondApron(p, -16.0 * log(max(st1.g, 1e-3)));
   // fade out over the last 25 m inside the world edge (thinner and shorter) so the field melts into the far-ring
   // terrain instead of ending in a straight line
   float edgeD = min(min(p.x, p.y), min(uWorld.x - p.x, uWorld.x - p.y));
@@ -554,9 +538,13 @@ void main() {
     float wdw = -16.0 * log(max(st1.g, 1e-3));
     float ripBroad = rpNoise(p * 0.011 + vec2(31.7, 12.3)) * 0.6 + rpNoise(p * 0.027 + vec2(7.3, 55.1)) * 0.4;
     float ripW = mix(20.0, 50.0, smoothstep(0.22, 0.66, ripBroad)) * (0.85 + 0.3 * rpNoise(p * 0.07 + vec2(3.1, 91.7)));
-    rip = (1.0 - smoothstep(0.3 * ripW, ripW, wdw)) * mix(1.0, 0.8, uCure) * (1.0 - 0.9 * uWinterK);
-    dry = mix(dry, min(dry, 0.02 + 0.12 * uCure + 0.4 * stub), rip);
+    rip = tgRiparian(1.0 - smoothstep(0.3 * ripW, ripW, wdw), uCure, uWinterK);
+    rip = tgDroughtRip(rip, uDrought);
   }
+  // same order as the ground shader: late-summer cure floor, then the drought's push to dry, then the belt's own cap
+  dry = tgCuredFloor(dry, uCure, rip);
+  dry = tgDroughtDry(dry, uDrought, rip);
+  dry = tgRiparianDry(dry, uCure, stub, rip);
 
   vUv = vec2(side, vg);
   vN = Nb;
@@ -564,6 +552,9 @@ void main() {
   vWP = wp3;
   vP0 = vec4(dry, rD, rE, seedFlag);
   vRip = rip;
+  // broad aspect bands, the same function the ground shader runs: sun-facing slopes pale gold, shaded slopes deeper ochre
+  // (a per-blade constant from the ground normal, so it is computed here and not per pixel)
+  vAsp = tgAspectTint(Ng, normalize(uSunDir), dry * (1.0 - rip) * (1.0 - uMoon) * (1.0 - 0.6 * uWinterK));
   vP1 = vec4(bio, gust, burn, stub);
   vP2 = vec4(rA, dist, swath, patch1);
   vP3 = vec4(fType, fTone, tusC, ridge);
@@ -625,6 +616,10 @@ varying vec4 vP2;
 varying float vTS;
 varying vec4 vP3;
 varying float vRip;
+varying vec3 vAsp;
+uniform float uDrought;
+uniform float uWinterK;
+${SEASON_GLSL}
 
 // Never let a zero-length or NaN input escape: every normalize in this shader goes through here.
 vec3 sn(vec3 v) { return v * inversesqrt(max(dot(v, v), 1e-12)); }
@@ -673,6 +668,9 @@ void main() {
   albedo *= 0.9 + 0.2 * smoothstep(0.2, 0.8, tusC);
   // ridge grass reads russet and a little paler (little bluestem)
   albedo *= mix(vec3(1.0), vec3(1.07, 0.93, 0.8), ridge * dry * 0.75);
+  albedo *= vAsp;   // aspect bands (vertex stage)
+  // drought: bleach to pale straw at constant luminance (the ground shader's tgDroughtTint), thinned inside the belt
+  if (uDrought > 0.001) albedo = tgDroughtTint(albedo, uDrought, vRip);
   albedo *= 1.0 + 0.1 * smoothstep(0.15, 0.0, abs(sideX)) - 0.12 * smoothstep(0.6, 1.0, abs(sideX));
   albedo *= mix(vec3(1.0), vec3(1.0 + 0.14 * (hue - 0.5), 1.0, 1.0 - 0.3 * (hue - 0.5)), nearK);
   albedo = mix(albedo, uStubble * (0.7 + 0.6 * bright), 0.85 * stub);
@@ -841,6 +839,7 @@ export class GrassField {
   private blackTex: THREE.DataTexture;
   private frameNo = 0;
   private snowU: { value: number } | null = null;
+  private droughtU: { value: number } | null = null;
   private snowTry = 0;
   private trailU: { value: THREE.Texture | null } | null = null;
   private vegVersion = -1;
@@ -883,6 +882,7 @@ export class GrassField {
       uFlower: { value: new THREE.Vector4(0, 0, 0, 0) },
       uTgShadow: { value: this.whiteTex },
       uTrail: { value: this.blackTex },
+      uPonds: makePondUniform(world.ponds),
       uWorld: { value: new THREE.Vector4(world.size, world.n, world.cell, world.hn) },
       uTime: { value: 0 },
       uWindDir: { value: new THREE.Vector2(1, 0) },
@@ -896,6 +896,7 @@ export class GrassField {
       uBladeW: { value: 0.014 },
       uCure: { value: 0.5 },
       uWinterK: { value: 0 },
+      uDrought: { value: 0 },
       uSeedFrac: { value: 0.1 },
       uMoistK: { value: 1.1 },
       uWindGain: { value: 1 },
@@ -1130,11 +1131,8 @@ export class GrassField {
     seasonColor(DRY_KEYS, env.season, 1, u.uDryM.value);
     seasonColor(DRY_KEYS, env.season, 2, u.uDryT.value);
     u.uCure.value = keyCurve(CURE_KEYS, env.season);
-    {
-      // same winter curve as the ground shader's winterK, for the riparian belt
-      const ws = ((env.season % 4) + 4) % 4;
-      u.uWinterK.value = smooth01((ws - 2.5) / 0.5) * (1 - smooth01((ws - 3.6) / 0.35));
-    }
+    // same winter curve as the ground shader's winterK (season.ts), for the riparian belt
+    u.uWinterK.value = winterK(env.season);
     u.uSeedFrac.value = keyCurve(SEED_KEYS, env.season);
     {
       const sn = ((env.season % 4) + 4) % 4;
@@ -1166,12 +1164,14 @@ export class GrassField {
     if (!this.snowU && (this.snowTry++ & 15) === 0) {
       let root: THREE.Object3D = this.object3D;
       while (root.parent) root = root.parent;
-      const tu = root.userData?.tgUniforms as { snow?: { value: number }; trailTex?: { value: THREE.Texture | null } } | undefined;
+      const tu = root.userData?.tgUniforms as { snow?: { value: number }; drought?: { value: number }; trailTex?: { value: THREE.Texture | null } } | undefined;
       if (tu?.snow) this.snowU = tu.snow;
+      if (tu?.drought) this.droughtU = tu.drought;
       if (tu?.trailTex) this.trailU = tu.trailTex;
     }
     u.uTrail.value = this.trailU?.value ?? this.blackTex;
     u.uSnow.value = this.snowU?.value ?? 0;
+    u.uDrought.value = this.droughtU?.value ?? 0;
     // grass blades under moonlight (blue key light) must not sparkle like static: damp the specular sheen there
     const moon = Math.max(0, Math.min(1, (sun.color.b / Math.max(sun.color.r, 1e-3) - 0.95) * 3));
     u.uSpecK.value = 1 - 0.93 * moon;

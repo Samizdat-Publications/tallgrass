@@ -28,6 +28,7 @@ import { Inspector } from './inspector';
 import { TopRight } from './menu';
 import { PopGraph, type Marker } from './popgraph';
 import { Slate } from './slate';
+import { applySpeciesVars } from './palette';
 import { TimeBar } from './timebar';
 import { ToolRail } from './tools';
 import type { ToolId, UIActions, UIFrame } from './types';
@@ -191,6 +192,7 @@ export class GameUI {
     }
 
     this.ui = h('div', { class: 'tg-ui', dataset: { cinematic: 'false' } }, chrome, this.noteToast.el, this.notesPanel.el, this.hint, bars, this.chapterCard.el, this.result.el, this.narrCaption, this.ambientNote);
+    applySpeciesVars(this.ui);
     root.append(this.ui);
 
     this.keyDown = (e) => this.onKeyDown(e);

@@ -1,6 +1,7 @@
 // The documentary "life story" of the selected animal: raw story entries from the sim become short captions with the
 // valley's year and season, and a death becomes an "In memoriam" line. Pure text, no DOM, so it can run under Node.
-import { YEAR_TICKS } from '../sim/types';
+import { SPECIES_COUNT, YEAR_TICKS } from '../sim/types';
+import { SPECIES, isPredator as isRegistryPredator } from '../sim/species';
 import type { StoryEntry } from '../sim/sim';
 import { ageText, countWord, plural, seasonName, seasonOfTick, seasonPhrase, singular, yearOfTick } from './describe';
 
@@ -17,20 +18,28 @@ export interface StorySubject {
   male: boolean;
 }
 
-const YOUNG: [string, string][] = [
-  ['calf', 'calves'],
-  ['pup', 'pups'],
-  ['chick', 'chicks'],
-  ['fawn', 'fawns'],
-  ['kit', 'kits'],
-  ['kitten', 'kittens'],
-];
-export const youngOf = (sp: number, n: number): string => (YOUNG[sp] ?? ['young one', 'young ones'])[n === 1 ? 0 : 1];
+/** What each species calls its young, by registry key. A species with no entry says "young one". */
+const YOUNG_BY_KEY: Record<string, [string, string]> = {
+  bison: ['calf', 'calves'],
+  wolf: ['pup', 'pups'],
+  raven: ['chick', 'chicks'],
+  pronghorn: ['fawn', 'fawns'],
+  rabbit: ['kit', 'kits'],
+  cougar: ['kitten', 'kittens'],
+  coyote: ['pup', 'pups'],
+  prairiedog: ['pup', 'pups'],
+  eagle: ['chick', 'chicks'],
+  hawk: ['chick', 'chicks'],
+  muledeer: ['fawn', 'fawns'],
+  beaver: ['kit', 'kits'],
+};
+export const youngOf = (sp: number, n: number): string => (YOUNG_BY_KEY[SPECIES[sp]?.key ?? ''] ?? ['young one', 'young ones'])[n === 1 ? 0 : 1];
 
-const isPredator = (sp: number): boolean => sp === 1 || sp === 5;
+/** Hunters in the story's sense: it gives chase and makes kills (wolf, cougar, and any predator the registry adds). */
+const isPredator = (sp: number): boolean => isRegistryPredator(sp);
 const cap = (s: string): string => (s ? s[0].toUpperCase() + s.slice(1) : s);
 const times = (n: number): string => (n === 2 ? 'twice' : `${countWord(n)} times`);
-const validSp = (a: number): boolean => a >= 0 && a <= 5;
+const validSp = (a: number): boolean => a >= 0 && a < SPECIES_COUNT;
 
 /** "Spring, year 4": the season name and the valley year of a tick. */
 export function whenShort(tick: number): string {
@@ -163,6 +172,8 @@ function causePhrase(code: number, who: StorySubject, entries: StoryEntry[], die
     }
     case 4: return 'Taken in a cull';
     case 5: return 'Removed from the valley';
+    case 6: return 'Left the valley for the open prairie';
+    case 7: return 'Died of distemper';
     default: return 'Died';
   }
 }
