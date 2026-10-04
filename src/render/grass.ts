@@ -278,6 +278,9 @@ varying vec4 vP2;
 varying float vTS;
 varying vec4 vP3;
 varying float vRip;
+varying vec3 vAsp;
+uniform vec3 uSunDir;
+uniform float uMoon;
 
 uint pcg(uint v) {
   uint s = v * 747796405u + 2891336453u;
@@ -549,6 +552,9 @@ void main() {
   vWP = wp3;
   vP0 = vec4(dry, rD, rE, seedFlag);
   vRip = rip;
+  // broad aspect bands, the same function the ground shader runs: sun-facing slopes pale gold, shaded slopes deeper ochre
+  // (a per-blade constant from the ground normal, so it is computed here and not per pixel)
+  vAsp = tgAspectTint(Ng, normalize(uSunDir), dry * (1.0 - rip) * (1.0 - uMoon) * (1.0 - 0.6 * uWinterK));
   vP1 = vec4(bio, gust, burn, stub);
   vP2 = vec4(rA, dist, swath, patch1);
   vP3 = vec4(fType, fTone, tusC, ridge);
@@ -610,6 +616,7 @@ varying vec4 vP2;
 varying float vTS;
 varying vec4 vP3;
 varying float vRip;
+varying vec3 vAsp;
 uniform float uDrought;
 uniform float uWinterK;
 ${SEASON_GLSL}
@@ -661,10 +668,9 @@ void main() {
   albedo *= 0.9 + 0.2 * smoothstep(0.2, 0.8, tusC);
   // ridge grass reads russet and a little paler (little bluestem)
   albedo *= mix(vec3(1.0), vec3(1.07, 0.93, 0.8), ridge * dry * 0.75);
-  // broad aspect bands, the same function the ground shader runs: sun-facing slopes pale gold, shaded slopes deeper ochre
-  albedo *= tgAspectTint(Ng, sn(uSunDir), dry * (1.0 - vRip) * (1.0 - uMoon) * (1.0 - 0.6 * uWinterK));
+  albedo *= vAsp;   // aspect bands (vertex stage)
   // drought: bleach to pale straw at constant luminance (the ground shader's tgDroughtTint), thinned inside the belt
-  albedo = tgDroughtTint(albedo, uDrought, vRip);
+  if (uDrought > 0.001) albedo = tgDroughtTint(albedo, uDrought, vRip);
   albedo *= 1.0 + 0.1 * smoothstep(0.15, 0.0, abs(sideX)) - 0.12 * smoothstep(0.6, 1.0, abs(sideX));
   albedo *= mix(vec3(1.0), vec3(1.0 + 0.14 * (hue - 0.5), 1.0, 1.0 - 0.3 * (hue - 0.5)), nearK);
   albedo = mix(albedo, uStubble * (0.7 + 0.6 * bright), 0.85 * stub);
