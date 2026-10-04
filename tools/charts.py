@@ -398,19 +398,21 @@ def chart_cycles(sc: Scenario, saved: list[Path]):
     On a 700-year axis a 5-year cycle is texture; here the booms, crashes and any predator lag are readable."""
     if sc.n == 0:
         return
-    span = min(sc.ticks[s][-1] for s in sc.seeds) / YEAR
+    seeds = [s for s in sc.seeds if all(sc.cols[s][f"pop_{k}"][-1] > 0 for k in sc.species)][:4] or sc.seeds[:4]
+    # the window comes from the worlds shown, so one early collapse elsewhere doesn't pull it back to the opening years
+    span = min(sc.ticks[s][-1] for s in seeds) / YEAR
     w0 = 100.0 if span > 180 else max(5.0, span * 0.25)
     w1 = min(span, w0 + 60)
     if w1 - w0 < 15:
         return
-    seeds = [s for s in sc.seeds if all(sc.cols[s][f"pop_{k}"][-1] > 0 for k in sc.species)][:4] or sc.seeds[:4]
     fig, axes = plt.subplots(len(seeds), 1, figsize=(13, 2.5 * len(seeds) + 1.4), sharex=True, squeeze=False)
     for ax, s in zip(axes[:, 0], seeds):
         t = sc.ticks[s] / YEAR
         yrs = np.arange(int(w0), int(w1))
         for k in sc.species:
             v = sc.cols[s][f"pop_{k}"]
-            ann = np.array([v[(t >= y) & (t < y + 1)].mean() if np.any((t >= y) & (t < y + 1)) else np.nan for y in yrs])
+            # years with no sample (runs sampled more sparsely than once a year) are interpolated from their neighbours
+            ann = np.array([v[(t >= y) & (t < y + 1)].mean() if np.any((t >= y) & (t < y + 1)) else float(np.interp(y + 0.5, t, v)) for y in yrs])
             m = np.nanmean(ann)
             if not np.isfinite(m) or m <= 0:
                 continue
