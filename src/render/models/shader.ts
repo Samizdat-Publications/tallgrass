@@ -123,7 +123,11 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
   // A body that has just been killed keeps the running pace it died at (aFx.z) while its legs go loose: the gait fades out
   // over the first part of the fall (aFx.w, 0 = just hit, 1 = down) instead of the animal freezing stiff and tipping over.
   float fallen = dead ? clamp(aFx.w, 0.0, 1.0) : 1.0;
-  float stag = dead ? (1.0 - smoothstep(0.08, 0.5, fallen)) : 1.0;
+  float stag = dead ? (1.0 - smoothstep(0.05, 0.4, fallen)) : 1.0;
+  // The takedown struggle (about 1.2 s of the 2.4 s fall): full strength from 0.1 s to 0.9 s, easing out as it gives way.
+  float strug = dead ? smoothstep(0.0, 0.05, fallen) * (1.0 - smoothstep(0.38, 0.5, fallen)) : 0.0;
+  // How far it has gone down (the roll, the drop and the leg fold happen after the struggle).
+  float down = dead ? smoothstep(0.42, 1.0, fallen) : 1.0;
   float spdG = dead ? aFx.z : spd;
   float seed = aLook.y;
   float sick = dead ? 0.0 : fract(aLook.w);
@@ -230,17 +234,22 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
     if (dead) {
       // A fallen animal lies on its side with the legs folded, not stiff spikes. Going down it first stumbles on (the gait it
       // died in fading out), the forelegs buckle ahead of the hind legs and every leg flops loose, then it folds up.
-      float loose = sin(3.14159265 * clamp((fallen - 0.06) / 0.8, 0.0, 1.0));
+      float loose = sin(3.14159265 * clamp((fallen - 0.38) / 0.55, 0.0, 1.0));
       float flopH = loose * (0.55 * sin(fallen * 17.0 + float(part) * 1.9) + (front ? 0.35 : -0.15));
       float flopK = loose * 0.9 * (0.5 + 0.5 * sin(fallen * 13.0 + float(part) * 2.3)) * (front ? -1.0 : HOCK_K);
       float fh = front ? mix(DEAD_HIP_F, LIE_HIP_F, 0.7) : mix(DEAD_HIP_H, LIE_HIP_H, 0.7);
       float fk = (front ? LIE_KNEE_F : LIE_KNEE_H) * 0.7;
-      float f2 = smoothstep(front ? 0.2 : 0.4, 1.0, fallen);
+      float f2 = smoothstep(front ? 0.4 : 0.55, 1.0, fallen);
       // every leg settles at its own angle (a dead weight, not a posed statue)
       float lj = fract(sin(float(part) * 12.9898 + seed * 78.233) * 43758.5453) - 0.5;
       float lk = fract(lj * 7.31 + 0.37) - 0.5;
       hip = mix(hip, fh, f2) + flopH * (1.0 - f2) + lj * 0.9 * f2;
       knee = mix(knee, fk, f2) + flopK * (1.0 - f2) + lk * 0.7 * f2;
+      // scrabbling: every leg paws and kicks fast and out of step (about 4.5 Hz), the forelegs braced out ahead, the hind legs
+      // driving, while it fights the weight on its back
+      float scr = sin(fallen * 70.0 + float(part) * 2.1 + seed * 5.0);
+      hip += strug * (front ? 0.3 + 0.6 * scr : 0.7 * scr - 0.1);
+      knee += strug * 0.8 * (0.5 + 0.5 * sin(fallen * 70.0 + float(part) * 1.3 + 1.0)) * (front ? -1.0 : HOCK_K);
     }
     tgRotZ(p, n, aPivot2, knee * aPart.y);
     tgRotZ(p, n, aPivot, hip);
@@ -287,10 +296,11 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
 #endif
     if (dead) {
       // the head drops as the animal goes, then lies slack
-      ang += smoothstep(0.0, 0.06, fallen) * (1.0 - smoothstep(0.22, 0.45, fallen)) * 0.55 * sin(fallen * 41.0); // head tosses
-      ang = mix(ang, -0.8, smoothstep(0.1, 0.4, fallen));
-      ang = mix(ang, -0.35 - 0.5 * fract(seed * 6.7), smoothstep(0.5, 1.0, fallen));
-      yaw = (fract(seed * 9.1) - 0.5) * 1.2 * fallen;
+      // the head is thrown up and about in strong tosses (4 in about 1.2 s), then drops as it gives way
+      ang += strug * (0.6 * sin(fallen * 50.0 + seed * 3.0) + 0.2);
+      ang = mix(ang, -0.8, smoothstep(0.38, 0.65, fallen));
+      ang = mix(ang, -0.35 - 0.5 * fract(seed * 6.7), smoothstep(0.6, 1.0, fallen));
+      yaw = (fract(seed * 9.1) - 0.5) * 1.2 * fallen + strug * 0.5 * sin(fallen * 37.0 + seed * 2.0);
     }
     tgRotY(p, n, aPivot, yaw);
     tgRotZ(p, n, aPivot, ang);
@@ -381,16 +391,18 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
     float r = clamp(aGait.z, 0.0, 1.0);
     float side = (fract(seed * 5.31) > 0.5 ? 1.0 : -1.0);
     // the stumble: the nose dips as the forelegs buckle, then the body rolls onto its side
-    float dip = sin(3.14159265 * smoothstep(0.0, 0.5, fallen)) * (1.0 - smoothstep(0.5, 0.75, fallen));
-    tgRotZ(p, n, vec3(-0.25 * BODY_LEN, COM_Y, 0.0), -0.3 * dip);
-    float roll = side * 1.45 * smoothstep(0.3, 1.0, fallen);
-    // the takedown: it bucks and twists against the weight on its back before it gives way
-    float strug = smoothstep(0.0, 0.06, fallen) * (1.0 - smoothstep(0.22, 0.5, fallen));
-    roll += strug * 0.3 * sin(fallen * 46.0 + seed * 9.0);
-    tgRotY(p, n, vec3(0.0, COM_Y, 0.0), strug * 0.12 * sin(fallen * 38.0 + 1.0));
+    float dip = sin(3.14159265 * clamp((fallen - 0.3) / 0.45, 0.0, 1.0));
+    tgRotZ(p, n, vec3(-0.25 * BODY_LEN, COM_Y, 0.0), -0.35 * dip);
+    float roll = side * 1.45 * down;
+    // the takedown: it bucks, rears and twists against the weight on its back for about a second before it gives way
+    roll += strug * 0.38 * sin(fallen * 44.0 + seed * 9.0);
+    tgRotY(p, n, vec3(0.0, COM_Y, 0.0), strug * 0.18 * sin(fallen * 38.0 + 1.0));
     tgRotX(p, n, vec3(0.0, COM_Y, 0.0), roll);
-    p.y -= DEAD_DROP * smoothstep(0.3, 1.0, fallen);
-    float f3 = smoothstep(0.3, 1.0, fallen);
+    // each buck lifts the whole body and throws the forequarters up about the hind end
+    p.y += strug * COM_Y * 0.14 * abs(sin(fallen * 25.0 + seed * 4.0));
+    tgRotZ(p, n, vec3(-0.3 * BODY_LEN, COM_Y * 0.6, 0.0), strug * 0.24 * max(sin(fallen * 25.0 + seed * 4.0 + 1.5), 0.0));
+    p.y -= DEAD_DROP * down;
+    float f3 = down;
     float k = mix(1.0, mix(0.4, 0.9, r), f3);
     p.y = p.y * k;
     p.xz *= mix(1.0, mix(0.8, 1.0, r), f3);

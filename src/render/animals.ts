@@ -93,7 +93,7 @@ const TURN: Array<[number, number]> = [
 const BANK_MAX = [0.2, 0.42, 0.75, 0.42, 0.3, 0.42];
 
 /** How the whole fall of a carcass plays out, in seconds. */
-const FALL_TIME = 2.0;
+const FALL_TIME = 2.4;
 /** A predator within this many metres of a fresh kill (and hunting) lunges. */
 const POUNCE_R = 7;
 const POUNCE_TIME = 1.15;
@@ -893,7 +893,7 @@ export class AnimalLayer {
       const h = fi ? fi.h : seed * Math.PI * 2;
       const fall = fi ? clamp(fi.t / FALL_TIME, 0, 1) : 1;
       // the struggle: earth and dust kicked up round the animal while it fights the takedown (about the first 0.7 s)
-      if (fi && fi.t > 0.05 && fi.t < 0.75 && running > 0 && Math.random() < 0.55) {
+      if (fi && fi.t > 0.05 && fi.t < 1.3 && running > 0 && Math.random() < 0.55) {
         const dryS = this.dust.dryness * this.groundDry(x, z);
         if (dryS > 0.08) {
           const bigS = sp === Sp.Bison ? 1.5 : 0.85;
