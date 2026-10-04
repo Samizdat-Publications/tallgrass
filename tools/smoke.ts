@@ -1,6 +1,7 @@
 // Browser smoke test (V2-PLAN.md S0 step 7): start Vite, load the game in headless Chromium (any GL, software is
 // fine), wait for __ready, step 2,000 ticks, fail on any console error, save one JPEG.
-//   npx tsx tools/smoke.ts [--out scratch/smoke.jpg] [--timeout 120000]
+//   npx tsx tools/smoke.ts [--out scratch/smoke.jpg] [--timeout 120000] [--gpu | --swiftshader]
+// --gpu is the default on Windows (the real GPU); elsewhere SwiftShader, which the cloud VM needs.
 // Exit codes: 0 pass, 1 fail, 2 skipped (Chromium could not launch; say so in TRACK-S.md).
 
 import { mkdirSync } from 'node:fs';
@@ -15,6 +16,7 @@ const arg = (k: string, d: string): string => {
 };
 const out = resolve(arg('out', 'scratch/smoke.jpg'));
 const timeout = Number(arg('timeout', '120000'));
+const gpu = argv.includes('--gpu') || (process.platform === 'win32' && !argv.includes('--swiftshader'));
 
 async function main(): Promise<number> {
   const server = await createServer({ server: { port: 0, host: '127.0.0.1' }, logLevel: 'error' });
@@ -25,7 +27,11 @@ async function main(): Promise<number> {
   let skipped = false;
   const log: string[] = []; // every console line, shown when the page never gets ready
   try {
-    const args = ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--disable-background-timer-throttling'];
+    // GPU mode (--gpu, the default on Windows): the real GPU, never throttled. Otherwise SwiftShader (cloud VMs have no GPU).
+    const background = ['--disable-renderer-backgrounding', '--disable-background-timer-throttling', '--disable-backgrounding-occluded-windows'];
+    const args = gpu
+      ? ['--enable-gpu', '--ignore-gpu-blocklist', ...(process.platform === 'win32' ? ['--use-angle=d3d11'] : []), ...background]
+      : ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', ...background];
     // Playwright's own browser first; then a preinstalled Chromium (cloud VMs ship one whose build may not match)
     const fallbacks = [process.env.SMOKE_CHROMIUM, '/opt/pw-browsers/chromium/chrome', '/opt/pw-browsers/chromium'].filter(Boolean) as string[];
     let lastErr = '';

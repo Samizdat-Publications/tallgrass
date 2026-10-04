@@ -143,6 +143,35 @@ export interface Params {
   ravenVagrantK: number;
   /** Vagrant ceiling. */
   ravenVagrantCap: number;
+  // small-prey web (S4, src/sim/smallprey.ts): jackrabbits and prairie dogs as density fields on the 32 x 32 coarse grid.
+  // Rates are per base year (2,400 ticks). Everything is off at smallPrey 0.
+  /** Master switch (0 = rabbits stay the old individual agents with no founders, and prairie dogs do not exist). */
+  smallPrey: number;
+  /** Jackrabbits per coarse cell (16 m) at full food. */
+  hareK: number;
+  /** Jackrabbit growth per base year in the breeding season (spring and summer). */
+  hareR: number;
+  /** Jackrabbit loss per base year outside the breeding season. */
+  hareWinterLoss: number;
+  /** Prairie dogs per suitable coarse cell (scaled by the cell's dogCap and soil). */
+  dogK: number;
+  /** Prairie dog growth per base year, applied as one spring pulse each valley year. */
+  dogR: number;
+  /** Sylvatic plague starts per base year per large town in summer. */
+  plagueRate: number;
+  /** 1 = wolf mousing success comes from SmallPrey.take on the local hare and dog density (needs smallPrey), 0 = the flat wolfSmallGame trickle. */
+  smallGameField: number;
+  /** Grass in prairie dog towns is clipped short: the share of grass above the clip height removed per 50 ticks in a full town (0 = off). */
+  dogClip: number;
+  /** Bison migration and grazing prefer the edges of towns by this much grass-equivalent (0 = off). */
+  dogGrazeBonus: number;
+  /** Storm cells and lightning (0 = off). On, thunderstorm days send cells across the valley; dry lightning can start
+   *  fires, and heavy rain (above 0.5) stops fire spreading. See storms.ts. */
+  stormCells: number;
+  /** Strike chance per tick per storm cell at full intensity. */
+  lightningRate: number;
+  /** Chance a strike in dry, cured grass (season 1.4 to 3.1, grass above 0.3, rain below 0.35) starts a fire. */
+  lightningIgnite: number;
   // fear
   fearKill: number;
   fearKillRadius: number;
@@ -245,6 +274,7 @@ export function defaultParams(): Params {
     bite: 0.0052, foodValue: 0.55, meat: 2.2, toughness: 0.75, initial: 350, herdRadius: 12,
     wariness: 0.85, defense: 0.08, camo: 0.6, diet: 1, hideAge: 170,
   });
+  // jackrabbit: a density field when smallPrey is on (hareK, hareR); these only matter for the old agent rabbit
   species[Sp.Rabbit] = base({ initial: 0 });
   // cougar: solitary ambush hunter; waits in cover near water and springs a short, explosive sprint
   species[Sp.Cougar] = base({
@@ -252,6 +282,17 @@ export function defaultParams(): Params {
     walkSpeed: 1.6, runSpeed: 18, stamina: 45, sight: 45, metabolism: 1 / 1050, thirst: 1 / 1700,
     meat: 2.5, toughness: 1.6, initial: 0, herdRadius: 0, camo: 0.8,
   });
+  // coyote (S4 registers it, S5 sets the real values from the plan's S5 table): wolf-like breeding, smaller body, no founders yet
+  species[Sp.Coyote] = base({
+    maxAge: 4800, matureAge: 900, gestation: 0, birthCooldown: 0, litter: 5,
+    walkSpeed: 1.3, runSpeed: 11, stamina: 130, sight: 60, metabolism: 1 / 1200, thirst: 1 / 1800,
+    meat: 0.8, toughness: 0.8, initial: 0, herdRadius: 12,
+  });
+  // prairie dog: a field species. Only initial (0 = the default colonies) and the smallPrey params apply; the rest keeps the
+  // lookup safe for any code that indexes the species table by id
+  species[Sp.PrairieDog] = base({ initial: 0, herdRadius: 0 });
+  // a species id added to the registry before it has a block here gets the defaults, so nothing indexes undefined
+  for (let s = 0; s < SPECIES_COUNT; s++) species[s] ??= base({});
   return {
     species,
     grassGrowth: 0.0016,
@@ -288,6 +329,16 @@ export function defaultParams(): Params {
     cougarImmigration: 0,
     fleeMomentum: 0,
     openPrairie: 0,
+    smallPrey: 0,
+    hareK: 3,
+    hareR: 2.2,
+    hareWinterLoss: 0.6,
+    dogK: 4,
+    dogR: 1.0,
+    plagueRate: 0.08,
+    smallGameField: 0,
+    dogClip: 0,
+    dogGrazeBonus: 0,
     wolfInRate: 0.2,
     wolfOutAfter: 1.0,
     deerOutK: 0.6,
@@ -299,6 +350,9 @@ export function defaultParams(): Params {
     ravenVagrants: 0,
     ravenVagrantK: 0.16,
     ravenVagrantCap: 400,
+    stormCells: 0,
+    lightningRate: 0.05,
+    lightningIgnite: 0.5,
     fearKill: 0.7,
     fearKillRadius: 22,
     fearPredatorStamp: 0.0008,

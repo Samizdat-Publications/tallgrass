@@ -17,18 +17,25 @@ function ok(cond: boolean, msg: string): void {
 
 // ids are positions, and the Sp constants agree with the registry
 ok(SPECIES.every((d, i) => d.id === i), 'registry ids are array positions');
-ok(SPECIES_COUNT === SPECIES.length && SPECIES_COUNT === 6, 'SPECIES_COUNT is 6 in S0');
-ok(SPECIES_KEYS.join() === 'bison,wolf,raven,pronghorn,rabbit,cougar', 'SPECIES_KEYS order');
-ok(SPECIES_NAMES.join() === 'Bison,Wolf,Raven,Pronghorn,Rabbit,Cougar', 'SPECIES_NAMES order');
+ok(SPECIES_COUNT === SPECIES.length && SPECIES_COUNT === 8, 'SPECIES_COUNT is 8 after S4');
+ok(SPECIES_KEYS.join() === 'bison,wolf,raven,pronghorn,rabbit,cougar,coyote,prairiedog', 'SPECIES_KEYS order');
+ok(SPECIES_NAMES.join() === 'Bison,Wolf,Raven,Pronghorn,Jackrabbit,Cougar,Coyote,Prairie dog', 'SPECIES_NAMES order');
 ok(SPECIES_BY_KEY.bison.id === Sp.Bison && SPECIES_BY_KEY.wolf.id === Sp.Wolf && SPECIES_BY_KEY.raven.id === Sp.Raven, 'Sp ids match keys (1)');
 ok(SPECIES_BY_KEY.pronghorn.id === Sp.Deer && SPECIES_BY_KEY.rabbit.id === Sp.Rabbit && SPECIES_BY_KEY.cougar.id === Sp.Cougar, 'Sp ids match keys (2)');
+ok(SPECIES_BY_KEY.coyote.id === Sp.Coyote && SPECIES_BY_KEY.prairiedog.id === Sp.PrairieDog && Sp.Coyote === 6 && Sp.PrairieDog === 7, 'Sp ids match keys (3)');
+ok(SPECIES_BY_KEY.rabbit.repr === 'field' && SPECIES_BY_KEY.prairiedog.repr === 'field' && SPECIES_BY_KEY.coyote.repr === 'agent', 'field and agent species');
+ok(SPECIES_BY_KEY.coyote.guild === 'mesopredator' && SPECIES_BY_KEY.coyote.threat === 0.3 && !SPECIES_BY_KEY.coyote.flies, 'coyote registry entry');
+ok(isPredator(Sp.Coyote) && isThreat(Sp.Coyote) && !isGrazer(Sp.Coyote), 'coyote is a mesopredator threat');
 ok(new Set(SPECIES.map((d) => d.key)).size === SPECIES.length, 'keys are unique');
 ok(SPECIES.every((d) => /^#[0-9A-Fa-f]{6}$/.test(d.color)), 'colours are hex');
 ok(DIET.length === SPECIES_COUNT && DIET.every((r) => r.length === SPECIES_COUNT), 'DIET is square');
 ok(COAT_BASE.length >= SPECIES_COUNT && COAT_RANGE.length >= SPECIES_COUNT, 'coat tables cover every species');
-ok(PARAM_PREFIX.join() === 'bison,wolf,raven,deer,rabbit,cougar', 'param prefixes keep the v1 names');
+ok(PARAM_PREFIX.join() === 'bison,wolf,raven,deer,rabbit,cougar,coyote,prairiedog', 'param prefixes keep the v1 names');
 const params = defaultParams();
 ok(params.species.length === SPECIES_COUNT, 'default params cover every species');
+ok(params.species.every((s) => s !== undefined && s.matureAge > 0), 'every species id has a params block (no matureAge of undefined)');
+ok(params.species[Sp.Coyote].maxAge === 4800 && params.species[Sp.Coyote].initial === 0 && params.species[Sp.PrairieDog].initial === 0, 'coyote and prairie dog start empty');
+ok(params.smallPrey === 0 && params.smallGameField === 0 && params.dogClip === 0 && params.dogGrazeBonus === 0, 'S4 params are off by default');
 
 // roles
 ok([Sp.Bison, Sp.Deer, Sp.Rabbit].every((s) => isGrazer(s) && isPrey(s)), 'grazers are prey');

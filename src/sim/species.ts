@@ -3,8 +3,8 @@
 // switching on species ids. Per-species biology that is genuinely unique (wolf packs, the cougar's
 // ambush) stays keyed on `Sp` in sim.ts. This file imports nothing, so types.ts can derive from it.
 //
-// Fixed ids, shared by both tracks: Bison 0, Wolf 1, Raven 2, Pronghorn 3, Rabbit 4, Cougar 5.
-// Later work packages append Coyote 6, PrairieDog 7, Eagle 8, Hawk 9, MuleDeer 10, Beaver 11.
+// Fixed ids, shared by both tracks: Bison 0, Wolf 1, Raven 2, Pronghorn 3, Rabbit 4 (the jackrabbit), Cougar 5,
+// Coyote 6, PrairieDog 7. Later work packages append Eagle 8, Hawk 9, MuleDeer 10, Beaver 11.
 
 export interface SpeciesDef {
   id: number;
@@ -33,9 +33,15 @@ export const SPECIES: SpeciesDef[] = [
   { id: 1, key: 'wolf', name: 'Wolf', plural: 'Wolves', repr: 'agent', guild: 'predator', prey: false, threat: 1, flies: false, traits: true, core: true, color: '#6FA4EA' },
   { id: 2, key: 'raven', name: 'Raven', plural: 'Ravens', repr: 'agent', guild: 'scavenger', prey: false, threat: 0, flies: true, traits: false, core: true, color: '#B48CE6' },
   { id: 3, key: 'pronghorn', name: 'Pronghorn', plural: 'Pronghorn', repr: 'agent', guild: 'browser', prey: true, threat: 0, flies: false, traits: true, core: true, color: '#4FC4BC' },
-  // rabbit stays an individual-agent species with no starting population until it becomes a field species
-  { id: 4, key: 'rabbit', name: 'Rabbit', plural: 'Rabbits', repr: 'agent', guild: 'grazer', prey: true, threat: 0, flies: false, traits: false, core: false, color: '#E9E4D4' },
+  // The jackrabbit (S4). The key stays 'rabbit' for compatibility (CSV columns, params, saved share codes). It is a field
+  // species on the 32 x 32 coarse grid when the smallPrey param is on (src/sim/smallprey.ts); with smallPrey off it is
+  // still the old individual-agent grazer, with no starting population, so the golden hashes do not move.
+  { id: 4, key: 'rabbit', name: 'Jackrabbit', plural: 'Jackrabbits', repr: 'field', guild: 'grazer', prey: true, threat: 0, flies: false, traits: false, core: false, color: '#E9E4D4' },
   { id: 5, key: 'cougar', name: 'Cougar', plural: 'Cougars', repr: 'agent', guild: 'predator', prey: false, threat: 1, flies: false, traits: false, core: false, color: '#D27A8C' },
+  // Coyote (S4 registers it, S5 gives it behaviour): a small, smart mesopredator that hunts the hares and dogs.
+  { id: 6, key: 'coyote', name: 'Coyote', plural: 'Coyotes', repr: 'agent', guild: 'mesopredator', prey: false, threat: 0.3, flies: false, traits: false, core: false, color: '#D9AE4B' },
+  // Prairie dog (S4): a field species, never an agent. Towns of burrows on flat, dry, open ground.
+  { id: 7, key: 'prairiedog', name: 'Prairie dog', plural: 'Prairie dogs', repr: 'field', guild: 'grazer', prey: false, threat: 0, flies: false, traits: false, core: false, color: '#C8A778' },
 ];
 
 /** Number of species ids in play. */
@@ -79,9 +85,9 @@ export function canHunt(predator: number, prey: number): boolean {
 }
 
 /** Base coat darkness of a new founder, by species id (0 pale .. 1 dark). Species not listed use 0.5. */
-export const COAT_BASE: number[] = [0.85, 0.3, 0.97, 0.5, 0.5, 0.5];
+export const COAT_BASE: number[] = [0.85, 0.3, 0.97, 0.5, 0.5, 0.5, 0.45, 0.5];
 /** Coat darkness stays within a species' believable range (bison stay dark, wolves stay pale). Unlisted species use [0, 1]. */
-export const COAT_RANGE: [number, number][] = [[0.62, 1], [0.05, 0.65], [0.85, 1], [0.2, 0.8], [0.2, 0.8], [0.15, 0.6]];
+export const COAT_RANGE: [number, number][] = [[0.62, 1], [0.05, 0.65], [0.85, 1], [0.2, 0.8], [0.2, 0.8], [0.15, 0.6], [0.25, 0.7], [0.2, 0.8]];
 
 /** Prefix used for per-species param overrides ("bison.metabolism"). Pronghorn keeps its v1 prefix "deer". */
 export const PARAM_PREFIX: string[] = SPECIES.map((s) => (s.key === 'pronghorn' ? 'deer' : s.key));

@@ -1,0 +1,62 @@
+{
+ "args": {
+  "seeds": 16,
+  "seedBase": 1,
+  "ticks": 240000,
+  "generations": null,
+  "sampleEvery": 600,
+  "threads": 2,
+  "scenarios": [
+   "baseline"
+  ],
+  "params": {},
+  "mock": false,
+  "maxMinutes": 0,
+  "progressSec": 120,
+  "out": "/home/user/tallgrass/scratch/screens/A16",
+  "argv": [
+   "--seeds",
+   "16",
+   "--ticks",
+   "240000",
+   "--sample",
+   "600",
+   "--threads",
+   "2",
+   "--out",
+   "/home/user/tallgrass/scratch/screens/A16",
+   "--progress-sec",
+   "120"
+  ]
+ },
+ "commit": "61455f2 (frozen copy)",
+ "node": "v22.22.0",
+ "platform": "linux x64",
+ "startedAt": "2026-10-04T18:44:38.898Z",
+ "finishedAt": "2026-10-04T20:13:43.417Z",
+ "wallSeconds": 5344.51,
+ "stopReason": null,
+ "tasks": {
+  "total": 16,
+  "completed": 16,
+  "errors": 0,
+  "aborted": 0,
+  "skipped": 0
+ },
+ "msPerTick": 2.821207,
+ "ticksRun": 3736800,
+ "ticksPerSecWall": 699,
+ "scenarios": {
+  "baseline": {
+   "seeds": 16,
+   "completed": 16,
+   "persistencePct": {
+    "bison": 93.75,
+    "wolf": 93.75,
+    "raven": 93.75,
+    "pronghorn": 93.75
+   },
+   "maxGen": 130.08245711123408
+  }
+ }
+}

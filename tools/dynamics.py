@@ -93,6 +93,7 @@ def report(d, scenario, skip):
     imm_c = {s: [] for s in SPECIES}
     emig_c = {s: [] for s in SPECIES}
     vag_mean, vag_max, vag_in_c, vag_out_c = [], [], [], []
+    web = {'cv_a': {'rabbit': [], 'prairiedog': []}, 'cv_s': {'rabbit': [], 'prairiedog': []}, 'plague': [], 'towns': [], 'founded': [], 'boom': [], 'crash': []}
     for f in files:
         rows = list(csv.DictReader(open(f)))
         rows_s = [r for r in rows if float(r['year']) >= skip]
@@ -106,6 +107,21 @@ def report(d, scenario, skip):
             continue
         flow_presence(rows, rows_s, SPECIES, presence, ext_rate, absent, imm_c, emig_c, vag_mean, vag_max, vag_in_c, vag_out_c)
         g = lambda k: sum(float(r.get(k, 0) or 0) for r in rows_s)
+        if 'hare_total' in rows[0] and max(float(r['hare_total']) for r in rows) > 0:
+            # small-prey web (S4): CV of the annual means and of the raw samples, plague per 100 years, towns
+            for sp in ('rabbit', 'prairiedog'):
+                if f'pop_{sp}' not in rows[0]:
+                    continue
+                _, ann = annual(rows_s, f'pop_{sp}')
+                raw = [float(r[f'pop_{sp}']) for r in rows_s]
+                web['cv_a'][sp].append(st.pstdev(ann) / (st.mean(ann) or 1))
+                web['cv_s'][sp].append(st.pstdev(raw) / (st.mean(raw) or 1))
+            yrs_all = float(rows[-1]['year']) - float(rows[0]['year']) or 1
+            web['plague'].append(sum(float(r.get('plague_events', 0) or 0) for r in rows) / yrs_all * 100)
+            web['founded'].append(sum(float(r.get('town_founded', 0) or 0) for r in rows) / yrs_all * 100)
+            web['boom'].append(sum(float(r.get('hare_boom', 0) or 0) for r in rows) / yrs_all * 100)
+            web['crash'].append(sum(float(r.get('hare_crash', 0) or 0) for r in rows) / yrs_all * 100)
+            web['towns'].append(st.mean(float(r.get('towns', 0) or 0) for r in rows_s))
         years = float(rows_s[-1]['year']) - float(rows_s[0]['year']) or 1
         _, bison = annual(rows_s, 'pop_bison')
         mean_b = st.mean(bison) or 1
@@ -145,6 +161,9 @@ def report(d, scenario, skip):
         print('  immigrants / emigrants per century (mean over seeds): ' + ', '.join(f'{s} {st.mean(imm_c[s]):.1f} in, {st.mean(emig_c[s]):.1f} out' for s in flows))
     else:
         print('  immigrants / emigrants per century: none recorded (open prairie off, or older CSVs)')
+    if web['plague']:
+        print('  small-prey web (S4): CV of annual means / of samples: ' + ', '.join(f"{sp} {med(web['cv_a'][sp]):.2f} / {med(web['cv_s'][sp]):.2f}" for sp in ('rabbit', 'prairiedog') if web['cv_a'][sp]))
+        print(f"  plagues per 100 yr: median {med(web['plague']):.1f} (per seed {', '.join(f'{v:.1f}' for v in web['plague'])}); mean towns {st.mean(web['towns']):.1f}; towns founded per 100 yr {med(web['founded']):.1f}; hare booms {med(web['boom']):.1f} and crashes {med(web['crash']):.1f} per 100 yr")
     if vag_mean and (max(vag_max) > 0 or st.mean(vag_in_c) > 0):
         print(f'  vagrant ravens: mean {st.mean(vag_mean):.1f}, max {max(vag_max):.0f}; arrivals {st.mean(vag_in_c):.1f} and departures {st.mean(vag_out_c):.1f} per century')
 
