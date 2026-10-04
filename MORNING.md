@@ -126,8 +126,8 @@ The default sim is now **checkpoint v5 on a 2x valley calendar** (since about 06
 | 7 (07:51) | Gemini, video | 5 | 7 | 2 | 4 | 8 | 3 |
 | 8 (09:05) | blind critic, stills + 2x-calendar charts | 7 | 5 | 6 | 4 | 6 | 5 |
 | 8 (09:10) | Gemini, video | 5 | 6 | 2 | 4 | 8 | 3 |
-| 9 (10:19) | blind critic, stills of the final build | 7 | 5 | 6 | 5 | 7 | 6 |
-| 10 (10:57) | Gemini, video of the final build | 7 | 6 | 3 | 8 | 9 | 5 |
+| 9 (10:19) | blind critic, stills of the 09:51 build | 7 | 5 | 6 | 5 | 7 | 6 |
+| 10 (10:57) | Gemini, video before the ribbon and takedown | 7 | 6 | 3 | 8 | 9 | 5 |
 | 11 (11:24) | Gemini, video of the live 11:19 build | 6 | 7 | 2 | 5 | 8 | 3 |
 
 Every issue and its triage is in `REVIEWS.md`.
