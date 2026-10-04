@@ -755,7 +755,7 @@ Budget for the whole WP: ≤ +1.0 ms at 1440p in every view.
   - A camera-local, instanced volume of flakes, driven by the wind, with density from env snow.
   - Blizzard look when snow combines with wind > 0.6: dense, near-horizontal flakes and heavier fog.
 - [x] **8. Dawn fog.** After a clear, calm night (no rain, wind < 0.35), mist pools in low ground from dayFrac 0.2 and burns off by 0.35, using the FogPass height mist with slow noise drift.
-- [ ] **9. Grass up close,** on LOD 0:
+- [x] **9. Grass up close,** on LOD 0:
   - seed heads: bluestem's three-pronged tips, switchgrass sprays
   - a warm glow when backlit
   - copper-red bluestem stems in autumn
