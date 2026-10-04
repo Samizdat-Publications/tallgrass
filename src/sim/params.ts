@@ -101,6 +101,9 @@ export interface Params {
    *  are divided by k because wolves breed once a year. Timers that aren't seasons (carcass life, immunity, outbreak
    *  spacing, drought length, immigration) stay fixed in ticks. */
   calendarScale: number;
+  /** Drought refuges (0 = off): how much of a drought's cut in growth, and its dieback, the wettest ground along the
+   *  creek and ponds escapes. Riparian strips stay green through a drought, so herds have somewhere to go. */
+  droughtRefuge: number;
   /** Rate per year at which a pair of cougars wanders in while fewer than two live in the valley (0 = closed valley). */
   cougarImmigration: number;
   /** When an already-fleeing grazer is scared again, how much of its current flight line it keeps (0 = turn straight away from the new threat). */
@@ -222,6 +225,7 @@ export function defaultParams(): Params {
     herdNearest: 0,
     climateAmp: 0,
     calendarScale: 1,
+    droughtRefuge: 0,
     cougarImmigration: 0,
     fleeMomentum: 0,
     fearKill: 0.7,

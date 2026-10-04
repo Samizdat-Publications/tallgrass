@@ -66,6 +66,9 @@ export class Vegetation {
     const dormant = gf < 0.12;
     const drought = this.env.droughtTicks > 0;
     const rGrow = p.grassGrowth * gf;
+    // drought refuges (off at 0): the growth the season would give without the drought, for the wettest cells
+    const refuge = drought ? p.droughtRefuge : 0;
+    const rFree = refuge > 0 ? rGrow / Math.max(0.05, 1 - this.env.droughtSeverity) : rGrow;
     const seed = p.grassSeedFloor * gf;
     const fearKeep = 1 - p.fearDecay * dt;
     const windDir = this.env.state.windDir, windS = this.env.state.windStrength;
@@ -95,9 +98,17 @@ export class Vegetation {
           burn[c] = Math.max(0, b - dt / 2400);
         }
         const moist = 0.55 + 0.9 * w.moisture[c];
-        g += dt * (rGrow * moist * g * (1 - g / (K + 1e-6)) + seed * K);
+        let rg = rGrow, dieF = 0.7;
+        if (refuge > 0) {
+          // 0 on the uplands, up to the refuge share on the wettest ground by the water
+          const m = w.moisture[c];
+          const wet = refuge * (m <= 0.55 ? 0 : m >= 0.85 ? 1 : ((m - 0.55) / 0.3) * ((m - 0.55) / 0.3) * (3 - 2 * ((m - 0.55) / 0.3)));
+          rg = rGrow + (rFree - rGrow) * wet;
+          dieF = 0.7 * (1 - wet);
+        }
+        g += dt * (rg * moist * g * (1 - g / (K + 1e-6)) + seed * K);
         if (dormant) g -= dt * p.winterDieback * g;
-        if (drought) g -= dt * p.winterDieback * 0.7 * g;
+        if (drought) g -= dt * p.winterDieback * dieF * g;
         if (g > K) g -= (g - K) * 0.004 * dt;
         if (g < 0) g = 0;
         grass[c] = g;
@@ -105,7 +116,7 @@ export class Vegetation {
         let bw = this.browse[c];
         const BK = this.browseK[c];
         if (b > 1) bw *= 0.5;
-        bw += dt * (rGrow * 0.85 * moist * bw * (1 - bw / (BK + 1e-6)) + seed * BK);
+        bw += dt * (rg * 0.85 * moist * bw * (1 - bw / (BK + 1e-6)) + seed * BK);
         if (dormant) bw -= dt * p.winterDieback * 0.5 * bw;
         this.browse[c] = bw < 0 ? 0 : bw;
         // overgrazing wears soil down; healthy grass slowly restores it
