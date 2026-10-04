@@ -59,15 +59,14 @@ Earlier, Saturday (since 09:00):
 4. Overlays, **Wolf territories**, then 10x: watch packs form, bud and fall apart.
 5. Press **G**, then 100x: decades of booms and crashes, now on the slower calendar. **E** for evolution.
 
-## Screenshots (all in `review/morning/`; the 09:00 set is in `review/morning/old-0900/`)
-- `1_opening_herd.png`: the opening shot, current build.
-- `2_photo_mode_herd_at_pond.png`: a photo-mode frame (P), no UI.
-- `3_winter_dawn.png`: early-winter dawn with snow and long tree shadows.
-- `4_wolf_territories.png`: the territory overlay draped over the hills.
-- `5_challenge_goal_card.png`: a challenge running in the real game (goal card, interventions left).
-- `6_ui_evolution.png`: the evolution chart.
-- `7_stability_20_worlds_v5.png`: the v5 acceptance run below, one panel per world.
-- `8_trophic_cascade.png`: the trophic cascade evidence.
+## Screenshots (current build, in `review/morning/sunday/`; Saturday's sets are in `review/morning/` and `review/morning/old-0900/`)
+- `2_golden_low.png`: bison against a low sun, the new horizon and dusk glow (no interface, H).
+- `1_golden_herd.png`: the valley from the drone at golden hour, with the reworked creek.
+- `5_ui_golden.png`: the documentary interface: chronicle newest first, population strip, tools.
+- `7_follow_a_wolf_hunt.png`: following an alpha female wolf on a hunt, with her traits and life story and a Field note.
+- `6_ui_territories.png`: wolf territories with named packs, and a chapter card.
+- `8_field_notes.png`: the Field notes notebook.
+- `9_chart_60_years.png`: 60 valley-years in 4 worlds on the 2x calendar.
 - Every image made tonight, in order, is in `journey/` (see `journey/INDEX.md`), as you asked. **Browse them as a page with a slideshow: https://claude.ai/artifact/7jPHUFvbzTv6AUz5UCA3Mu** (private to you; republished as new images are added). Locally: open `journey/index.html`.
 
 ## Stability: what is proven and what isn't (honest)
