@@ -10,9 +10,11 @@
 - Nothing is running in the background.
 
 ## In flight (Track R session started 2026-10-04 ~16:30 local, deadline 2026-10-08 12:00)
-- Mode: two tracks. This is Track R on main; Track S runs in the cloud on v2-sim (no Track S commits yet at start).
-- R0 items 1+6 (tools/gpubench.mjs, JPEG stills), 4 (hill shadows on animals), 5 (tools/concept_compare.py + __concept hook) are with builders. Item 3 (tone map) is the lead's, after items 1 and 5 land. Item 2 waits for S0 on main.
-- Quota at start: weekly 64%, 5-hour 6%.
+- Done on main: R0 items 1, 3 (keep ACES), 4, 5 (concept baseline 4/10), 6; R2 item 0. R0 item 2 waits for Track S's S0 (v2-sim had no commits at 14:45).
+- Builders in worktrees (.claude/worktrees/agent-*, branches worktree-agent-*): R1 items 1-3 (foot lock, slope IK, rig), R2 item 1 (water), R2 item 2 (aerial perspective). Merge each after review; gate on concept_compare and GPU budget.
+- Next after those: R1 items 4-9 (takedowns, feeding, ravens, weight, cougar, border fade), R2 items 3-9.
+- GPU A/B is noisy while builders share the GPU: use in-page A,B,B,A blocks keeping fast-clock blocks (scratch/r0/bench.mjs pattern) or bench when idle.
+- Quota at 14:45: weekly 65%.
 
 ## Start here
 1. Read CLAUDE.md, then V2-PLAN.md sections 0 to 6. Your kickoff prompt gives your mode (single or two tracks) and your deadline: write the deadline to `.claude/hooks/run_until.local.txt` first.
