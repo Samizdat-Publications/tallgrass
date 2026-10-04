@@ -1,0 +1,64 @@
+{
+ "args": {
+  "seeds": 32,
+  "seedBase": 1,
+  "ticks": 240000,
+  "generations": null,
+  "sampleEvery": 600,
+  "threads": 12,
+  "scenarios": [
+   "baseline"
+  ],
+  "params": {
+   "calendarScale": 2
+  },
+  "mock": false,
+  "maxMinutes": 0,
+  "progressSec": 15,
+  "out": "C:\\Users\\stewa\\Documents\\Claude\\ecosystem-sim\\scratch\\screens\\A32",
+  "argv": [
+   "--seeds",
+   "32",
+   "--ticks",
+   "240000",
+   "--sample",
+   "600",
+   "--threads",
+   "12",
+   "--params",
+   "{\"calendarScale\":2}",
+   "--out",
+   "C:/Users/stewa/Documents/Claude/ecosystem-sim/scratch/screens/A32"
+  ]
+ },
+ "commit": "bc62e1e (frozen copy)",
+ "node": "v24.19.0",
+ "platform": "win32 x64",
+ "startedAt": "2026-10-04T19:38:25.409Z",
+ "finishedAt": "2026-10-04T20:00:31.799Z",
+ "wallSeconds": 1326.38,
+ "stopReason": null,
+ "tasks": {
+  "total": 32,
+  "completed": 32,
+  "errors": 0,
+  "aborted": 0,
+  "skipped": 0
+ },
+ "msPerTick": 1.739136,
+ "ticksRun": 7576800,
+ "ticksPerSecWall": 5712,
+ "scenarios": {
+  "baseline": {
+   "seeds": 32,
+   "completed": 32,
+   "persistencePct": {
+    "bison": 93.75,
+    "wolf": 96.875,
+    "raven": 93.75,
+    "pronghorn": 96.875
+   },
+   "maxGen": 130.08245711123408
+  }
+ }
+}

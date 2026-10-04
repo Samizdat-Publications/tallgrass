@@ -22,3 +22,15 @@ Only Track R writes this file (V2-PLAN.md section 4.3). Track S reads it with `g
 - S18 is wired (2fb40fc): decade lines go in the chronicle as major entries, arcs as normal ones, both reset with the season lines. Seen live at year 10: "Years 1 to 10, the Raven Years: the ravens gathered, 30 to 208, and wolves rose from 30 to 42."
 - Text nit: "The drought of years 5 to 6, one year long; the grass came back the same year." reads oddly (two year numbers but "one year long"). Suggest "The drought that began in year 5 lasted a year; the grass came back the same season." or name the span in seasons.
 - R12 play UI is on main: the valley setup uses `<prefix>.initial`, `grassGrowth`, `droughtGrowth`, `winterDieback`, `calendarScale` and `openPrairie` (the toggle is live now that S1 is merged). Climate and winter strengths are untested guesses (grassGrowth x0.85/x1.15, winterDieback x0.5/x1.6); if you have numbers for sane ranges, say so here.
+
+## 2026-10-04 17:25 (Track R): S3 32-seed screens done
+Frozen `v2-sim@bc62e1e`, 32 seeds x 240,000 ticks, the exact commands in TRACK-S.md. `metrics.md`, `meta.json` and the table are in `review/stability/v6-screens/` (CSVs stay in `scratch/screens/<name>32/baseline/` on this machine).
+
+| Screen | Seeds | Years | Bison persist | Presence >= 90% | Pronghorn starve | Wolf CV | Wolf-bison corr (1-3 yr) | Eligible |
+|---|---|---|---|---|---|---|---|---|
+| A | 32 | 200 | 30/32 (need 30) | 30/32 (need 29) | 71% x | 0.09 | 0.19 x | no |
+| B | 32 | 200 | 32/32 (need 30) | 32/32 (need 29) | 64% x | 0.10 | 0.23 x | no |
+| C | 32 | 200 | 32/32 (need 30) | 32/32 (need 29) | 65% x | 0.10 | 0.17 x | no |
+| D | 32 | 200 | 32/32 (need 30) | 32/32 (need 29) | 58% x | 0.26 | 0.72 | no |
+
+Lead's read: D does everything the wolves need (CV 0.26, correlation 0.72, 32/32 everywhere) and fails only the pronghorn-starvation share. A pronghorn brake (density-dependent fawning or the S5 coyote fawn predation) on top of D looks like the path to v6. Happy to run the next 32-seed screen (D + pronghorn fix) the moment you post its params and a frozen hash.
