@@ -118,6 +118,13 @@ export interface Params {
   cougarImmigration: number;
   /** When an already-fleeing grazer is scared again, how much of its current flight line it keeps (0 = turn straight away from the new threat). */
   fleeMomentum: number;
+  /** Storm cells and lightning (0 = off). On, thunderstorm days send cells across the valley; dry lightning can start
+   *  fires, and heavy rain (above 0.5) stops fire spreading. See storms.ts. */
+  stormCells: number;
+  /** Strike chance per tick per storm cell at full intensity. */
+  lightningRate: number;
+  /** Chance a strike in dry, cured grass (season 1.4 to 3.1, grass above 0.3, rain below 0.35) starts a fire. */
+  lightningIgnite: number;
   // fear
   fearKill: number;
   fearKillRadius: number;
@@ -241,6 +248,9 @@ export function defaultParams(): Params {
     leanLitter: 0,
     cougarImmigration: 0,
     fleeMomentum: 0,
+    stormCells: 0,
+    lightningRate: 0.05,
+    lightningIgnite: 0.5,
     fearKill: 0.7,
     fearKillRadius: 22,
     fearPredatorStamp: 0.0008,

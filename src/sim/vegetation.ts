@@ -76,6 +76,8 @@ export class Vegetation {
     // fire is much likelier late summer and autumn, and nearly impossible in the rain
     const si = Math.floor(season) % 4;
     const seasonDry = [0.35, 1.0, 0.9, 0.25][si] * (drought ? 1.6 : 1) * (1 - 0.9 * this.env.state.rain);
+    // heavy rain stops fire spreading (only with storm cells on, so the default sim is unchanged)
+    const rainStop = p.stormCells > 0 && this.env.state.rain > 0.5;
     let burning = 0;
     for (let j = tick % STRIDE; j < n; j += STRIDE) {
       const row = j * n;
@@ -93,7 +95,7 @@ export class Vegetation {
           fear[c] = 1;
           const nb = b - dt / 48;
           burn[c] = nb <= 1 ? 1 : nb;
-          if (b > 1.15) this.spreadFire(i, j, seasonDry, wx, wy, windS);
+          if (b > 1.15 && !rainStop) this.spreadFire(i, j, seasonDry, wx, wy, windS);
         } else if (b > 0) {
           burn[c] = Math.max(0, b - dt / 2400);
         }

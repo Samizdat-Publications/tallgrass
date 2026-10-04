@@ -68,6 +68,9 @@ export type FromWorker =
       carcassCount: number;
       carcasses: Float32Array;
       veg?: Uint8Array;
+      /** Storm cells and the strikes since the last post (only with params.stormCells); layouts in types.ts. */
+      storms?: Float32Array;
+      strikes?: Float32Array;
       /** Trait heatmap, TRAIT_GRID^2 RGBA bytes: R speed relative to the species mean (128 = average), G animal density. Sent with veg. */
       traitGrid?: Uint8Array;
       pop: number[];
@@ -222,12 +225,14 @@ function post(forceVeg: boolean): void {
   const sel = selectedId !== null ? detail(selectedId) : null;
   const msg: FromWorker = {
     type: 'snap', tick: s.tick, env: s.env, count: s.count, ids: s.ids, agents: s.agents, carcassCount: s.carcassCount,
-    carcasses: s.carcasses, veg: s.veg, traitGrid: withVeg ? traitGrid() : undefined, pop: Array.from(s.pop), events, history, selected: sel,
+    carcasses: s.carcasses, veg: s.veg, storms: s.storms, strikes: s.strikes, traitGrid: withVeg ? traitGrid() : undefined, pop: Array.from(s.pop), events, history, selected: sel,
     selectedGone: selectedId !== null && sel === null, story: sim.story.slice(), storyId: sim.trackedId, ...packInfo(), speed: skipping ? -1 : speed, ticksPerSec, stepMs: stepMsAvg,
   };
   history = [];
   const transfer: Transferable[] = [s.ids.buffer, s.agents.buffer, s.carcasses.buffer];
   if (s.veg) transfer.push(s.veg.buffer);
+  if (s.storms) transfer.push(s.storms.buffer);
+  if (s.strikes) transfer.push(s.strikes.buffer);
   ctx.postMessage(msg, transfer);
 }
 

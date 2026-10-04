@@ -4,6 +4,7 @@ import { Environment } from './env';
 import { BucketGrid } from './grid';
 import { applyOverrides, defaultParams, Params, SpeciesParams } from './params';
 import { Rng } from './rng';
+import { StormCells } from './storms';
 import { AGENT_STRIDE, CARCASS_STRIDE, F_ALPHA, F_INFECTED, F_JUVENILE, F_MALE, F_PREGNANT, Intervention, SimLike, Snapshot, SPECIES_COUNT, SPECIES_KEYS, Sp, St, YEAR_TICKS, SEASON_TICKS, BASE_YEAR_TICKS, setCalendarScale } from './types';
 import { COAT_BASE, COAT_RANGE, DIET, IS_PREY, isGrazer, SPECIES, THREAT } from './species';
 import { STRIDE, Vegetation } from './vegetation';
@@ -143,6 +144,9 @@ export class Sim implements SimLike {
   private wasDrought = false;
   private groundB = 0.6;
   private firstKillLogged = false;
+  /** Storm cells and lightning (params.stormCells; null when off). */
+  storms: StormCells | null = null;
+  private cLightning = 0;
 
   constructor(opts: SimOptions) {
     this.seed = opts.seed >>> 0;
@@ -153,6 +157,7 @@ export class Sim implements SimLike {
     this.env = new Environment(this.rng.fork(11));
     this.env.climateAmp = this.p.climateAmp;
     this.veg = new Vegetation(this.world, this.p, this.env, this.rng.fork(12));
+    if (this.p.stormCells > 0) this.storms = new StormCells(this.seed, this.world.size, this.p, DT);
     this.a = new Agents(4096);
     this.prey = new BucketGrid(this.world.size, BUCKET);
     this.pred = new BucketGrid(this.world.size, BUCKET);
@@ -368,6 +373,7 @@ export class Sim implements SimLike {
     const a = this.a;
     const t = this.tick;
     this.env.update(t);
+    if (this.storms) this.stepStorms(t);
     this.veg.step(t);
     this.groundB = grassBrightness(this.env.state.season);
 
@@ -1863,6 +1869,23 @@ export class Sim implements SimLike {
     if (this.events.length > 4000) this.events.splice(0, 1000);
   }
 
+  /** Storm cells drift over the valley; dry lightning in cured grass starts fires (own generator, see storms.ts). */
+  private stepStorms(t: number): void {
+    const st = this.storms!;
+    const veg = this.veg, water = this.world.water, size = this.world.size;
+    st.update(t, this.env.state, (x, y) => {
+      if (x < 0 || y < 0 || x >= size || y >= size) return 0;
+      const c = veg.cellAt(x, y);
+      return water[c] ? 0 : veg.grass[c];
+    });
+    for (let k = 0; k < st.starts.length; k += 3) this.event('storm', -1, st.starts[k], st.starts[k + 1], st.starts[k + 2], 0);
+    for (let k = 0; k < st.fires.length; k += 2) {
+      veg.ignite(st.fires[k], st.fires[k + 1], 4);
+      this.cLightning++;
+      this.event('lightningFire', -1, st.fires[k], st.fires[k + 1], 0, 0);
+    }
+  }
+
   private checkEvents(): void {
     const t = this.tick;
     const drought = this.env.droughtTicks > 0;
@@ -2029,6 +2052,8 @@ export class Sim implements SimLike {
     row.packs = packs;
     row.carcasses = this.cN;
     row.drought = this.env.droughtTicks > 0 ? 1 : 0;
+    row.fires_lightning = this.cLightning;
+    row.storm_cells = this.storms ? this.storms.cells.length : 0;
     this.cKills = 0;
     this.cKillsDeer = 0;
     this.cStrife = 0;
@@ -2041,6 +2066,7 @@ export class Sim implements SimLike {
     this.cKilled.fill(0);
     this.cThirst.fill(0);
     this.cStarveJuv = 0;
+    this.cLightning = 0;
     return row;
   }
 
@@ -2090,10 +2116,15 @@ export class Sim implements SimLike {
       veg = vegOut ?? new Uint8Array(this.world.n * this.world.n * 4);
       this.veg.fillTexture(veg);
     }
-    return {
+    const snap: Snapshot = {
       tick: this.tick, env: { ...this.env.state }, count: k, ids, agents: out, carcassCount: this.cN, carcasses: car, veg,
       pop: Int32Array.from(this.populations()),
     };
+    if (this.storms) {
+      snap.storms = this.storms.toArray(this.env.state, this.tick);
+      snap.strikes = this.storms.drainStrikes();
+    }
+    return snap;
   }
 }
 
