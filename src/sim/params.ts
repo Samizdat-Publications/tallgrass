@@ -96,6 +96,8 @@ export interface Params {
   herdNearest: number;
   /** Amplitude of the slow climate cycle on grass growth (0 = off; 0.3 = +/-30%). */
   climateAmp: number;
+  /** Rate per year at which a pair of cougars wanders in while fewer than two live in the valley (0 = closed valley). */
+  cougarImmigration: number;
   // fear
   fearKill: number;
   fearKillRadius: number;
@@ -212,6 +214,7 @@ export function defaultParams(): Params {
     matingWindow: 0,
     herdNearest: 0,
     climateAmp: 0,
+    cougarImmigration: 0,
     fearKill: 0.7,
     fearKillRadius: 22,
     fearPredatorStamp: 0.0008,

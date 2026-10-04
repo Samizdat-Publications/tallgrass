@@ -507,6 +507,10 @@ export class Sim implements SimLike {
     if (this.p.wolfImmigration > 0 && this.pop[Sp.Wolf] < 6 && this.rng.next() < this.p.wolfImmigration / YEAR_TICKS) {
       this.introduce(Sp.Wolf, 2);
     }
+    // the valley holds only a few cougar ranges; when they empty, a pair of dispersers from the wider country moves in
+    if (this.p.cougarImmigration > 0 && this.pop[Sp.Cougar] < 2 && this.rng.next() < this.p.cougarImmigration / YEAR_TICKS) {
+      this.introduce(Sp.Cougar, 2);
+    }
   }
 
   /** An oversized pack buds: a young breeding pair plus up to two yearlings found a pack near prey in open ground. */

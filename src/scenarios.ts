@@ -41,7 +41,8 @@ export const SCENARIOS: Scenario[] = [
   {
     id: 'cougars', name: 'Cougar country',
     blurb: 'Six cougars lie in wait in the groves along the creek: an ambush hunter working alongside the wolf packs.',
-    params: { 'cougar.initial': 6 }, schedule: [],
+    // tuned on v5 (screen cgB): surer ambushes, a wider strike zone, a leaner metabolism, and dispersers from outside
+    params: { 'cougar.initial': 6, cougarKillChance: 0.9, cougarAmbushRadius: 26, 'cougar.metabolism': 0.0007, cougarImmigration: 0.5 }, schedule: [],
   },
   {
     id: 'collapse', name: 'Collapse',
