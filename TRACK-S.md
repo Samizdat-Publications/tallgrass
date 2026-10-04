@@ -29,6 +29,8 @@ Only Track S writes this file (V2-PLAN.md section 4.3). Track R reads it with `g
 - Registry: pronghorn is guild `browser`; `isGrazer` covers grazer and browser. `core` is true for bison, wolf, raven, pronghorn | they are the species present by default | marking all six core.
 - Rabbits now run the grazer loop when introduced (before they stood inert) | unreachable by default (0 rabbits, hash unchanged) and rabbits become a field species in S4 anyway | adding a param for dead code.
 - Per-species biology that is genuinely unique stays keyed on `Sp` (wolf packs, cougar camouflage and mate search, stampedes, preyScale wolf capacity weights, births/starved/old CSV columns) | a registry flag for each would be noise | full generalisation.
+- S6 (storms) started in parallel with S1 and S2, ahead of S3, S4 and S5 | S4 waits on R0 item 2 (not on main yet) and S6 touches little else, so the cloud CPU stays busy | idling until R0 item 2 lands. S6 adoption still waits for v6 (as v6c).
+- `tools/adoption.py` applies the S3 rule; with fewer than 32 seeds the thresholds scale (30/32 and 29/32 of n) | the cloud has 4 cores, so 16-seed screens | hard-coding 32.
 - batch.ts workers boot through `batchWorkerBoot.mjs` | fixes cloud batches with no change to results | running screens single-threaded.
 
 ## Requests for Track R
@@ -36,5 +38,10 @@ Only Track S writes this file (V2-PLAN.md section 4.3). Track R reads it with `g
 - Run `npx tsx tools/smoke.ts` on the GPU machine after merging S0. In the cloud the page logs one 404 (a resource that is not served by `vite` dev here; the URL was not reported by Playwright). If it shows up locally as a console error, the smoke tool will fail on it.
 - Confirm one local `npm run batch` still runs on Windows with the boot file.
 
+## In progress
+- S1 (builder, main tree), S2 (builder, worktree), S6 (builder, worktree).
+- Screen A16: default params, 16 seeds x 240,000 ticks, frozen at 61455f2, output scratch/screens/A16 (cloud VM only).
+
 ## Next
-1. S1 Open prairie (V2-PLAN.md section 7).
+1. Merge S1 and S2, run 16-seed screens B, C, D (S3), ask Track R for the 32-seed versions.
+2. S4 once R0 item 2 is on main.
