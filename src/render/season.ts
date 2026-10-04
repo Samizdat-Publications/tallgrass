@@ -98,7 +98,9 @@ function glf(x: number): string {
  *   tgDroughtDry(dry, drought, rip)       drought forces dry grass (less so inside the belt)
  *   tgDroughtTint(color, drought, rip)    bleach to pale straw at constant luminance
  *   tgDroughtSoil(soil, drought)          dusty tan ground
- *   tgAspectTint(nrm, L, amt)            pale gold on sun-facing slopes, deeper ochre on shaded ones (colour multiplier)
+ *   tgAspectBand(nrm, L)                 pale gold on sun-facing slopes, deeper ochre on shaded ones (vertex stage: rgb multiplier, a strength)
+ *   tgAspectApply(band, amt)             the colour multiplier for a pixel of dryness amt
+ *   tgAspectTint(nrm, L, amt)            both in one call
  */
 export const SEASON_GLSL = /* glsl */ `
 float tgWinterK(float s) {
@@ -127,15 +129,22 @@ vec3 tgDroughtTint(vec3 c, float drought, float rip) {
 vec3 tgDroughtSoil(vec3 soil, float drought) {
   return mix(soil, vec3(${DROUGHT.dust.map(glf).join(', ')}), ${glf(DROUGHT.soil)} * drought);
 }
-// nrm: ground normal, L: direction toward the light, amt: 0..1 strength (dryness of the ground, off at night and under living grass)
-vec3 tgAspectTint(vec3 nrm, vec3 L, float amt) {
+// The aspect band is geometry plus light only, so it can be evaluated per vertex (nrm: ground normal, L: unit direction toward the
+// light): rgb = the colour multiplier at full strength, a = how strongly the light lets it show (a low sun shows it most).
+vec4 tgAspectBand(vec3 nrm, vec3 L) {
   float sl = length(nrm.xz);
   float slopeK = smoothstep(${glf(ASPECT.slope0)}, ${glf(ASPECT.slope1)}, sl);
   float facing = dot(nrm.xz / max(sl, 1e-4), L.xz / max(length(L.xz), 1e-4)) * slopeK;
   float low = 1.0 - smoothstep(0.15, 0.75, L.y);
   vec3 sunC = vec3(${ASPECT.sun.map(glf).join(', ')});
   vec3 shadeC = vec3(${ASPECT.shade.map(glf).join(', ')});
-  vec3 t = mix(vec3(1.0), facing >= 0.0 ? sunC : shadeC, abs(facing));
-  return mix(vec3(1.0), t, clamp(amt, 0.0, 1.0) * (${glf(ASPECT.base)} + ${glf(ASPECT.low)} * low));
+  return vec4(mix(vec3(1.0), facing >= 0.0 ? sunC : shadeC, abs(facing)), ${glf(ASPECT.base)} + ${glf(ASPECT.low)} * low);
+}
+// amt: 0..1 strength per pixel (dryness of the ground, off at night and under living grass)
+vec3 tgAspectApply(vec4 band, float amt) {
+  return mix(vec3(1.0), band.rgb, clamp(amt, 0.0, 1.0) * band.a);
+}
+vec3 tgAspectTint(vec3 nrm, vec3 L, float amt) {
+  return tgAspectApply(tgAspectBand(nrm, L), amt);
 }
 `;

@@ -784,8 +784,9 @@ export class Terrain {
       u.tMacro3 = { value: this.macroRT[2].texture };
       u.tDetail = { value: this.detailTex };
       shader.vertexShader = shader.vertexShader
-        .replace('void main() {', 'attribute float aCurv;\nvarying float vTgCurv;\nvarying vec3 vTgWorld;\nvarying vec3 vTgNormal;\nvoid main() {')
-        .replace('#include <begin_vertex>', '#include <begin_vertex>\nvTgWorld = (modelMatrix * vec4(transformed, 1.0)).xyz;\nvTgNormal = normal;\nvTgCurv = aCurv;');
+        .replace('void main() {', `attribute float aCurv;\nvarying float vTgCurv;\nvarying vec3 vTgWorld;\nvarying vec3 vTgNormal;\nvarying vec4 vTgAsp;\nuniform vec3 uLightDir;\n${SEASON_GLSL}\nvoid main() {`)
+        // the sun-aspect band depends only on the slope and the light, so it is a per-vertex varying (the pixel shader scales it by dryness)
+        .replace('#include <begin_vertex>', '#include <begin_vertex>\nvTgWorld = (modelMatrix * vec4(transformed, 1.0)).xyz;\nvTgNormal = normal;\nvTgCurv = aCurv;\nvTgAsp = tgAspectBand(normal, normalize(uLightDir));');
       shader.fragmentShader = shader.fragmentShader
         .replace('void main() {', GROUND_PARS + '\nvoid main() {')
         .replace(
@@ -816,7 +817,7 @@ export class Terrain {
         );
       shader.fragmentShader = injectSafeOutput( shader.fragmentShader );
     };
-    mat.customProgramCacheKey = () => 'tallgrass-terrain-v5';
+    mat.customProgramCacheKey = () => 'tallgrass-terrain-v6';
 
     const mesh = new THREE.Mesh(geo, mat);
     mesh.castShadow = false;
@@ -884,6 +885,7 @@ uniform float uNight;
 varying vec3 vTgWorld;
 varying vec3 vTgNormal;
 varying float vTgCurv;
+varying vec4 vTgAsp;
 ${NOISE_GLSL}
 ${SEASON_GLSL}
 float gTgRough = 0.95;
@@ -1043,7 +1045,7 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
   vec3 tint = mix(mix(tOl, tSt, smoothstep(0.38, 0.62, p1)), mix(tSg, tRu, smoothstep(0.4, 0.62, p2)), smoothstep(0.35, 0.65, p3));
   grassCol *= mix(vec3(1.0), tint, mix(0.6, 1.0, farK) * mot * (1.0 - 0.75 * winterK));
   // broad tonal bands by aspect: sun-facing slopes pale gold, shaded slopes deeper ochre (the blade layer runs the same function)
-  grassCol *= tgAspectTint(nrm, uLightDir, dry * (1.0 - riparian) * (1.0 - uNight) * (1.0 - 0.6 * winterK));
+  grassCol *= tgAspectApply(vTgAsp, dry * (1.0 - riparian) * (1.0 - uNight) * (1.0 - 0.6 * winterK));
   // sunlit ridges go pale and dry, draws and hollows go deep olive
   grassCol *= 1.0 + 0.26 * ridgeK * (0.5 + 0.5 * dry) - 0.22 * hollowK;
   grassCol = mix(grassCol, grassCol * vec3(0.76, 0.92, 0.56), hollowK * 0.4 * (1.0 - 0.75 * winterK));
@@ -1078,7 +1080,7 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
     grassCol = mix(vec3(lumO), grassCol, 1.0 + 0.2 * ochreK) * mix(vec3(1.0), vec3(1.04, 1.0, 0.86), 0.5 * ochreK);
   }
   // drought: bleached pale straw (same luminance, leaning yellow, so never mauve), thinned in the belt
-  grassCol = tgDroughtTint(grassCol, uDrought, riparian);
+  if (uDrought > 0.001) grassCol = tgDroughtTint(grassCol, uDrought, riparian);
 
   // distance grain: tufts and clumps whose size follows the pixel footprint (two to eight pixels across), so a far hill keeps a
   // grassy stipple of olive and straw instead of a smooth dune; far copses of trees are dark dotted patches along the draws
@@ -1151,7 +1153,7 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
     shortGrass = mix(shortGrass, shortGrass * vec3(1.14, 1.06, 0.84), smoothstep(0.62, 0.9, sb) * 0.5 * sbk);
   }
   // drought soil is dry dusty tan, not dark earth
-  vec3 soilCol = tgDroughtSoil(uSoil, uDrought);
+  vec3 soilCol = uDrought > 0.001 ? tgDroughtSoil(uSoil, uDrought) : uSoil;
   vec3 col = mix(shortGrass, soilCol * (0.8 + 0.5 * nA), soilShow * 0.85);
   gTgGrass = 1.0 - soilShow;
 
