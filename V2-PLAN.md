@@ -742,7 +742,7 @@ Budget for the whole WP: ≤ +1.0 ms at 1440p in every view.
   - Add broad, smooth tonal bands by slope aspect: sun-facing slopes pale gold, shaded slopes deeper ochre.
   - In late summer, the uplands turn more cured gold; green stays in the riparian ribbon and the swales.
 - [x] **4. Drought ground.** A drought term in the terrain and grass shaders, driven by env drought severity: pale straw grass and dusty tan soil, never mauve.
-- [ ] **5. Cloud shadows.**
+- [x] **5. Cloud shadows.**
   - A ground mask from the same fbm as the sky's cloud layer (sky.ts:271-349), projected along the sun and moved by the wind.
   - It multiplies direct sun on terrain, grass, trees and animals.
   - Coverage follows the weather: clear days get scattered cumulus; overcast turns it off.
