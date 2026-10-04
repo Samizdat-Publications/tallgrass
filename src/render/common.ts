@@ -170,6 +170,50 @@ float tgOcclusionFade(vec3 wp){
 }
 `;
 
+/**
+ * Bare apron on the shaded side of each pond. Cattle and wildlife trample the bank where the trees shade it and the grass gives out,
+ * so one side of every pond (a fixed direction near north, wandering a little per pond, so it is the side the noon sun leaves in
+ * shade) has a ragged band of bare, dusty ground between the waterline and the grass. The ground shader (terrain.ts) paints it and
+ * the blade layer (grass.ts) thins its blades from the same function, so near and far field agree.
+ *   uPonds[i] = (x, z, radius, direction of the apron in radians as atan(z, x));   tgPondApron(p, wd): 0..1, wd = distance to water (m)
+ */
+export const POND_GLSL = /* glsl */ `
+uniform vec4 uPonds[3];
+float tgPondH(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float tgPondN(vec2 p){
+  vec2 i = floor(p), f = fract(p);
+  f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(tgPondH(i), tgPondH(i + vec2(1.0, 0.0)), f.x), mix(tgPondH(i + vec2(0.0, 1.0)), tgPondH(i + vec2(1.0, 1.0)), f.x), f.y);
+}
+float tgPondApron(vec2 p, float wd){
+  if (wd > 8.0) return 0.0;
+  float a = 0.0;
+  for (int i = 0; i < 3; i++) {
+    vec4 q = uPonds[i];
+    vec2 d = p - q.xy;
+    float rr = length(d);
+    if (q.z < 1.0 || rr > q.z + 14.0) continue;
+    float cw = dot(d / max(rr, 1e-3), vec2(cos(q.w), sin(q.w)));
+    float n = tgPondN(p * 0.33 + q.xy * 0.017);
+    float wedge = smoothstep(0.0, 0.6, cw + (n - 0.5) * 0.5);
+    float width = (1.2 + 4.6 * wedge) * (0.7 + 0.6 * tgPondN(p * 0.19 + 3.0));
+    a = max(a, wedge * (1.0 - smoothstep(0.4 * width, width, wd + (tgPondN(p * 0.9 + 7.0) - 0.5) * 1.4)));
+  }
+  return a;
+}
+`;
+
+/** Pond data for POND_GLSL: x, z, radius and the apron's direction (north, wandering up to about 40 degrees per pond). Unused slots are zero. */
+export function makePondUniform(ponds: ArrayLike<number>): { value: THREE.Vector4[] } {
+  const v = [0, 1, 2].map(() => new THREE.Vector4(0, 0, 0, 0));
+  for (let k = 0; k < 3 && k * 4 + 3 < ponds.length; k++) {
+    const x = ponds[k * 4], z = ponds[k * 4 + 1];
+    const wander = hash2(Math.round(x), Math.round(z), 41) - 0.5;
+    v[k].set(x, z, ponds[k * 4 + 2], Math.PI / 2 + wander * 1.4);
+  }
+  return { value: v };
+}
+
 /** Sky gradient shared by the dome, water reflections and distance haze. Needs the sky uniforms in scope. */
 export const SKY_GLSL = /* glsl */ `
 uniform vec3 uSunDir;

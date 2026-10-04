@@ -20,6 +20,7 @@ import * as THREE from 'three';
 import type { World } from '../sim/world';
 import type { EnvState } from '../sim/types';
 import { CURE_KEYS, SEED_KEYS, SEASON_GLSL, keyCurve, smooth01, winterK } from './season';
+import { POND_GLSL, makePondUniform } from './common';
 
 export interface GrassOptions {
   quality?: 'high' | 'medium';
@@ -285,6 +286,7 @@ uint pcg(uint v) {
 float u01(uint h) { return float(h) * (1.0 / 4294967296.0); }
 
 ${SEASON_GLSL}
+${POND_GLSL}
 // same hash and value noise as the ground shader (common.ts NOISE_GLSL), for the riparian belt's width
 float rpHash(vec2 p) { vec3 p3 = fract(vec3(p.xyx) * .1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
 float rpNoise(vec2 p) {
@@ -396,6 +398,8 @@ void main() {
   float ridge = max(1.0 - smoothstep(0.40, 0.66, moist), 0.8 * smoothstep(0.22, 0.5, slopeM));
   float pres = smoothstep(0.015, 0.14, bioEff) * (1.0 - 0.72 * cover) * (1.0 - smoothstep(0.3, 0.7, water)) * (1.0 - 0.5 * burn);
   pres *= mix(0.62, 1.0, smoothstep(0.28, 0.62, tusC)) * (1.0 - 0.18 * ridge);
+  // the bare apron on the shaded side of a pond (common.ts): almost no blades, only a few sedge stalks
+  if (st1.g > 0.5) pres *= 1.0 - 0.94 * tgPondApron(p, -16.0 * log(max(st1.g, 1e-3)));
   // fade out over the last 25 m inside the world edge (thinner and shorter) so the field melts into the far-ring
   // terrain instead of ending in a straight line
   float edgeD = min(min(p.x, p.y), min(uWorld.x - p.x, uWorld.x - p.y));
@@ -859,6 +863,7 @@ export class GrassField {
       uFlower: { value: new THREE.Vector4(0, 0, 0, 0) },
       uTgShadow: { value: this.whiteTex },
       uTrail: { value: this.blackTex },
+      uPonds: makePondUniform(world.ponds),
       uWorld: { value: new THREE.Vector4(world.size, world.n, world.cell, world.hn) },
       uTime: { value: 0 },
       uWindDir: { value: new THREE.Vector2(1, 0) },
