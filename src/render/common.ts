@@ -58,6 +58,8 @@ export interface SharedUniforms {
   grassGreen: U<THREE.Color>;
   grassDry: U<THREE.Color>;
   cure: U<number>;
+  /** 0..1 drought severity, the engine's eased weather === 2 value (the same one that feeds the aerial haze's dust). Ground and blade shaders bleach to straw with it. */
+  drought: U<number>;
   /** Canopy occlusion fade: camera position, the focus point being watched, and (inner radius, outer radius, strength). */
   occCam: U<THREE.Vector3>;
   occFocus: U<THREE.Vector3>;
@@ -104,7 +106,7 @@ export function createSharedUniforms(worldSize: number): SharedUniforms {
     wet: { value: 0 },
     rain: { value: 0 },
     fearOverlay: { value: 0 },
-    grassGreen: c(), grassDry: c(), cure: { value: 0 },
+    grassGreen: c(), grassDry: c(), cure: { value: 0 }, drought: { value: 0 },
     occCam: { value: new THREE.Vector3() },
     occFocus: { value: new THREE.Vector3() },
     occParams: { value: new THREE.Vector3(2, 6, 0) },

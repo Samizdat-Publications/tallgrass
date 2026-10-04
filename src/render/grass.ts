@@ -262,6 +262,7 @@ uniform float uPixW;
 uniform float uMaxH;
 uniform float uBladeW;
 uniform float uCure;
+uniform float uDrought;
 uniform float uWinterK;
 uniform float uSeedFrac;
 uniform float uMoistK;
@@ -535,8 +536,12 @@ void main() {
     float ripBroad = rpNoise(p * 0.011 + vec2(31.7, 12.3)) * 0.6 + rpNoise(p * 0.027 + vec2(7.3, 55.1)) * 0.4;
     float ripW = mix(20.0, 50.0, smoothstep(0.22, 0.66, ripBroad)) * (0.85 + 0.3 * rpNoise(p * 0.07 + vec2(3.1, 91.7)));
     rip = tgRiparian(1.0 - smoothstep(0.3 * ripW, ripW, wdw), uCure, uWinterK);
-    dry = tgRiparianDry(dry, uCure, stub, rip);
+    rip = tgDroughtRip(rip, uDrought);
   }
+  // same order as the ground shader: late-summer cure floor, then the drought's push to dry, then the belt's own cap
+  dry = tgCuredFloor(dry, uCure, rip);
+  dry = tgDroughtDry(dry, uDrought, rip);
+  dry = tgRiparianDry(dry, uCure, stub, rip);
 
   vUv = vec2(side, vg);
   vN = Nb;
@@ -605,6 +610,9 @@ varying vec4 vP2;
 varying float vTS;
 varying vec4 vP3;
 varying float vRip;
+uniform float uDrought;
+uniform float uWinterK;
+${SEASON_GLSL}
 
 // Never let a zero-length or NaN input escape: every normalize in this shader goes through here.
 vec3 sn(vec3 v) { return v * inversesqrt(max(dot(v, v), 1e-12)); }
@@ -653,6 +661,10 @@ void main() {
   albedo *= 0.9 + 0.2 * smoothstep(0.2, 0.8, tusC);
   // ridge grass reads russet and a little paler (little bluestem)
   albedo *= mix(vec3(1.0), vec3(1.07, 0.93, 0.8), ridge * dry * 0.75);
+  // broad aspect bands, the same function the ground shader runs: sun-facing slopes pale gold, shaded slopes deeper ochre
+  albedo *= tgAspectTint(Ng, sn(uSunDir), dry * (1.0 - vRip) * (1.0 - uMoon) * (1.0 - 0.6 * uWinterK));
+  // drought: bleach to pale straw at constant luminance (the ground shader's tgDroughtTint), thinned inside the belt
+  albedo = tgDroughtTint(albedo, uDrought, vRip);
   albedo *= 1.0 + 0.1 * smoothstep(0.15, 0.0, abs(sideX)) - 0.12 * smoothstep(0.6, 1.0, abs(sideX));
   albedo *= mix(vec3(1.0), vec3(1.0 + 0.14 * (hue - 0.5), 1.0, 1.0 - 0.3 * (hue - 0.5)), nearK);
   albedo = mix(albedo, uStubble * (0.7 + 0.6 * bright), 0.85 * stub);
@@ -821,6 +833,7 @@ export class GrassField {
   private blackTex: THREE.DataTexture;
   private frameNo = 0;
   private snowU: { value: number } | null = null;
+  private droughtU: { value: number } | null = null;
   private snowTry = 0;
   private trailU: { value: THREE.Texture | null } | null = null;
   private vegVersion = -1;
@@ -877,6 +890,7 @@ export class GrassField {
       uBladeW: { value: 0.014 },
       uCure: { value: 0.5 },
       uWinterK: { value: 0 },
+      uDrought: { value: 0 },
       uSeedFrac: { value: 0.1 },
       uMoistK: { value: 1.1 },
       uWindGain: { value: 1 },
@@ -1144,12 +1158,14 @@ export class GrassField {
     if (!this.snowU && (this.snowTry++ & 15) === 0) {
       let root: THREE.Object3D = this.object3D;
       while (root.parent) root = root.parent;
-      const tu = root.userData?.tgUniforms as { snow?: { value: number }; trailTex?: { value: THREE.Texture | null } } | undefined;
+      const tu = root.userData?.tgUniforms as { snow?: { value: number }; drought?: { value: number }; trailTex?: { value: THREE.Texture | null } } | undefined;
       if (tu?.snow) this.snowU = tu.snow;
+      if (tu?.drought) this.droughtU = tu.drought;
       if (tu?.trailTex) this.trailU = tu.trailTex;
     }
     u.uTrail.value = this.trailU?.value ?? this.blackTex;
     u.uSnow.value = this.snowU?.value ?? 0;
+    u.uDrought.value = this.droughtU?.value ?? 0;
     // grass blades under moonlight (blue key light) must not sparkle like static: damp the specular sheen there
     const moon = Math.max(0, Math.min(1, (sun.color.b / Math.max(sun.color.r, 1e-3) - 0.95) * 3));
     u.uSpecK.value = 1 - 0.93 * moon;

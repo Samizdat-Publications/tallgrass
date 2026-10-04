@@ -490,6 +490,7 @@ export class Engine {
     this.dustSm = ease(this.dustSm, w === 2 ? 1 : 0, 120);
     if (w !== 2 && this.dustSm < 0.02) this.dustSm = 0;
     this.post.dust = this.dustSm;
+    u.drought.value = this.dustSm;   // the same eased value drives the ground and blade shaders' straw bleach (season.ts DROUGHT)
     sm.snow = ease(sm.snow, snowTarget, snowTarget > sm.snow ? 320 : 220, snowTarget > sm.snow ? 7 : 9);
     sm.wet = ease(sm.wet, wetTarget, wetTarget > sm.wet ? 90 : 200);
     // the eased values only approach their targets asymptotically: snap the last trace to zero so no ghost snow or frost lingers
