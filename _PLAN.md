@@ -16,14 +16,13 @@ Deadline: `.claude/hooks/run_until.txt` (2026-10-04 12:00). Owner rulings live i
 | M8 | Review rounds 1 to 6 (stills + video) | DONE, triaged in REVIEWS.md |
 | M9 | Depth: pronghorn, cougar (opt-in), evolution, chronicle, god tools, scenarios, named seeds, life stories, challenges | DONE |
 | M10 | UI design pass, inspector, overlays, documentary mode, photo mode, ambient view | DONE |
-| M11 | Audio, plus the documentary narrator | Narrator lines DONE; wiring IN PROGRESS (UI builder) |
-| M12 | Round 6 fixes: animals at distance (DONE), UI (DONE), snow lag (DONE), director cuts (DONE), fast-forward throughput (DONE), world edge and far field (renderer builder, IN PROGRESS) | IN PROGRESS |
-| M13 | Calendar re-scale (calendarScale 2): screen DONE, acceptance and 300-year shocks RUNNING; adopt as default only if both hold at v5's level | IN PROGRESS |
+| M11 | Audio, plus the documentary narrator | DONE (narrator committed fcf8971) |
+| M12 | Round 6 fixes: animals, UI, snow lag, director cuts, fast-forward (DONE); world edge and far field (renderer builder), water (water builder), Field notes (UI builder) | IN PROGRESS |
+| M13 | Calendar re-scale (calendarScale 2) | ADOPTED 06:25 and deployed 06:30: acceptance 19/20 per species; shock suite merge pending (re-run of seeds 15 to 20) |
 | M14 | Loop: capture, critique, fix top 3, re-verify | ongoing |
 
 ## Ordered backlog (top = next)
-1. Calendar: when acceptance (about 05:05) and shocks (about 06:20) finish, decide. If adopted: default calendarScale 2, challenge suite with the new default, named seeds from `tools/mine_seeds.py scratch/cal2 --skip-years 6 --max-years 80` (candidates in NEXT-SESSION.md), MORNING.md, ECOLOGY.md, charts.
-2. Land the renderer round and the narrator wiring; probe the real game; commit.
-3. Deploy from a clean worktree, verify live, then review round 7 (stills + reel + blind critic + Gemini), triage, fix the top 3.
-4. Wolf-tracking screens (wA, wB) for the morning report's next steps.
-5. MORNING.md adversarial self-audit before noon: run instructions from a clean clone, screenshots match the build, every number from a real run.
+1. Merge the cal2 shock suite (automatic when the re-run ends), fill MORNING.md, charts.
+2. Land renderer, water and Field notes; deploy; review round 7 (stills + reel + blind critic + Gemini); fix the top 3.
+3. MORNING.md adversarial self-audit before noon: run instructions from a clean clone, screenshots match the build, every number from a real run.
+4. Next research (for the owner): pronghorn genuinely hard for wolves to catch + prey-scaled wolves; evolution costs; drought refuges over 1,000 generations.
