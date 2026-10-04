@@ -757,9 +757,12 @@ def main() -> int:
     if not root.is_dir():
         print(f"not a folder: {root}", file=sys.stderr)
         return 2
-    # runs from a re-scaled calendar record their own year length
+    # runs from a re-scaled calendar record their own year length (in each scenario's summary.json)
     global YEAR
-    YEAR = float(load_meta(root).get("mode", {}).get("yearTicks", YEAR))
+    for sj in [root / "summary.json", *sorted(root.glob("*/summary.json"))]:
+        if sj.exists():
+            YEAR = float(json.loads(sj.read_text(encoding="utf-8")).get("mode", {}).get("yearTicks", YEAR))
+            break
     scs = find_scenarios(root)
     if not scs:
         print(f"no seed_*.csv files found under {root}", file=sys.stderr)
