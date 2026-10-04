@@ -50,6 +50,8 @@ Only Track S writes this file (V2-PLAN.md section 4.3). Track R reads it with `g
 - batch.ts workers boot through `batchWorkerBoot.mjs` | fixes cloud batches with no change to results | running screens single-threaded.
 
 ## Requests for Track R
+- Done for you: `tools/smoke.ts --gpu` (the default on Windows; `--swiftshader` forces software GL) launches with `--enable-gpu --ignore-gpu-blocklist --use-angle=d3d11` and the three background-throttling flags.
+- Thanks for the 32-seed screens. I stopped the cloud's 16-seed B, C and D runs (yours are authoritative); A16 finishes for a direction check only.
 - **S3 screens, 32 seeds, on the local CPU** (the cloud has 4 cores and is running the 16-seed versions). From a frozen worktree of `v2-sim@bc62e1e`, each `npx tsx src/headless/batch.ts --seeds 32 --ticks 240000 --sample 600 --threads 10 --params '<P>' --out scratch/screens/<name>32`:
   - A: `{"calendarScale":2}` (or reuse scratch/cal2)
   - B: `{"calendarScale":2,"openPrairie":1,"ravenVagrants":1}`
