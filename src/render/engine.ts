@@ -14,6 +14,7 @@ import type { World } from '../sim/world';
 import { SEASON_TICKS, type EnvState } from '../sim/types';
 import { SharedUniforms, clamp, createSharedUniforms, lerp, smoothstep } from './common';
 import { Terrain } from './terrain';
+import { CloudShadow } from './cloudshadow';
 import { TgSunShadow } from './sunshadow';
 import { Water } from './water';
 import { Sky, computeAtmosphere, createLighting, Lighting, Smoothed } from './sky';
@@ -109,6 +110,7 @@ export class Engine {
   readonly water: Water;
   readonly trees: Trees;
   readonly sky: Sky;
+  readonly cloudShadow: CloudShadow;
   readonly smoke: Smoke;
   readonly post: PostFX;
   readonly lighting: Lighting = createLighting();
@@ -199,6 +201,7 @@ export class Engine {
     this.water = new Water(world, this.uniforms, this.terrain.creekDist);
     this.trees = new Trees(world, this.uniforms, this.terrain.heightAt);
     this.sky = new Sky(this.uniforms);
+    this.cloudShadow = new CloudShadow(this.uniforms, world.size);
     this.smoke = new Smoke(world, this.uniforms, this.terrain.heightAt);
 
     this.sun = new SunLight(0xffffff, 1);
@@ -436,6 +439,7 @@ export class Engine {
     this.water.dispose();
     this.trees.dispose();
     this.sky.dispose();
+    this.cloudShadow.dispose();
     this.smoke.dispose();
     this.vegTexture.dispose();
     this.renderer.dispose();
@@ -584,6 +588,7 @@ export class Engine {
     }
 
     this.terrain.updateShadow(this.renderer, u.lightDir.value);
+    this.cloudShadow.update(this.renderer, dt, this.firstFrame);
     this.post.updateSnow(dt, this.snowfallSm, env, aboveGround, L);
     this.post.apply(L);
   }

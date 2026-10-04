@@ -79,6 +79,11 @@ export interface SharedUniforms {
   /** Mean grass biomass and mean moisture over the playable valley: the far ring is tinted to match so the border never shows. */
   farStats: U<THREE.Vector2>;
   staticTex: U<THREE.Texture | null>;
+  /** Cloud shadow mask (cloudshadow.ts): R = 0 clear .. 1 in the shade of a cloud, over the square (x0, z0) .. (x0 + size, z0 + size) in cloudRect (x0, z0, size). */
+  cloudShadow: U<THREE.Texture | null>;
+  cloudRect: U<THREE.Vector3>;
+  /** Fraction of the direct sun a cloud shadow removes right now: 0 at night, under overcast and at the horizon, about 0.55 on a fair day. */
+  cloudK: U<number>;
 }
 
 export function createSharedUniforms(worldSize: number): SharedUniforms {
@@ -119,7 +124,46 @@ export function createSharedUniforms(worldSize: number): SharedUniforms {
     trailTex: { value: null },
     farStats: { value: new THREE.Vector2(0.6, 0.46) },
     staticTex: { value: null },
+    cloudShadow: { value: null },
+    cloudRect: { value: new THREE.Vector3(-768, -768, 2048) },
+    cloudK: { value: 0 },
   };
+}
+
+/**
+ * The cloud layer's shape, shared by the sky dome (sky.ts) and the ground cloud-shadow mask (cloudshadow.ts) so the shadows are
+ * cut from the same fbm, drifted by the same wind, with the same coverage threshold. Needs NOISE_GLSL (tgFbm2).
+ *   tgCloudCp(d):         the sky's layer coordinate for a view direction d (y up)
+ *   tgCloudQ(cp, drift):  fbm domain for a layer coordinate
+ *   tgCloudDrift(w, t):   fbm-domain offset that carries the pattern DOWNWIND (w = the uWind uniform, xy = unit direction the wind
+ *                         blows toward; the domain moves the opposite way, so the sign is negative), t = real seconds
+ *   tgCloudThresh(c, tw): density threshold for cloudiness c (uCloud), tw = twilight lift (0 for the ground mask)
+ */
+export const CLOUD_GLSL = /* glsl */ `
+vec2 tgCloudCp(vec3 d){ return d.xz / (d.y * 0.9 + 0.22); }
+vec2 tgCloudQ(vec2 cp, vec2 drift){ return cp * vec2(0.5, 0.8) + drift; }
+vec2 tgCloudDrift(vec3 w, float t){ return -w.xy * t * 0.006; }
+float tgCloudThresh(float c, float tw){ return mix(0.64, 0.30, clamp(c, 0.0, 1.0)) - 0.1 * tw; }
+`;
+
+/**
+ * Reading the cloud shadow mask (a plain lookup, nothing to compute): declares tTgCloud, uTgCloudRect (x0, z0, size), uTgCloudK and
+ * tgCloudShadowAt(xz) = the multiplier on direct sun, 1 in the open .. 1 - K under a cloud. Used by injectTerrainShadow (terrain, trees,
+ * animals) and, per blade root, by the grass vertex shader.
+ */
+export const CLOUD_SHADOW_GLSL = /* glsl */ `
+uniform sampler2D tTgCloud;
+uniform vec3 uTgCloudRect;
+uniform float uTgCloudK;
+float tgCloudShadowAt(vec2 xz){
+  if (uTgCloudK < 0.002) return 1.0;
+  return 1.0 - uTgCloudK * texture2D(tTgCloud, clamp((xz - uTgCloudRect.xy) / uTgCloudRect.z, 0.0, 1.0)).r;
+}
+`;
+
+/** The uniforms CLOUD_SHADOW_GLSL reads, by reference from the shared set. */
+export function cloudShadowUniforms(shared: Pick<SharedUniforms, 'cloudShadow' | 'cloudRect' | 'cloudK'>): Record<string, U<any>> {
+  return { tTgCloud: shared.cloudShadow, uTgCloudRect: shared.cloudRect, uTgCloudK: shared.cloudK };
 }
 
 /** Hash + value noise helpers (prefixed tg to avoid clashing with three's chunks). */
@@ -276,6 +320,7 @@ export function injectTerrainShadow(
   shader.uniforms.uTgFarRect = shared.farRect;
   shader.uniforms.uTgWorld = shared.worldSize;
   shader.uniforms.uTgOver = shared.overcast;
+  Object.assign(shader.uniforms, cloudShadowUniforms(shared));
   if (!shader.vertexShader.includes('vTgShadowXZ')) {
     shader.vertexShader = shader.vertexShader
       .replace('void main() {', 'varying vec2 vTgShadowXZ;\nvoid main() {')
@@ -293,6 +338,7 @@ export function injectTerrainShadow(
       uniform vec3 uTgFarRect;
       uniform float uTgWorld;
       uniform float uTgOver;
+      ${CLOUD_SHADOW_GLSL}
       varying vec2 vTgShadowXZ;
       float gTgShadow = 1.0;
       float tgSampleTerrainShadow(){
@@ -304,7 +350,9 @@ export function injectTerrainShadow(
         vec2 fuv = (vTgShadowXZ - uTgFarRect.xy) / uTgFarRect.z;
         float far = texture2D(tTgShadowFar, clamp(fuv, 0.0, 1.0)).r;
         // an overcast sky has no hard hill shadows: the horizon map fades out as the cloud thickens
-        return mix(mix(far, texture2D(tTgShadow, clamp(uv, 0.0, 1.0)).r, wIn), 1.0, 0.85 * uTgOver);
+        float hill = mix(mix(far, texture2D(tTgShadow, clamp(uv, 0.0, 1.0)).r, wIn), 1.0, 0.85 * uTgOver);
+        // drifting cloud shadows dim the direct sun on top of the hill shadows (ambient is untouched, so they never go black)
+        return hill * tgCloudShadowAt(vTgShadowXZ);
       }
       void main() {`,
     )

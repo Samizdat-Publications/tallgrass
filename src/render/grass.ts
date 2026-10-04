@@ -20,7 +20,7 @@ import * as THREE from 'three';
 import type { World } from '../sim/world';
 import type { EnvState } from '../sim/types';
 import { CURE_KEYS, SEED_KEYS, SEASON_GLSL, keyCurve, smooth01, winterK } from './season';
-import { POND_GLSL, makePondUniform } from './common';
+import { CLOUD_SHADOW_GLSL, POND_GLSL, cloudShadowUniforms, makePondUniform, type SharedUniforms } from './common';
 
 export interface GrassOptions {
   quality?: 'high' | 'medium';
@@ -29,6 +29,8 @@ export interface GrassOptions {
    * Optional: if omitted, the field looks for it on the scene (the water material shares it) at runtime.
    */
   terrainShadow?: { value: THREE.Texture | null };
+  /** The engine's cloud-shadow uniforms (engine.uniforms): per-blade cloud shade on the direct sun. Omitted = no cloud shadows on the blades. */
+  cloudShadow?: Pick<SharedUniforms, 'cloudShadow' | 'cloudRect' | 'cloudK'>;
 }
 
 export interface GrassSun {
@@ -291,6 +293,7 @@ float u01(uint h) { return float(h) * (1.0 / 4294967296.0); }
 
 ${SEASON_GLSL}
 ${POND_GLSL}
+${CLOUD_SHADOW_GLSL}
 // same hash and value noise as the ground shader (common.ts NOISE_GLSL), for the riparian belt's width
 float rpHash(vec2 p) { vec3 p3 = fract(vec3(p.xyx) * .1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
 float rpNoise(vec2 p) {
@@ -415,7 +418,7 @@ void main() {
 
   float gy = terrainH(p);
   // hill shadow from the engine's horizon map (R = visibility), sampled once per blade at its root
-  vTS = texture(uTgShadow, clamp(p / uWorld.x, vec2(0.0), vec2(1.0))).r;
+  vTS = texture(uTgShadow, clamp(p / uWorld.x, vec2(0.0), vec2(1.0))).r * tgCloudShadowAt(p);
   vec3 root = vec3(p.x, gy - 0.03, p.y);
 
   float rA = u01(h4), rB = u01(h5), rC = u01(h6);
@@ -881,6 +884,7 @@ export class GrassField {
       uBig: { value: this.bigNoiseTex },
       uFlower: { value: new THREE.Vector4(0, 0, 0, 0) },
       uTgShadow: { value: this.whiteTex },
+      ...cloudShadowUniforms(opts.cloudShadow ?? { cloudShadow: { value: null }, cloudRect: { value: new THREE.Vector3(0, 0, 1) }, cloudK: { value: 0 } }),
       uTrail: { value: this.blackTex },
       uPonds: makePondUniform(world.ponds),
       uWorld: { value: new THREE.Vector4(world.size, world.n, world.cell, world.hn) },
