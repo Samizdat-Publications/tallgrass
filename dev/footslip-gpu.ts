@@ -92,6 +92,7 @@ precision highp float; out vec4 c; void main() { c = vec4(1.0); }`;
       gl.vertexAttrib4f(loc('aGait'), ph, spd, 0, 0);
       gl.vertexAttrib4f(loc('aLook'), 0.5, 0, 0, 0); // seed 0: no breathing offset
       gl.vertexAttrib4f(loc('aFx'), 0, bdy, 0, 0);
+      gl.vertexAttrib4f(loc('aFx2'), 0, 0, -1, 0); // no hold, no feeding cycle
       const l = loc('instanceMatrix');
       for (let c = 0; c < 4; c++) gl.vertexAttrib4f(l + c, mat[c * 4], mat[c * 4 + 1], mat[c * 4 + 2], mat[c * 4 + 3]);
       gl.uniform3f(uni('uCamPos'), camPos[0], camPos[1], camPos[2]);

@@ -136,7 +136,7 @@ export function buildWolf(): ModelDef {
       headDown: 1.05, lookYaw: 0.5,
       tailRest: 0, tailRun: -0.3, tailSway: 0.22,
       lieDrop: 0.4, lieHipF: 1.25, lieKneeF: -2.3, lieHipH: -0.8, lieKneeH: 1.6,
-      crouchDrop: 0.18,
+      crouchDrop: 0.18, hunts: true,
       curl: 1, curlAng: 1.6, curlX: 0.14, curlLen: 0.95,
       deadDrop: 0.36, deadHipF: 0.9, deadHipH: -0.6,
       length: 1.5, height: 0.85, ring: 1.1, minPx: 10.5, boostLen: 1.5,
