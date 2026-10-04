@@ -163,6 +163,27 @@ export interface Params {
   diseaseSpark: number;
   diseaseTicks: number;
   diseaseMetab: number;
+  // canid disease (src/sim/disease.ts); cdvRate and mangeRate default to 0 = off
+  /** Yearly distemper outbreak chance at 60 wolves; scales with (wolves / 60)^2, capped at 2x. */
+  cdvRate: number;
+  cdvPupDeath: number;
+  cdvAdultDeath: number;
+  /** Course of the illness in ticks. */
+  cdvTicks: number;
+  /** Immunity after recovery, in base years. */
+  cdvImmuneYears: number;
+  /** Yearly chance a case of mange arrives while there are more than 30 wolves. */
+  mangeRate: number;
+  /** Per day, per infected packmate. */
+  mangeSpread: number;
+  /** Severity gained per base year. */
+  mangeGrowth: number;
+  /** Winter cold cost is multiplied by (1 + mangeColdK * severity). */
+  mangeColdK: number;
+  /** Recovery chance per base year while energy > 0.7. */
+  mangeRecover: number;
+  /** Share of immigrants that carry mange (used when mangeRate > 0). */
+  mangeImmigrantShare: number;
   // genetics
   mutation: number;
   // misc
@@ -279,6 +300,17 @@ export function defaultParams(): Params {
     diseaseSpark: 0.0004,
     diseaseTicks: 450,
     diseaseMetab: 1.7,
+    cdvRate: 0,
+    cdvPupDeath: 0.6,
+    cdvAdultDeath: 0.1,
+    cdvTicks: 300,
+    cdvImmuneYears: 5,
+    mangeRate: 0,
+    mangeSpread: 0.02,
+    mangeGrowth: 0.5,
+    mangeColdK: 1.5,
+    mangeRecover: 0.3,
+    mangeImmigrantShare: 0.05,
     mutation: 0.035,
     maxAgents: 20000,
     steerFree: 0,
