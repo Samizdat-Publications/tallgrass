@@ -5,11 +5,15 @@
 // - current: each creek vertex carries a travel coordinate along the channel (scaled by the local speed, faster where the
 //   channel narrows) and its offset across it, so ripples, silt streaks, foam flecks and the mirrored sky are stretched along
 //   the flow and ride downstream through the bends; ponds only take wind ripples and drifting cat's paws
-// - banks: the draped skirt darkens the wet ground above the waterline, the creek laps it with a broken foam line and breaks
-//   white over riffles, and the reflection marches the height field and a crown map, so banks, tallgrass and cottonwoods
-//   are mirrored in the water instead of empty sky
-// - light: sky reflection with Fresnel and a soft highlight clamp, sun or moon glitter, a silver sheen under the moon, and in
-//   winter still water freezes from the shore inward (the creek's current keeps its channel open longest), dusted by snow.
+// - channel: pools on the outside of bends and in wide reaches, sand and gravel bars on the inside of bends and over the
+//   riffles (alternating sides on the straights), so the creek's width, depth and edges vary like a stream's, not a road's
+// - banks: the draped skirt darkens the wet ground and sedge fringe above the waterline with a dark wet lip at the edge, the
+//   creek laps it with a broken foam line and breaks white over riffles, and the reflection marches the height field and a
+//   crown map, so banks, tallgrass and cottonwoods are mirrored in the water and crowns shade it
+// - distance: the mirror is held below the brightness of the land around it (a deep teal cast, never a pale road or a lavender
+//   path), except where the current or a gust roughens the surface, which goes silvery and spreads the sun's glitter
+// - light: Fresnel sky reflection, sun or moon glitter, a silver sheen under the moon; rain dulls and darkens the surface with
+//   rings near the camera; in winter still water freezes from the shore inward (the creek's channel stays open longest).
 // Output is premultiplied: colour = reflected and scattered light, alpha = how much of the terrain behind is hidden.
 import * as THREE from 'three';
 import type { World } from '../sim/world';
@@ -157,8 +161,28 @@ export class Water {
       trav[k] = trav[k - 1] + seg / (0.5 * (spd[k] + spd[k - 1]));
     }
 
-    // creek frame per vertex: travel coordinate, signed offset across, tangent, relative speed, riffle amount (ponds get zeros)
-    const frame = (x: number, z: number): [number, number, number, number, number, number] => {
+    // bends: signed curvature over about 24 m of channel (positive when the creek turns toward the side of positive offset),
+    // smoothed; the current scours a pool on the outside of each bend and drops a sand bar on the inside
+    let bend = new Float32Array(nc);
+    for (let k = 0; k < nc; k++) {
+      const a = Math.max(0, k - 3), b = Math.min(nc - 1, k + 3);
+      if (b - a < 2) continue;
+      const cr = tanX[a] * tanZ[b] - tanZ[a] * tanX[b];
+      bend[k] = Math.max(-1, Math.min(1, (Math.asin(Math.max(-1, Math.min(1, cr))) / ((b - a) * 4)) * 22));
+    }
+    for (let pass = 0; pass < 2; pass++) {
+      const nb = new Float32Array(nc);
+      for (let k = 0; k < nc; k++) {
+        let sm = 0, c = 0;
+        for (let d = -2; d <= 2; d++) { const q = k + d; if (q >= 0 && q < nc) { sm += bend[q]; c++; } }
+        nb[k] = sm / c;
+      }
+      bend = nb;
+    }
+
+    // creek frame per vertex: travel coordinate, signed offset across, tangent, relative speed, riffle amount, bend, local
+    // half-width (ponds get zeros)
+    const frame = (x: number, z: number): number[] => {
       let best = 1e9, bk = 0, bt = 0;
       for (let k = 0; k < nc - 1; k++) {
         const ax = creek[2 * k], az = creek[2 * k + 1];
@@ -169,7 +193,7 @@ export class Water {
         const d2 = (x - ax - dx * s) ** 2 + (z - az - dz * s) ** 2;
         if (d2 < best) { best = d2; bk = k; bt = s; }
       }
-      if (Math.sqrt(best) >= 11) return [0, 0, 0, 0, 0, 0];
+      if (Math.sqrt(best) >= 11) return [0, 0, 0, 0, 0, 0, 0, 0];
       const k = bk, t = bt;
       const qx = creek[2 * k] + (creek[2 * k + 2] - creek[2 * k]) * t;
       const qz = creek[2 * k + 1] + (creek[2 * k + 3] - creek[2 * k + 1]) * t;
@@ -180,7 +204,9 @@ export class Water {
       const u = trav[k] + (trav[k + 1] - trav[k]) * t;
       const v = spd[k] + (spd[k + 1] - spd[k]) * t;
       const riffle = Math.min(1, Math.max(0, (v - 1.08) / 0.32));
-      return [u, off, tx, tz, v, riffle * riffle * (3 - 2 * riffle)];
+      const bd = bend[k] + (bend[k + 1] - bend[k]) * t;
+      const w = hw[k] + (hw[k + 1] - hw[k]) * t;
+      return [u, off, tx, tz, v, riffle * riffle * (3 - 2 * riffle), bd, w];
     };
 
     // ---- crown map for reflections: over each height-grid vertex, the crown's half-thickness (0 outside any crown) and its centre
@@ -256,7 +282,7 @@ export class Water {
       lvl.push(wy[v]);
       const f = frame(i * cell, j * cell);
       flw.push(f[0], f[1], f[2], f[3]);
-      flw2.push(f[4], f[5]);
+      flw2.push(f[4], f[5], f[6], f[7]);
       return remap[v];
     };
     for (let j = 0; j < hn - 1; j++) {
@@ -272,7 +298,7 @@ export class Water {
     geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
     geo.setAttribute('aLevel', new THREE.Float32BufferAttribute(lvl, 1));
     geo.setAttribute('aFlow', new THREE.Float32BufferAttribute(flw, 4));
-    geo.setAttribute('aFlow2', new THREE.Float32BufferAttribute(flw2, 2));
+    geo.setAttribute('aFlow2', new THREE.Float32BufferAttribute(flw2, 4));
     geo.setIndex(idx);
     geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(world.size / 2, 10, world.size / 2), world.size);
 
@@ -286,6 +312,7 @@ export class Water {
         uWindOff: windOffU,
         uNight: shared.night,
         uOvercast: shared.overcast,
+        uWet: shared.wet,
         uSnow: shared.snow,
         uFrost: shared.frost,
         uSeason: shared.season,
@@ -309,11 +336,11 @@ export class Water {
       vertexShader: /* glsl */ `
         attribute float aLevel;
         attribute vec4 aFlow;
-        attribute vec2 aFlow2;
+        attribute vec4 aFlow2;
         varying vec3 vWorld;
         varying float vLevel;
         varying vec4 vFlow;
-        varying vec2 vFlow2;
+        varying vec4 vFlow2;
         void main() {
           vec4 wp = modelMatrix * vec4(position, 1.0);
           vWorld = wp.xyz;
@@ -327,7 +354,7 @@ export class Water {
         varying vec3 vWorld;
         varying float vLevel;
         varying vec4 vFlow;   // travel coordinate along the creek (m), signed offset across it (m), tangent (x, z)
-        varying vec2 vFlow2;  // speed relative to the mean, riffle amount
+        varying vec4 vFlow2;  // speed relative to the mean, riffle amount, bend (+ turns toward positive offset), half-width (m)
         uniform float uTime;
         uniform vec3 uLightDir;
         uniform vec3 uLightColor;
@@ -335,6 +362,7 @@ export class Water {
         uniform vec2 uWindOff;
         uniform float uNight;
         uniform float uOvercast;
+        uniform float uWet;
         uniform float uSnow;
         uniform float uFrost;
         uniform float uSeason;
@@ -387,15 +415,48 @@ export class Water {
           return g * (0.16 + 0.84 * gust) * (0.3 + 0.9 * uWind.z);
         }
 
+        // Shade of the valley's tree crowns on the water: march toward the key light through the crown map (crowns stand about
+        // 3 to 15 m up). 1 = open sky, lower under a crown's shadow (lighter when the trees are bare).
+        float treeShade(vec2 p0, float level) {
+          float Ly = max(uLightDir.y, 0.07);
+          vec2 dxz = uLightDir.xz / Ly;
+          float occ = 0.0;
+          for (int k = 0; k < 4; k++) {
+            float h = 3.5 + 3.4 * float(k);
+            vec2 cn = texture2D(tCanopy, ((p0 + dxz * h) / uCell + 0.5) / uHN).rg;
+            occ = max(occ, smoothstep(0.0, 1.2, cn.x - abs(level + h - cn.y)));
+          }
+          return 1.0 - occ * mix(0.3, 0.8, uLeaf);
+        }
+
+        // Rain on the water: drops land at random in a jittered grid (two offset layers) and each spreads a ring that fades as it
+        // grows. Returns the surface slope.
+        vec2 rainRings(vec2 p) {
+          vec2 g = vec2(0.0);
+          for (int k = 0; k < 2; k++) {
+            vec2 cp = p * 1.7 + float(k) * vec2(0.37, 0.71);
+            vec2 ci = floor(cp);
+            vec2 h = tgHash22(ci + float(k) * 13.0);
+            vec2 d = cp - (ci + 0.25 + 0.5 * h);
+            float r = max(length(d), 1e-3);
+            float ph = fract(uTime * 1.1 + h.x * 7.0 + h.y * 3.0);
+            float x = r - ph * 0.55;
+            float s = cos(x * 38.0) * exp(-x * x * 160.0) * (1.0 - ph) * (1.0 - ph) * (1.0 - smoothstep(0.4, 0.5, r));
+            g += d / r * s;
+          }
+          return g * 2.2;
+        }
+
         // What the reflected ray meets first: the bank (ground plus standing grass) or a tree crown, marched outward over the
         // height field and the crown map. rgb = that surface's colour, a = how much of the sky it hides.
-        vec4 mirrorHit(vec2 p0, vec3 R, float level, vec3 ambC) {
+        vec4 mirrorHit(vec2 p0, vec3 R, float level, vec3 ambC, float farK) {
           float hl = length(R.xz);
           if (hl < 0.02) return vec4(0.0);
           vec2 d = R.xz / hl;
           float rise = R.y / hl;
-          float grassH = 0.62 * (1.0 - 0.65 * uSnow);
-          float treeDen = mix(0.32, 0.9, uLeaf);
+          float grassH = 0.85 * (1.0 - 0.65 * uSnow);
+          // from afar the mirrored crowns blur together and thin out, so a pond never shows round dark blots
+          float treeDen = mix(0.32, 0.9, uLeaf) * mix(1.0, 0.55, farK);
           float cov = 0.0, wTree = 0.0;
           vec2 hitP = p0;
           float t = 0.7;
@@ -404,10 +465,10 @@ export class Water {
             float ry = level + rise * t;
             float th = tgHeightAt(xz);
             // grass stands only on dry ground, never on the bed under the shallows
-            float hg = smoothstep(-0.15, 0.2, th + grassH * smoothstep(level - 0.02, level + 0.3, th) - ry);
+            float hg = smoothstep(-0.25, 0.25, th + grassH * smoothstep(level - 0.02, level + 0.3, th) - ry);
             // crown map: r = half-thickness, g = centre height (filtered, so silhouettes are smooth)
             vec2 cn = texture2D(tCanopy, (xz / uCell + 0.5) / uHN).rg;
-            float ht = smoothstep(0.0, 0.7, cn.x - abs(ry - cn.y)) * treeDen;
+            float ht = smoothstep(-0.2 - 2.5 * farK, 1.4 + 3.5 * farK, cn.x - abs(ry - cn.y)) * treeDen;
             float h = max(hg, ht);
             float add = (1.0 - cov) * h;
             wTree += add * (ht > hg ? 1.0 : 0.0);
@@ -422,7 +483,7 @@ export class Water {
           vec3 grassC = mix(mix(uGrassGreen, uGrassDry, uCure), vec3(0.85, 0.87, 0.9), uSnow * 0.8);
           vec3 bankC = grassC * INV_PI * (ambC * 0.75 + uLightColor * lit);
           vec3 leafC = mix(vec3(0.11, 0.09, 0.075), uLeafA, uLeaf);
-          vec3 treeC = leafC * INV_PI * (ambC * 0.55 + uLightColor * lit * 0.7);
+          vec3 treeC = leafC * INV_PI * (ambC * 1.0 + uLightColor * lit * 0.9);
           return vec4(mix(bankC, treeC, wTree / cov), clamp(cov, 0.0, 1.0));
         }
 
@@ -436,6 +497,9 @@ export class Water {
             terr = 0.4 * terr + 0.15 * (tgHeightAt(p + vec2(1.1, 0.0)) + tgHeightAt(p - vec2(1.1, 0.0)) + tgHeightAt(p + vec2(0.0, 1.1)) + tgHeightAt(p - vec2(0.0, 1.1)));
           }
           float depth = vLevel - terr;
+          // the waterline wanders a little (undercut banks, trampled mud, grass leaning in), so the edge is not a drawn contour
+          float wig = tgNoise2(p * 0.31 + 2.0) * 0.6 + tgNoise2(p * 1.1 + 8.0) * 0.4 - 0.5;
+          depth += wig * 0.1 * (1.0 - smoothstep(0.08, 0.4, abs(depth)));
           if (depth < -0.55) discard;
 
           vec3 toCam = cameraPosition - vWorld;
@@ -452,6 +516,9 @@ export class Water {
           float w3 = 1.0 - smoothstep(22.0, 95.0, dist);
 
           float shadow = texture2D(tShadow, clamp(p / uWorld, 0.0, 1.0)).r;
+          // rain: the wet state from the weather while it is overcast (snow is handled as snow)
+          float rain = clamp((uWet - 0.22) / 0.35, 0.0, 1.0) * smoothstep(0.25, 0.45, uOvercast) * (1.0 - uSnow);
+          float farK = smoothstep(80.0, 320.0, dist);
           // ambient from the sky dome, plus a share of the key light so moonlit nights stay readable
           vec3 ambC = (uSkyMid * 0.6 + uSkyZenith * 0.4) * 1.3 + uLightColor * mix(0.03, 0.08, uNight);
           vec3 irr = ambC + uLightColor * max(uLightDir.y, 0.0) * shadow;
@@ -469,12 +536,28 @@ export class Water {
             float hA = -depth;
             float rag = tgNoise2(p * 0.6) * 0.6 + tgNoise2(p * 2.1 + 3.0) * 0.4;
             // the band never reaches the floodplain beside the creek (about 0.3 m up), so it cannot end at the mesh edge
-            float reach = mix(0.12 + 0.16 * rag, (0.1 + 0.1 * rag) * (1.0 + 0.5 * riffle), isCreek);
+            // in height above the water: the pond banks are gentle, so their band stays low or it smears across the grass
+            float reach = mix(0.06 + 0.08 * rag, min(0.26, (0.12 + 0.1 * rag) * (1.0 + 0.3 * riffle)), isCreek);
+            reach *= 1.0 + 0.5 * rain * isCreek;
             float band = 1.0 - smoothstep(0.0, reach, hA);
-            float a = band * band * 0.42 * (1.0 - dry);
+            float a = pow(band, mix(2.0, 1.0, farK)) * mix(0.42, mix(0.4, 0.6, isCreek), max(farK, rain)) * (1.0 - dry);
             float film = 1.0 - smoothstep(0.0, 0.012, hA);
             float Fw = 0.03 + 0.97 * pow(1.0 - clamp(V.y, 0.0, 1.0), 5.0);
             vec3 src = tgSkyBase(normalize(vec3(-V.x, max(abs(V.y), 0.05), -V.z))) * Fw * film * 0.2 * (1.0 - dry);
+            // Riparian fringe: damp ground and sedges crowd the bank, darker than the prairie, so from the drone's height the water
+            // is framed by a dark line and the terrain's pale bank mud never shows as a kerb. Drawn as pure darkening, so the bank
+            // keeps the terrain's own colour and lighting.
+            {
+              float clump = tgNoise2(p * 0.8 + 3.0) * 0.6 + tgNoise2(p * 2.6 + 1.0) * 0.4;
+              float frH = mix(0.36, 0.5, farK) * (0.75 + 0.5 * clump);
+              float fr = (1.0 - smoothstep(frH * 0.4, frH, hA)) * (0.5 + 0.5 * smoothstep(0.3, 0.7, clump)) * mix(0.5, 0.62, farK);
+              fr *= 1.0 - 0.85 * uSnow;
+              src *= 1.0 - fr;
+              a = a + fr * (1.0 - a);
+            }
+            float lip = (1.0 - smoothstep(0.0, mix(0.035, 0.07, farK) * (0.7 + 0.6 * rag), hA)) * 0.8 * (1.0 - dry);
+            src *= 1.0 - lip;
+            a = max(a, lip);
             if (isCreek > 0.5) {
               // the current laps the bank: a faint broken line of foam just above the edge
               float lap = wNoise(vec2(q.x * 0.35, q.y * 2.0) + 41.0).x;
@@ -483,6 +566,40 @@ export class Water {
               a = mix(a, 1.0, foam);
             }
             gl_FragColor = vec4(min(max(src, vec3(0.0)), vec3(32.0)), clamp(a, 0.0, 1.0)) * worldFade;
+            return;
+          }
+
+          // crowns shade the water (not needed on the skirt above, which only darkens the bank)
+          if (uLightDir.y > 0.02 && shadow > 0.02) shadow *= treeShade(p, vLevel);
+
+          // ---- point bars and shoals. The current drops sand on the inside of each bend and gravel across the riffles; where it
+          // stands above the water it is drawn as a bar, so the creek's width and edges vary like a real stream's, never a road's.
+          float barRise = 0.0;
+          if (isCreek > 0.5) {
+            float hwM = max(vFlow2.w, 1.5);
+            // which side the bar is on: the inside of a bend, and on the straighter reaches alternate bars that swap sides every
+            // few channel widths, as a real stream's do
+            float alt = sin(vFlow.x * 0.11 + tgNoise2(vec2(vFlow.x * 0.02, 5.0)) * 3.0);
+            float pref = clamp(vFlow2.z * 2.2 + 0.75 * alt, -1.0, 1.0);
+            float sideB = vFlow.y / hwM * sign(pref);
+            float lens = tgNoise2(vec2(vFlow.x * 0.035, 1.3));
+            barRise = 0.62 * smoothstep(0.0, 0.9, sideB) * smoothstep(0.45, 0.95, abs(pref)) * (0.45 + 0.75 * lens);
+            barRise += riffle * 0.3 * smoothstep(0.5, 0.8, tgNoise2(vec2(vFlow.x * 0.2, vFlow.y * 0.55) + 19.0));
+            barRise *= (0.85 + 0.3 * tgNoise2(p * 0.5 + 4.0)) * (1.0 - 0.75 * farK);
+          }
+          float barTop = barRise - depth;
+          if (barTop > 0.0) {
+            float n = tgNoise2(p * 1.3 + 2.0), n2 = tgNoise2(p * 5.0 + 9.0);
+            vec3 wetC = vec3(0.07, 0.06, 0.042), dryC = vec3(0.17, 0.145, 0.105);
+            vec3 barC = mix(wetC, dryC, smoothstep(0.02, 0.2, barTop + (n - 0.5) * 0.1)) * (0.8 + 0.35 * n2);
+            // sedge and grass take hold on the higher, older part of the bar
+            float tuft = smoothstep(0.12, 0.3, barTop + (n - 0.5) * 0.25) * smoothstep(0.4, 0.7, tgNoise2(p * 0.9 + 17.0));
+            barC = mix(barC, mix(uGrassGreen, uGrassDry, uCure) * 0.75, tuft * (1.0 - uSnow));
+            // pebbles where the riffles run
+            barC *= 1.0 - 0.25 * riffle * smoothstep(0.55, 0.8, n2) * w3;
+            barC = mix(barC, vec3(0.9, 0.91, 0.93), clamp(uSnow * 1.2, 0.0, 1.0) * smoothstep(0.0, 0.05, barTop));
+            vec3 src = barC * INV_PI * irr * (1.0 - 0.3 * rain);
+            gl_FragColor = vec4(min(max(src, vec3(0.0)), vec3(32.0)), 1.0) * worldFade;
             return;
           }
 
@@ -495,6 +612,12 @@ export class Water {
             // the travel coordinate runs 1 / speed times as fast as distance along the channel; the current slows toward the banks
             vec2 gcw = (gc.x / vRel) * T + gc.y * Nx;
             g = gcw * (0.5 + 0.5 * smoothstep(0.0, 0.3, depth)) * (0.8 + 0.7 * riffle) + gw * 0.35;
+          }
+          if (rain > 0.01) {
+            if (w3 > 0.01) g += rainRings(p) * rain * w3;
+            // beyond the rings, a fine dimpling that dulls the mirror
+            vec3 rn = wNoise(p * 3.1 + uTime * vec2(0.7, -0.4));
+            g += rn.yz * 0.35 * rain * w2;
           }
           vec3 N = normalize(vec3(-g.x * 0.12, 1.0, -g.y * 0.12));
 
@@ -511,7 +634,9 @@ export class Water {
           vec3 R = reflect(-V, N);
           R.y = abs(R.y);
           float cosV = clamp(dot(N, V), 0.0, 1.0);
-          float F = 0.03 + 0.97 * pow(1.0 - cosV, 3.4);
+          float F = 0.02 + 0.98 * pow(1.0 - cosV, 5.0);
+          // a rain-roughened surface turns its micro-facets toward the viewer: the grazing mirror dulls
+          F *= 1.0 - 0.4 * rain * (1.0 - ice);
           // distant cat's paws scatter the bright sky a little: they read as darker drifting patches
           F *= 1.0 - 0.3 * gust * uWind.z * (1.0 - w3) * (1.0 - ice);
           // the reflected sky, with its bright low-sun glow compressed: water reads as water (darker than the sky it mirrors, the
@@ -521,8 +646,31 @@ export class Water {
           sky *= sL > 0.45 ? (0.45 + (sL - 0.45) / (1.0 + 1.8 * (sL - 0.45))) / sL : 1.0;
           // under the moon the mirrored sky is a dark grey-blue, not a bright blue stripe
           sky = mix(sky, vec3(min(sL, 1.0)) * vec3(0.8, 0.9, 1.1), 0.55 * uNight);
-          vec4 hit = F > 0.035 ? mirrorHit(p, R, vLevel, ambC) : vec4(0.0);
+          // a grey rain sky is mirrored dim and flat, never as a white sheet
+          sky *= 1.0 - 0.3 * uOvercast;
+          sky = mix(sky, vec3(dot(sky, vec3(0.3333))), 0.5 * rain);
+          vec4 hit = F > 0.03 ? mirrorHit(p, R, vLevel, ambC, farK) : vec4(0.0);
+          hit.a *= 1.0 - 0.5 * rain;
           vec3 refl = mix(sky, hit.rgb, hit.a);
+          // from afar the mirror takes a deep teal cast, so the creek reads as water rather than a neutral grey strip
+          refl = mix(refl, refl * vec3(0.55, 0.92, 1.2), 0.75 * farK * (1.0 - uNight));
+          // From afar a stream is never one tone: calm reaches mirror the dark banks, and where the current or a gust roughens
+          // the surface it scatters the bright low sky and goes silvery. The pattern drifts slowly downstream.
+          float roughD = 0.0;
+          if (farK > 0.01) {
+            float rn = isCreek > 0.5 ? tgNoise2(vec2(vFlow.x * 0.03 - uTime * 0.03, vFlow.y * 0.08 + 7.0)) * 0.75 + tgNoise2(vec2(vFlow.x * 0.11, vFlow.y * 0.3 + 2.0)) * 0.25 : gust;
+            roughD = max(smoothstep(0.5, 0.78, rn), riffle * 0.8) * farK * (1.0 - ice);
+            vec3 skyLow = tgSkyBase(normalize(vec3(R.x, 0.1, R.z)));
+            refl = mix(refl, skyLow, roughD * 0.7);
+            F = mix(F, max(F, 0.12), roughD);
+          }
+          {
+            float landL = 0.06 * dot(irr, vec3(0.2126, 0.7152, 0.0722));
+            // calm reaches stay darker than the land around them; the roughened, silvery reaches may come up to about its level
+            float capL = max(landL * mix(2.4, 0.42, farK) * (1.0 + 1.8 * roughD), 1e-4);
+            float rL = F * dot(refl, vec3(0.2126, 0.7152, 0.0722));
+            refl *= rL > 1e-5 ? capL * (1.0 - exp(-rL / capL)) / rL : 1.0;
+          }
 
           // ---- the water body. The bed is drawn here (the terrain under the water is plain mud): wet mud at the waterline, tan
           // silt and gravel in the shallows with olive weed where the water is still, seen through the refracting surface so it
@@ -533,8 +681,19 @@ export class Water {
           float cosT = sqrt(max(1.0 - sinI2 / 1.769, 0.05));
           float Ly = max(uLightDir.y, 0.0);
           float cosL = sqrt(max(1.0 - (1.0 - Ly * Ly) / 1.769, 0.05));
-          vec3 sigma = isCreek > 0.5 ? vec3(2.0, 1.45, 1.3) : vec3(1.25, 0.72, 0.62);
-          vec3 Tr = exp(-sigma * depth * (1.0 / cosT + 1.0 / cosL));
+          vec3 sigma = isCreek > 0.5 ? vec3(3.0, 2.3, 2.1) : vec3(1.25, 0.72, 0.62);
+          // The channel is not one depth all along: the current scours pools on the outside of bends and through the wide reaches
+          // and drops sand bars on the inside of bends and over the riffles. This only changes how deep the water looks.
+          float optK = 1.0, barK = 0.0;
+          if (isCreek > 0.5) {
+            float hwM = max(vFlow2.w, 1.5);
+            float side = clamp(vFlow2.z * vFlow.y / hwM, -1.0, 1.0);
+            float reach = tgNoise2(vec2(vFlow.x * 0.022, 3.7));
+            optK = clamp((1.0 - 1.1 * side) * mix(0.8, 1.5, smoothstep(3.6, 5.2, hwM)) * (1.0 - 0.35 * riffle) * (0.75 + 0.5 * reach), 0.3, 2.6);
+            barK = max(smoothstep(0.15, 0.6, side), smoothstep(0.05, 0.25, barRise));
+          }
+          float dOpt = max(depth - barRise * 0.9, 0.0) * optK;
+          vec3 Tr = exp(-sigma * dOpt * (1.0 / cosT + 1.0 / cosL));
           vec3 bodyC = vec3(0.0);
           if (w2 > 0.002 || depth < 0.6) {
             // where the refracted view ray meets the bed
@@ -544,8 +703,8 @@ export class Water {
             vec3 sand = vec3(0.3, 0.25, 0.17) * (0.8 + 0.3 * n2) * (0.9 + 0.18 * n3 * w3);
             // gravel in the creek's current, olive weed on the still pond shelves
             vec3 weed = vec3(0.17, 0.2, 0.09) * (0.8 + 0.4 * n3);
-            float weedK = smoothstep(0.5, 0.8, n1 * 0.7 + n2 * 0.3) * mix(0.8, 0.35, isCreek) * smoothstep(0.08, 0.3, depth);
-            vec3 bedAlb = mix(sand, weed, weedK);
+            float weedK = smoothstep(0.5, 0.8, n1 * 0.7 + n2 * 0.3) * mix(0.8, 0.35, isCreek) * smoothstep(0.08, 0.3, depth) * (1.0 - barK);
+            vec3 bedAlb = mix(sand * (1.0 + 0.3 * barK), weed, weedK);
             float gravel = smoothstep(0.5, 0.9, n3) * smoothstep(0.35, 0.65, n2) * isCreek * w3;
             bedAlb *= 1.0 - 0.22 * gravel;
             // wet mud right at the waterline, so the bed meets the bank without a seam
@@ -563,25 +722,31 @@ export class Water {
             vec3 Ebed = ambC * 0.7 + uLightColor * Ly * shadow * (0.85 + 0.75 * caus);
             bodyC = bedAlb * INV_PI * Ebed * Tr;
           }
-          vec3 scatC = isCreek > 0.5 ? vec3(0.026, 0.036, 0.032) : vec3(0.02, 0.036, 0.036);
+          vec3 scatC = isCreek > 0.5 ? vec3(0.03, 0.042, 0.032) : vec3(0.021, 0.043, 0.04);
           if (isCreek > 0.5) {
             // silt streaks carried by the current
             float st = wNoise(vec2(q.x * 0.07, q.y * 0.7) + 23.0).x * 0.7 + wNoise(vec2(q.x * 0.22, q.y * 1.6) + 5.0).x * 0.3;
             scatC *= 0.78 + 0.44 * st;
           }
           bodyC += scatC * INV_PI * irr * (1.0 - Tr);
+          // rain stirs silt into the water and darkens it a little
+          bodyC *= 1.0 - 0.25 * rain;
 
           // the water hides the terrain except in the last few centimetres, where it thins to a wet film over the mud
           float edgeA = smoothstep(0.0, 0.06, depth);
           vec3 src = refl * F + bodyC * (1.0 - F) * edgeA;
           float a = F + (1.0 - F) * edgeA;
-          a = max(a, 0.42 * (1.0 - edgeA) * (1.0 - dry));
+          float lipW = (1.0 - edgeA) * 0.8 * (1.0 - dry);
+          src = src * (1.0 - lipW) + refl * F * lipW;
+          a = mix(a, 1.0, lipW);
 
           // ---- sun and moon glitter, a broad sheen, and a silver path under the moon
           float rd = max(dot(R, uLightDir), 0.0);
           // the broad sheen is kept tight, so far water glints along the sun's path only, not as a long white ribbon; under the moon
           // a faint silver path
           vec3 glint = uLightColor * (pow(rd, 260.0) * 1.2 * (1.0 - 0.5 * uNight) + pow(rd, 60.0) * 0.07 * (1.0 - 0.6 * uNight)) * (0.3 + 0.7 * F);
+          // roughened water far off: the sun's glitter spreads into a broad path, a bright line where the stream crosses it
+          glint += uLightColor * pow(rd, 14.0) * 0.06 * roughD * (1.0 - 0.7 * uNight);
           glint += uLightColor * pow(rd, 30.0) * 0.006 * uNight;
           // glitter: tiny facets on the ripples flash in the sun's path, re-rolled a few times a second (near the camera, by day;
           // under the moon only a faint few)
@@ -595,7 +760,7 @@ export class Water {
             float spot = 1.0 - smoothstep(0.12, 0.42, length(fract(gp) - 0.5));
             glint += uLightColor * fl * spot * 1.6 * glitW;
           }
-          glint *= shadow * (1.0 - uOvercast * 0.8) * (1.0 - 0.8 * ice);
+          glint *= shadow * (1.0 - uOvercast * 0.8) * (1.0 - 0.8 * ice) * (1.0 - 0.7 * rain);
           src += min(glint, vec3(3.0));
 
           // ---- foam: lapping at the edge of the creek, breaking white over riffles, flecks drifting downstream
