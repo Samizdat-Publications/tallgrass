@@ -133,3 +133,15 @@ Stills critic: Visual 7, Readability 6 (was 5), Life 6, Ecosystem 4, UI 7, Keep 
 | 8 | Herds as texture at distance; near-camera wolves glitch (03) | FIX | animals builder | |
 | 9 | Founder alpha with 0 offspring and kills | FIX | UI builder | |
 | 10 | UI and chart rough edges | FIX (partly) | UI builder (label overlap), lead (charts: right axis, persist labels, thinning) | "100x running at 20x" is honest hardware reporting: REJECT. Graph covering a third of the scene: it's the expanded view (G), by design. |
+
+Round 7 Gemini video (07:51, review/round-07-video/reel.gemini.md): Visual 5, Readability 7, Life and motion 2, Ecosystem 4, UI 8, Keep watching 3.
+
+| # | Issue | Triage | Owner | Notes |
+|---|---|---|---|---|
+| G1 | Sliding locomotion in the hunt shot (0:09 to 0:21) | CHECK + FIX | animals builder | Frame check of the reel at gallop speed (on-screen speed is 1.5x sim speed). |
+| G2 | Bison jog away without scattering | DEFER | lead | Flight behaviour is sim; flee changes cost persistence before (flee momentum rejected 00:45 Saturday). |
+| G3 | Robotic raven flight | FIX | animals builder | Soar, glide, bank, varied flaps. |
+| G4 | Rigid carcasses | FIX | animals builder | Align to slope, slumped pose. |
+| G5 | Territory overlay looks like debug UI | FIX | UI builder | Feathered tinted ranges, softer edges. |
+| G6 | Captions lost on bright grass | FIX | UI builder | Soft scrim or shadow. |
+| G7 | Chapter cards over the action | PARTLY | UI builder | Already lower third; smaller at speed. |
