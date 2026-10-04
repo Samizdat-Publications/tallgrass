@@ -129,6 +129,10 @@ Every issue and its triage is in `REVIEWS.md`.
 - **Stack:** TypeScript + Three.js instead of Godot (ADR-001 in `DECISIONS.md`): one language for sim, harness and renderer, headless GPU capture, and the URL build.
 - **Time scale:** a year is now 2 minutes at 1x (seasons 30 s), down from 4. Biology runs per tick and is unchanged, so 1,000 generations still fit in a few hours of compute while a bison lives about 6.7 valley-years. If you'd rather keep the slower seasons of Saturday's build, set `calendarScale: 1` in `src/sim/params.ts` (or open the game with `?p=calendarScale:1`). The seasons now turn twice as fast as before; the day stays 80 s.
 - **The world opens in late summer** (golden, like your concept); early summer is green.
+- **Challenges keep the classic calendar** (a year is 4 minutes there): they were tuned and validated on it, and on the 2x calendar three of the five stopped behaving as tuned. Retuning them for the new calendar is a morning's work if you want one calendar everywhere.
+- **The narrator is on by default** but speaks only in documentary or cinematic mode, at 1x or 10x, at most once every 40 seconds. V or the menu switch turns it off for good (remembered in your browser).
+- **Hungry wolves is opt-in, not the default:** its wolves are far more alive, but its pronghorn survive in 25 of 32 worlds over 200 years against 31 of 32 on the default, and its 1,000-generation run hasn't finished.
+- **The landing page is a private draft,** not deployed beside the game. Deploy it only if you like it.
 - **Challenges** are fixed and hand-tuned, not generated; the tuning data is in `DECISIONS.md`.
 - **Cougars and rabbits:** cougars are opt-in, and their scenario lets dispersers wander in from outside (the valley is too small to hold a cat population on its own); rabbits stay abstract (wolves' "small game" in lean times).
 - **No immigration:** wolves never wander in from outside the valley, so persistence numbers are for a closed valley.
