@@ -151,7 +151,7 @@ Every issue and its triage is in `REVIEWS.md`.
 - **Challenges** are fixed and hand-tuned, not generated; the tuning data is in `DECISIONS.md`.
 - **Cougars and rabbits:** cougars are opt-in, and their scenario lets dispersers wander in from outside (the valley is too small to hold a cat population on its own); rabbits stay abstract (wolves' "small game" in lean times).
 - **No immigration:** wolves never wander in from outside the valley, so persistence numbers are for a closed valley.
-- **Review reels are committed** with their critiques (each 50 to 80 MB), so the repo's `.git` is about 700 MB. If you'd rather keep video out of git, add `review/**/*.mp4` to `.gitignore` from now on; taking the existing ones out of history needs a force-push, which I never do.
+- **Review images and three review reels are committed** with their critiques (the reels are 185 MB together, the rest is hundreds of PNG stills), so the local `.git` is about 700 MB, mostly loose objects that `git gc` would pack smaller. If you'd rather keep video and stills out of git, gitignore `review/**/*.mp4` from now on; taking existing files out of history needs a force-push, which I never do.
 
 ## Blocked / cut
 - **PixelLab:** no key (blank in Noclip's `.env`). Icons are hand-made SVG.
