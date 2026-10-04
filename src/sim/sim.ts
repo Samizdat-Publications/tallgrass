@@ -856,6 +856,7 @@ export class Sim implements SimLike {
     const running = v > P.walkSpeed * 2.2;
     const activity = a.state[i] === St.Rest ? 0.7 : running ? 1.8 : v > 0.3 ? 1.05 : 0.9;
     let m = P.metabolism * Math.pow(size, -0.25) * (0.98 + 0.02 * spd * spd) * activity;
+    if (running && this.p.sprintCost > 0) m *= Math.max(0.3, 1 + this.p.sprintCost * (spd * spd - 1));
     if (a.infected[i] > 0) m *= this.p.diseaseMetab;
     if (a.age[i] < P.matureAge) m *= 0.75;
     // cold costs extra, much more for a small bird
@@ -990,7 +991,7 @@ export class Sim implements SimLike {
           if (stalking && d > eff * 0.6) continue;
           // in risky ground (high fear) the herd is on edge and notices more
           const pd = hunting ? 0.95 : Math.min(0.95, p.detectBase * (1 - d / (eff + 1)) * (stalking ? 0.8 * (1 + p.fearVigilance * fearHere) : 1));
-          const vig = 1 - Math.pow(1 - pd, 1 + p.vigilancePerNeighbor * n);
+          const vig = 1 - Math.pow(1 - pd, 1 + p.vigilancePerNeighbor * n * (p.herdEyes > 0 ? Math.max(0, 1 + p.herdEyes * (a.genes[o + G_HERD] - 1)) : 1));
           if (rng.next() < vig && d < threatD) { threat = j; threatD = d; }
         }
       }

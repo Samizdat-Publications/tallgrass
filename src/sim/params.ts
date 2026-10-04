@@ -104,6 +104,12 @@ export interface Params {
   /** Drought refuges (0 = off): how much of a drought's cut in growth, and its dieback, the wettest ground along the
    *  creek and ponds escapes. Riparian strips stay green through a drought, so herds have somewhere to go. */
   droughtRefuge: number;
+  /** Extra metabolism while running for a fast build (0 = off): x (1 + sprintCost * (speed^2 - 1)), so a fast gene pays in
+   *  every chase and a slow one saves. Meant to stop speed running to its limit within a century. */
+  sprintCost: number;
+  /** Herd-minded animals heed their neighbours' alarm more (0 = off): the many-eyes vigilance from neighbours is scaled by
+   *  1 + herdEyes * (herding gene - 1), so herding pays against wolves instead of fading. */
+  herdEyes: number;
   /** Rate per year at which a pair of cougars wanders in while fewer than two live in the valley (0 = closed valley). */
   cougarImmigration: number;
   /** When an already-fleeing grazer is scared again, how much of its current flight line it keeps (0 = turn straight away from the new threat). */
@@ -226,6 +232,8 @@ export function defaultParams(): Params {
     climateAmp: 0,
     calendarScale: 2,
     droughtRefuge: 0,
+    sprintCost: 0,
+    herdEyes: 0,
     cougarImmigration: 0,
     fleeMomentum: 0,
     fearKill: 0.7,
