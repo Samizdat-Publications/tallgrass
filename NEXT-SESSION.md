@@ -10,12 +10,13 @@
 - Nothing is running in the background.
 
 ## In flight (Track R session started 2026-10-04 ~16:30 local, deadline 2026-10-08 12:00)
-- Done on main (as of 257bfcb): R0 all six items (keep ACES; concept baseline 4/10), R1 items 1-3 (foot lock, leg IK, rig: `npx tsx dev/footslip.ts`), R2 items 0-4 (season module, haze, silver water, golden terrain, drought ground), R14 (music + new sounds; needs an ear test), v2-sim merged at 4893296 (S0, S16, S18 pending).
-- Builders in worktrees (.claude/worktrees/agent-*): R1 items 4-6 (takedown, feeding, ravens), R2 items 6-8 (god rays, snow, dawn fog), R12 play UI minus family tree.
-- Next: R1 items 7-9 (weight, cougar kill, border fade), R2 items 5 and 9 (cloud shadows, grass close-up), crane V-formation render (audio.onFlyover hook exists), music/settings UI hooks (audio.music.setLevel/setEnabled), then R3 once S4/S5 merge.
-- Watch: midday autumn looks very ochre and hazy after R2 (scratch/merge_r1/04_pronghorn.jpg); check in the next review round. The concept_compare judge sits at 4/10 regardless (DECISIONS.md); trust the eye and trends.
+- Done on main (215d4af): R0 all; R1 items 1-6 (foot lock, leg IK, takedown v2, feeding, ravens at kills); R2 items 0-9 (all); R12 except family tree; R14 (music, sounds, crane render); S18 decade lines wired; v2-sim merged through d4f956d (S0, S1, S2, S4, S6, S15, S16, S18; all new ecology off by default). Round 13 blind critic done (REVIEWS.md).
+- Builders in worktrees: R1 items 7-9 + upright-wolf fix; R3 (prairie dogs, jackrabbits, small-prey UI, audio incl. thunder, narrator); R4 storm visuals; round-13 fixes (mid-range water, early-winter snow, grazed stubble); grass copper fade in winter.
+- Next: R3 items 1, 4, 5, 9, 10 after S5 coyotes merge (mange needs animals.ts free); round-13 leftovers (snow buries grass, moonlight on animals at night, potato rocks); M1 once R3/R4 land (Gemini video round with hunt and storm segments, deploy, MORNING).
+- S3: 32-seed screens A-D and D re-run at 3bb97a5 done (review/stability/v6-screens/). D: wolf CV 0.26, corr 0.72, 32/32, fails only pronghorn starve share (50%). Waiting for Track S to post the next screen; run it locally at 32 seeds from a frozen worktree.
+- Builders' reports sometimes name the wrong branch: use `git branch --contains <commit>`.
 - Do not `git worktree remove` builder worktrees: each has a node_modules junction to the main node_modules.
-- Quota at ~17:40: weekly 66%, 5-hour 13%.
+- Quota at ~18:30: weekly 67%.
 
 ## Start here
 1. Read CLAUDE.md, then V2-PLAN.md sections 0 to 6. Your kickoff prompt gives your mode (single or two tracks) and your deadline: write the deadline to `.claude/hooks/run_until.local.txt` first.
