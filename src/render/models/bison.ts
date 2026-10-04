@@ -168,7 +168,7 @@ export function buildBison(): ModelDef {
       lieDrop: 0.62, lieHipF: 1.25, lieKneeF: -2.3, lieHipH: -0.8, lieKneeH: 1.6,
       crouchDrop: 0.1,
       deadDrop: 0.55, deadHipF: 0.9, deadHipH: -0.6,
-      length: 3.3, height: 1.85, ring: 2.3, minPx: 10, boostLen: 3.3,
+      length: 3.3, height: 1.85, ring: 2.3, minPx: 11, boostLen: 3.3,
     },
   };
 }

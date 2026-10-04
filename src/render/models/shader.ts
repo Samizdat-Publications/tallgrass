@@ -4,7 +4,8 @@
 // Per-instance inputs (InstancedBufferAttribute, vec4):
 //   aGait = (gait phase 0..1, speed m/s [-1 marks a carcass], head-down weight | flap amount | carcass remaining, lie weight)
 //   aLook = (coat 0..1, per-animal seed 0..1, crouch | wing fold, selected + sick: floor() = selected 0/1, fract() = sickness 0..0.98)
-//   aFx   = (feeding tug weight 0..1, altitude above ground in m (birds), hunting weight 0..1, spare)
+//   aFx   = (feeding tug weight 0..1, altitude above ground in m (birds), hunting weight 0..1, pounce envelope 0..1 |
+//            for a carcass: how far it has fallen over, 0 standing .. 1 down)
 import * as THREE from 'three';
 import { STRETCH_CAP, footReach } from './types';
 import type { AnimParams, ModelDef } from './types';
@@ -37,6 +38,7 @@ function defines(p: AnimParams): string {
     `#define FLAP_HZ ${f(p.flapHz)}`,
     `#define MIN_PX ${f(p.minPx)}`,
     `#define FAR_NEAR 140.0`, `#define FAR_FAR 400.0`,
+    `#define ANIM_NEAR 25.0`, `#define ANIM_FAR 150.0`,
     `#define BODY_LEN ${f(p.boostLen)}`,
   ].join('\n');
 }
@@ -112,6 +114,11 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
   float ph = aGait.x;
   float cyc = TG_TAU * ph;
   float t = uTime * (1.0 - 0.5 * sick);
+  // Distance cue strength: 0 up close (the animation stays subtle and anatomical), 1 from the drone view, where legs are
+  // invisible and only whole-body motion (bounding, spine flex, head pumping, sway) tells walking from running.
+  float farK = smoothstep(ANIM_NEAR, ANIM_FAR, distance(uCamPos, vec3(instanceMatrix[3])));
+  float pounce = dead ? 0.0 : aFx.w;
+  float fallen = dead ? clamp(aFx.w, 0.0, 1.0) : 1.0;
 
   // gait weights from speed
   float s1 = smoothstep(TROT0, TROT1, spd);
@@ -181,6 +188,8 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
     lift = wWalk * KNEE_W * max(cos(aw), 0.0) + wTrot * KNEE_T * max(cos(at), 0.0) + wGal * KNEE_G * max(cos(ag), 0.0);
 #endif
     float knee = front ? -lift : lift * HOCK_K;
+    // pounce: forelegs reach out ahead, hindlegs drive
+    hip += pounce * (front ? 0.85 : -0.55);
     // stalking: bent legs
     hip += crouchBody * (front ? 0.25 : -0.2);
     float lieHip = front ? LIE_HIP_F : LIE_HIP_H;
@@ -192,8 +201,13 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
     knee = 0.0;
 #endif
     if (dead) {
-      hip = front ? DEAD_HIP_F : DEAD_HIP_H;
-      knee = 0.0;
+      // a fallen animal lies on its side with the legs folded, not stiff spikes; while it is still going down they flail
+      float flail = (1.0 - fallen) * sin(fallen * 22.0 + float(part) * 1.7) * 0.7;
+      float fh = front ? mix(DEAD_HIP_F, LIE_HIP_F, 0.7) : mix(DEAD_HIP_H, LIE_HIP_H, 0.7);
+      float fk = (front ? LIE_KNEE_F : LIE_KNEE_H) * 0.7;
+      float f2 = smoothstep(0.3, 1.0, fallen);
+      hip = mix(0.0, fh, f2) + flail;
+      knee = mix(0.0, fk, f2);
     }
     tgRotZ(p, n, aPivot2, knee * aPart.y);
     tgRotZ(p, n, aPivot, hip);
@@ -215,8 +229,12 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
     float ang = -HEAD_DN * dn + nod + chew - 0.45 * crouchBody - 0.5 * sick * (1.0 - 0.5 * dn);
     ang += tugPull * 0.6 - peck * 1.0 + peckUp;
     yaw += tugShake * 0.3;
+    // from the drone view the head pumps harder so a trot or a gallop reads as a body moving, not sliding
+    float pump = farK * (wWalk * 0.1 * sin(2.0 * cyc + 1.0) + wTrot * 0.16 * sin(2.0 * cyc + 1.0) + wGal * 0.32 * sin(cyc + 2.0));
+    ang += pump;
+    ang -= pounce * 0.55; // the head drives forward and down onto the prey
     ang = mix(ang, 0.15, lie * 0.7);
-    if (dead) { ang = -0.55; yaw = 0.25; }
+    if (dead) { ang = mix(0.0, -0.55, smoothstep(0.2, 1.0, fallen)); yaw = 0.25 * fallen; }
     tgRotY(p, n, aPivot, yaw);
     tgRotZ(p, n, aPivot, ang);
   } else if (part == 6) {
@@ -232,8 +250,9 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
     float burst = smoothstep(0.55, 0.85, sin(t * 0.6 + seed * 50.0));
     float fl = clamp(flap + burst * 0.75, 0.0, 1.0);
     float fph = TG_TAU * (t * FLAP_HZ * (0.85 + 0.3 * fract(seed * 3.7)) + seed * 10.0);
-    float inner = 0.17 + 0.05 * sin(t * 1.7 + seed * 9.0) + fl * 0.75 * sin(fph);
-    float outer = 0.1 + fl * 0.6 * sin(fph - 1.1);
+    float wAmp = 1.0 + 0.6 * farK; // a deeper beat from the drone view, where a raven is a few pixels across
+    float inner = 0.17 + 0.05 * sin(t * 1.7 + seed * 9.0) + fl * 0.75 * wAmp * sin(fph);
+    float outer = 0.1 + fl * 0.6 * wAmp * sin(fph - 1.1);
     inner = mix(inner, 0.0, fold);
     float w1 = aPart.y;
     if (fold > 0.001) {
@@ -249,14 +268,47 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
   p.y += bob + breathe - lie * LIE_DROP - crouchBody * CROUCH_DROP;
   tgRotZ(p, n, vec3(0.0, COM_Y, 0.0), pitch);
 
+#if KIND == 0
+  if (!dead && farK > 0.001) {
+    // Whole-body gait cues sized as a fraction of the body length, so they stay readable at 15 to 40 px: a bound (the body
+    // rises and falls once per stride in a gallop), the spine arching and stretching, a lateral snake, and the body pitching.
+    float bl = BODY_LEN;
+    float hop = wWalk * 0.02 * cos(2.0 * cyc) + wTrot * 0.05 * cos(2.0 * cyc) + wGal * 0.1 * cos(cyc - 0.5);
+    float xn = clamp(p.x / (bl * 0.55), -1.3, 1.3);
+    float arch = (wTrot * 0.03 + wGal * 0.055) * cos(cyc + 1.0) * (xn * xn - 0.35);
+    float snake = (wWalk * 0.018 + wTrot * 0.032 + wGal * 0.036) * sin(cyc + 0.3) * xn;
+    p.y += bl * farK * (hop + arch);
+    p.z += bl * farK * snake;
+    tgRotZ(p, n, vec3(0.0, COM_Y, 0.0), farK * (wTrot * 0.05 * sin(2.0 * cyc + 0.5) + wGal * 0.13 * sin(cyc + 1.0)));
+  }
+#endif
+#if KIND == 2
+  if (!dead && farK > 0.001 && aGait.z > 0.3 && aLook.z < 0.5) {
+    // wing beats lift and drop the whole bird a little
+    float fph2 = TG_TAU * (t * FLAP_HZ * (0.85 + 0.3 * fract(seed * 3.7)) + seed * 10.0);
+    p.y += BODY_LEN * farK * 0.06 * sin(fph2 - 0.4);
+  }
+#endif
+
+  // the leap of a pounce: the forequarters rise about the hind end and the whole animal lifts
+  if (pounce > 0.001) {
+    p.y += pounce * COM_Y * 0.25;
+    tgRotZ(p, n, vec3(-0.3 * BODY_LEN, COM_Y * 0.6, 0.0), pounce * 0.42);
+  }
+
   if (dead) {
     float r = clamp(aGait.z, 0.0, 1.0);
-    float roll = (fract(seed * 5.31) > 0.5 ? 1.0 : -1.0) * 1.45;
+    float side = (fract(seed * 5.31) > 0.5 ? 1.0 : -1.0);
+    // the stumble: the nose dips as the forelegs buckle, then the body rolls onto its side
+    float dip = sin(3.14159265 * smoothstep(0.0, 0.55, fallen)) * (1.0 - smoothstep(0.55, 0.8, fallen));
+    tgRotZ(p, n, vec3(0.0, COM_Y, 0.0), -0.22 * dip);
+    float roll = side * 1.45 * smoothstep(0.3, 1.0, fallen);
     tgRotX(p, n, vec3(0.0, COM_Y, 0.0), roll);
-    p.y -= DEAD_DROP;
-    float k = mix(0.4, 1.0, r);
+    p.y -= DEAD_DROP * smoothstep(0.3, 1.0, fallen);
+    float f3 = smoothstep(0.3, 1.0, fallen);
+    float k = mix(1.0, mix(0.4, 1.0, r), f3);
     p.y = p.y * k;
-    p.xz *= mix(0.8, 1.0, r);
+    p.xz *= mix(1.0, mix(0.8, 1.0, r), f3);
   }
 
   // distance readability: keep every animal at least MIN_PX pixels long (on a 900 px tall viewport), growing gently
@@ -288,8 +340,8 @@ void tgShade() {
     col *= 0.5; // a dead body reads darker than the living herd, so a kill is a dark mark in the grass
     vec3 flesh = vec3(0.22, 0.035, 0.03);
     float fleshW = (1.0 - smoothstep(0.38, 0.62, r)) * 0.85;
-    float boneW = (1.0 - smoothstep(0.06, 0.3, r));
-    col = mix(mix(col, flesh, fleshW), uBone, boneW);
+    float boneW = (1.0 - smoothstep(0.04, 0.22, r));
+    col = mix(mix(col, flesh, fleshW), uBone * 0.85, boneW);
   }
   float sick = dead ? 0.0 : fract(aLook.w);
   float luma = dot(col, vec3(0.2126, 0.7152, 0.0722));

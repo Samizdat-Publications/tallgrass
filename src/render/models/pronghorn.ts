@@ -136,7 +136,7 @@ export function buildPronghorn(): ModelDef {
       lieDrop: 0.45, lieHipF: 1.25, lieKneeF: -2.3, lieHipH: -0.8, lieKneeH: 1.6,
       crouchDrop: 0.1,
       deadDrop: 0.38, deadHipF: 0.9, deadHipH: -0.6,
-      length: 1.4, height: 1.2, ring: 1.0, minPx: 6, boostLen: 1.4,
+      length: 1.4, height: 1.2, ring: 1.0, minPx: 10, boostLen: 1.4,
     },
   };
 }

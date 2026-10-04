@@ -63,7 +63,7 @@ export class Dust {
   /** Dust clock: real seconds, frozen while the sim is paused. */
   now = 0;
   private uNow = { value: 0 };
-  private uColor = { value: new THREE.Vector3(0.7, 0.5, 0.3) };
+  private uColor = { value: new THREE.Vector3(0.76, 0.66, 0.55) };
   private lit: SceneLit;
 
   constructor(lit: SceneLit) {
@@ -347,7 +347,7 @@ export class KillSites {
  */
 const MARKER: Array<[number, number, number, number, number, boolean] | null> = [
   [0.045, 0.03, 0.022, 3.6, 0.5, false], // bison: dark umber
-  [0.16, 0.19, 0.25, 4.4, 0.55, true], // wolf: dark slate, so a pale wolf in gold grass has a dark core and reads from the wide view
+  [0.13, 0.16, 0.23, 5.2, 0.6, true], // wolf: dark slate, so a pale wolf in gold grass has a dark core and reads from the wide view
   [0.015, 0.015, 0.02, 3.0, 0.5, false], // raven: black speck
   [0.5, 0.34, 0.2, 3.0, 0.3, false], // pronghorn: warm tan
   null, // rabbit
@@ -360,9 +360,14 @@ const CLUSTER_CELL = 24;
 /** Markers are fully off inside this camera distance, and fade in over the next FADE_LEN meters. */
 const NEAR_OFF = 250;
 const FADE_LEN = 150;
-/** Hunt rings (around a chase, a stalk or a feeding) use their own, earlier, fade range. */
-const PING_NEAR = 170;
-const PING_FAR = 300;
+/** Chase ripples are for the wide view only: gone inside 200 m, full strength by about 330 m. */
+const PING_NEAR = 200;
+const PING_FAR = 330;
+/** Ripple tint per predator species id (linear-ish rgb) and strength: cool slate for wolves, warm umber for cougars. */
+const PING_TINT: Record<number, [number, number, number, number]> = {
+  1: [0.46, 0.58, 0.82, 0.3],
+  5: [0.82, 0.6, 0.36, 0.28],
+};
 const PING_CELL = 14;
 const PING_CAP = 256;
 /** An animal this many pixels long (without the minimum-size boost) is already readable: no marker. */
@@ -503,7 +508,9 @@ export class Markers {
           // a slow ripple: from a small circle to about three times that while it fades out
           float ph = fract(uNow * 0.4 + aK.x);
           float size = aP.w * (0.45 + 1.15 * ph);
-          float a = aC.a * fade * pow(1.0 - ph, 1.4) * smoothstep(0.0, 0.12, ph);
+          // seen from straight above (the map view) the rings crowd the herds, so they thin out there
+          float steep = smoothstep(0.72, 0.95, (cameraPosition.y - aP.y) / dist);
+          float a = aC.a * fade * (1.0 - 0.65 * steep) * pow(1.0 - ph, 1.4) * smoothstep(0.0, 0.12, ph);
           // metres across so that it keeps its size in pixels, lying flat just above the ground
           float world = size * (uView.y / 900.0) * dist / uPxK;
           vec3 wp = aP.xyz + vec3(position.x * world, 1.0, position.y * world);
@@ -517,7 +524,7 @@ export class Markers {
         varying vec2 vUv; varying vec4 vCol;
         void main() {
           float r = length(vUv);
-          float a = smoothstep(0.7, 0.84, r) * (1.0 - smoothstep(0.9, 1.0, r));
+          float a = smoothstep(0.8, 0.88, r) * (1.0 - smoothstep(0.92, 0.98, r));
           if (a * vCol.a < 0.004) discard;
           gl_FragColor = vec4(vCol.rgb, a * vCol.a);
         }`,
@@ -555,8 +562,8 @@ export class Markers {
     st[o] = sp; st[o + 1] = x; st[o + 2] = y; st[o + 3] = z; st[o + 4] = px; st[o + 5] = scale;
   }
 
-  /** A hunt ripple at (x, y, z): one per ~14 m neighbourhood however many animals are in it. strength 0..1. */
-  addPing(x: number, y: number, z: number, strength: number): void {
+  /** A chase ripple at (x, y, z) for predator species sp: one per ~14 m neighbourhood however many animals are in it. */
+  addPing(sp: number, x: number, y: number, z: number): void {
     if (this.pingN >= PING_CAP) return;
     const dx = x - this.cam.x, dy = y - this.cam.y, dz = z - this.cam.z;
     if (dx * dx + dy * dy + dz * dz < PING_NEAR * PING_NEAR) return;
@@ -564,7 +571,7 @@ export class Markers {
     if (this.pingSeen.has(key)) return;
     this.pingSeen.add(key);
     const o = this.pingN++ * 4;
-    this.ping[o] = x; this.ping[o + 1] = y; this.ping[o + 2] = z; this.ping[o + 3] = strength;
+    this.ping[o] = x; this.ping[o + 1] = y; this.ping[o + 2] = z; this.ping[o + 3] = sp;
   }
 
   /** Run the cluster test and write the surviving markers. */
@@ -608,8 +615,9 @@ export class Markers {
     for (let i = 0; i < this.pingN; i++) {
       const o = i * 4;
       const seed = (Math.abs(Math.sin(this.ping[o] * 12.9898 + this.ping[o + 2] * 78.233) * 43758.5453) % 1);
-      this.pingP[o] = this.ping[o]; this.pingP[o + 1] = this.ping[o + 1]; this.pingP[o + 2] = this.ping[o + 2]; this.pingP[o + 3] = 30;
-      this.pingC[o] = 0.96; this.pingC[o + 1] = 0.9; this.pingC[o + 2] = 0.78; this.pingC[o + 3] = 0.65 * this.ping[o + 3];
+      const tint = PING_TINT[this.ping[o + 3]] ?? PING_TINT[1];
+      this.pingP[o] = this.ping[o]; this.pingP[o + 1] = this.ping[o + 1]; this.pingP[o + 2] = this.ping[o + 2]; this.pingP[o + 3] = 22;
+      this.pingC[o] = tint[0]; this.pingC[o + 1] = tint[1]; this.pingC[o + 2] = tint[2]; this.pingC[o + 3] = tint[3];
       this.pingK[o] = seed; this.pingK[o + 1] = 0; this.pingK[o + 2] = 0; this.pingK[o + 3] = 0;
     }
     this.pingGeo.instanceCount = this.pingN;

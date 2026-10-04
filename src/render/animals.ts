@@ -73,6 +73,38 @@ function strideFor(p: AnimParams, gaitSpd: number): number {
 /** Most leg cycles per second the cadence may reach (faster than this the legs alias on screen). */
 const MAX_CADENCE = 6;
 
+/**
+ * Render-side heading dynamics per species: natural frequency (rad/s) of the critically damped spring that chases the sim
+ * heading, and the fastest the body may turn (rad/s). The sim re-aims instantly; the body does not, so an animal carries
+ * its momentum through a turn and leans into it.
+ */
+const TURN: Array<[number, number]> = [
+  [4.2, 2.3], // bison
+  [7, 6], // wolf
+  [3.5, 2.6], // raven (banks through wide circles)
+  [7, 6], // pronghorn
+  [9, 8], // rabbit
+  [7, 6], // cougar
+];
+/** Largest lean (rad) into a turn at speed. */
+const BANK_MAX = [0.2, 0.42, 0.75, 0.42, 0.3, 0.42];
+
+/** How the whole fall of a carcass plays out, in seconds. */
+const FALL_TIME = 1.3;
+/** A predator within this many metres of a fresh kill (and hunting) lunges. */
+const POUNCE_R = 7;
+const POUNCE_TIME = 0.9;
+
+interface FallInfo {
+  /** Seconds since the animal began to go down (large for carcasses that were already lying there). */
+  t: number;
+  /** Heading and on-screen speed of the animal that died here. */
+  h: number;
+  v: number;
+  /** Snapshot generation that last saw this carcass (so stale entries can be dropped). */
+  g: number;
+}
+
 /** Per species draw batch (one InstancedMesh, rebuilt when it must grow). */
 class Batch {
   readonly sp: number;
@@ -166,6 +198,11 @@ class Slots {
   /** Feeding tug and hunting weights, eased. */
   tug = new Float32Array(this.cap);
   hunt = new Float32Array(this.cap);
+  /** Drawn heading (rad) and its angular velocity: a critically damped follower of the sim heading. */
+  hs = new Float32Array(this.cap);
+  hw = new Float32Array(this.cap);
+  /** Seconds since a pounce began (negative = not pouncing). */
+  pounce = new Float32Array(this.cap).fill(-1);
   hdn = new Float32Array(this.cap);
   lie = new Float32Array(this.cap);
   crouch = new Float32Array(this.cap);
@@ -199,6 +236,9 @@ class Slots {
     this.pz = g(this.pz, Float32Array);
     this.tug = g(this.tug, Float32Array);
     this.hunt = g(this.hunt, Float32Array);
+    this.hs = g(this.hs, Float32Array);
+    this.hw = g(this.hw, Float32Array);
+    { const b = new Float32Array(n).fill(-1); b.set(this.pounce); this.pounce = b; }
     this.hdn = g(this.hdn, Float32Array);
     this.lie = g(this.lie, Float32Array);
     this.crouch = g(this.crouch, Float32Array);
@@ -240,6 +280,7 @@ export class AnimalLayer {
   private counts = new Int32Array(SPECIES_COUNT);
   private carcassCounts = new Int32Array(SPECIES_COUNT);
 
+  private falls = new Map<number, FallInfo>();
   private timeSec = 0;
   private lastSnapT = -1;
   private snapDt = 0.1;
@@ -323,6 +364,7 @@ export class AnimalLayer {
         S.phase[slot] = hash01(id * 7 + 3);
         S.sick[slot] = 0;
         S.dust[slot] = 0;
+        S.pounce[slot] = -1;
       }
       S.stamp[slot] = this.gen;
       this.currSlot[i] = slot;
@@ -344,6 +386,100 @@ export class AnimalLayer {
     }
     for (let sp = 0; sp < SPECIES_COUNT; sp++) this.batches[sp].ensure(this.counts[sp] + this.carcassCounts[sp], this.object3D);
     this.kills.setSnapshot(snap);
+    this.trackFalls(snap, this.prev === null);
+    this.lungeScan(snap);
+  }
+
+  /**
+   * New carcasses are animals that just went down. Find the animal that died (in the previous snapshot) so the body keeps
+   * its heading and speed while it stumbles and topples, and set the predators that were on it lunging.
+   */
+  private trackFalls(snap: Snapshot, first: boolean): void {
+    const gen = this.gen;
+    const fast = this.timeScale > 3 || first;
+    let budget = 6; // at most this many kill reactions per snapshot (a cull can drop dozens of animals at once)
+    const P = this.prev ? this.prev.agents : null;
+    const pn = this.prev ? this.prev.count : 0;
+    for (let k = 0; k < snap.carcassCount; k++) {
+      const o = k * CARCASS_STRIDE;
+      const cx = snap.carcasses[o], cz = snap.carcasses[o + 1];
+      const key = Math.floor(cx * 8) * 65536 + Math.floor(cz * 8);
+      let fi = this.falls.get(key);
+      if (!fi) {
+        const sp = Math.round(snap.carcasses[o + 3]);
+        fi = { t: 1e3, h: hash01((Math.floor(cx * 13) * 73856093) ^ (Math.floor(cz * 13) * 19349663)) * Math.PI * 2, v: 0, g: gen };
+        this.falls.set(key, fi);
+        if (!fast && P) {
+          let bj = -1, bd = 36;
+          for (let j = 0; j < pn; j++) {
+            const q = j * AGENT_STRIDE;
+            if ((P[q] | 0) !== sp) continue;
+            const dx = P[q + 1] - cx, dz = P[q + 2] - cz;
+            const d = dx * dx + dz * dz;
+            if (d < bd) { bd = d; bj = j; }
+          }
+          if (bj >= 0) { fi.h = P[bj * AGENT_STRIDE + 3]; fi.v = P[bj * AGENT_STRIDE + 4] * VIS_PER_SIM; }
+          fi.t = 0;
+          if (budget-- > 0) this.killBurst(snap, cx, cz, sp, fi);
+        }
+      }
+      fi.g = gen;
+    }
+    for (const [key, fi] of this.falls) if (fi.g !== gen) this.falls.delete(key);
+  }
+
+  /** A kill: a puff of dust from the site, and every hunting predator close by pounces. */
+  private killBurst(snap: Snapshot, cx: number, cz: number, sp: number, fi: FallInfo): void {
+    const w = this.world;
+    const big = sp === Sp.Bison ? 1.6 : sp === Sp.Wolf ? 0.9 : 1;
+    const n = sp === Sp.Bison ? 16 : 10;
+    for (let i = 0; i < n; i++) {
+      const a = Math.random() * Math.PI * 2, r = Math.random() * 1.2 * big;
+      const px = cx + Math.cos(a) * r, pz = cz + Math.sin(a) * r;
+      const sp2 = (1.4 + Math.random() * 2.2) * big;
+      this.dust.emit(
+        px, sampleHeight(w.height, w.hn, w.cell, px, pz) + 0.2, pz,
+        Math.cos(a) * sp2 + Math.cos(fi.h) * fi.v * 0.12, 0.4 + Math.random() * 0.9, Math.sin(a) * sp2 + Math.sin(fi.h) * fi.v * 0.12,
+        (1.2 + Math.random() * 1.0) * big, 0.9 + Math.random() * 0.9, 0.4 + Math.random() * 0.25, Math.random(),
+      );
+    }
+    const A = snap.agents, S = this.slots;
+    for (let i = 0; i < snap.count; i++) {
+      const o = i * AGENT_STRIDE;
+      const s = A[o] | 0;
+      if (s !== Sp.Wolf && s !== Sp.Cougar) continue;
+      const st = A[o + 7] | 0;
+      if (st !== St.Chase && st !== St.Stalk && st !== St.Eat) continue;
+      const dx = A[o + 1] - cx, dz = A[o + 2] - cz;
+      if (dx * dx + dz * dz > POUNCE_R * POUNCE_R) continue;
+      const slot = this.currSlot[i];
+      if (S.pounce[slot] < 0.35 * POUNCE_TIME || S.pounce[slot] > POUNCE_TIME) S.pounce[slot] = 0;
+    }
+  }
+
+  /** A predator in a chase that has caught up with something lunges at it. */
+  private lungeScan(snap: Snapshot): void {
+    if (this.timeScale <= 0 || this.timeScale > 3) return;
+    const A = snap.agents, S = this.slots, n = snap.count;
+    for (let i = 0; i < n; i++) {
+      const o = i * AGENT_STRIDE;
+      const sp = A[o] | 0;
+      if ((sp !== Sp.Wolf && sp !== Sp.Cougar) || (A[o + 7] | 0) !== St.Chase) continue;
+      const slot = this.currSlot[i];
+      if (S.pounce[slot] >= 0) continue; // already lunging or cooling down
+      const x = A[o + 1], z = A[o + 2], hx = Math.cos(A[o + 3]), hz = Math.sin(A[o + 3]);
+      for (let j = 0; j < n; j++) {
+        const q = j * AGENT_STRIDE;
+        const s2 = A[q] | 0;
+        if (s2 === Sp.Wolf || s2 === Sp.Cougar || s2 === Sp.Raven || s2 === Sp.Rabbit) continue;
+        const dx = A[q + 1] - x, dz = A[q + 2] - z;
+        const d2 = dx * dx + dz * dz;
+        if (d2 > 3.6 * 3.6 || d2 < 0.2) continue;
+        if (dx * hx + dz * hz < 0.4 * Math.sqrt(d2)) continue; // only prey ahead of it
+        S.pounce[slot] = 0;
+        break;
+      }
+    }
   }
 
   // ---------------------------------------------------------------------------------------------------------
@@ -394,7 +530,7 @@ export class AnimalLayer {
       const state = A[o + 7] | 0, alt1 = A[o + 9];
 
       // interpolate against the previous snapshot
-      let x = x1, z = z1, h = h1, alt = alt1, sc = sc1, turn = 0, climb = 0;
+      let x = x1, z = z1, h = h1, alt = alt1, sc = sc1, climb = 0;
       const j = this.prevOf[i];
       if (j >= 0 && P) {
         const q = j * AGENT_STRIDE;
@@ -405,7 +541,6 @@ export class AnimalLayer {
         }
         const dh = wrapPi(h1 - P[q + 3]);
         h = P[q + 3] + dh * alpha;
-        turn = dh / snapDt;
         alt = P[q + 9] + (alt1 - P[q + 9]) * alpha;
         climb = (alt1 - P[q + 9]) / snapDt;
         sc = P[q + 5] + (sc1 - P[q + 5]) * alpha;
@@ -430,6 +565,8 @@ export class AnimalLayer {
         S.fresh[slot] = 0;
         S.px[slot] = x;
         S.pz[slot] = z;
+        S.hs[slot] = h;
+        S.hw[slot] = 0;
         S.spd[slot] = spdT;
         S.vis[slot] = 0;
         S.hdn[slot] = hdT;
@@ -460,20 +597,46 @@ export class AnimalLayer {
       S.sick[slot] += (sickT - S.sick[slot]) * kSick;
       const sickK = S.sick[slot];
       const spdS = S.spd[slot];
+      // pounce: a lunge that lifts the forequarters and drives the head, then a short cooldown
+      let pounceE = 0;
+      if (S.pounce[slot] >= 0) {
+        S.pounce[slot] += running;
+        const u = S.pounce[slot] / POUNCE_TIME;
+        if (u < 1) pounceE = u < 0.28 ? smoothstep(0, 0.28, u) : 1 - smoothstep(0.45, 1, u);
+        if (S.pounce[slot] > POUNCE_TIME * 2.4) S.pounce[slot] = -1;
+      }
       // a creature that is not actually going anywhere (blocked, turning on the spot) stands rather than marching in place
       const gaitSpd = Math.min(spdS, S.vis[slot] * 1.6 + 0.15);
       // the model is drawn scaled (species readability boost, age, size), and its stride scales with it
       const vs = sc * this.speciesScale[sp];
       S.phase[slot] = (S.phase[slot] + Math.min(ds / (strideFor(pr, gaitSpd) * vs), MAX_CADENCE * dt)) % 1;
 
+      // The drawn heading is a critically damped follower of the sim heading, rate limited, so a turn is a curve with some
+      // momentum behind it rather than a snap on a central pivot.
+      {
+        const tn = TURN[sp];
+        const om = tn[0];
+        const steps = Math.max(1, Math.ceil(dt / 0.02)), sdt = dt / steps;
+        let hs = S.hs[slot], hw = S.hw[slot];
+        for (let s = 0; s < steps; s++) {
+          hw += (om * om * wrapPi(h - hs) - 2 * om * hw) * sdt;
+          hw = clamp(hw, -tn[1], tn[1]);
+          hs += hw * sdt;
+        }
+        S.hs[slot] = wrapPi(hs);
+        S.hw[slot] = hw;
+      }
+      const hd = S.hs[slot];
+      const turnRate = S.hw[slot];
+
       // pose on the terrain
-      const ch = Math.cos(h), sh = Math.sin(h);
+      const ch = Math.cos(hd), sh = Math.sin(hd);
       const ground = sampleHeight(H, hn, cell, x, z);
       let pitch = 0, roll = 0, y = ground;
       if (sp === Sp.Raven) {
         y = ground + alt;
         const v = Math.max(spdT, 0.5);
-        const bankT = clamp(Math.atan((v * turn) / 9.81), -0.75, 0.75);
+        const bankT = clamp(Math.atan((v * turnRate) / 9.81), -BANK_MAX[sp], BANK_MAX[sp]);
         S.bank[slot] += (bankT - S.bank[slot]) * kBank;
         roll = S.bank[slot];
         const pT = clamp(Math.atan2(climb, v), -0.5, 0.5);
@@ -492,7 +655,9 @@ export class AnimalLayer {
         const hL = sampleHeight(H, hn, cell, x + sh * hw, z - ch * hw);
         roll = -Math.atan2(hR - hL, 2 * hw);
         y = (hF + hB + hR + hL) * 0.25 * 0.5 + ground * 0.5; // sit between the footprint average and the centre
-        const lean = clamp(spdT * turn * 0.03, -0.12, 0.12);
+        // lean into the turn like a rider on a bend (tan = v * omega / g), only once it is actually running
+        const vv = S.vis[slot];
+        const lean = clamp(Math.atan((vv * turnRate) / 9.81) * 0.85, -BANK_MAX[sp], BANK_MAX[sp]) * smoothstep(1.5, 5, vv);
         S.bank[slot] += (lean - S.bank[slot]) * kBank;
         roll += S.bank[slot];
       }
@@ -513,25 +678,29 @@ export class AnimalLayer {
       this.writeInstance(b, x, y, z, ch, sh, pitch, roll, vs);
 
       this.markers.add(sp, x, y + (sp === Sp.Raven ? 0.3 : pr.height * 0.6 * vs), z, pr.boostLen, vs);
-      // from the wide view, a slow ring where a predator chases or stalks and where anything is feeding at a carcass
-      if (hunting >= 1 || (feeding && S.tug[slot] > 0.5)) this.markers.addPing(x, y + 0.3, z, hunting >= 1 ? 1 : 0.7);
+      // from the wide view, a faint ripple where a predator is actually chasing
+      if (state === St.Chase && (sp === Sp.Wolf || sp === Sp.Cougar)) this.markers.addPing(sp, x, y + 0.3, z);
 
       // dust kicked up by fast movers
       const dp = DUST[sp];
       if (dp && dustRate > 0 && spdS > dp[0] && (state === St.Run || state === St.Flee || state === St.Chase)) {
-        S.dust[slot] += dt * dp[1] * (spdS - dp[0]) * dustRate;
+        // from the drone view a herd on the run has to leave a visible trail: fewer, bigger, longer-lived puffs with distance
+        const cp = this.shared.uCamPos.value;
+        const cd = Math.hypot(x - cp.x, y - cp.y, z - cp.z);
+        const dsK = 1 + clamp((cd - 60) / 140, 0, 1) * 1.7;
+        S.dust[slot] += (dt * dp[1] * (spdS - dp[0]) * dustRate) / Math.sqrt(dsK);
         let guard = 2;
         while (S.dust[slot] >= 1 && guard-- > 0) {
           S.dust[slot] -= 1;
           const ci = Math.min(world.n - 1, Math.max(0, Math.floor(x / cell))), cj = Math.min(world.n - 1, Math.max(0, Math.floor(z / cell)));
           if (world.water[cj * world.n + ci]) continue;
-          const back = -0.3 * pr.length * vs, side = (Math.random() - 0.5) * 0.35 * pr.length * vs;
+          const back = -0.3 * pr.length * vs * (1 + 0.6 * (dsK - 1)), side = (Math.random() - 0.5) * 0.35 * pr.length * vs;
           const px = x + ch * back - sh * side, pz = z + sh * back + ch * side;
           const drift = -0.1 * spdS;
           this.dust.emit(
             px, sampleHeight(H, hn, cell, px, pz) + 0.15, pz,
             ch * drift * 0.6 + (Math.random() - 0.5) * 0.6, 0.15 + Math.random() * 0.3, sh * drift * 0.6 + (Math.random() - 0.5) * 0.6,
-            dp[2] * vs * (0.8 + 0.4 * Math.random()), dp[4] + Math.random() * (dp[5] - dp[4]), dp[3] * (0.75 + 0.5 * Math.random()), Math.random(),
+            dp[2] * vs * (0.8 + 0.4 * Math.random()) * Math.pow(dsK, 0.6), (dp[4] + Math.random() * (dp[5] - dp[4])) * (1 + 0.3 * (dsK - 1)), Math.min(0.34, dp[3] * (0.75 + 0.5 * Math.random()) * (1 + 0.1 * (dsK - 1))), Math.random(),
           );
         }
         if (S.dust[slot] > 1) S.dust[slot] = 1;
@@ -551,7 +720,7 @@ export class AnimalLayer {
       fx[gp] = S.tug[slot];
       fx[gp + 1] = sp === Sp.Raven ? alt : 0;
       fx[gp + 2] = S.hunt[slot];
-      fx[gp + 3] = 0;
+      fx[gp + 3] = pounceE;
       look[gp] = clamp(coat, 0, 1);
       look[gp + 1] = hash01(id);
       look[gp + 2] = S.crouch[slot];
@@ -581,17 +750,25 @@ export class AnimalLayer {
       const b = this.batches[sp];
       const x = snap.carcasses[o], z = snap.carcasses[o + 1], rem = snap.carcasses[o + 2];
       const seed = hash01((Math.floor(x * 13) * 73856093) ^ (Math.floor(z * 13) * 19349663));
-      const h = seed * Math.PI * 2;
+      const fi = this.falls.get(Math.floor(x * 8) * 65536 + Math.floor(z * 8));
+      if (fi && fi.t < FALL_TIME + 2) fi.t += running;
+      const h = fi ? fi.h : seed * Math.PI * 2;
+      const fall = fi ? clamp(fi.t / FALL_TIME, 0, 1) : 1;
       const ch = Math.cos(h), sh = Math.sin(h);
-      const ground = sampleHeight(H, hn, cell, x, z);
+      // the animal skids on a little in the direction it was running as it goes down
+      const slide = fi && fi.t < 1e2 ? Math.min(fi.v * 0.1, 1.4) * (1 - Math.exp(-fi.t * 3.2)) : 0;
+      const cx = x + ch * slide, cz = z + sh * slide;
+      const ground = sampleHeight(H, hn, cell, cx, cz);
       const hl = b.def.params.length * 0.3;
-      const hF = sampleHeight(H, hn, cell, x + ch * hl, z + sh * hl);
-      const hB = sampleHeight(H, hn, cell, x - ch * hl, z - sh * hl);
+      const hF = sampleHeight(H, hn, cell, cx + ch * hl, cz + sh * hl);
+      const hB = sampleHeight(H, hn, cell, cx - ch * hl, cz - sh * hl);
       const pitch = Math.atan2(hF - hB, 2 * hl);
       let cy = ground + 0.22;
-      const wc = Math.min(world.n - 1, Math.max(0, Math.floor(z / cell))) * world.n + Math.min(world.n - 1, Math.max(0, Math.floor(x / cell)));
+      const wc = Math.min(world.n - 1, Math.max(0, Math.floor(cz / cell))) * world.n + Math.min(world.n - 1, Math.max(0, Math.floor(cx / cell)));
       if (world.water[wc]) cy = Math.max(cy, world.waterHeight[wc] - 0.3); // a carcass in a pond floats at the surface
-      this.writeInstance(b, x, cy, z, ch, sh, pitch, 0, 1);
+      // while it is still going down the body is the full-size living animal, so no ground lift
+      if (fall < 1) cy = ground + 0.22 * fall;
+      this.writeInstance(b, cx, cy, cz, ch, sh, pitch, 0, fall < 1 ? this.speciesScale[sp] * (1 - fall) + fall : 1);
       const k = b.count - 1;
       const gp = k * 4;
       const gait = b.gait.array as Float32Array;
@@ -605,7 +782,7 @@ export class AnimalLayer {
       look[gp + 2] = 0;
       look[gp + 3] = 0;
       const fxc = b.fx.array as Float32Array;
-      fxc[gp] = 0; fxc[gp + 1] = 0; fxc[gp + 2] = 0; fxc[gp + 3] = 0;
+      fxc[gp] = 0; fxc[gp + 1] = 0; fxc[gp + 2] = 0; fxc[gp + 3] = fall;
       b.ids[k] = 0;
       b.centers[k * 4 + 3] = 0; // not pickable
     }

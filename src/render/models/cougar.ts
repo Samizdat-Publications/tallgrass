@@ -123,7 +123,7 @@ export function buildCougar(): ModelDef {
       lieDrop: 0.4, lieHipF: 1.25, lieKneeF: -2.3, lieHipH: -0.8, lieKneeH: 1.6,
       crouchDrop: 0.26,
       deadDrop: 0.36, deadHipF: 0.9, deadHipH: -0.6,
-      length: 1.3, height: 0.8, ring: 1.3, minPx: 8, boostLen: 1.8,
+      length: 1.3, height: 0.8, ring: 1.3, minPx: 13, boostLen: 1.8,
     },
   };
 }

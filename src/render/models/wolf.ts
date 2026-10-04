@@ -117,7 +117,7 @@ export function buildWolf(): ModelDef {
     neutral: 0.4,
     // from the wide view a wolf is a little darker (value contrast with gold grass) and one that stalks, chases or feeds
     // gets a cool rim of light
-    far: { gain: 0.82, rim: 0.04, hunt: 0.4, rimCol: [0.7, 0.8, 1.0] },
+    far: { gain: 0.74, rim: 0.08, hunt: 0.5, rimCol: [0.7, 0.8, 1.0] },
     params: {
       ...DEFAULT_PARAMS,
       kind: 0,
@@ -135,7 +135,7 @@ export function buildWolf(): ModelDef {
       lieDrop: 0.4, lieHipF: 1.25, lieKneeF: -2.3, lieHipH: -0.8, lieKneeH: 1.6,
       crouchDrop: 0.18,
       deadDrop: 0.36, deadHipF: 0.9, deadHipH: -0.6,
-      length: 1.5, height: 0.85, ring: 1.1, minPx: 9, boostLen: 1.5,
+      length: 1.5, height: 0.85, ring: 1.1, minPx: 15, boostLen: 1.5,
     },
   };
 }

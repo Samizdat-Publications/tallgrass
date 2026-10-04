@@ -9,7 +9,13 @@ export function buildRaven(): ModelDef {
   const beak = lin(0x0a0a0a);
 
   // Black with a faint blue-black sheen on the wing tops
-  const feather: PaintFn = (p, n) => [1, 1, 1.06 + 0.1 * Math.max(0, n[1]), 1];
+  // Black with a blue-black sheen on every upward-facing surface, so a raven seen from above reads as a glossy bird with
+  // form (back, wing tops, tail) instead of a flat black cutout.
+  const feather: PaintFn = (p, n) => {
+    const up = Math.max(0, n[1]);
+    const k = 1 + 0.4 * up * up;
+    return [k, k, k * 1.1, 1];
+  };
   b.addTube({
     part: PART.BODY, sides: 10, paint: feather,
     rings: torsoRings([
@@ -75,13 +81,14 @@ export function buildRaven(): ModelDef {
   return {
     geometry,
     triangles: b.triangleCount,
-    coatPale: lin(0x34343a),
-    coatDark: lin(0x0b0b0e),
+    coatPale: lin(0x2a2a34),
+    coatDark: lin(0x101016),
     bone: lin(0xd8d0bc),
     roughness: 0.5,
     fill: 1.6,
     warm: [1.0, 1.0, 1.0],
     neutral: 0.6,
+    far: { gain: 1, rim: 0.05, hunt: 0, rimCol: [0.55, 0.65, 0.95] },
     params: {
       ...DEFAULT_PARAMS,
       kind: 2,
@@ -91,7 +98,7 @@ export function buildRaven(): ModelDef {
       tailRest: 0, tailRun: 0, tailSway: 0.15,
       lieDrop: 0, deadDrop: 0.12,
       strideW: 0.5, strideG: 1.2, strideSpeedMax: 8,
-      length: 0.6, height: 0.35, ring: 0.6, minPx: 9, boostLen: 1.2,
+      length: 0.6, height: 0.35, ring: 0.6, minPx: 11, boostLen: 1.2,
     },
   };
 }
