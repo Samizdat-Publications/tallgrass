@@ -469,7 +469,7 @@ Make the code safe for many new species and for changes that stay identical whil
   - Measurement: `EXT_disjoint_timer_query_webgl2`, median of 40 frames.
   - `--ab <dirA> <dirB>` runs A,B,B,A and reports the mean paired delta.
   - Commit the baseline as `review/perf/baseline-<hash>.json`.
-- [ ] **2. Registry-safe render and UI.** These tables read `SPECIES`:
+- [x] **2. Registry-safe render and UI.** These tables read `SPECIES`:
   - `animals.ts`: `INITIAL_CAPACITY` (:22), `DUST` (:37), `TURN` (:84), `BANK_MAX` (:93), `speciesScale` (:285), and the raven and predator branches at 516-899
   - `fx.ts`: `MARKER` (:423), `PING_TINT` (:442), grid sized by `SPECIES_COUNT` (:500)
   - `models/index.ts`
