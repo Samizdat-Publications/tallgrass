@@ -1,0 +1,10 @@
+== scratch/screens/F16 (baseline, 14 seeds, stats from year 5)
+  persistence: bison 14/14, wolf 14/14, raven 14/14, pronghorn 14/14
+  bison births per capita per year 0.41; deaths: predation 40%, starvation 38%, old age 19%
+  annual means: bison CV 0.40, median year-to-year change bison 13% pronghorn 9%
+  wolves: CV 0.28; best lag behind bison 2 yr (median corr 0.68)
+  presence (share of samples alive): bison 100%, wolf 100%, raven 100%, pronghorn 100%
+  local extinctions per 1,000 yr (mean over seeds): bison 0.0, wolf 0.0, raven 0.0, pronghorn 0.0
+  years absent (median over seeds): bison 0.0, wolf 0.0, raven 0.0, pronghorn 0.0
+  immigrants / emigrants per century (mean over seeds): wolf 0.1 in, 0.0 out, pronghorn 2670.5 in, 14576.5 out
+  vagrant ravens: mean 192.3, max 369; arrivals 7896.9 and departures 0.0 per century

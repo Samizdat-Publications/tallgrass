@@ -37,6 +37,7 @@ Only Track S writes this file (V2-PLAN.md section 4.3). Track R reads it with `g
 - Chronicle text for the 14 v2 event kinds and names for species 6 to 11 (`describe.ts`, tested by `src/ui/describe.test.ts`).
 
 ## Decisions
+- A backup branch `wip/s5-coyotes` was pushed by mistake while saving the interrupted S5 builder's work after a container restart; the proxy refused deleting it (403). It is safe to delete. All real work goes to v2-sim.
 - Lineage records more than "died with offspring or followed": also males that sired young and anyone who was ever alpha | herbivore and cougar births never count the father's children, so every father line would be empty; alphas let dynasties resolve | the literal rule.
 - Migration clock is a new agent field `mig`, not `cdv` | both S1 and S2 builders used `cdv`; it is the distemper countdown by contract | sharing one field between two features.
 - Story death codes: 6 emigrated, 7 disease | both builders took 6 | -
@@ -53,7 +54,8 @@ Only Track S writes this file (V2-PLAN.md section 4.3). Track R reads it with `g
 - batch.ts workers boot through `batchWorkerBoot.mjs` | fixes cloud batches with no change to results | running screens single-threaded.
 
 ## Requests for Track R
-- **Screen E at 32 seeds** (priority over anything else in the CPU queue after A to D): from a frozen worktree of `v2-sim@3bb97a5`, `npx tsx src/headless/batch.ts --seeds 32 --ticks 240000 --sample 600 --threads 10 --params '{"calendarScale":2,"openPrairie":1,"ravenVagrants":1,"cdvRate":0.3,"mangeRate":0.06,"wolfPreyRef":1000,"wolfRareHalf":400,"leanLitter":0.8}' --out scratch/screens/E32`, then `python tools/adoption.py E=scratch/screens/E32` (pull v2-sim first so adoption.py reads killed_pronghorn). If E32 passes it becomes the v6 candidate for the acceptance run.
+- **Screen F at 32 seeds** (priority, replaces the E32 request if it has not started; E is F without `"deerOutK":0.9`): same command as E below with `"deerOutK":0.9` added to the params and `--out scratch/screens/F32`. If F32 passes, please also launch the v6 acceptance and shocks on F from the same frozen worktree (V2-PLAN.md section 10 commands).
+- Screen E at 32 seeds (priority over anything else in the CPU queue after A to D): from a frozen worktree of `v2-sim@3bb97a5`, `npx tsx src/headless/batch.ts --seeds 32 --ticks 240000 --sample 600 --threads 10 --params '{"calendarScale":2,"openPrairie":1,"ravenVagrants":1,"cdvRate":0.3,"mangeRate":0.06,"wolfPreyRef":1000,"wolfRareHalf":400,"leanLitter":0.8}' --out scratch/screens/E32`, then `python tools/adoption.py E=scratch/screens/E32` (pull v2-sim first so adoption.py reads killed_pronghorn). If E32 passes it becomes the v6 candidate for the acceptance run.
 - **Caution on the 32-seed A to D table:** screens from `bc62e1e` have no `old_pronghorn` column and `kills_pronghorn` counts wolf kills only, so `adoption.py`'s pronghorn-starvation share reads far too high there (old age turned out to be a large share of pronghorn deaths). Please still post the table; I will judge the starvation gate from cloud re-runs at `3bb97a5`+ (which have the columns) and the other gates from yours.
 - R3 and R4 inputs are ready on v2-sim: `small` texture (S4) and `storms`/`strikes` (S6), layouts above.
 - Done for you: `tools/smoke.ts --gpu` (the default on Windows; `--swiftshader` forces software GL) launches with `--enable-gpu --ignore-gpu-blocklist --use-angle=d3d11` and the three background-throttling flags.
@@ -78,6 +80,8 @@ Only Track S writes this file (V2-PLAN.md section 4.3). Track R reads it with `g
 - E8 (cloud, exploratory, 8 seeds x 200 years, frozen bc62e1e): D with stronger disease, `{"calendarScale":2,"openPrairie":1,"ravenVagrants":1,"cdvRate":0.3,"mangeRate":0.06,"wolfPreyRef":1000,"wolfRareHalf":400,"leanLitter":0.8}`. All species persist 8/8, presence 8/8, **wolf CV 0.24, wolf-bison corr 0.75 at 1 yr lag**, pronghorn starvation 58% (gate <= 50%). Caveat: the CSVs have no `old_pronghorn` column, so pronghorn old-age deaths are missing from the denominator and the starvation share reads high in every screen. Fix coming (generic per-species death columns), then re-screen. Disease pressure looks like the lever that makes wolves rise and fall.
 
 - E8b (cloud, same E params at 3bb97a5, with the generic death columns; dynamics identical to E8 as expected): bison 8/8, presence 8/8, **pronghorn starvation 50%** (exactly at the gate), wolf CV 0.24, corr 0.75. First eligible config. Needs 32 seeds (request below). F16 (E + `deerOutK 0.9`, more autumn exodus to get starvation margin) is running in the cloud.
+
+- F16 (cloud, E + `deerOutK 0.9`, frozen 3bb97a5): 14 of 16 seeds finished before a container restart (all 14 complete 200-year runs). Bison 14/14, presence 14/14, **pronghorn starvation 45%, wolf CV 0.27, wolf-bison corr 0.67**. Eligible with margin: **F is the v6 candidate.** Table and dynamics in `review/stability/v6-screens/F16-cloud/`.
 
 ## In progress
 - S5 Coyotes (builder, main tree).
