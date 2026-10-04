@@ -48,6 +48,11 @@ export interface AnimParams {
   /** Stalking crouch body drop (m). */
   crouchDrop: number;
   /**
+   * A land hunter (wolf, cougar): its material reads the second effects attribute (aFx2: the hold on the prey and the feeding
+   * cycle). Birds read it too (hop, walk, takeoff). For everything else the attribute is left out of the shader.
+   */
+  hunts?: boolean;
+  /**
    * Curled rest (canids): while lying, the hindquarters and tail swing round to one side (up to `curlAng` rad, ramping in
    * over `curlLen` m behind the pivot at x = `curlX`) and the head turns back and rests on the paws. A resting wolf then
    * reads as a compact rounded form from any side; stretched out it is a long pale shape that looks like a fish standing

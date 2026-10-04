@@ -7,6 +7,10 @@
 //   aFx   = (feeding tug weight 0..1, altitude above ground in m (birds) | body-height offset in model metres (quadrupeds: the
 //            mean height of the ground under the stance feet above the body's ground plane), hunting weight 0..1, pounce envelope 0..1 |
 //            for a carcass: how far it has fallen over, 0 standing .. 1 down)
+//   A carcass (aGait.y < 0) carries its flank dent in the slots a body that is down does not use: the pull strength 0..1 in aFx.x,
+//   and the point it pulls from, in the body frame (m), in aFx.y (along the body) and aGait.w (across it).
+//   aFx2  = (only for hunters and birds, #define FX2) a predator: (hold on the prey 0..1, feeding cycle phase 0..1); a raven: (hop
+//            0..1 or -1, walk phase 0..1 or -1, seconds into a takeoff or -1, flutter 0..1)
 import * as THREE from 'three';
 import { IK_CAP, footReach, plantedStride } from './types';
 import type { AnimParams, ModelDef } from './types';
@@ -53,6 +57,7 @@ function defines(p: AnimParams, far: ModelDef['far'] | undefined, geometry: Mode
     `#define FAR_NEAR ${f(far?.d0 ?? 140)}`, `#define FAR_FAR ${f(far?.d1 ?? 400)}`,
     `#define ANIM_NEAR 20.0`, `#define ANIM_FAR 110.0`,
     `#define BODY_LEN ${f(p.boostLen)}`,
+    `#define FX2 ${p.hunts || p.kind === 2 ? 1 : 0}`,
   ].join('\n');
 }
 
@@ -66,6 +71,9 @@ attribute vec3 aPivot2;
 attribute vec4 aGait;
 attribute vec4 aLook;
 attribute vec4 aFx;
+#if FX2
+attribute vec4 aFx2;
+#endif
 uniform float uTime;
 uniform vec3 uCamPos;
 uniform float uPxK;
@@ -146,6 +154,8 @@ float tgPitchB;
 float tgFarK;
 float tgCyc;
 float tgPounce;
+float tgHold;   // 0..1: holding the prey (takedown), braced back on the hind feet
+float tgFeedB;  // 0..1: the haul of the feeding cycle, the forequarters pulled back
 vec3 tgGW;
 void tgBodyFwd(inout vec3 p, inout vec3 n) {
   p.y += tgYoff;
@@ -166,11 +176,16 @@ void tgBodyFwd(inout vec3 p, inout vec3 n) {
     // rolling from side to side with the stride (a walk sways, a trot rolls, a gallop rocks), and a little weight settling in the stance
     tgRotX(p, n, vec3(0.0, COM_Y, 0.0), tgFarK * (tgGW.x * 0.03 + tgGW.y * 0.055 + tgGW.z * 0.06) * sin(c + 0.9));
   }
-  // the leap of a pounce: the forequarters rise about the hind end and the whole animal lifts
+  // the leap of a pounce: the forequarters rise about the hind end and the whole animal lifts; once it has hold of the prey the
+  // airborne part settles (the hind feet are on the ground again, the forelegs on the prey)
   if (tgPounce > 0.001) {
-    p.y += tgPounce * COM_Y * 0.25;
-    tgRotZ(p, n, vec3(-0.3 * BODY_LEN, COM_Y * 0.6, 0.0), tgPounce * 0.42);
+    p.y += tgPounce * (1.0 - 0.85 * tgHold) * COM_Y * 0.25;
+    tgRotZ(p, n, vec3(-0.3 * BODY_LEN, COM_Y * 0.6, 0.0), tgPounce * (0.42 - 0.26 * tgHold));
   }
+  // holding the prey: braced back 8 degrees on the planted hind feet, rocking a little with each haul
+  if (tgHold > 0.001) tgRotZ(p, n, vec3(HIND_FOOT.x, 0.0, 0.0), tgHold * (0.14 + 0.02 * sin(uTime * 8.0)));
+  // feeding: the forequarters haul back with the neck (the forefeet stay planted, the leg IK takes this motion out)
+  if (tgFeedB > 0.001) p.x -= tgFeedB * 0.08 * BODY_LEN * smoothstep(-0.1, 0.5, p.x);
 }
 #endif
 
@@ -193,6 +208,12 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
   int part = int(aPart.x + 0.5);
   float spd = aGait.y;
   bool dead = spd < -0.5;
+  // aFx2 (see the top of the file); species without it get the "nothing happening" values, which the compiler folds away
+#if FX2
+  vec4 fx2 = aFx2;
+#else
+  vec4 fx2 = vec4(-1.0, -1.0, -1.0, 0.0);
+#endif
   // A body that has just been killed keeps the running pace it died at (aFx.z) while its legs go loose: the gait fades out
   // over the first part of the fall (aFx.w, 0 = just hit, 1 = down) instead of the animal freezing stiff and tipping over.
   float fallen = dead ? clamp(aFx.w, 0.0, 1.0) : 1.0;
@@ -251,7 +272,17 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
   // feeding at a carcass. Predators tear: the head hauls up and back slowly with the meat in its teeth, shakes it, then
   // snaps back down for the next bite, with the whole body heaving back a little. Ravens peck in quick bursts.
   float tug = dead ? 0.0 : aFx.x;
-  float tugPull = 0.0, tugShake = 0.0, peck = 0.0, peckUp = 0.0;
+  float tugPull = 0.0, tugShake = 0.0, tugSwallow = 0.0, tugBite = 0.0, peck = 0.0, peckUp = 0.0;
+  // takedown: the hold on the prey (0..1) and the head shaking it
+  float holdW = 0.0, holdSh = 0.0;
+#if KIND == 0
+  holdW = dead ? 0.0 : clamp(fx2.x, 0.0, 1.0);
+  holdSh = holdW * sin(t * 21.0 + seed * 40.0);
+  pitch += holdW * 0.04 * sin(t * 8.0 + seed * 5.0);
+#endif
+#if KIND == 2
+  if (fx2.x >= 0.0) pitch += 0.35 * sin(TG_TAU * fx2.x); // a hop: the beak comes up leaving the ground, down landing
+#endif
   if (tug > 0.001) {
 #if KIND == 2
     // pecking comes in bursts: the head lifts a little, then stabs down, 1.6 to 2.4 times a second
@@ -261,10 +292,16 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
     peckUp = tug * burst * 0.35;
     pitch -= peck * 0.22;
 #else
-    float tp = fract(t * (0.5 + 0.2 * fract(seed * 5.3)) + seed * 7.0);
-    tugPull = tug * smoothstep(0.0, 0.62, tp) * (1.0 - smoothstep(0.62, 0.7, tp));
-    tugShake = tug * smoothstep(0.3, 0.55, tp) * (1.0 - smoothstep(0.62, 0.7, tp)) * sin(t * 21.0 + seed * 40.0);
-    pitch += tugPull * 0.05;
+    // The feeding cycle, one per 2.5 to 4 s (fp is its phase 0..1, kept by the animal layer so the carcass dents in step):
+    // bite (the head dips into the meat), haul (the neck and forequarters pull back and up, then the meat tears free),
+    // shake (the head whips side to side with it), swallow (the head thrown up), and back down for the next bite.
+    float fp = fx2.y;
+    float shakeE = smoothstep(0.5, 0.56, fp) * (1.0 - smoothstep(0.7, 0.76, fp));
+    tugPull = tug * smoothstep(0.16, 0.5, fp) * (1.0 - smoothstep(0.5, 0.56, fp));
+    tugShake = tug * shakeE * sin(t * 23.0 + seed * 40.0);
+    tugSwallow = tug * smoothstep(0.74, 0.8, fp) * (1.0 - smoothstep(0.9, 0.96, fp));
+    tugBite = tug * sin(3.14159265 * clamp(fp / 0.2, 0.0, 1.0));
+    pitch += tugPull * 0.05 - tugSwallow * 0.03;
 #endif
   }
 
@@ -273,11 +310,13 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
   // quadruped is the body-height offset the animal layer works out from the ground under the stance feet (m, model units).
   // (legmath.ts bodyMotion) the body also sinks a little while it moves, so the knees stay bent (flex)
   float flex = LEGL * dot(gN, FLEX.xyz) * gAmt * moveK;
-  tgYoff = bob - flex + breathe - lie * LIE_DROP - crouchBody * CROUCH_DROP - sick * 0.035 * COM_Y + (dead ? 0.0 : aFx.y); // a sick animal sags a little
+  tgYoff = bob - flex + breathe - lie * LIE_DROP - crouchBody * CROUCH_DROP - sick * 0.035 * COM_Y + (dead ? 0.0 : aFx.y) - holdW * LEGL * 0.05; // a sick animal sags a little, a predator holding prey sits back
   tgPitchB = pitch;
   tgFarK = dead ? 0.0 : farK;
   tgCyc = cyc;
   tgPounce = pounce;
+  tgHold = holdW;
+  tgFeedB = tugPull;
   tgGW = vec3(wWalk, wTrot, wGal);
 #endif
   if (part >= 1 && part <= 4) {
@@ -332,7 +371,8 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
     knee = front ? -lift : lift * HOCK_K;
 #endif
     // pounce: forelegs reach out ahead, hindlegs drive
-    hip += pounce * (front ? 0.85 : -0.55);
+    // (holding the prey, the hind legs are planted: the leg IK has put the feet on the ground, so they are left as solved)
+    hip += pounce * (front ? 0.85 + holdW * 0.12 * sin(t * 9.0 + float(part) * 2.0) : -0.55 * (1.0 - holdW));
 #if KIND != 0
     // stalking: bent legs (a quadruped's legs bend through the IK instead, as the body drops by CROUCH_DROP)
     hip += crouchBody * (front ? 0.25 : -0.2);
@@ -344,6 +384,11 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
 #if KIND == 2
     hip = -1.5 * (1.0 - aLook.z); // birds: legs tuck back in flight, hang when perched
     knee = 0.0;
+    if (aLook.z > 0.5) {
+      // on the ground at a carcass: a hop is both feet together (tucked in the air), a walk alternates them
+      if (fx2.x >= 0.0) hip -= 0.9 * sin(3.14159265 * fx2.x);
+      else if (fx2.y >= 0.0) hip += 0.55 * sin(TG_TAU * (fx2.y + (part == 1 ? 0.0 : 0.5)));
+    }
 #endif
     if (dead) {
       // A fallen animal lies on its side with the legs folded, not stiff spikes. Going down it first stumbles on (the gait it
@@ -389,13 +434,19 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
     float chew = dn * 0.05 * sin(t * 7.0 + seed * 20.0);
     float yaw = LOOK_YAW * sin(t * 0.45 + seed * 13.0) * (1.0 - dn) * (1.0 - wGal) * (1.0 - lie * 0.5);
     float ang = -HEAD_DN * dn + nod + chew - 0.45 * crouchBody - 0.5 * sick * (1.0 - 0.5 * dn);
-    ang += tugPull * 0.6 - peck * 1.0 + peckUp + biteUp;
-    yaw += tugShake * 0.3;
+    ang += tugPull * 0.75 + tugSwallow * 1.5 - tugBite * 0.3 - peck * 1.0 + peckUp + biteUp;
+    yaw += tugShake * 0.55;
+    // holding the prey by the throat or flank: the head shakes it hard from side to side
+    ang += holdW * (0.5 + 0.2 * sin(t * 13.0 + seed * 5.0));
+    yaw += holdSh * 0.6;
     // after lifting the head it turns to look, then back
     yaw += idleK * raise * (fract(seed * 6.1) - 0.5) * 1.0 * sin(t * 0.9 + seed * 7.0);
     // from the drone view the head pumps harder so a trot or a gallop reads as a body moving, not sliding
     float pump = farK * (wWalk * 0.1 * sin(2.0 * cyc + 1.0) + wTrot * 0.16 * sin(2.0 * cyc + 1.0) + wGal * 0.32 * sin(cyc + 2.0));
     ang += pump;
+#if KIND == 2
+    if (fx2.y >= 0.0) ang += 0.22 * sin(TG_TAU * 2.0 * fx2.y); // a walking raven's head pumps with each step
+#endif
     ang -= pounce * 0.55; // the head drives forward and down onto the prey
     ang = mix(ang, 0.15, lie * 0.7);
 #if KIND == 0
@@ -432,8 +483,16 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
     float fold = aLook.z;
     float fph = 0.0;
     float fl = 0.0;
+    float tkT = -1.0, tkW = 0.0;
 #if KIND == 2
     fl = tgBirdBeat(t, seed, aGait.z * (1.0 - fold), clamp(aFx.z, 0.0, 1.0), fph);
+    // a hop flicks the wings half open, a startled raven flutters them, a takeoff throws them open in a deep downstroke flare
+    tkT = fx2.z;
+    tkW = tkT >= 0.0 ? 1.0 - smoothstep(0.55, 1.0, tkT) : 0.0;
+    float flick = fx2.x >= 0.0 ? sin(3.14159265 * fx2.x) * 0.85 : 0.0;
+    float opened = clamp(max(flick, max(fx2.w * 0.85, tkT >= 0.0 ? smoothstep(0.0, 0.12, tkT) : 0.0)), 0.0, 1.0);
+    fold *= 1.0 - opened;
+    if (fx2.w > 0.001) { fph = TG_TAU * t * 9.0; fl = max(fl, fx2.w); }
 #endif
     float wAmp = 1.0 + 0.6 * farK; // a deeper beat from the drone view, where a raven is a few pixels across
     // gliding and soaring: with the wings still they are held out with a dihedral that drifts between a flat glide and a
@@ -442,6 +501,13 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
     float soar = 0.5 + 0.5 * sin(t * 0.23 + seed * 17.0);
     float inner = 0.17 + glide * (0.05 + 0.1 * soar) + 0.03 * glide * sin(t * 1.9 + seed * 9.0 + right * 1.3) + fl * 0.75 * wAmp * sin(fph);
     float outer = 0.1 + glide * (0.06 + 0.1 * soar) + 0.04 * glide * sin(t * 2.7 + seed * 5.0 + right) + fl * 0.6 * wAmp * sin(fph - 1.1);
+#if KIND == 2
+    if (tkW > 0.001) {
+      // the first beat is deep and slow: wings up, then swept down hard (0.25 s), fading into the normal beat
+      inner = mix(inner, 1.15 * cos(TG_TAU * tkT / 0.5), tkW);
+      outer = mix(outer, 0.9 * cos(TG_TAU * (tkT - 0.06) / 0.5), tkW);
+    }
+#endif
     inner = mix(inner, 0.0, fold);
     float w1 = aPart.y;
     if (fold > 0.001) {
@@ -508,6 +574,21 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
     float k = mix(1.0, mix(0.4, 0.9, r), f3);
     p.y = p.y * k;
     p.xz *= mix(1.0, mix(0.8, 1.0, r), f3);
+#if KIND == 0
+    if (aFx.x > 0.001) {
+      // the flank dents with each pull of a feeding predator: the hide is drawn toward it and pressed in round the contact point
+      // (a carcass carries the pull strength in aFx.x and the contact point in the body frame in aFx.y and aGait.w, which a body
+      // that is down does not otherwise use)
+      float dR = 0.3 * BODY_LEN;
+      vec2 dcp = vec2(aFx.y, aGait.w);
+      vec2 dc = p.xz - dcp;
+      float dg = exp(-dot(dc, dc) / (dR * dR)) * aFx.x;
+      p.xz += (dcp / max(length(dcp), 1e-3)) * dg * 0.05 * BODY_LEN;
+      p.y -= dg * 0.09 * BODY_LEN;
+      n.xz -= dc * (2.0 * dg * 0.09 * BODY_LEN / (dR * dR));
+      n = normalize(n);
+    }
+#endif
   }
 
 #if KIND == 0
