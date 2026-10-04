@@ -56,7 +56,7 @@ export function drawRows(g: CanvasRenderingContext2D, w: number, h: number, u: n
   const rows: ({ kind: 'sp'; sp: number } | { kind: 'grass' })[] = [...d.species.map((sp) => ({ kind: 'sp' as const, sp })), { kind: 'grass' as const }];
   const gap = 5 * u;
   // species rows share the height equally; the grass row is a little slimmer
-  const GRASS_W = 0.62;
+  const GRASS_W = 0.86;
   const unitH = (P.b - P.t - gap * (rows.length - 1)) / (d.species.length + GRASS_W);
   const rowTop: number[] = [];
   const rowHs: number[] = [];
@@ -109,7 +109,7 @@ export function drawRows(g: CanvasRenderingContext2D, w: number, h: number, u: n
   rows.forEach((row, i) => {
     const top = rowTop[i];
     const bottom = top + rowHs[i];
-    const py0 = top + 4 * u, py1 = bottom - 3 * u;
+    const py0 = top + 6 * u, py1 = bottom - 4 * u;
     const isGrass = row.kind === 'grass';
     const vals = isGrass ? d.grass : d.pops[row.sp];
     const color = isGrass ? GRASS_COLOR : SPECIES_COLORS[row.sp];
@@ -123,8 +123,12 @@ export function drawRows(g: CanvasRenderingContext2D, w: number, h: number, u: n
     }
     let aLo: number, aHi: number;
     if (isGrass) {
-      aLo = 0;
-      aHi = d.grassMax > 1.0001 ? Math.ceil(d.grassMax * 10) / 10 : 1;
+      // grass is a fraction of full cover; its band is scaled to its own range so the seasonal wave shows
+      const span = Math.max(hi - lo, 0.08);
+      const mid = (hi + lo) / 2;
+      aLo = Math.max(0, Math.floor((mid - span * 0.62) * 20) / 20);
+      aHi = Math.min(Math.max(1, d.grassMax), Math.ceil((mid + span * 0.62) * 20) / 20);
+      if (aHi - aLo < 0.1) aHi = aLo + 0.1;
     } else {
       [aLo, aHi] = axisRange(lo, hi, 0.18);
     }
@@ -143,9 +147,10 @@ export function drawRows(g: CanvasRenderingContext2D, w: number, h: number, u: n
     g.font = axisFont;
     g.textAlign = 'right';
     g.fillStyle = PAPER_DIM;
-    const fmtAxis = (v: number) => (isGrass ? String(Math.round(v * 100) / 100) : fmtInt(v));
-    g.fillText(fmtAxis(aHi), P.l - 7 * u, py0 + 1 * u);
-    g.fillText(fmtAxis(aLo), P.l - 7 * u, py1 - 1 * u);
+    const fmtAxis = (v: number) => (isGrass ? v.toFixed(2).replace(/0$/, '') : fmtInt(v));
+    // two labels per row, each inset well inside its own band, so a row's low number never meets the next row's high
+    g.fillText(fmtAxis(aHi), P.l - 7 * u, top + 7 * u);
+    g.fillText(fmtAxis(aLo), P.l - 7 * u, bottom - 8 * u);
 
     // year hairlines
     g.strokeStyle = 'rgba(239,230,208,0.05)';
@@ -189,7 +194,7 @@ export function drawRows(g: CanvasRenderingContext2D, w: number, h: number, u: n
     g.textAlign = 'left';
     g.font = `500 ${(small ? 11.5 : 12.5) * u}px ${SANS}`;
     g.fillStyle = color;
-    g.fillText(isGrass ? 'Grass, 0 to 1' : SPECIES_NAMES[row.sp], P.l + 7 * u, top + 8.5 * u);
+    g.fillText(isGrass ? 'Grass cover, 0 to 1' : SPECIES_NAMES[row.sp], P.l + 7 * u, top + 8.5 * u);
     if (!isGrass) {
       g.textAlign = 'right';
       g.font = `700 ${(small ? 11.5 : 12.5) * u}px ${SANS}`;

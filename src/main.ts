@@ -186,6 +186,7 @@ const ui = new GameUI(document.getElementById('ui')!, {
   flyTo: (x, y) => { takeCamera(); engine.cam.flyTo(x, y); },
   setOverlay: (o: OverlayId) => overlay.setMode(o),
   setCinematic: (on) => { following = null; cinematicOn = on; autoCam = false; director.setEnabled(on); takeCamera(); },
+  takeCamera: () => takeCamera(),
   newWorld: (s, sc) => {
     const u = new URL(location.href);
     u.searchParams.delete('challenge');
@@ -300,7 +301,7 @@ engine.onFrame((dt, t) => {
       tick: pending.tick, env: pending.env, pop: pending.pop, history: pendingHistory, events: pendingEvents,
       selected: pending.selected, speed: pending.speed, ticksPerSec: pending.ticksPerSec, seed: seedStr,
       scenario: scenario.id, following, story: pending.story, storyId: pending.storyId,
-      packs: pending.packs.length / 4,
+      packs: pending.packs.length / 4, autoCamera: autoCam,
     });
     if (pending.selectedGone && following !== null) { following = null; engine.cam.follow(null); }
     const cp = engine.camera.position; // three x = sim x, three z = sim y

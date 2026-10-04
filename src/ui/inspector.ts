@@ -135,6 +135,7 @@ export class Inspector {
       h('span', { class: 'tg-story-caret', html: icon('chevronDown', 16) }),
     );
     this.storyEl = h('section', { class: 'tg-story', 'aria-label': 'Life story' }, this.storyToggle, this.storyList);
+    this.storyList.addEventListener('scroll', () => this.trimStory(), { passive: true });
     this.storyEl.classList.toggle('is-collapsed', !this.storyOpen);
 
     this.el = h(
@@ -246,6 +247,28 @@ export class Inspector {
     }
     setText(this.storyCount, lines.length ? String(lines.length) : '');
     if (atBottom || this.memorial) this.storyList.scrollTop = this.storyList.scrollHeight;
+    this.trimStory();
+  }
+
+  /** The story scrolls to its newest line, so its top edge can cut a line in half: mask away any line that is not whole. */
+  private trimStory(): void {
+    const l = this.storyList;
+    const set = (v: string) => {
+      l.style.maskImage = v;
+      l.style.webkitMaskImage = v;
+    };
+    if (l.scrollTop <= 1 || l.clientHeight === 0) return set('none');
+    const box = l.getBoundingClientRect();
+    let firstWhole = -1;
+    for (const li of l.querySelectorAll<HTMLElement>('.tg-story-line')) {
+      const r = li.getBoundingClientRect();
+      if (r.top >= box.top - 0.5) {
+        firstWhole = r.top - box.top;
+        break;
+      }
+    }
+    if (firstWhole <= 0) return set('none');
+    set(`linear-gradient(to bottom, transparent ${Math.max(0, firstWhole - 6).toFixed(1)}px, #000 ${firstWhole.toFixed(1)}px)`);
   }
 
   private show(): void {

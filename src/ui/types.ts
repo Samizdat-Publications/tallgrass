@@ -21,6 +21,8 @@ export interface UIActions {
   setOverlay(o: OverlayId): void;
   setCinematic(on: boolean): void;
   newWorld(seed: string, scenario: string): void;
+  /** Hand the camera back to the player when the documentary camera is driving. */
+  takeCamera?(): void;
   /** Load a challenge by id (the page reloads with ?challenge=id). */
   startChallenge(id: string): void;
 }
@@ -46,6 +48,8 @@ export interface UIFrame {
   storyId?: number;
   /** Wolf packs holding a territory right now (for challenges). */
   packs?: number;
+  /** True while the documentary camera is driving on its own (nobody has touched the camera for a while). */
+  autoCamera?: boolean;
 }
 
 /**

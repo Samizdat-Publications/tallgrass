@@ -36,6 +36,8 @@ export class Chronicle {
   private empty: HTMLElement;
   /** The first batch after a (re)start is history, not news: it never counts as unread. */
   private quietNext = true;
+  private trimRaf = 0;
+  private ro: ResizeObserver;
 
   constructor(private flyTo: (x: number, y: number) => void) {
     this.list = h('div', { class: 'tg-chron-list', role: 'list' });
@@ -49,6 +51,11 @@ export class Chronicle {
       h('span', { class: 'tg-chron-caret', html: icon('chevronDown', 16) }),
     );
     this.el = h('aside', { class: 'tg-chron tg-glass tg-leaf', 'aria-label': 'Chronicle' }, this.toggle, this.list);
+    // The list is clipped by its panel (and shrinks when the inspector opens). Whatever the height, the visible part
+    // must end on a whole entry, never half a sentence, so the part below the last whole entry is masked away.
+    this.list.addEventListener('scroll', () => this.scheduleTrim(), { passive: true });
+    this.ro = new ResizeObserver(() => this.scheduleTrim());
+    this.ro.observe(this.list);
 
     // Below 900 px wide the chronicle starts collapsed to a single tab.
     const mq = window.matchMedia('(max-width: 899px)');
@@ -72,7 +79,13 @@ export class Chronicle {
     if (!c) {
       this.unread = 0;
       this.renderBadge();
+      this.scheduleTrim();
     }
+  }
+
+  destroy(): void {
+    this.ro.disconnect();
+    cancelAnimationFrame(this.trimRaf);
   }
 
   clear(): void {
@@ -161,6 +174,36 @@ export class Chronicle {
     this.fresh.clear();
     this.list.replaceChildren(frag);
     this.list.scrollTop = scroll;
+    this.scheduleTrim();
+  }
+
+  private scheduleTrim(): void {
+    if (this.trimRaf) return;
+    this.trimRaf = requestAnimationFrame(() => {
+      this.trimRaf = 0;
+      this.trim();
+    });
+  }
+
+  /** Mask everything below the last entry that fits whole, so the list never ends mid-sentence. */
+  private trim(): void {
+    const l = this.list;
+    const set = (v: string) => {
+      l.style.maskImage = v;
+      l.style.webkitMaskImage = v;
+    };
+    if (this.collapsed || l.clientHeight === 0) return;
+    if (l.scrollTop + l.clientHeight >= l.scrollHeight - 2) return set('none'); // everything is on show
+    const top = l.getBoundingClientRect().top;
+    const limit = l.getBoundingClientRect().bottom + 0.5;
+    let lastWhole = -1;
+    for (const it of l.querySelectorAll<HTMLElement>('.tg-ent, .tg-more')) {
+      const r = it.getBoundingClientRect();
+      if (r.bottom > limit) break;
+      if (r.bottom > top) lastWhole = r.bottom - top;
+    }
+    if (lastWhole < 0) return set('none');
+    set(`linear-gradient(#000 ${lastWhole.toFixed(1)}px, transparent ${(lastWhole + 7).toFixed(1)}px)`);
   }
 
   private toggleYear(year: number): void {

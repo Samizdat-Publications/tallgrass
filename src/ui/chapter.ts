@@ -1,7 +1,15 @@
 // Chapter cards: the one bold, unboxed element. A large serif title fades in over the lower third, holds, and goes.
 import { h } from './dom';
 
+/** How long a card holds at 1x. Faster time shortens it (years are flying by), with a floor so it can still be read. */
 const DURATION = 4800;
+const MIN_DURATION = 2500;
+
+/** Hold time for a card at a sim speed: 1x full length, about 3.2 s at 10x, the floor from 100x up. */
+export function cardDuration(speed: number): number {
+  if (!(speed > 1)) return DURATION;
+  return Math.max(MIN_DURATION, Math.round(DURATION * (1 - 0.33 * Math.log10(speed))));
+}
 
 export interface CardRequest {
   title: string;
@@ -24,7 +32,7 @@ export class ChapterCard {
     this.reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
   }
 
-  show(title: string, subtitle?: string): void {
+  show(title: string, subtitle?: string, duration = DURATION): void {
     for (const a of this.anims) a.cancel();
     this.anims = [];
     this.title.textContent = title;
@@ -33,7 +41,7 @@ export class ChapterCard {
     this.sub.style.display = subtitle ? '' : 'none';
     this.el.classList.add('is-on');
 
-    const opts: KeyframeAnimationOptions = { duration: DURATION, fill: 'both', easing: 'linear' };
+    const opts: KeyframeAnimationOptions = { duration, fill: 'both', easing: 'linear' };
     if (this.reduce.matches) {
       // No movement: the card simply appears and disappears.
       const k: Keyframe[] = [{ opacity: 0, offset: 0 }, { opacity: 1, offset: 0.02 }, { opacity: 1, offset: 0.96 }, { opacity: 0, offset: 1 }];

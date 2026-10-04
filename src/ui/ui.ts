@@ -11,14 +11,15 @@ import './ui.css';
 import type { SimEvent } from '../sim/sim';
 import { YEAR_TICKS } from '../sim/types';
 import type { Challenge } from '../challenges';
-import { ChapterCard } from './chapter';
+import { ChapterCard, cardDuration } from './chapter';
 import { ChallengeRun } from './challenge';
 import { GoalCard } from './goal';
 import { ResultCard } from './result';
 import { Chronicle, type ChronicleEntry } from './chronicle';
 import { cardRank, describeEvent, eventWeight, yearOfTick } from './describe';
 import { FeedFilter } from './feed';
-import { h, unitPx } from './dom';
+import { button, h, unitPx } from './dom';
+import { icon } from './icons';
 import { Inspector } from './inspector';
 import { TopRight } from './menu';
 import { PopGraph, type Marker } from './popgraph';
@@ -69,6 +70,8 @@ export class GameUI {
   private resultShown = false;
   private goalRo: ResizeObserver;
   private hint: HTMLElement;
+  private camChip: HTMLButtonElement;
+  private camOn = false;
   private hintDone = false;
   private lastInput = performance.now();
   private hintTimer = 0;
@@ -82,6 +85,8 @@ export class GameUI {
   private hidden = false;
   private cinematic = false;
   private lastCardAt = -1e9;
+  /** Latest sim speed from the frame (0 paused, -1 skipping). */
+  private speed = 1;
   private queued: QueuedCard | null = null;
   private feed = new FeedFilter();
   private keyDown: (e: KeyboardEvent) => void;
@@ -104,7 +109,21 @@ export class GameUI {
     this.goalRo.observe(this.goal.el);
 
     const right = h('div', { class: 'tg-right' }, this.top.el, this.chron.el, this.inspector.el);
-    const bottom = h('div', { class: 'tg-bottom' }, h('span'), this.time.el, this.time.overlayEl);
+    // a quiet chip beside the time controls while the documentary camera is driving; a click takes the camera back
+    this.camChip = button(
+      {
+        class: 'tg-camchip tg-glass tg-leaf',
+        title: 'The camera is following the action. Click, or just move it, to take over.',
+        'aria-hidden': 'true',
+        tabindex: '-1',
+        onclick: () => this.actions.takeCamera?.(),
+      },
+      h('i', { class: 'tg-camdot', 'aria-hidden': 'true' }),
+      h('span', { class: 'tg-cam-ic', html: icon('camera', 16) }),
+      h('span', { class: 'tg-cam-name', text: 'Documentary camera' }),
+      h('span', { class: 'tg-cam-act', text: 'Take over' }),
+    );
+    const bottom = h('div', { class: 'tg-bottom' }, h('div', { class: 'tg-camwrap' }, this.camChip), this.time.el, this.time.overlayEl);
     const chrome = h('div', { class: 'tg-chrome' }, this.slate.el, this.goal.el, this.tools.el, right, this.pop.el, bottom);
     const bars = h('div', { class: 'tg-bars', 'aria-hidden': 'true' });
     this.hint = h(
@@ -143,6 +162,8 @@ export class GameUI {
     const now = performance.now();
     if (f.seed !== this.seed || f.scenario !== this.scenario || f.tick + 5 < this.lastTick) this.resetWorld(f);
     this.lastTick = f.tick;
+    this.speed = f.speed;
+    this.setCamChip(!!f.autoCamera);
     this.selectedId = f.selected ? f.selected.id : null;
     this.followingId = f.following;
 
@@ -253,11 +274,20 @@ export class GameUI {
     this.ui.style.setProperty('--goal-h', `${px}px`);
   }
 
+  private setCamChip(on: boolean): void {
+    if (on === this.camOn) return;
+    this.camOn = on;
+    this.camChip.classList.toggle('is-on', on);
+    this.camChip.setAttribute('aria-hidden', String(!on));
+    this.camChip.tabIndex = on ? 0 : -1;
+  }
+
   /** Show a chapter card right now (ignores the rate limit). */
   chapter(title: string, subtitle?: string): void {
     this.lastCardAt = performance.now();
     this.queued = null;
-    this.chapterCard.show(title, subtitle);
+    // one card at a time (show() replaces whatever is up), and shorter while years fly by
+    this.chapterCard.show(title, subtitle, cardDuration(this.speed < 0 ? 100 : this.speed));
   }
 
   /** Reflect the armed tool in the rail (main calls this when it arms or disarms by itself). */
@@ -302,6 +332,7 @@ export class GameUI {
     for (const ev of ['pointermove', 'pointerdown', 'wheel', 'keydown']) window.removeEventListener(ev, this.onInput);
     window.clearTimeout(this.hintTimer);
     this.goalRo.disconnect();
+    this.chron.destroy();
     this.time.destroy();
     this.top.destroy();
     this.pop.destroy();
@@ -348,7 +379,7 @@ export class GameUI {
     this.chron.add(entries, entries.length <= 4);
     this.pop.addMarkers(markers);
 
-    if (best) {
+    if (best && best.rank >= this.cardMinRank()) {
       if (now - this.lastCardAt >= CARD_COOLDOWN_MS) {
         this.chapter(best.title, best.subtitle);
       } else if (best.rank >= 4 && (!this.queued || best.rank > this.queued.rank)) {
@@ -356,6 +387,14 @@ export class GameUI {
         this.queued = { ...best, at: now };
       }
     }
+  }
+
+  /** The smallest card rank worth showing at this speed: minor events are skipped while years fly by. */
+  private cardMinRank(): number {
+    const s = this.speed < 0 ? 100 : this.speed;
+    if (s >= 100) return 4; // only extinctions, reintroductions and droughts at 100x
+    if (s >= 10) return 2; // a new pack on its own is not worth interrupting a fast run
+    return 0;
   }
 
   private flushQueuedCard(now: number): void {

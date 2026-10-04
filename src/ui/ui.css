@@ -659,9 +659,7 @@
   overscroll-behavior: contain;
   scrollbar-width: thin;
   scrollbar-color: rgba(239, 230, 208, 0.25) transparent;
-  padding: calc(2 * var(--u)) 0 calc(14 * var(--u));
-  -webkit-mask-image: linear-gradient(#000 calc(100% - 28 * var(--u)), transparent);
-  mask-image: linear-gradient(#000 calc(100% - 28 * var(--u)), transparent);
+  padding: calc(2 * var(--u)) 0 calc(6 * var(--u));
 }
 .tg-chron-empty {
   padding: calc(6 * var(--u)) calc(10 * var(--u));
@@ -810,6 +808,11 @@ button.tg-ent-b:hover {
 .tg-pop.is-open[data-view='pop'][data-rows='2'],
 .tg-pop.is-open[data-view='pop'][data-cols='2'] {
   height: calc(336 * var(--u));
+}
+/* five or six species: seven rows want more room still */
+.tg-pop.is-open[data-view='pop'][data-count='5'],
+.tg-pop.is-open[data-view='pop'][data-count='6'] {
+  height: min(calc(384 * var(--u)), calc(100vh - 210 * var(--u)));
 }
 @media (max-height: 940px) {
   /* the rail would collide with the tall chart on short screens, so the chart sits to its right */
@@ -1619,6 +1622,75 @@ button.tg-ent-b:hover {
 }
 .tg-ui.is-hidden .tg-result {
   display: none;
+}
+
+/* ---- the documentary camera chip, beside the time controls while the camera drives itself ---------------------- */
+.tg-camwrap {
+  justify-self: end;
+  display: flex;
+  align-items: flex-end;
+  pointer-events: none;
+}
+.tg-camchip {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(8 * var(--u));
+  height: calc(34 * var(--u));
+  padding: 0 calc(6 * var(--u)) 0 calc(14 * var(--u));
+  border-radius: 999px;
+  font-size: calc(13 * var(--u));
+  font-weight: 500;
+  white-space: nowrap;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(calc(6 * var(--u)));
+  pointer-events: none;
+  transition: opacity 0.5s var(--ease), transform 0.5s var(--ease), border-color 0.15s, visibility 0s linear 0.5s;
+}
+.tg-camchip.is-on {
+  opacity: 1;
+  visibility: visible;
+  transform: none;
+  pointer-events: auto;
+  transition-delay: 0s;
+}
+.tg-camchip:hover {
+  border-color: var(--edge-hi);
+}
+.tg-camdot {
+  width: calc(7 * var(--u));
+  height: calc(7 * var(--u));
+  border-radius: 50%;
+  background: var(--gold);
+  animation: tg-breathe 2.4s ease-in-out infinite;
+}
+.tg-cam-ic {
+  display: grid;
+  color: var(--paper-dim);
+}
+.tg-cam-name {
+  font: italic 400 calc(15 * var(--u)) / 1 var(--serif);
+}
+.tg-cam-act {
+  margin-left: calc(2 * var(--u));
+  padding: calc(5 * var(--u)) calc(11 * var(--u));
+  border-radius: 999px;
+  border: 1px solid var(--edge-hi);
+  font-size: calc(12.5 * var(--u));
+  transition: background-color 0.15s, color 0.15s;
+}
+.tg-camchip:hover .tg-cam-act,
+.tg-camchip:focus-visible .tg-cam-act {
+  background: var(--gold);
+  border-color: var(--gold);
+  color: var(--ink);
+}
+@media (max-width: 899px) {
+  .tg-camwrap {
+    position: absolute;
+    left: 0;
+    bottom: calc(var(--bar-h) + 8 * var(--u));
+  }
 }
 
 /* ---- quiet hint for second-monitor use ----------------------------------------------------------------------- */

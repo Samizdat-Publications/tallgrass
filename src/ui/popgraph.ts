@@ -385,14 +385,32 @@ export class PopGraph {
       if (series[i] < lo) lo = series[i];
     }
     // show the shape, not the baseline: scale from the window's low to its high, but never blow up flat noise
-    const range = Math.max(hi - lo, hi * 0.14);
-    const yMin = Math.max(0, lo - (range - (hi - lo)) / 2);
-    const yMax = yMin + range;
+    const range = Math.max(hi - lo, hi * 0.04, 3);
+    const yMin = Math.max(0, lo - (range - (hi - lo)) / 2 - range * 0.06);
+    const yMax = yMin + range * 1.12;
     const padT = 4 * this.unit, padB = 3 * this.unit, padL = 1, padR = 4 * this.unit;
     const pw = w - padL - padR, ph = ht - padT - padB;
     const X = (t: number) => padL + ((t - ts) / (t1 - ts)) * pw;
     const Y = (v: number) => padT + ph - ((v - yMin) / (yMax - yMin)) * ph;
     const step = Math.max(1, Math.floor((n - i0) / (pw * 1.5)));
+
+    // a faint baseline at the foot of the window's range, and a dotted line at its average
+    let sum = 0;
+    for (let i = i0; i < n; i++) sum += series[i];
+    const avgY = Y(sum / (n - i0));
+    g.lineWidth = 1;
+    g.strokeStyle = 'rgba(239,230,208,0.2)';
+    g.beginPath();
+    g.moveTo(padL, Math.round(padT + ph) + 0.5);
+    g.lineTo(padL + pw, Math.round(padT + ph) + 0.5);
+    g.stroke();
+    g.setLineDash([2 * this.unit, 3 * this.unit]);
+    g.strokeStyle = 'rgba(239,230,208,0.14)';
+    g.beginPath();
+    g.moveTo(padL, Math.round(avgY) + 0.5);
+    g.lineTo(padL + pw, Math.round(avgY) + 0.5);
+    g.stroke();
+    g.setLineDash([]);
 
     g.beginPath();
     let first = true;
