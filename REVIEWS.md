@@ -117,3 +117,19 @@ Round 6 outcomes (04:40):
 - In progress: 7, 9, G2, G4, G5 (renderer builder: world edge and ridges first).
 - Research: 1 (calendar re-scale cal2: 100-year screen within noise of v5 and visibly slower cycles, chart journey/20261004-042209_chart_calendar-cycles.png; acceptance and 300-year shocks running), 2 (wolf-tracking screens queued on cal2).
 - Also from this round: the documentary narrator (18 lines, being wired in), and fast-forward throughput (the worker stepped only 11 ms per 27 ms cycle).
+
+## Round 7 (07:25, build with renderer round 7, water rework, dust fix, Field notes, narrator, 2x calendar; charts from the 2x acceptance and shock suite) -> `review/round-07/critique.md`
+Stills critic: Visual 7, Readability 6 (was 5), Life 6, Ecosystem 4, UI 7, Keep watching 5.
+
+| # | Issue | Triage | Owner | Notes |
+|---|---|---|---|---|
+| 1 | Predators flat (wolves about 50, ravens capped at 320) | DEFER (researched) | lead | Prey-scaled wolves track bison (corr 0.71 to 0.76) but cost pronghorn by starvation overshoot (diagnosed 07:35); next: lean-times births (leanLitter, screening now). Raven cap rejected twice. |
+| 2 | Seed 11 dies | DEFER (documented) | lead | The failure mode (wolves carried by pronghorn and small game grind the bison out) is the same as in item 1; an immigration safety net would hide it rather than fix it. |
+| 3 | Evolution caps; litter about 2.4; herding collapses | DEFER + chart fix | lead | herdEyes keeps herding (screen evo2); sprint cost too strong at 0.5. Chart: mask the last stretch where few worlds remain (lead). Bison twinning: a bison litter cap was part of the rejected v6 package; worth re-screening on the 2x calendar. |
+| 4 | Births in autumn and winter | RESEARCH | lead | The spring birth pulse failed on the classic calendar because bison lived 3.3 valley-years; on the 2x calendar it may now hold. Screen when CPU frees. |
+| 5 | Distant river reads as pavement; night reads as an ocean; pond blotches in rain | FIX | water builder (river, rain), renderer builder (night) | |
+| 6 | Rain invisible; trees leafy in late winter; no snow in winter | FIX | renderer builder | Seasonal snowpack (the 2x calendar made snow weather rarer), foliage wrap bug, overcast in rain. |
+| 7 | Chronicle too thin; pack lost while count rises | FIX | UI builder | Season lines from population history; pack break-up phrasing. |
+| 8 | Herds as texture at distance; near-camera wolves glitch (03) | FIX | animals builder | |
+| 9 | Founder alpha with 0 offspring and kills | FIX | UI builder | |
+| 10 | UI and chart rough edges | FIX (partly) | UI builder (label overlap), lead (charts: right axis, persist labels, thinning) | "100x running at 20x" is honest hardware reporting: REJECT. Graph covering a third of the scene: it's the expanded view (G), by design. |
