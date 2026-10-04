@@ -10,8 +10,8 @@ const SEG = 192;
 const LIFT = 1.1;
 const MAX_PACKS = 16;
 const FADE_S = 0.35;
-/** Pack colors: distinct but sun-warmed, so a ring never looks like a UI bug laid over the prairie. */
-const PACK_HEX = ['#e8b04f', '#7fb0dc', '#e08a7c', '#a6cc7a', '#bca0e0', '#6fc8b8', '#f0d68a', '#d98f5a'];
+/** Pack colors: muted and earthy, so a range reads as a tint on the land, not as an interface drawn over it. Still eight distinct hues. */
+const PACK_HEX = ['#d4a85c', '#8aa8c8', '#c98f82', '#a0bb84', '#b2a2cc', '#7fb5a8', '#dcc88e', '#c4925f'];
 const MODE_ID: Record<OverlayMode, number> = { none: 0, vegetation: 1, fear: 2, territory: 3, traits: 4 };
 
 const LEGENDS: Record<OverlayMode, { title: string; lo: string; hi: string; ramp: string } | null> = {
@@ -46,6 +46,17 @@ varying vec2 vXZ;
 
 vec4 over(vec4 dst, vec3 c, float a) { return vec4(mix(dst.rgb, c, a), a + dst.a * (1.0 - a)); }
 
+float hash21(vec2 p) {
+  p = fract(p * vec2(123.34, 456.21));
+  p += dot(p, p + 45.32);
+  return fract(p.x * p.y);
+}
+float vnoise(vec2 p) {
+  vec2 i = floor(p), f = fract(p);
+  f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(hash21(i), hash21(i + vec2(1.0, 0.0)), f.x), mix(hash21(i + vec2(0.0, 1.0)), hash21(i + vec2(1.0, 1.0)), f.x), f.y);
+}
+
 void main() {
   vec2 uv = vXZ / uWorld;
   vec4 col = vec4(0.0);
@@ -63,16 +74,31 @@ void main() {
     for (int i = 0; i < ${MAX_PACKS}; i++) {
       if (i >= uPackN) break;
       vec4 p = uPacks[i];
-      float d = distance(vXZ, p.xy);
+      vec2 q = vXZ - p.xy;
+      float d = length(q);
       float aa = max(0.8, fwidth(d) * 1.2);
-      float ring = 1.0 - smoothstep(aa * 0.6, aa * 1.6, abs(d - p.z));
-      float inside = 1.0 - smoothstep(p.z - aa, p.z, d);
-      float fill = inside * (0.07 + 0.16 * smoothstep(p.z * 0.35, p.z, d));
-      // the den: a small ring that breathes
-      float dr = 5.0 + 0.8 * sin(uTime * 2.0 + float(i));
-      float den = (1.0 - smoothstep(aa * 0.6, aa * 1.6, abs(d - dr))) + (1.0 - smoothstep(1.4, 1.4 + aa, d));
-      col = over(col, uPackCol[i], clamp(max(max(ring * 0.9, fill), den * 0.95), 0.0, 1.0));
+      // a range is not a circle: the radius wanders with the direction, a broad lobe and a finer ripple, so the border
+      // follows the land the way a territory does (each pack its own shape)
+      vec2 dir = q / max(d, 0.001);
+      float fi = float(i);
+      float wob = (vnoise(dir * 1.5 + fi * 3.1) - 0.5) * 0.36 + (vnoise(dir * 4.1 + 9.0 + fi * 1.7) - 0.5) * 0.12;
+      float R = p.z * (1.0 + wob);
+      // a feathered tint over the range, a little denser toward the edge like a stain that has soaked in
+      float r = d / max(R, 1.0);
+      float inside = 1.0 - smoothstep(0.74, 1.04, r);
+      float wash = inside * (0.08 + 0.14 * smoothstep(0.2, 0.95, r));
+      // a thin, soft edge line that comes and goes along the border instead of a drawn circle
+      float soft = max(1.7, aa * 1.5);
+      float le = (d - R) / soft;
+      float line = exp(-le * le) * (0.42 + 0.34 * vnoise(dir * 5.0 + fi * 2.3));
+      // the den: a small dot and a faint breathing ring
+      float dr = 3.2 + 0.5 * sin(uTime * 1.6 + fi);
+      float de = (d - dr) / max(0.9, aa);
+      float den = (1.0 - smoothstep(0.7, 0.7 + aa, d)) * 0.8 + exp(-de * de) * 0.32;
+      col = over(col, uPackCol[i], clamp(max(max(line, wash), den), 0.0, 0.8));
     }
+    // a tint on the land has to hold at night too: a little more opaque, and not darkened by the night grade below
+    col.a = min(col.a * (1.0 + 0.9 * uNight), 0.85);
   } else if (uMode == 4) {
     // five soft taps, so the 16 m cells read as regions rather than tiles
     float o = 0.8 / 32.0;
@@ -87,7 +113,8 @@ void main() {
   // keep the ponds and the creek clear (static A = distance to water / 64 m)
   if (uMode != 3) edge *= smoothstep(0.004, 0.035, texture2D(tStatic, uv).a);
   // the night grade cools and lifts everything; keep overlay colours saturated and a little darker so they stay legible
-  col.rgb = pow(max(col.rgb, vec3(0.0)), vec3(1.0 + 1.3 * uNight)) * (1.0 - 0.3 * uNight);
+  if (uMode == 3) col.rgb = col.rgb * (1.0 - 0.12 * uNight);
+  else col.rgb = pow(max(col.rgb, vec3(0.0)), vec3(1.0 + 1.3 * uNight)) * (1.0 - 0.3 * uNight);
   gl_FragColor = vec4(col.rgb, col.a * uAlpha * edge);
 }`;
 
@@ -226,7 +253,7 @@ export class OverlayLayer {
     } else {
       const note = document.createElement('div');
       note.className = 'tg-map-legend-note';
-      note.textContent = 'Each ring is one pack\'s range; the small ring is its den.';
+      note.textContent = 'Each tinted patch is one pack\'s range; the small mark is its den.';
       this.legend.append(note);
     }
   }

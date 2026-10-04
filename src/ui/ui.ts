@@ -9,6 +9,7 @@ import '@fontsource/alegreya-sans/700.css';
 import './ui.css';
 
 import type { SimEvent } from '../sim/sim';
+import type { HistoryRow } from '../sim/worker';
 import { YEAR_TICKS } from '../sim/types';
 import type { Challenge } from '../challenges';
 import { ChapterCard, cardDuration } from './chapter';
@@ -18,8 +19,9 @@ import { FieldNotes, NoteTracker, NOTE_COUNT } from './fieldnotes';
 import { NotesPanel, NoteToast } from './notespanel';
 import { ResultCard } from './result';
 import { Chronicle, type ChronicleEntry } from './chronicle';
-import { cardRank, describeEvent, eventWeight, seasonName, seasonOfTick, yearOfTick } from './describe';
+import { cardRank, describeEvent, eventWeight, seasonName, seasonOfTick, yearOfTick, type DescribeContext } from './describe';
 import { FeedFilter } from './feed';
+import { SeasonLines } from './seasonlines';
 import { button, h, unitPx } from './dom';
 import { icon } from './icons';
 import { Inspector } from './inspector';
@@ -94,7 +96,6 @@ export class GameUI {
   private ambientNote: HTMLElement;
   private ambientTimer = 0;
   private dodgeFrame = 0;
-  private dodging = false;
   private onAnyDown: (e: PointerEvent) => void;
   private camOn = false;
   private hintDone = false;
@@ -117,6 +118,7 @@ export class GameUI {
   private speed = 1;
   private queued: QueuedCard | null = null;
   private feed = new FeedFilter();
+  private seasons = new SeasonLines();
   private keyDown: (e: KeyboardEvent) => void;
   private keyUp: (e: KeyboardEvent) => void;
 
@@ -144,7 +146,10 @@ export class GameUI {
     this.goalRo = new ResizeObserver(() => this.syncGoalHeight());
     this.goalRo.observe(this.goal.el);
     // the field note toast rides above the population strip, whatever height that has
-    this.popRo = new ResizeObserver(() => this.ui.style.setProperty('--pop-h', `${this.pop.el.offsetHeight}px`));
+    this.popRo = new ResizeObserver(() => {
+      this.unitCache = 0;
+      this.ui.style.setProperty('--pop-h', `${this.pop.el.offsetHeight}px`);
+    });
     this.popRo.observe(this.pop.el);
 
     const right = h('div', { class: 'tg-right' }, this.top.el, this.chron.el, this.inspector.el);
@@ -221,9 +226,10 @@ export class GameUI {
     this.time.update(f.speed, f.ticksPerSec, now);
     if (f.history.length) {
       this.pop.addHistory(f.history);
+      this.addSeasonLines(f.history, f.speed);
       this.inspector.setMeans(this.pop.latestTraits());
     }
-    if (f.events.length) this.handleEvents(f.events, now, f.tick);
+    if (f.events.length) this.handleEvents(f.events, now, f.tick, f.pop);
     this.pop.update(now, f.pop);
     this.inspector.update(f.selected, f.following, f.story, f.storyId);
     this.lastYear = f.env.year + 1;
@@ -231,7 +237,7 @@ export class GameUI {
     this.top.setWorld(f.seed, f.scenario);
     this.flushQueuedCard(now);
     this.keepCardInStep(now);
-    if ((this.dodgeFrame++ & 3) === 0) this.dodgeLabels();
+    if ((this.dodgeFrame++ & 1) === 0) this.dodgeLabels(now);
     if (this.run) this.stepChallenge(f);
     this.tracker.update(
       { tick: f.tick, env: f.env, pop: f.pop, events: f.events, selected: f.selected, following: f.following, speed: f.speed },
@@ -400,7 +406,7 @@ export class GameUI {
     this.lastCardAt = performance.now();
     this.queued = null;
     // one card at a time (show() replaces whatever is up), and shorter while years fly by
-    this.chapterCard.show(title, subtitle, cardDuration(this.speed < 0 ? 100 : this.speed));
+    this.chapterCard.show(title, subtitle, cardDuration(this.speed < 0 ? 100 : this.speed), this.speed > 1 || this.speed < 0);
   }
 
   /** Reflect the armed tool in the rail (main calls this when it arms or disarms by itself). */
@@ -468,6 +474,7 @@ export class GameUI {
     this.scenario = f.scenario;
     this.pop.reset();
     this.tracker.reset();
+    this.seasons.reset();
     this.inspector.setMeans(null);
     this.chron.clear();
     this.chapterCard.clear();
@@ -476,7 +483,17 @@ export class GameUI {
     this.lastCardAt = performance.now() - CARD_COOLDOWN_MS + 2500; // let the world settle before the first card
   }
 
-  private handleEvents(events: SimEvent[], now: number, tick: number): void {
+  /** The quiet news in the numbers: a season that thinned a herd, pups at the dens, ravens gathering, a record. */
+  private addSeasonLines(rows: HistoryRow[], speed: number): void {
+    const lines = this.seasons.feed(rows, speed);
+    if (!lines.length) return;
+    this.chron.add(
+      lines.map((l) => ({ tick: l.tick, year: l.year, sentence: l.sentence, x: 0, y: 0, sp: l.sp, major: false, weight: l.weight })),
+      lines.length <= 2,
+    );
+  }
+
+  private handleEvents(events: SimEvent[], now: number, tick: number, pop?: number[]): void {
     const entries: ChronicleEntry[] = [];
     const markers: Marker[] = [];
     let best: { title: string; subtitle: string; rank: number; tick: number } | null = null;
@@ -489,7 +506,13 @@ export class GameUI {
       if ((e.kind === 'packLost' || e.kind === 'packFounded') && flash.has(e.a)) continue;
       // the sim reports more stampedes and elders than anyone wants to read: thin them out
       if (!this.feed.accept(e)) continue;
-      const d = describeEvent(e);
+      // a pack that breaks up is a death only if the wolf count fell around then
+      let ctx: DescribeContext | undefined;
+      if (e.kind === 'packLost' && pop) {
+        const before = this.pop.popAtOrBefore(1, e.tick);
+        if (before !== null) ctx = { wolvesFell: before - (pop[1] ?? 0) >= 2 };
+      }
+      const d = describeEvent(e, ctx);
       const major = !!d.card;
       entries.push({ tick: e.tick, year: yearOfTick(e.tick), sentence: d.sentence, x: e.x, y: e.y, sp: e.sp, major, weight: eventWeight(e) });
       if (MARK_KINDS.has(e.kind)) markers.push({ tick: e.tick, sentence: d.sentence, major });
@@ -561,22 +584,79 @@ export class GameUI {
     return subtitle;
   }
 
-  /** Hide any pack label that sits under the chapter card, so the two never fight over the same pixels. */
-  private dodgeLabels(): void {
-    const b = this.chapterCard.bounds();
-    if (!b) {
-      if (this.dodging) {
-        this.dodging = false;
-        for (const el of this.ui.querySelectorAll('.tg-map-label.is-under-card')) el.classList.remove('is-under-card');
+  /**
+   * Keep the territory labels clear of the interface drawn over them. A label that would sit under the tool rail, the
+   * chronicle, the inspector or the goal card is nudged just clear of it (a CSS translate that rides on top of the
+   * position the overlay gives it), and one that cannot be nudged far enough is hidden. One that sits under the chapter
+   * card is hidden while the card is up.
+   */
+  private dodgeLabels(now: number): void {
+    const labels = this.ui.querySelectorAll<HTMLElement>('.tg-map-label');
+    const card = this.chapterCard.bounds();
+    if (!labels.length) return;
+    if (now - this.panelRectsAt > 350) {
+      this.panelRectsAt = now;
+      this.panelRects = [];
+      const pad = 10 * this.unitPx();
+      for (const sel of ['.tg-rail', '.tg-chron', '.tg-insp', '.tg-goal', '.tg-topright-row']) {
+        const el = this.ui.querySelector<HTMLElement>(sel);
+        if (!el || el.hidden) continue;
+        if (sel === '.tg-insp' && !el.classList.contains('is-open')) continue;
+        const r = el.getBoundingClientRect();
+        if (r.width < 2 || r.height < 2) continue;
+        this.panelRects.push({ l: r.left - pad, t: r.top - pad, r: r.right + pad, b: r.bottom + pad });
       }
-      return;
     }
-    this.dodging = true;
-    for (const el of this.ui.querySelectorAll<HTMLElement>('.tg-map-label')) {
+    const W = window.innerWidth, H = window.innerHeight;
+    const maxNudge = 120 * this.unitPx();
+    for (const el of labels) {
+      const prevX = Number(el.dataset.dx ?? 0), prevY = Number(el.dataset.dy ?? 0);
       const r = el.getBoundingClientRect();
-      const hit = r.right > b.left && r.left < b.right && r.bottom > b.top && r.top < b.bottom;
-      el.classList.toggle('is-under-card', hit);
+      if (r.width < 1) continue; // not shown right now
+      // where the overlay put it, without our own nudge
+      const w = r.width, h = r.height;
+      let x = r.left - prevX, y = r.top - prevY;
+      const x0 = x, y0 = y;
+      for (let pass = 0; pass < 2; pass++) {
+        for (const p of this.panelRects) {
+          if (x + w <= p.l || x >= p.r || y + h <= p.t || y >= p.b) continue;
+          // the shortest way out that keeps the label on screen
+          const opts: [number, number][] = [];
+          if (p.l - w >= 4) opts.push([p.l - w - x, 0]);
+          if (p.r + w <= W - 4) opts.push([p.r - x, 0]);
+          if (p.t - h >= 4) opts.push([0, p.t - h - y]);
+          if (p.b + h <= H - 4) opts.push([0, p.b - y]);
+          if (!opts.length) continue;
+          opts.sort((m, n) => Math.abs(m[0]) + Math.abs(m[1]) - Math.abs(n[0]) - Math.abs(n[1]));
+          x += opts[0][0];
+          y += opts[0][1];
+        }
+      }
+      // how far the panels pushed it; a label pushed too far from its den is hidden rather than left misleading
+      const pushed = Math.hypot(x - x0, y - y0);
+      // and never half off the screen: a label whose den is near the edge slides in
+      x = Math.max(8, Math.min(W - w - 8, x));
+      y = Math.max(8, Math.min(H - h - 8, y));
+      const dx = Math.round(x - x0), dy = Math.round(y - y0);
+      const stuck = this.panelRects.some((p) => !(x + w <= p.l || x >= p.r || y + h <= p.t || y >= p.b));
+      const far = pushed > maxNudge;
+      if (dx !== prevX || dy !== prevY) {
+        el.dataset.dx = String(dx);
+        el.dataset.dy = String(dy);
+        el.style.translate = dx || dy ? `${dx}px ${dy}px` : '';
+      }
+      const underCard = !!card && r.right > card.left && r.left < card.right && r.bottom > card.top && r.top < card.bottom;
+      el.classList.toggle('is-under-card', underCard || stuck || far);
     }
+  }
+
+  private panelRects: { l: number; t: number; r: number; b: number }[] = [];
+  private panelRectsAt = -1e9;
+  private unitCache = 0;
+  /** One CSS pixel unit in screen pixels (the UI's --u). */
+  private unitPx(): number {
+    if (!this.unitCache) this.unitCache = unitPx(this.ui);
+    return this.unitCache;
   }
 
   private flushQueuedCard(now: number): void {

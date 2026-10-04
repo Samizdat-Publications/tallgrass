@@ -3,7 +3,7 @@
 // Query: ?state=default|graph|graphhover|inspector|wolf|menu|overlay|tool|cinematic|night|noon|card|hidden
 //        story (live life story)|memorial (the animal dies)|evolution|evohover
 //        challenge (Knife's edge running; &used=5 spends the budget)|challenge-won (Dry years, wins after a second) (the expanded graph on its Evolution tab)
-//        founder (a founding bison with an empty story)
+//        founder (a founding bison with an empty story)  founderwolf (a founding wolf, no young, no kills)
 //        &tshift=-230 (shifts the mock clock)  &speed=0 (frozen clock)
 //        &caption=Some+words (a narrator caption, visible in cinematic mode)
 //        &fresh=1 (start with an empty field notebook)  state=notes (the notebook open, a few notes earned)
@@ -146,7 +146,8 @@ function bisonDetail(): AnimalDetail {
       genes: { speed: 1.1, size: 1.02, sight: 1.2, boldness: 1.3, herding: 0.2, coat: 0.55, litter: 1 },
     };
   }
-  const wolf = state === 'wolf';
+  const wolf = state === 'wolf' || state === 'founderwolf';
+  const founderWolf = state === 'founderwolf';
   return {
     id: wolf ? 20977 : 18234,
     sp: wolf ? 1 : 0,
@@ -159,9 +160,9 @@ function bisonDetail(): AnimalDetail {
     stamina: wolf ? 0.42 : 0.91,
     state: wolf ? 10 : 1,
     male: wolf,
-    gen: state === 'founder' ? 0 : wolf ? 9 : 12,
-    kills: wolf ? 14 : 0,
-    children: wolf ? 11 : 3,
+    gen: state === 'founder' || founderWolf ? 0 : wolf ? 9 : 12,
+    kills: founderWolf ? 0 : wolf ? 14 : 0,
+    children: founderWolf ? 0 : wolf ? 11 : 3,
     pack: wolf ? 6 : -1,
     packSize: wolf ? 7 : 0,
     alpha: wolf,
@@ -185,7 +186,7 @@ function storyFor(wolf: boolean): StoryEntry[] {
     ? [e(11200, 'dispersed'), e(9800, 'chase', 3), e(9650, 'kill', 3), e(7000, 'chase', 3), e(6900, 'chase', 3), e(5200, 'birth', 5), e(3000, 'chase', 0), e(2900, 'kill', 0), e(1500, 'infected'), e(900, 'recovered')]
     : [e(6900, 'fled', 1), e(6800, 'fled', 1), e(6000, 'fled', 1), e(4400, 'birth', 1), e(3100, 'infected'), e(2500, 'recovered'), e(1200, 'fled', 1), e(900, 'birth', 1)];
 }
-let storyLive: StoryEntry[] = state === 'founder' ? [] : storyFor(state === 'wolf');
+let storyLive: StoryEntry[] = state === 'founder' || state === 'founderwolf' ? [] : storyFor(state === 'wolf');
 let dyingSoon = state === 'memorial';
 
 // ---- fake event stream -----------------------------------------------------------------------------------------
@@ -295,6 +296,8 @@ if (q.has('labels')) {
     [330, 560, 'Willow', '4 wolves', '#F08A8A'],
     [760, 884, 'Switchgrass', '5 wolves', '#E07A6A'],
     [800, 770, 'Bluff', '13 wolves', '#9FA8F0'],
+    [46, 330, 'Hollow', '11 wolves', '#E0A870'],
+    [1500, 230, 'Creek', '9 wolves', '#7AC7A0'],
   ];
   for (const [x, y, name, count, col] of pts) {
     const el = document.createElement('div');
@@ -314,7 +317,7 @@ if (state === 'challenge' || state === 'challenge-won') {
   ui.setChallenge(challengeById(state === 'challenge' ? 'herd' : 'dry'));
   for (let i = 0; i < Number(q.get('used') ?? (state === 'challenge' ? 2 : 1)); i++) ui.tryUseTool();
 }
-if (state === 'inspector' || state === 'wolf' || state === 'story' || state === 'memorial' || state === 'cougar' || state === 'founder') selectedId = bisonDetail().id;
+if (state === 'inspector' || state === 'wolf' || state === 'story' || state === 'memorial' || state === 'cougar' || state === 'founder' || state === 'founderwolf') selectedId = bisonDetail().id;
 
 // ---- driver -----------------------------------------------------------------------------------------------------
 

@@ -195,6 +195,12 @@ export class PopGraph {
 
   // ---- view state --------------------------------------------------------------------------------------------
 
+  /** The count of a species in the newest history row at or before `tick`, or null when there is none yet. */
+  popAtOrBefore(sp: number, tick: number): number | null {
+    const i = this.lowerBound(tick + 1) - 1;
+    return i >= 0 ? (this.pops[sp]?.[i] ?? null) : null;
+  }
+
   get isExpanded(): boolean {
     return this.expanded;
   }

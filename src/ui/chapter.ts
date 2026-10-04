@@ -32,7 +32,9 @@ export class ChapterCard {
     this.reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
   }
 
-  show(title: string, subtitle?: string, duration = DURATION): void {
+  /** `compact` is a smaller title that sits lower, for when time is running fast. */
+  show(title: string, subtitle?: string, duration = DURATION, compact = false): void {
+    this.el.classList.toggle('is-compact', compact);
     for (const a of this.anims) a.cancel();
     this.anims = [];
     this.title.textContent = title;

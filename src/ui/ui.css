@@ -1288,8 +1288,17 @@ button.tg-ent-b:hover {
 .tg-gauge-mean.is-on {
   display: block;
 }
+.tg-insp-stats.is-empty {
+  display: none;
+}
+.tg-stat-since {
+  align-self: center;
+  font: italic 400 calc(13 * var(--u)) / 1 var(--serif);
+  color: var(--paper-dim);
+}
 .tg-insp-stats {
   display: flex;
+  flex-wrap: wrap;
   gap: calc(22 * var(--u));
   padding-top: calc(10 * var(--u));
   border-top: 1px solid var(--edge);
@@ -1967,16 +1976,31 @@ button.tg-ent-b:hover {
   transform: translateX(calc(16 * var(--u)));
   background: var(--gold);
 }
+.tg-narr-caption::before {
+  /* a soft dark pool behind the words, feathered on every side, so they hold on gold grass and on snow without
+     becoming a subtitle box */
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: calc(100% + 220 * var(--u));
+  height: calc(100% + 110 * var(--u));
+  transform: translate(-50%, -50%);
+  background: radial-gradient(closest-side, rgba(14, 10, 4, 0.74), rgba(14, 10, 4, 0.5) 58%, transparent);
+  z-index: -1;
+  pointer-events: none;
+}
 .tg-narr-caption {
+  isolation: isolate;
   position: absolute;
   left: 50%;
   bottom: calc(8.2vh + 14 * var(--u));
   transform: translate(-50%, calc(6 * var(--u)));
   max-width: min(72vw, calc(780 * var(--u)));
   text-align: center;
-  font: italic 400 calc(18 * var(--u)) / 1.3 var(--serif);
-  color: var(--paper);
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.7), 0 1px 16px rgba(0, 0, 0, 0.75);
+  font: italic 400 calc(20 * var(--u)) / 1.3 var(--serif);
+  color: #f4ecd8;
+  text-shadow: 0 0 2px rgba(0, 0, 0, 0.85), 0 1px 4px rgba(0, 0, 0, 0.75), 0 2px 20px rgba(0, 0, 0, 0.8);
   text-wrap: balance;
   opacity: 0;
   pointer-events: none;
@@ -2277,6 +2301,19 @@ button.tg-ent-b:hover {
   margin: calc(16 * var(--u)) auto calc(13 * var(--u));
   background: var(--gold);
   transform-origin: center;
+}
+/* years flying by: a smaller title that sits lower, so it names the moment without covering the action */
+.tg-chapter.is-compact {
+  bottom: calc(var(--stack) + 4 * var(--u));
+}
+.tg-chapter.is-compact .tg-chapter-title {
+  font-size: clamp(calc(26 * var(--u)), 2.9vw, calc(44 * var(--u)));
+}
+.tg-chapter.is-compact .tg-chapter-rule {
+  margin: calc(10 * var(--u)) auto calc(8 * var(--u));
+}
+.tg-chapter.is-compact .tg-chapter-sub {
+  font-size: calc(15 * var(--u));
 }
 .tg-chapter-sub {
   font: 500 calc(17 * var(--u)) / 1.2 var(--sans);

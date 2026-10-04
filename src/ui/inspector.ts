@@ -365,12 +365,18 @@ export class Inspector {
     }
 
     // stats: offspring always, kills for hunters or anyone who has some
-    const statKey = `${d.children}|${d.kills}|${d.sp}`;
+    // A counter that is still zero says nothing (a founder with no young and no kills reads as a contradiction), so it
+    // stays hidden until its first one. A founder's counts run from the day the valley began, and say so.
+    const founder = d.gen <= 0 || d.parentA <= 0;
+    const statKey = `${d.children}|${d.kills}|${d.sp}|${founder ? 1 : 0}`;
     if (statKey !== this.stats.dataset.k) {
       this.stats.dataset.k = statKey;
-      const parts: HTMLElement[] = [stat(fmtInt(d.children), d.children === 1 ? 'offspring' : 'offspring')];
-      if (d.sp === 1 || d.sp === 5 || d.kills > 0) parts.push(stat(fmtInt(d.kills), d.kills === 1 ? 'kill' : 'kills'));
+      const parts: HTMLElement[] = [];
+      if (d.children > 0) parts.push(stat(fmtInt(d.children), d.children === 1 ? 'offspring' : 'offspring'));
+      if (d.kills > 0) parts.push(stat(fmtInt(d.kills), d.kills === 1 ? 'kill' : 'kills'));
+      if (parts.length && founder) parts.push(h('span', { class: 'tg-stat-since', text: 'since the valley began' }));
       this.stats.replaceChildren(...parts);
+      this.stats.classList.toggle('is-empty', parts.length === 0);
     }
   }
 }

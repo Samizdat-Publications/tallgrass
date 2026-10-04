@@ -12,6 +12,12 @@ const WORLD_SIZE = 512;
  *  the calendar scale is set at startup). */
 const calendarOffset = () => Math.round(START_SEASON * SEASON_TICKS);
 
+/** What the caller knows that the event itself does not say. */
+export interface DescribeContext {
+  /** For a pack that broke up: true when the wolf count fell around then, false when it did not, undefined when unknown. */
+  wolvesFell?: boolean;
+}
+
 export interface EventText {
   sentence: string;
   card?: { title: string; subtitle: string };
@@ -179,7 +185,7 @@ export function animalCaption(sp: number, male: boolean, age: number, matureAge:
 
 /** "Generation 12, daughter of #18233" (or the founders' line). */
 export function lineageText(sp: number, gen: number, male: boolean, parentA: number): string {
-  if (gen <= 0 || parentA <= 0) return `One of the first ${plural(sp)} in the valley`;
+  if (gen <= 0 || parentA <= 0) return `Founder: arrived with the first ${plural(sp)}`;
   return `Generation ${gen}, ${male ? 'son' : 'daughter'} of #${parentA}`;
 }
 
@@ -271,7 +277,7 @@ export function eventWeight(e: SimEvent): number {
  * One plain sentence for the chronicle, plus a chapter card for the events that earn one.
  * Pure: depends only on the event.
  */
-export function describeEvent(e: SimEvent): EventText {
+export function describeEvent(e: SimEvent, ctx?: DescribeContext): EventText {
   const when = whenPhrase(e.tick);
   const year = yearOfTick(e.tick);
   const known = e.sp >= 0 && e.sp < SINGULAR.length;
@@ -288,10 +294,18 @@ export function describeEvent(e: SimEvent): EventText {
       };
     }
     case 'packLost': {
+      // A pack that breaks up is not a pack that died: when the wolf count did not fall, its wolves went on elsewhere.
       const name = packName(e.a);
+      const joined = ctx?.wolvesFell === false;
+      const died = ctx?.wolvesFell === true;
+      const sentence = joined
+        ? pick(e, [`The ${name} pack breaks apart; its wolves join others.`, `The ${name} pack disbands, and its wolves scatter to other packs.`, `The ${name} pack gives up its range; its wolves go on elsewhere.`])
+        : died
+          ? pick(e, [`The ${name} pack breaks up, and not every wolf survives the scattering.`, `The ${name} pack falls apart, and the valley has fewer wolves for it.`])
+          : pick(e, [`The ${name} pack has broken up.`, `The ${name} pack falls apart.`]);
       return {
-        sentence: pick(e, [`The ${name} pack has broken up.`, `The ${name} pack falls apart.`, `The ${name} pack is no more.`]),
-        card: { title: 'A pack falls silent', subtitle: `The ${name} pack, year ${year}` },
+        sentence,
+        card: { title: joined ? 'A pack breaks apart' : 'A pack falls silent', subtitle: `The ${name} pack, year ${year}` },
       };
     }
     case 'drought': {
