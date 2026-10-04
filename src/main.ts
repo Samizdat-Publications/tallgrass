@@ -12,6 +12,7 @@ import { scenarioById } from './scenarios';
 import { challengeById } from './challenges';
 import { Director } from './director';
 import { AudioDirector } from './audio/audio';
+import { Narrator } from './audio/narrator';
 import { countNearby, nearWater01 } from './audio/inputs';
 import { DAY_TICKS, setCalendarScale, Sp, YEAR_TICKS, type Intervention, type Snapshot } from './sim/types';
 import { applyOverrides, defaultParams } from './sim/params';
@@ -49,6 +50,9 @@ const director = new Director(engine.cam, (id, out) => animals.getPosition(id, o
 // sound starts itself on the first click or key press (browser autoplay rules)
 const audio = new AudioDirector();
 void audio.load();
+// the documentary narrator: speaks on big events while the documentary camera or cinematic mode is filming
+const narrator = new Narrator(audio);
+void narrator.load();
 window.addEventListener('keydown', (e) => { if (e.key === 'm' || e.key === 'M') audio.setMuted(!audio.muted); });
 
 // Photo mode: P saves the current frame as a PNG. The UI is HTML over the canvas, so the picture is clean.
@@ -191,6 +195,7 @@ const ui = new GameUI(document.getElementById('ui')!, {
   setOverlay: (o: OverlayId) => overlay.setMode(o),
   setCinematic: (on) => { following = null; cinematicOn = on; autoCam = false; director.setEnabled(on); takeCamera(); },
   takeCamera: () => takeCamera(),
+  setNarrator: (on) => { narrator.enabled = on; },
   newWorld: (s, sc) => {
     const u = new URL(location.href);
     u.searchParams.delete('challenge');
@@ -306,7 +311,7 @@ engine.onFrame((dt, t) => {
       tick: pending.tick, env: pending.env, pop: pending.pop, history: pendingHistory, events: pendingEvents,
       selected: pending.selected, speed: pending.speed, ticksPerSec: pending.ticksPerSec, seed: seedStr,
       scenario: scenario.id, following, story: pending.story, storyId: pending.storyId,
-      packs: pending.packs.length / 4, autoCamera: autoCam,
+      packs: pending.packs.length / 4, autoCamera: autoCam, narrator: narrator.enabled, caption: narrator.caption,
     });
     if (pending.selectedGone && following !== null) { following = null; engine.cam.follow(null); }
     const cp = engine.camera.position; // three x = sim x, three z = sim y
@@ -315,6 +320,8 @@ engine.onFrame((dt, t) => {
     if ((audioFrame & 3) === 0) nearbyCache = countNearby(pending.agents, pending.count, cp.x, cp.z, 250);
     audio.update(dt, { env: pending.env, camX: cp.x, camY: cp.z, camHeight, speed: pending.speed, nearby: nearbyCache, nearWater: nearWater01(world, cp.x, cp.z) });
     if (!skipping) for (const ev of pendingEvents) if (ev.x !== 0 || ev.y !== 0) audio.onEvent(ev, Math.hypot(ev.x - cp.x, ev.y - cp.z, camHeight));
+    if (!skipping) narrator.onEvents(pendingEvents, pending.tick);
+    narrator.update({ filming: autoCam || cinematicOn, speed: pending.speed });
     // a fresh carcass near the camera: someone just died here
     if (!skipping && pending.speed > 0 && pending.speed <= 10) {
       const C = pending.carcasses;
@@ -352,6 +359,9 @@ w.__snap = () => pending;
 w.__director = director;
 w.__apply = (iv: Intervention) => send({ type: 'apply', iv });
 w.__audio = audio;
+w.__narrator = narrator;
+// dev hook: speak one line by id, bypassing the narrator's rules (the audio must be unlocked by a click)
+w.__narrate = (id: string) => narrator.speakNow(id);
 w.__followId = (id: number | null) => {
   following = id;
   if (id === null) { engine.cam.follow(null); return; }

@@ -81,6 +81,11 @@ export class AudioDirector {
   private master: GainNode | null = null;
   private bedBus: GainNode | null = null;
   private spotBus: GainNode | null = null;
+  private voiceBus: GainNode | null = null;
+  private voiceBuffers = new Map<string, AudioBuffer>();
+  private voiceLoading: Promise<void> | null = null;
+  private voiceSrc: AudioBufferSourceNode | null = null;
+  private voiceInfo: { id: string; start: number; duration: number } | null = null;
   private meter: AnalyserNode | null = null;
   private buffers = new Map<ClipName, AudioBuffer>();
   private segs = new Map<ClipName, Segment[]>();
@@ -238,6 +243,131 @@ export class AudioDirector {
     this.lastDeath = this.clock;
   }
 
+  // ------------------------------------------------------------------------------------------------ narration
+
+  /**
+   * Fetch and decode the narrator's lines. Never rejects. A line that is missing (not generated yet, a failed fetch,
+   * or a dev server answering with its index page) is simply not available: no warning, the narrator skips it.
+   */
+  loadVoices(ids: string[], base: string = import.meta.env.BASE_URL + 'audio/narration/'): Promise<void> {
+    if (this.voiceLoading) return this.voiceLoading;
+    this.voiceLoading = this.doLoadVoices(ids, base);
+    return this.voiceLoading;
+  }
+
+  private async doLoadVoices(ids: string[], base: string): Promise<void> {
+    const root = typeof document !== 'undefined' ? new URL(base, document.baseURI).href : base;
+    const OfflineCtx = (typeof window !== 'undefined' && (window.OfflineAudioContext ?? (window as unknown as { webkitOfflineAudioContext?: typeof OfflineAudioContext }).webkitOfflineAudioContext)) || null;
+    if (!OfflineCtx) return;
+    const dec = new OfflineCtx(2, 1, 44100);
+    await Promise.all(
+      ids.map(async (id) => {
+        try {
+          const res = await fetch(root + id + '.mp3');
+          if (!res.ok) return;
+          const type = res.headers.get('content-type') ?? '';
+          if (type.includes('text/html')) return; // a dev server's fallback page, not audio
+          this.voiceBuffers.set(id, await dec.decodeAudioData(await res.arrayBuffer()));
+        } catch {
+          /* no line: the narrator carries on without it */
+        }
+      }),
+    );
+  }
+
+  /** True when the line is decoded and ready to speak. */
+  hasVoice(id: string): boolean {
+    return this.voiceBuffers.has(id);
+  }
+
+  /** Ids of the lines that decoded, for debug displays and tests. */
+  get voiceIds(): string[] {
+    return [...this.voiceBuffers.keys()];
+  }
+
+  /** The context is running (the first click has unlocked it), so a line can be heard. */
+  get voiceReady(): boolean {
+    return !!this.ctx && this.ctx.state === 'running' && !!this.voiceBus;
+  }
+
+  /** The line now playing: its id, how long it has run and how long it lasts (seconds). Null when silent. */
+  get voiceNow(): { id: string; elapsed: number; duration: number } | null {
+    const v = this.voiceInfo;
+    if (!v || !this.ctx) return null;
+    return { id: v.id, elapsed: Math.max(0, this.ctx.currentTime - v.start), duration: v.duration };
+  }
+
+  /** The current ducking of the beds and spot sounds (1 = untouched). For debug displays and tests. */
+  get duckLevel(): { beds: number; spots: number } {
+    return { beds: this.bedBus ? this.bedBus.gain.value : 1, spots: this.spotBus ? this.spotBus.gain.value : 1 };
+  }
+
+  /**
+   * Speak one line. Resolves true when it has played to the end, false when it could not start (not unlocked, missing,
+   * already speaking) or was stopped. While it plays the beds and spot sounds give way by `duck` (0..1) over `ramp`
+   * seconds, and come back the same way afterwards.
+   */
+  speak(id: string, duck = 0.4, ramp = 0.3): Promise<boolean> {
+    const ctx = this.ctx;
+    const buf = this.voiceBuffers.get(id);
+    if (!ctx || ctx.state !== 'running' || !buf || !this.voiceBus || this.voiceSrc) return Promise.resolve(false);
+    const t0 = ctx.currentTime + 0.05;
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    const g = ctx.createGain();
+    const fade = Math.min(0.12, buf.duration * 0.1);
+    g.gain.setValueAtTime(0, t0);
+    g.gain.linearRampToValueAtTime(1, t0 + fade);
+    g.gain.setValueAtTime(1, Math.max(t0 + fade, t0 + buf.duration - fade));
+    g.gain.linearRampToValueAtTime(0, t0 + buf.duration);
+    src.connect(g);
+    g.connect(this.voiceBus);
+    this.voiceSrc = src;
+    this.voiceInfo = { id, start: t0, duration: buf.duration };
+    // the world gets quieter just before the voice comes in
+    this.rampDuck(1 - clamp01(duck), ramp, ctx.currentTime);
+    return new Promise<boolean>((resolve) => {
+      src.onended = () => {
+        const wasMine = this.voiceSrc === src;
+        src.disconnect();
+        g.disconnect();
+        if (wasMine) {
+          this.voiceSrc = null;
+          this.voiceInfo = null;
+          if (this.ctx) this.rampDuck(1, ramp, this.ctx.currentTime);
+        }
+        resolve(wasMine);
+      };
+      src.start(t0);
+    });
+  }
+
+  /** Stop the line that is playing, if any (a world change, the narrator switched off). */
+  stopVoice(): void {
+    const src = this.voiceSrc;
+    if (!src || !this.ctx) return;
+    this.voiceSrc = null;
+    this.voiceInfo = null;
+    this.rampDuck(1, 0.3, this.ctx.currentTime);
+    try {
+      src.stop();
+    } catch {
+      /* already stopped */
+    }
+  }
+
+  /** Smooth ramp of the beds and spot sounds to `level` (1 = untouched). */
+  private rampDuck(level: number, seconds: number, now: number): void {
+    for (const bus of [this.bedBus, this.spotBus]) {
+      if (!bus) continue;
+      const p = bus.gain;
+      const cur = p.value;
+      p.cancelScheduledValues(now);
+      p.setValueAtTime(cur, now);
+      p.linearRampToValueAtTime(level, now + seconds);
+    }
+  }
+
   /** Release the context and listeners (hot reload, tests). */
   dispose(): void {
     this.stopListening();
@@ -309,8 +439,11 @@ export class AudioDirector {
     meter.fftSize = 1024;
     const bedBus = ctx.createGain();
     const spotBus = ctx.createGain();
+    // the narrator rides beside the beds and spot sounds, straight into the master (so M and the volume still rule it)
+    const voiceBus = ctx.createGain();
     bedBus.connect(master);
     spotBus.connect(master);
+    voiceBus.connect(master);
     master.connect(comp);
     comp.connect(limiter);
     limiter.connect(ctx.destination);
@@ -319,6 +452,7 @@ export class AudioDirector {
     this.master = master;
     this.bedBus = bedBus;
     this.spotBus = spotBus;
+    this.voiceBus = voiceBus;
     this.meter = meter;
     this.startBeds();
     return ctx;

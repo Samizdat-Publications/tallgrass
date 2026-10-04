@@ -23,6 +23,8 @@ export interface UIActions {
   newWorld(seed: string, scenario: string): void;
   /** Hand the camera back to the player when the documentary camera is driving. */
   takeCamera?(): void;
+  /** Switch the documentary narrator on or off (the game remembers the choice). */
+  setNarrator?(on: boolean): void;
   /** Load a challenge by id (the page reloads with ?challenge=id). */
   startChallenge(id: string): void;
 }
@@ -50,6 +52,10 @@ export interface UIFrame {
   packs?: number;
   /** True while the documentary camera is driving on its own (nobody has touched the camera for a while). */
   autoCamera?: boolean;
+  /** Whether the narrator is switched on. */
+  narrator?: boolean;
+  /** The line the narrator is speaking right now (null when silent); shown as a caption in cinematic mode. */
+  caption?: string | null;
 }
 
 /**

@@ -1731,6 +1731,82 @@ button.tg-ent-b:hover {
   }
 }
 
+/* ---- the narrator: its switch in the menu, and its caption in cinematic mode ------------------------------------- */
+.tg-switch {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: calc(14 * var(--u));
+  width: 100%;
+  padding: calc(8 * var(--u)) calc(8 * var(--u)) calc(9 * var(--u));
+  border-radius: calc(7 * var(--u));
+  transition: background-color 0.15s;
+}
+.tg-switch:hover {
+  background: rgba(240, 228, 200, 0.09);
+}
+.tg-switch-text {
+  display: grid;
+  text-align: left;
+}
+.tg-switch-track {
+  flex: none;
+  position: relative;
+  width: calc(36 * var(--u));
+  height: calc(20 * var(--u));
+  border-radius: 999px;
+  border: 1px solid var(--edge-hi);
+  background: rgba(10, 8, 4, 0.35);
+  transition: background-color 0.18s, border-color 0.18s;
+}
+.tg-switch-knob {
+  position: absolute;
+  left: calc(2 * var(--u));
+  top: calc(2 * var(--u));
+  width: calc(14 * var(--u));
+  height: calc(14 * var(--u));
+  border-radius: 50%;
+  background: var(--paper-dim);
+  transition: transform 0.18s var(--ease), background-color 0.18s;
+}
+.tg-switch[aria-checked='true'] .tg-switch-track {
+  background: rgba(217, 182, 92, 0.3);
+  border-color: var(--gold);
+}
+.tg-switch[aria-checked='true'] .tg-switch-knob {
+  transform: translateX(calc(16 * var(--u)));
+  background: var(--gold);
+}
+.tg-narr-caption {
+  position: absolute;
+  left: 50%;
+  bottom: calc(8.2vh + 14 * var(--u));
+  transform: translate(-50%, calc(6 * var(--u)));
+  max-width: min(72vw, calc(780 * var(--u)));
+  text-align: center;
+  font: italic 400 calc(18 * var(--u)) / 1.3 var(--serif);
+  color: var(--paper);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.7), 0 1px 16px rgba(0, 0, 0, 0.75);
+  text-wrap: balance;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.6s var(--ease), transform 0.6s var(--ease);
+}
+/* cinematic mode only: elsewhere the chronicle and the cards already carry the news */
+.tg-ui.is-cinematic .tg-narr-caption.is-on {
+  opacity: 0.94;
+  transform: translate(-50%, 0);
+}
+.tg-ui.is-cinematic.has-caption .tg-chapter {
+  bottom: calc(8.2vh + 86 * var(--u));
+}
+.tg-chapter {
+  transition: bottom 0.5s var(--ease);
+}
+.tg-ui.is-hidden .tg-narr-caption {
+  display: none;
+}
+
 /* ---- ambient view: the note that says how to get the interface back, and the labels that give way to cards ------ */
 .tg-ambient-note {
   position: absolute;

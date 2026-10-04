@@ -31,6 +31,7 @@ const KEYS: [string[], string][] = [
   [['L'], 'log scale on the graph'],
   [['E'], 'evolution view of the graph'],
   [['C'], 'documentary mode: bars, drifting camera, no panels'],
+  [['V'], 'narrator voice-over on or off'],
   [['H'], 'ambient view: hide everything; any key or click brings it back'],
   [['P'], 'save a picture of the view'],
   [['Esc'], 'let go, disarm, close'],
@@ -41,6 +42,8 @@ export class TopRight {
   private seedBtn: HTMLButtonElement;
   private seedText: HTMLElement;
   private ambientBtn: HTMLButtonElement;
+  private narratorBtn: HTMLButtonElement;
+  private narratorOn = true;
   private seedName: HTMLElement;
   private namedBtns = new Map<string, HTMLButtonElement>();
   private challengeBtns = new Map<string, HTMLButtonElement>();
@@ -133,9 +136,17 @@ export class TopRight {
     const keys = h('dl', { class: 'tg-keys' });
     for (const [ks, v] of KEYS) keys.append(h('dt', {}, ...ks.map((k) => h('kbd', { class: 'tg-kbd', text: k }))), h('dd', { text: v }));
 
+    // the narrator switch: a quiet voice-over for the big moments, only while the documentary camera is filming
+    this.narratorBtn = button(
+      { class: 'tg-switch', role: 'switch', 'aria-checked': 'true', onclick: () => this.actions.setNarrator?.(!this.narratorOn) },
+      h('span', { class: 'tg-switch-text' }, h('span', { class: 'tg-sc-name', text: 'Narrator' }), h('span', { class: 'tg-sc-blurb', text: 'A quiet voice-over for the big moments, while the documentary camera is filming. Key V.' })),
+      h('span', { class: 'tg-switch-track', 'aria-hidden': 'true' }, h('i', { class: 'tg-switch-knob' })),
+    );
+
     this.menu = h(
       'div',
       { class: 'tg-menu tg-glass', role: 'dialog', 'aria-label': 'Menu', hidden: true },
+      this.narratorBtn,
       h('h2', { class: 'tg-menu-h', text: 'Scenarios' }),
       scenarios,
       h('h2', { class: 'tg-menu-h', text: 'Challenges' }),
@@ -167,6 +178,13 @@ export class TopRight {
 
   get isOpen(): boolean {
     return this.open;
+  }
+
+  /** Reflect the narrator switch in the menu. */
+  setNarrator(on: boolean): void {
+    if (on === this.narratorOn) return;
+    this.narratorOn = on;
+    this.narratorBtn.setAttribute('aria-checked', String(on));
   }
 
   setWorld(seed: string, scenario: string): void {

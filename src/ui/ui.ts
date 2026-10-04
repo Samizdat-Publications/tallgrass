@@ -75,6 +75,9 @@ export class GameUI {
   private goalRo: ResizeObserver;
   private hint: HTMLElement;
   private camChip: HTMLButtonElement;
+  private narrCaption: HTMLElement;
+  private narratorOn = true;
+  private captionText = '';
   private ambientNote: HTMLElement;
   private ambientTimer = 0;
   private dodgeFrame = 0;
@@ -136,6 +139,8 @@ export class GameUI {
     const chrome = h('div', { class: 'tg-chrome' }, this.slate.el, this.goal.el, this.tools.el, right, this.pop.el, bottom);
     const bars = h('div', { class: 'tg-bars', 'aria-hidden': 'true' });
     // shown briefly when the interface goes away, so nobody is left wondering how to get it back
+    // the narrator's words under the chapter card, in cinematic mode only
+    this.narrCaption = h('div', { class: 'tg-narr-caption', 'aria-hidden': 'true' });
     this.ambientNote = h('div', { class: 'tg-ambient-note', role: 'status', 'aria-live': 'polite', text: 'Interface hidden. Press any key or click to bring it back.' });
     this.hint = h(
       'div',
@@ -149,7 +154,7 @@ export class GameUI {
       /* storage unavailable: the hint just shows once per page load */
     }
 
-    this.ui = h('div', { class: 'tg-ui', dataset: { cinematic: 'false' } }, chrome, this.hint, bars, this.chapterCard.el, this.result.el, this.ambientNote);
+    this.ui = h('div', { class: 'tg-ui', dataset: { cinematic: 'false' } }, chrome, this.hint, bars, this.chapterCard.el, this.result.el, this.narrCaption, this.ambientNote);
     root.append(this.ui);
 
     this.keyDown = (e) => this.onKeyDown(e);
@@ -180,6 +185,8 @@ export class GameUI {
     this.lastTick = f.tick;
     this.speed = f.speed;
     this.setCamChip(!!f.autoCamera);
+    this.setNarrator(f.narrator ?? true);
+    this.setCaption(f.caption ?? null);
     this.selectedId = f.selected ? f.selected.id : null;
     this.followingId = f.following;
 
@@ -289,6 +296,23 @@ export class GameUI {
     const el = this.goal.el;
     const px = this.run && !el.hidden ? el.offsetHeight + 10 * unitPx(this.ui) : 0;
     this.ui.style.setProperty('--goal-h', `${px}px`);
+  }
+
+  private setNarrator(on: boolean): void {
+    if (on === this.narratorOn) return;
+    this.narratorOn = on;
+    this.top.setNarrator(on);
+  }
+
+  /** The spoken line as a quiet caption under the chapter card. Only cinematic mode shows it (CSS). */
+  private setCaption(text: string | null): void {
+    const t = text ?? '';
+    if (t !== this.captionText) {
+      this.captionText = t;
+      if (t) this.narrCaption.textContent = t;
+      this.narrCaption.classList.toggle('is-on', !!t);
+      this.ui.classList.toggle('has-caption', !!t);
+    }
   }
 
   private setCamChip(on: boolean): void {
@@ -519,6 +543,9 @@ export class GameUI {
         break;
       case 'e':
         if (!e.repeat) this.pop.toggleEvolution();
+        break;
+      case 'v':
+        if (!e.repeat) this.actions.setNarrator?.(!this.narratorOn);
         break;
       case 'f':
         if (!e.repeat && this.selectedId !== null) this.actions.follow(this.followingId === this.selectedId ? null : this.selectedId);

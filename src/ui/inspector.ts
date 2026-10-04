@@ -140,7 +140,7 @@ export class Inspector {
 
     this.el = h(
       'section',
-      { class: 'tg-insp tg-glass', 'aria-label': 'Selected animal', hidden: true },
+      { class: 'tg-insp tg-glass tg-leaf', 'aria-label': 'Selected animal', hidden: true },
       h('header', { class: 'tg-insp-head' }, this.caption, this.lineage),
       memorial,
       this.activity,

@@ -5,6 +5,7 @@
 //        challenge (Knife's edge running; &used=5 spends the budget)|challenge-won (Dry years, wins after a second) (the expanded graph on its Evolution tab)
 //        founder (a founding bison with an empty story)
 //        &tshift=-230 (shifts the mock clock)  &speed=0 (frozen clock)
+//        &caption=Some+words (a narrator caption, visible in cinematic mode)
 //        &autocam=1 (the documentary camera chip shows)
 //        &intro=0 (rail starts as icons)  &hint=1 (show the H and C hint)  &behind=0.13 (sim runs at 13% of the speed asked)
 //        &labels=1 (sample territory labels like the overlay draws)
@@ -49,6 +50,9 @@ let following: number | null = null;
 let deadId = 0;
 // the documentary camera drives after a while with no input; ?autocam=1 starts with it on
 let autoCam = q.get('autocam') === '1';
+// the narrator switch and the line it is speaking, as main.ts would pass them
+let narratorOn = true;
+let caption: string | null = q.get('caption') ?? null;
 let seed = q.get('seed') ?? 'bluestem-4417';
 let scenario = 'prairie';
 let weather: number = Weather.Clear;
@@ -248,6 +252,10 @@ const actions: UIActions = {
     log.push('takeCamera');
     autoCam = false;
   },
+  setNarrator: (on) => {
+    log.push(`setNarrator ${on}`);
+    narratorOn = on;
+  },
   setOverlay: (o: OverlayId) => log.push(`setOverlay ${o}`),
   setCinematic: (on) => log.push(`setCinematic ${on}`),
   startChallenge: (id) => {
@@ -363,6 +371,8 @@ function frame(first: boolean): void {
     storyId: selectedId ?? deadId ?? 0,
     packs: 3,
     autoCamera: autoCam,
+    narrator: narratorOn,
+    caption,
   };
   ui.update(f);
 }
