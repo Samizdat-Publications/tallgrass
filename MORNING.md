@@ -78,7 +78,7 @@ The default sim is now **checkpoint v5** (since 16:45 Saturday). v4 results are 
 - **v4, for comparison** (`review/stability/v4-5df7663*`): 1,000 generations, bison, wolves and ravens 20/20, pronghorn 15/20. Shocks: the cull passed for every species; the drought passed except pronghorn recovery; the wolf wipeout failed strict recovery.
 - **What I tried next and did not ship (v6, Saturday evening):** about 20 more screens chasing the critics' "wolves should rise and fall a few years behind their prey". Prey-scaled wolf capacity does exactly that, lifting wolf-prey correlation from 0.29 to 0.58 at a one-year lag. Adding litter caps and individual herd protection stops the evolutionary drift and keeps herding alive. At 40 and 100 years it looked like a clear win (100 years: bison 32, wolves 31, ravens 32, pronghorn 28 of 32). But the 1,000-generation acceptance lost pronghorn in **every** finished world, between years 117 and 390: wolves that follow the pronghorn booms make each crash deeper. In this model a faster predator response trades directly against prey persistence, so **v5 stays the default**. The mechanisms are in the code, off by default, with every result in `DECISIONS.md` (18:10 to 20:35).
 - **Also rejected:** a spring birth pulse (calves only in spring). It collapsed everything, because bison live only about 3.3 valley-years in the compressed calendar, so one calf a year can't replace them; a real birth pulse needs the calendar re-scaled. Slow climate cycles also cost persistence.
-- Cougars (opt-in "Cougar country"): they ride the pronghorn boom and bust and die out in most worlds within 40 years. Revisit after the ecology settles.
+- Cougars (opt-in "Cougar country"): under v5 they starved within 2 to 16 years in all 32 worlds (about 0.2 kills of their own per cougar-year; the valley also holds only about four cougar ranges). Retuned at 22:40 with surer ambushes, a leaner metabolism, and a pair of dispersers wandering in when the valley empties of cats. Cougars are now present 85% of the time over 40 years (13 of 16 worlds at year 40), and the other species are unaffected.
 
 ## Reviews so far
 | Round | Source | Visual | Readability | Life | Ecosystem | UI | Keep watching |
@@ -99,7 +99,7 @@ Every issue and its triage is in `REVIEWS.md`.
 - **Time scale:** a year is 4 minutes at 1x, and biology is fast so that 1,000 generations fit in hours of compute: a v5 bison lives about 3.3 valley-years. That is why a realistic spring birth pulse failed (see Stability). Re-scaling the calendar would be the deeper fix and a bigger job.
 - **The world opens in late summer** (golden, like your concept); early summer is green.
 - **Challenges** are fixed and hand-tuned, not generated; the tuning data is in `DECISIONS.md`.
-- **Cougars and rabbits:** cougars are opt-in, and under v5 they currently starve within a few years (being retuned tonight); rabbits stay abstract (wolves' "small game" in lean times).
+- **Cougars and rabbits:** cougars are opt-in, and their scenario lets dispersers wander in from outside (the valley is too small to hold a cat population on its own); rabbits stay abstract (wolves' "small game" in lean times).
 - **No immigration:** wolves never wander in from outside the valley, so persistence numbers are for a closed valley.
 
 ## Blocked / cut
