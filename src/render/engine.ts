@@ -22,6 +22,7 @@ import { PostFX, Quality } from './post';
 import { Smoke } from './smoke';
 import { DroneCamera, CameraPreset } from './camera';
 import { grassTint } from './grass';
+import { CURE_KEYS, LEAF_KEYS, PACK_KEYS, keyCurve } from './season';
 
 export type { Quality } from './post';
 export { injectTerrainShadow } from './common';
@@ -54,34 +55,7 @@ const SEASON_COLORS = SEASONS.map((k) => ({
 }));
 const ROCK_COLOR = new THREE.Color('#8d7f6a');
 
-/** Copy of the blade layer's cure curve (grass.ts CURE_KEYS): how cured the prairie is across the year. */
-const CURE_KEYS: [number, number][] = [
-  [0, 0.03], [0.6, 0.06], [1.0, 0.12], [1.25, 0.24], [1.5, 0.6], [1.8, 0.92], [2.0, 1.0], [3.5, 1.0], [3.8, 0.5], [4.0, 0.03],
-];
-/**
- * Cottonwood leaf cover across the year: [season, leaf amount]. Bare through winter and into early spring, buds and small leaves
- * by mid spring, full by early summer, thinning from mid autumn. The old table interpolated half-season keys around the year
- * wrap (late winter 0.1 to early spring 0.45), so crowns were already half green in late winter.
- */
-const LEAF_KEYS: [number, number][] = [
-  [0, 0.05], [0.3, 0.14], [0.55, 0.5], [0.8, 0.9], [1.05, 1.0], [1.5, 1.0], [2.0, 0.88], [2.5, 0.4], [3.0, 0.08], [3.6, 0.05], [4.0, 0.05],
-];
-/** Seasonal snowpack: [season, cover] (0..1 of the snow uniform). Builds from early winter, peaks mid winter, melts out by early spring. */
-const PACK_KEYS: [number, number][] = [
-  [0, 0], [3.1, 0], [3.35, 0.3], [3.5, 0.36], [3.7, 0.3], [3.9, 0.06], [4.0, 0],
-];
-function keyCurve(keys: [number, number][], s: number): number {
-  const t = ((s % 4) + 4) % 4;
-  for (let i = 0; i < keys.length - 1; i++) {
-    const [a, va] = keys[i];
-    const [b, vb] = keys[i + 1];
-    if (t >= a && t <= b) {
-      const f = (t - a) / (b - a);
-      return va + (vb - va) * f * f * (3 - 2 * f);
-    }
-  }
-  return keys[keys.length - 1][1];
-}
+// the cure, leaf, snowpack and seed curves (and keyCurve) live in season.ts, shared with the blade layer and the ground shader
 
 /**
  * Sun shadow filter. three's PCF takes 5 rotated taps with one UV offset for both axes, but the two cascades sit side by side in one

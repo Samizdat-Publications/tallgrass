@@ -8,6 +8,7 @@ import { sampleHeight } from '../sim/world';
 import {
   HEIGHT_GLSL, NOISE_GLSL, SharedUniforms, clamp, fbm2, injectSafeOutput, injectTerrainShadow, smoothstep, vnoise2,
 } from './common';
+import { SEASON_GLSL } from './season';
 
 const SHADOW_RES = 512;
 const FAR_RES = 512;
@@ -882,6 +883,7 @@ varying vec3 vTgWorld;
 varying vec3 vTgNormal;
 varying float vTgCurv;
 ${NOISE_GLSL}
+${SEASON_GLSL}
 float gTgRough = 0.95;
 float gTgH = 0.0;
 vec3 gTgEmis = vec3(0.0);
@@ -949,7 +951,7 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
   float wd = mix(90.0, st.a * 64.0, inS);
 
   float slopeG = sqrt(max(1.0 - nrm.y * nrm.y, 0.0)) / max(nrm.y, 0.05);
-  float winterK = smoothstep(2.5, 3.0, uSeason) * (1.0 - smoothstep(3.6, 3.95, uSeason));
+  float winterK = tgWinterK(uSeason);
   float autumnK = smoothstep(1.8, 2.2, uSeason) * (1.0 - smoothstep(2.6, 3.0, uSeason));
   float curv = vTgCurv;
   float ridgeK = smoothstep(0.04, 0.7, curv);
@@ -1014,10 +1016,10 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
   if (wd < 58.0) {   // the belt never reaches past about 57 m (the distance texture holds 64), so the open prairie skips the noise
     float ripBroad = tgNoise2(xz * 0.011 + vec2(31.7, 12.3)) * 0.6 + tgNoise2(xz * 0.027 + vec2(7.3, 55.1)) * 0.4;
     float ripW = mix(20.0, 50.0, smoothstep(0.22, 0.66, ripBroad)) * (0.85 + 0.3 * tgNoise2(xz * 0.07 + vec2(3.1, 91.7)));
-    riparian = (1.0 - smoothstep(0.3 * ripW, ripW, wd)) * mix(1.0, 0.8, uCure) * (1.0 - 0.9 * winterK);
+    riparian = tgRiparian(1.0 - smoothstep(0.3 * ripW, ripW, wd), uCure, winterK);
   }
   float dry = clamp(uCure + (0.55 - moist) * 1.1 + stubA * 0.55 + 0.3 * up + (nB - 0.5) * 0.24 + (nM2 - 0.5) * 0.26 - mix(0.5, 0.3, edgeW) * draw * (0.4 + 0.6 * (1.0 - uCure)) - 0.2 * (nM1 - 0.5), 0.0, 1.0);
-  dry = mix(dry, min(dry, 0.02 + 0.12 * uCure + 0.4 * stubA), riparian);
+  dry = tgRiparianDry(dry, uCure, stubA, riparian);
   vec3 grassCol = mix(uGrassGreen, uGrassDry, dry) * vec3(1.0 + 0.08 * up * dry, 1.0 - 0.07 * up * dry, 1.0 - 0.16 * up * dry);
   // the blades add their own shading; the far-field ground is the canopy average: slightly olive and a little less saturated
   grassCol *= vec3(1.04, 1.01, 0.86);
