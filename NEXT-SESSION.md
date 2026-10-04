@@ -3,13 +3,13 @@
 **Updated:** 2026-10-04 11:06 (deadline in .claude/hooks/run_until.txt: 2026-10-04 12:00)
 
 ## State
-- **Updated 11:06.** Live: 10:59 deploy from 359f512 (everything, including the riparian ribbon and all round 9 fixes). Working tree clean. Every doc current; MORNING.md audited (run steps verified from a clean clone at 10:34; challenge suite re-run 10:57, all five pass).
+- **Updated 11:20.** Live: 11:19 deploy from 86eb206 (everything, including the riparian ribbon, all round 9 fixes and a 1.2 s takedown struggle). Working tree clean. Every doc current; MORNING.md audited (run steps verified from a clean clone at 10:34; challenge suite re-run 10:57, all five pass).
 - Reviews: round 9 blind critic 7, 5, 6, 5, 7, 6; round 10 Gemini video 7, 6, 3, 8, 9, 5 (its best yet). Both triaged in REVIEWS.md.
 - Frame cost tonight: final quick round about +0.5 ms, riparian about +0.35 ms (+0.8 low view) at 1440p, paired A/B.
 - Nothing running in the background. scratch/wt is at 359f512; scratch/wt2 is a second worktree for paired GPU A/B.
 
 ## Next 3 steps (for the next session)
-1. Close-range animation, the one complaint every Gemini round repeats: lengthen the kill struggle (0.25 s is too brief to read on video), check foot planting on the hunt close-ups frame by frame, vary raven flapping.
+1. Close-range animation, the one complaint every Gemini round repeats: record a reel and check the new 1.2 s takedown on video, check foot planting on the hunt close-ups frame by frame, vary raven flapping.
 2. The research items in MORNING.md Next 5: pronghorn under prey-scaled wolves (a fawning brake), per-species evolution costs plus a bison single-calf cap, personal space while grazing (herd shape).
 3. Drought ground that goes pale straw instead of mauve, and the bare apron on the shaded side of ponds (terrain.ts).
 

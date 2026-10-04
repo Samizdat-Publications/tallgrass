@@ -189,7 +189,7 @@ Gemini: Visual 7, Readability 6, Life 3, Ecosystem 8, UI 9, Keep watching 5 (rou
 | # | Issue | Triage | Owner | Notes |
 |---|---|---|---|---|
 | G1 | Locomotion slides, feet don't plant at close range | DEFER | animals | Round 4 measured 8 to 12% foot slip; path smoothing in round 7. Gemini keeps seeing it at the hunt close-ups; next step is a close-range gait check on the reel frames. |
-| G2 | Kill snaps to a dead pose without struggle | DEFER | animals | A 0.25 s struggle landed at 09:51; too brief to read on video. Lengthen it next session. |
+| G2 | Kill snaps to a dead pose without struggle | FIXED 11:19 | animals builder | The 0.25 s struggle became about 1.2 s (bucking, rearing, head tosses, scrabbling legs) before the roll; rig strips in scratch/b3/r10. Not yet seen on video. |
 | G3 | Metronomic raven flight | DEFER | animals | Glides and soaring landed in round 7; still reads as mechanical in flapping flight. |
 | G4 | Night too dark to watch | REJECT for now | lead | Round 9's stills critic and earlier rounds read the night as land; Gemini sees the darkest moment of the reel. |
 | G5 | Captions hard to read on grass | DEFER | UI | A soft shadow was added in round 8; a fuller scrim is the next step. |
