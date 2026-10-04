@@ -39,6 +39,9 @@ export interface World {
   creek: Float32Array;
   /** Ponds: stride 4 (x, y, radius m, surface height m). */
   ponds: Float32Array;
+  /** Border entry points for the open prairie (V2-PLAN.md S1), stride 4: x, y on the border, inward unit normal (nx, ny).
+   *  Eight of them: the creek inlet and outlet, and the lowest rim cell in each remaining eighth of the rim. */
+  corridors: Float32Array;
 }
 
 export const WORLD_SIZE = 512;
@@ -297,7 +300,57 @@ export function generateWorld(seed: number, size = WORLD_SIZE, n = GRID_N): Worl
   return {
     seed, size, n, cell, hn, height, water, waterHeight, waterDist, moisture, soilBase, cover, slope, capacity,
     trees: new Float32Array(trees), shrubs: new Float32Array(shrubs), creek, ponds: new Float32Array(ponds),
+    corridors: findCorridors(height, hn, size, cell, creek),
   };
+}
+
+/**
+ * Eight border entry points, computed from the finished terrain with no random draws (so the world generator's
+ * stream is untouched). The rim (4 sides, going round from the south-west corner) is split into eighths. Each eighth
+ * gets its lowest rim sample, keeping 8 cells clear of the corners; the creek inlet (west edge) and outlet (east edge)
+ * take over the eighths they sit in. Returned in rim order, stride 4: x, y, inward normal.
+ */
+function findCorridors(height: Float32Array, hn: number, size: number, cell: number, creek: Float32Array): Float32Array {
+  const n = hn - 1;
+  const margin = 8;
+  const out = new Float32Array(8 * 4);
+  const best = new Float32Array(8).fill(1e9);
+  const rimPoint = (p: number): { i: number; j: number; nx: number; ny: number; k: number } => {
+    const side = Math.floor(p / n), k = p % n;
+    if (side === 0) return { i: k, j: 0, nx: 0, ny: 1, k };
+    if (side === 1) return { i: n, j: k, nx: -1, ny: 0, k };
+    if (side === 2) return { i: n - k, j: n, nx: 0, ny: -1, k };
+    return { i: 0, j: n - k, nx: 1, ny: 0, k };
+  };
+  for (let p = 0; p < 4 * n; p++) {
+    const r = rimPoint(p);
+    if (r.k < margin || r.k > n - margin) continue;
+    const e = Math.min(7, Math.floor(p / (n / 2)));
+    const h = height[r.j * hn + r.i];
+    if (h < best[e]) {
+      best[e] = h;
+      out.set([r.i * cell, r.j * cell, r.nx, r.ny], e * 4);
+    }
+  }
+  // creek inlet and outlet: where the centerline crosses x = 0 and x = size
+  const nc = creek.length / 2;
+  const cross = (target: number): number => {
+    for (let k = 0; k < nc - 1; k++) {
+      const x0 = creek[2 * k], x1 = creek[2 * k + 2];
+      if ((x0 - target) * (x1 - target) <= 0 && x0 !== x1) {
+        const s = (target - x0) / (x1 - x0);
+        return creek[2 * k + 1] + (creek[2 * k + 3] - creek[2 * k + 1]) * s;
+      }
+    }
+    return size / 2;
+  };
+  const clampY = (y: number) => Math.min(size - margin * cell, Math.max(margin * cell, y));
+  const inletY = clampY(cross(0)), outletY = clampY(cross(size));
+  // west edge is side 3 (p = 3n + n - j), east edge is side 1 (p = n + j)
+  const inP = 3 * n + (n - Math.round(inletY / cell)), outP = n + Math.round(outletY / cell);
+  out.set([0, inletY, 1, 0], Math.min(7, Math.floor(inP / (n / 2))) * 4);
+  out.set([size, outletY, -1, 0], Math.min(7, Math.floor(outP / (n / 2))) * 4);
+  return out;
 }
 
 export function clamp01(v: number): number {

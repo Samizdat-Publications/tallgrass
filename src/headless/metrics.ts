@@ -355,6 +355,20 @@ export interface SpeciesMetrics {
   periodStrength: number | null;
   prior: PriorRange | null;
   recovery: Recovery | null;
+  /** share of post-burn-in samples with pop > 0 */
+  presenceFrac: number;
+  /** post-burn-in transitions from present to absent between consecutive samples */
+  localExtinctions: number;
+  /** localExtinctions per 1,000 years of post-burn-in run; null when the span is under a year */
+  extinctionsPer1000y: number | null;
+  /** years the species spent at zero after burn-in (zero samples x sample spacing) */
+  yearsAbsent: number;
+  /** arrivals and departures over the whole run, from the imm_<key> and emig_<key> columns; null when the run has no such columns */
+  immigrants: number | null;
+  emigrants: number | null;
+  /** the same, per 100 valley years */
+  immPerCentury: number | null;
+  emigPerCentury: number | null;
 }
 
 export interface SeedMetrics {
@@ -385,6 +399,7 @@ export function analyzeSpecies(
   values: readonly number[],
   totalTicks: number,
   shock: ShockInfo | null,
+  flow: { imm?: readonly number[]; emig?: readonly number[] } = {},
 ): SpeciesMetrics | null {
   if (!ticks.length || !(values[0] > 0)) return null; // never started: not analyzed
   const spacing = sampleSpacing(ticks);
@@ -405,6 +420,28 @@ export function analyzeSpecies(
   let nz = 0;
   for (const f of flags) if (f) nz++;
   const run = longestRun(flags);
+
+  // presence: how much of the post-burn-in run the species was there at all, and how often it blinked out
+  let present = 0;
+  let zeroSamples = 0;
+  let blinkOuts = 0;
+  for (let i = 0; i < use.length; i++) {
+    if (use[i] > 0) present++;
+    else zeroSamples++;
+    if (i > 0 && use[i - 1] > 0 && use[i] === 0) blinkOuts++;
+  }
+  const spanTicks = postTicks.length > 1 ? postTicks[postTicks.length - 1] - postTicks[0] : 0;
+  const spanYears = spanTicks / YEAR_TICKS;
+  const runYears = ticks[ticks.length - 1] / YEAR_TICKS;
+  const sumOf = (xs: readonly number[] | undefined): number | null => {
+    if (!xs || !xs.length) return null;
+    let s = 0;
+    for (const x of xs) if (Number.isFinite(x)) s += x;
+    return s;
+  };
+  const immigrants = sumOf(flow.imm);
+  const emigrants = sumOf(flow.emig);
+  const perCentury = (n: number | null) => (n === null || runYears <= 0 ? null : (n / runYears) * 100);
 
   const last = values.length - 1;
   const finalPop = values[last];
@@ -449,6 +486,14 @@ export function analyzeSpecies(
     periodStrength: per.strength,
     prior,
     recovery,
+    presenceFrac: present / use.length,
+    localExtinctions: blinkOuts,
+    extinctionsPer1000y: spanYears >= 1 ? (blinkOuts / spanYears) * 1000 : null,
+    yearsAbsent: (zeroSamples * spacing) / YEAR_TICKS,
+    immigrants,
+    emigrants,
+    immPerCentury: perCentury(immigrants),
+    emigPerCentury: perCentury(emigrants),
   };
 }
 
@@ -461,7 +506,7 @@ export function analyzeSeed(input: AnalyzeInput): SeedMetrics {
   for (const key of SPECIES_KEYS) {
     const col = cols[`pop_${key}`];
     if (!col) continue;
-    const sm = analyzeSpecies(key, ticks, col, totalTicks, shock);
+    const sm = analyzeSpecies(key, ticks, col, totalTicks, shock, { imm: cols[`imm_${key}`], emig: cols[`emig_${key}`] });
     if (sm) species[key] = sm;
   }
   const gen = cols['gen_bison'];
@@ -510,6 +555,15 @@ export interface SpeciesAggregate {
   recoveredPct: number | null;
   medianRecoveryTicks: number | null;
   meanRecoveryTicks: number | null;
+  /** open prairie: share of post-burn-in samples with the species present (median over seeds) */
+  medianPresence: number | null;
+  /** local extinctions per 1,000 years (mean over seeds) */
+  meanExtinctionsPer1000y: number | null;
+  /** years at zero after burn-in (median over seeds) */
+  medianYearsAbsent: number | null;
+  /** arrivals and departures per 100 valley years (mean over the seeds that recorded them) */
+  meanImmPerCentury: number | null;
+  meanEmigPerCentury: number | null;
 }
 
 export interface Aggregate {
@@ -551,6 +605,11 @@ export function aggregate(seeds: readonly SeedMetrics[]): Aggregate {
       recoveredPct: rec.length ? (100 * rec.filter((r) => r.recoveryTicks !== null).length) / rec.length : null,
       medianRecoveryTicks: medianOf(rec.map((r) => r.recoveryTicks)),
       meanRecoveryTicks: meanOf(rec.map((r) => r.recoveryTicks)),
+      medianPresence: medianOf(sms.map((x) => x.presenceFrac)),
+      meanExtinctionsPer1000y: meanOf(sms.map((x) => x.extinctionsPer1000y)),
+      medianYearsAbsent: medianOf(sms.map((x) => x.yearsAbsent)),
+      meanImmPerCentury: meanOf(sms.map((x) => x.immPerCentury)),
+      meanEmigPerCentury: meanOf(sms.map((x) => x.emigPerCentury)),
     };
   }
   const gens = seeds.map((s) => s.maxGen);
@@ -632,6 +691,19 @@ export function renderMarkdown(meta: MarkdownMeta, seeds: readonly SeedMetrics[]
   }
   out.push('');
   out.push(`Max bison generation depth reached: ${num(agg.maxGen, 1)} (median across seeds ${num(agg.medianGen, 1)}).`, '');
+
+  out.push('## Presence and flow', '');
+  out.push(
+    'Presence = share of post-burn-in samples with the species alive. Local extinctions are present-to-absent steps between samples, per 1,000 valley years. Years absent = time at zero after burn-in. Immigrants and emigrants are per 100 valley years over the whole run (0 with the open prairie off).',
+    '',
+  );
+  const fh = ['species', 'presence', 'local extinctions / 1000 yr', 'years absent (median)', 'immigrants / century', 'emigrants / century'];
+  out.push(`| ${fh.join(' | ')} |`, `| ${fh.map((_, i) => (i === 0 ? '---' : '---:')).join(' | ')} |`);
+  for (const k of keys) {
+    const a = agg.species[k];
+    out.push(`| ${[k, pct(a.medianPresence), num(a.meanExtinctionsPer1000y, 1), num(a.medianYearsAbsent, 1), num(a.meanImmPerCentury, 1), num(a.meanEmigPerCentury, 1)].join(' | ')} |`);
+  }
+  out.push('');
 
   out.push('## Proposed acceptance (thresholds live in metrics.ts ACCEPT)', '');
   const ah = ['species', `persist >= ${ACCEPT.persistencePct}%`, `near-zero <= ${ACCEPT.nearZeroFracMax * 100}%`, `stretch <= ${ACCEPT.longestNearZeroYearsMax} yr`, `max/mean <= ${ACCEPT.maxOverMeanMax}`, `CV >= ${ACCEPT.cvMin}`];
@@ -751,6 +823,19 @@ function selfTest(): boolean {
   const calm = ticks.map((_, i) => 100 + wiggle(i));
   const s7 = analyzeSpecies('raven', ticks, calm, total, shock)!;
   check('shock: unaffected -> leftRange false', !s7.recovery!.leftRange && s7.recovery!.recoveryTicks === 0);
+
+  // 7b. presence and flow: present for 3/4 of the post-burn-in run in two stretches, 7 immigrants and 4 emigrants
+  const blink = ticks.map((_, i) => (i >= 300 && i < 400 ? 0 : i >= 600 && i < 650 ? 0 : 20));
+  const imm = ticks.map((_, i) => (i % 100 === 0 && i > 0 && i <= 700 ? 1 : 0));
+  const emi = ticks.map((_, i) => (i % 200 === 0 && i > 0 && i <= 800 ? 1 : 0));
+  const sf = analyzeSpecies('bison', ticks, blink, total, null, { imm, emig: emi })!;
+  const nPost = N + 1 - Math.ceil(0.15 * N);
+  check('flow: presence fraction', near(sf.presenceFrac, (nPost - 150) / nPost, 1e-9), `got ${sf.presenceFrac.toFixed(4)}`);
+  check('flow: two local extinctions', sf.localExtinctions === 2, `got ${sf.localExtinctions}`);
+  check('flow: years absent', near(sf.yearsAbsent, (150 * dt) / YEAR_TICKS, 1e-9), `got ${sf.yearsAbsent}`);
+  check('flow: immigrants 7, emigrants 4', sf.immigrants === 7 && sf.emigrants === 4, `got ${sf.immigrants}/${sf.emigrants}`);
+  check('flow: per century', near(sf.immPerCentury, 7 / (total / YEAR_TICKS) * 100, 1e-6), `got ${sf.immPerCentury}`);
+  check('flow: columns absent -> null', s1.immigrants === null && s1.immPerCentury === null);
 
   // 8. peaks: prominence filter
   check('findPeaks prominence', JSON.stringify(findPeaks([0, 5, 4.9, 5.2, 0, 3, 0], 1)) === JSON.stringify([3, 5]) && findPeaks([0, 5, 4.9, 5.2, 0, 3, 0], 4).length === 1);

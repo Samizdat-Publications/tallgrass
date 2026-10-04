@@ -65,10 +65,12 @@ export class Agents {
   mateId!: Uint32Array;
   /** 0 native, 1 immigrant, 2 vagrant (later work packages; always 0 until then). */
   origin!: Uint8Array;
-  /** Generic countdown (migration and dispersal timers). */
+  /** Distemper course countdown in ticks (canid disease, S2). */
   cdv!: Uint16Array;
   /** Mange severity 0..1. */
   mange!: Float32Array;
+  /** Ticks into a migration, or a pack-less wolf's wandering time (open prairie, S1). Not the distemper countdown. */
+  mig!: Uint16Array;
 
   constructor(cap: number) {
     this.grow(cap);
@@ -126,6 +128,7 @@ export class Agents {
     this.origin = g(Uint8Array, this.origin);
     this.cdv = g(Uint16Array, this.cdv);
     this.mange = g(Float32Array, this.mange);
+    this.mig = g(Uint16Array, this.mig);
     // newly added slots go on the free list in descending order so pop() yields ascending slots
     for (let i = cap - 1; i >= old; i--) this.free.push(i);
     this.cap = cap;
@@ -164,6 +167,7 @@ export class Agents {
     this.origin[i] = 0;
     this.cdv[i] = 0;
     this.mange[i] = 0;
+    this.mig[i] = 0;
     this.hydration[i] = 1;
     if (i + 1 > this.hi) this.hi = i + 1;
     this.count++;

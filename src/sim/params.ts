@@ -118,6 +118,31 @@ export interface Params {
   cougarImmigration: number;
   /** When an already-fleeing grazer is scared again, how much of its current flight line it keeps (0 = turn straight away from the new threat). */
   fleeMomentum: number;
+  // open prairie (S1): animals come and go through the border corridors. Rates are per base year (2,400 ticks).
+  /** Master switch (0 = closed valley). The vagrant ravens below have their own switch. */
+  openPrairie: number;
+  /** Wolf pairs arriving per base year, rolled every 100 ticks, when a den site is free. */
+  wolfInRate: number;
+  /** Base years a pack-less adult wolf wanders before it leaves the valley. */
+  wolfOutAfter: number;
+  /** Pronghorn autumn exodus: fraction leaving = deerOutK x (1 - browse per pronghorn / deerBref), clamped to 0..0.5. */
+  deerOutK: number;
+  /** Pronghorn spring return: share of the gap to deerKb that walks back in. */
+  deerInK: number;
+  /** Most pronghorn that return in one spring. */
+  deerInMax: number;
+  /** A group of this many walks in each spring when fewer than 20 pronghorn remain. */
+  deerRescue: number;
+  /** Browse per pronghorn (summed browse over land cells / pronghorn) in autumn (season 2.6) that sends nobody away. Measured. */
+  deerBref: number;
+  /** Pronghorn equilibrium population the spring return refills toward. Measured. */
+  deerKb: number;
+  /** Vagrant ravens (0 = off): scavengers from outside that follow carrion into the valley and never breed. */
+  ravenVagrants: number;
+  /** Vagrants wanted per unit of remaining carcass meat (the unit of cMeat). Measured. */
+  ravenVagrantK: number;
+  /** Vagrant ceiling. */
+  ravenVagrantCap: number;
   // fear
   fearKill: number;
   fearKillRadius: number;
@@ -163,6 +188,27 @@ export interface Params {
   diseaseSpark: number;
   diseaseTicks: number;
   diseaseMetab: number;
+  // canid disease (src/sim/disease.ts); cdvRate and mangeRate default to 0 = off
+  /** Yearly distemper outbreak chance at 60 wolves; scales with (wolves / 60)^2, capped at 2x. */
+  cdvRate: number;
+  cdvPupDeath: number;
+  cdvAdultDeath: number;
+  /** Course of the illness in ticks. */
+  cdvTicks: number;
+  /** Immunity after recovery, in base years. */
+  cdvImmuneYears: number;
+  /** Yearly chance a case of mange arrives while there are more than 30 wolves. */
+  mangeRate: number;
+  /** Per day, per infected packmate. */
+  mangeSpread: number;
+  /** Severity gained per base year. */
+  mangeGrowth: number;
+  /** Winter cold cost is multiplied by (1 + mangeColdK * severity). */
+  mangeColdK: number;
+  /** Recovery chance per base year while energy > 0.7. */
+  mangeRecover: number;
+  /** Share of immigrants that carry mange (used when mangeRate > 0). */
+  mangeImmigrantShare: number;
   // genetics
   mutation: number;
   // misc
@@ -241,6 +287,18 @@ export function defaultParams(): Params {
     leanLitter: 0,
     cougarImmigration: 0,
     fleeMomentum: 0,
+    openPrairie: 0,
+    wolfInRate: 0.2,
+    wolfOutAfter: 1.0,
+    deerOutK: 0.6,
+    deerInK: 0.5,
+    deerInMax: 60,
+    deerRescue: 12,
+    deerBref: 35,
+    deerKb: 367,
+    ravenVagrants: 0,
+    ravenVagrantK: 0.16,
+    ravenVagrantCap: 400,
     fearKill: 0.7,
     fearKillRadius: 22,
     fearPredatorStamp: 0.0008,
@@ -279,6 +337,17 @@ export function defaultParams(): Params {
     diseaseSpark: 0.0004,
     diseaseTicks: 450,
     diseaseMetab: 1.7,
+    cdvRate: 0,
+    cdvPupDeath: 0.6,
+    cdvAdultDeath: 0.1,
+    cdvTicks: 300,
+    cdvImmuneYears: 5,
+    mangeRate: 0,
+    mangeSpread: 0.02,
+    mangeGrowth: 0.5,
+    mangeColdK: 1.5,
+    mangeRecover: 0.3,
+    mangeImmigrantShare: 0.05,
     mutation: 0.035,
     maxAgents: 20000,
     steerFree: 0,
