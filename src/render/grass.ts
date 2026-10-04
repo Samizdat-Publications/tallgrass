@@ -272,6 +272,7 @@ uniform float uSeedFrac;
 uniform float uMoistK;
 uniform float uWindGain;
 uniform float uCopper;
+uniform float uSnow;
 
 varying vec2 vUv;
 varying vec3 vN;
@@ -611,7 +612,7 @@ void main() {
     // copper-red bluestem: a share of the blades (stands of it, all the culms that carry a turkey foot) flush copper through autumn.
     // The flush fades out with distance (the ground and the far rings keep the plain cured palette).
     float bs = max(step(fract(rE * 17.0 + rC * 5.0), 0.05 + 0.75 * smoothstep(0.5, 0.74, tusC)), step(seedFlag, 1.5) * step(0.5, seedFlag));
-    vSd.x = uCopper * bs * (1.0 - smoothstep(14.0, 50.0, dist));
+    vSd.x = uCopper * bs * (1.0 - smoothstep(14.0, 50.0, dist)) * (1.0 - 0.9 * uWinterK) * (1.0 - clamp(uSnow * 2.0, 0.0, 1.0));
 #if LEVEL == 0
     vSd.y = 0.5 * (0.0075 + seedHW) * min(wScale, 3.0);
     vSd.z = seedHead * H;

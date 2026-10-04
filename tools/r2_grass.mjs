@@ -40,6 +40,9 @@ const VIEWS = [
   ['autumn_backlit_7m', 2.6, 0.28, 7, 4, 0.5, 0],
   ['autumn_backlit_12m', 2.6, 0.28, 12, 5, 0.6, 6],
   ['autumn_noon_7m', 2.6, 0.5, 7, 5, 0.6, 180],
+  ['winter_dusk_low', 3.1, 0.7, 16, 5, 1.2, 0],
+  ['winter_dusk_7m', 3.1, 0.7, 7, 4, 0.5, 0],
+  ['autumn_late_dusk_low', 2.8, 0.7, 16, 5, 1.2, 0],
   ['ls_noon_8m', 1.8, 0.5, 8, 5, 0.6, 180],
   ['autumn_sunset_9m', 2.6, 0.7, 9, 4, 0.5, 0],
 ].filter((v) => !only.length || only.includes(v[0]));
