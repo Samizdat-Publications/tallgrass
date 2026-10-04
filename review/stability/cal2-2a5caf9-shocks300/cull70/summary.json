@@ -1,0 +1,26 @@
+{
+ "scenario": "cull70",
+ "mode": {
+  "ticks": 720000,
+  "generations": null,
+  "sampleEvery": 1500,
+  "yearTicks": 1200
+ },
+ "params": {
+  "calendarScale": 2
+ },
+ "events": [
+  {
+   "label": "cull 70% bison",
+   "frac": 0.4,
+   "intervention": {
+    "kind": "cull",
+    "species": 0,
+    "fraction": 0.7
+   }
+  }
+ ],
+ "priorEvent": 0,
+ "recoveryEvent": 0,
+ "merged": true
+}

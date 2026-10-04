@@ -1,0 +1,34 @@
+{
+ "scenario": "wolfwipe",
+ "mode": {
+  "ticks": 720000,
+  "generations": null,
+  "sampleEvery": 1500,
+  "yearTicks": 1200
+ },
+ "params": {
+  "calendarScale": 2
+ },
+ "events": [
+  {
+   "label": "wolves removed",
+   "frac": 0.35,
+   "intervention": {
+    "kind": "remove",
+    "species": 1
+   }
+  },
+  {
+   "label": "introduce 8 wolves",
+   "frac": 0.5,
+   "intervention": {
+    "kind": "introduce",
+    "species": 1,
+    "count": 8
+   }
+  }
+ ],
+ "priorEvent": 0,
+ "recoveryEvent": 1,
+ "merged": true
+}

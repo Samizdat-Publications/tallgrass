@@ -1,0 +1,92 @@
+{
+ "args": {
+  "seeds": 6,
+  "seedBase": 15,
+  "ticks": 720000,
+  "generations": null,
+  "sampleEvery": 1500,
+  "threads": 12,
+  "scenarios": [
+   "cull70",
+   "drought",
+   "wolfwipe"
+  ],
+  "params": {
+   "calendarScale": 2
+  },
+  "mock": false,
+  "maxMinutes": 0,
+  "progressSec": 15,
+  "out": "C:\\Users\\stewa\\Documents\\Claude\\ecosystem-sim\\review\\stability\\cal2-2a5caf9-shocks300-b",
+  "argv": [
+   "--seeds",
+   "6",
+   "--seed-base",
+   "15",
+   "--ticks",
+   "720000",
+   "--sample",
+   "1500",
+   "--threads",
+   "12",
+   "--out",
+   "review/stability/cal2-2a5caf9-shocks300-b",
+   "--scenario",
+   "cull70,drought,wolfwipe",
+   "--params",
+   "{\"calendarScale\":2}"
+  ]
+ },
+ "commit": "2a5caf9 (frozen copy)",
+ "node": "v24.19.0",
+ "platform": "win32 x64",
+ "startedAt": "2026-10-04T09:59:12.241Z",
+ "finishedAt": "2026-10-04T10:55:31.533Z",
+ "wallSeconds": 3379.28,
+ "stopReason": null,
+ "tasks": {
+  "total": 18,
+  "completed": 18,
+  "errors": 0,
+  "aborted": 0,
+  "skipped": 0
+ },
+ "msPerTick": 2.457299,
+ "ticksRun": 12960000,
+ "ticksPerSecWall": 3835,
+ "scenarios": {
+  "cull70": {
+   "seeds": 6,
+   "completed": 6,
+   "persistencePct": {
+    "bison": 100,
+    "wolf": 100,
+    "raven": 100,
+    "pronghorn": 100
+   },
+   "maxGen": 464.38684210526316
+  },
+  "drought": {
+   "seeds": 6,
+   "completed": 6,
+   "persistencePct": {
+    "bison": 100,
+    "wolf": 100,
+    "raven": 100,
+    "pronghorn": 100
+   },
+   "maxGen": 478.6619365609349
+  },
+  "wolfwipe": {
+   "seeds": 6,
+   "completed": 6,
+   "persistencePct": {
+    "bison": 100,
+    "wolf": 100,
+    "raven": 100,
+    "pronghorn": 66.66666666666667
+   },
+   "maxGen": 508.7915218902015
+  }
+ }
+}

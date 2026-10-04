@@ -1,0 +1,174 @@
+{
+ "scenario": "drought",
+ "mode": {
+  "ticks": 720000,
+  "generations": null,
+  "sampleEvery": 1500,
+  "yearTicks": 1200
+ },
+ "params": {
+  "calendarScale": 2
+ },
+ "events": [
+  {
+   "label": "drought (2 yr)",
+   "frac": 0.4,
+   "intervention": {
+    "kind": "drought",
+    "ticks": 4800,
+    "severity": 0.8
+   }
+  }
+ ],
+ "sources": [
+  "1:first",
+  "10:first",
+  "11:first",
+  "12:first",
+  "13:first",
+  "14:first",
+  "2:first",
+  "3:first",
+  "4:first",
+  "5:first",
+  "6:first",
+  "7:first",
+  "8:first",
+  "9:first",
+  "15:rerun",
+  "16:rerun",
+  "17:rerun",
+  "18:rerun",
+  "19:rerun",
+  "20:rerun"
+ ],
+ "aggregate": {
+  "seeds": 20,
+  "species": {
+   "bison": {
+    "key": "bison",
+    "seedsStarted": 20,
+    "persistedCount": 17,
+    "persistencePct": 85,
+    "medianMean": 1031.3092909535453,
+    "meanOfMeans": 991.4258356818902,
+    "medianCv": 0.3079366995092607,
+    "medianMaxOverMean": 2.0417403793943003,
+    "medianNearZeroFrac": 0.003667481662591687,
+    "medianLongestNearZeroTicks": 2250,
+    "medianPeaks": 42.5,
+    "meanPeaks": 37.7,
+    "medianPeriodTicks": 36000,
+    "periodSeeds": 8,
+    "shockSeeds": 19,
+    "leftRangePct": 100,
+    "recoveredPct": 89.47368421052632,
+    "medianRecoveryTicks": 28500,
+    "meanRecoveryTicks": 29911.764705882353
+   },
+   "wolf": {
+    "key": "wolf",
+    "seedsStarted": 20,
+    "persistedCount": 17,
+    "persistencePct": 85,
+    "medianMean": 51.812958435207825,
+    "meanOfMeans": 51.759433593385474,
+    "medianCv": 0.10587621607852252,
+    "medianMaxOverMean": 1.2762416354483217,
+    "medianNearZeroFrac": 0,
+    "medianLongestNearZeroTicks": 0,
+    "medianPeaks": 36.5,
+    "meanPeaks": 33.05,
+    "medianPeriodTicks": 12000,
+    "periodSeeds": 17,
+    "shockSeeds": 19,
+    "leftRangePct": 84.21052631578948,
+    "recoveredPct": 89.47368421052632,
+    "medianRecoveryTicks": 16500,
+    "meanRecoveryTicks": 42176.470588235294
+   },
+   "raven": {
+    "key": "raven",
+    "seedsStarted": 20,
+    "persistedCount": 17,
+    "persistencePct": 85,
+    "medianMean": 299.5171149144254,
+    "meanOfMeans": 273.7035657627055,
+    "medianCv": 0.06788577485284936,
+    "medianMaxOverMean": 1.0876683498250221,
+    "medianNearZeroFrac": 0,
+    "medianLongestNearZeroTicks": 0,
+    "medianPeaks": 0,
+    "meanPeaks": 2.55,
+    "medianPeriodTicks": 6000,
+    "periodSeeds": 16,
+    "shockSeeds": 19,
+    "leftRangePct": 63.1578947368421,
+    "recoveredPct": 89.47368421052632,
+    "medianRecoveryTicks": 16500,
+    "meanRecoveryTicks": 12000
+   },
+   "pronghorn": {
+    "key": "pronghorn",
+    "seedsStarted": 20,
+    "persistedCount": 18,
+    "persistencePct": 90,
+    "medianMean": 741.6907090464547,
+    "meanOfMeans": 732.1116869949049,
+    "medianCv": 0.42229897734570226,
+    "medianMaxOverMean": 2.855036296138254,
+    "medianNearZeroFrac": 0,
+    "medianLongestNearZeroTicks": 0,
+    "medianPeaks": 64.5,
+    "meanPeaks": 59.25,
+    "medianPeriodTicks": 10500,
+    "periodSeeds": 19,
+    "shockSeeds": 19,
+    "leftRangePct": 100,
+    "recoveredPct": 94.73684210526316,
+    "medianRecoveryTicks": 18000,
+    "meanRecoveryTicks": 36250
+   }
+  },
+  "maxGen": 478.6619,
+  "medianGen": 429.4439
+ },
+ "verdict": {
+  "bison": {
+   "persistence": true,
+   "nearZero": true,
+   "longestStretch": true,
+   "noExplosion": true,
+   "notFlat": true,
+   "recovered": true,
+   "all": true
+  },
+  "wolf": {
+   "persistence": true,
+   "nearZero": true,
+   "longestStretch": true,
+   "noExplosion": true,
+   "notFlat": true,
+   "recovered": true,
+   "all": true
+  },
+  "raven": {
+   "persistence": true,
+   "nearZero": true,
+   "longestStretch": true,
+   "noExplosion": true,
+   "notFlat": true,
+   "recovered": true,
+   "all": true
+  },
+  "pronghorn": {
+   "persistence": true,
+   "nearZero": true,
+   "longestStretch": true,
+   "noExplosion": true,
+   "notFlat": true,
+   "recovered": true,
+   "all": true
+  }
+ }
+}

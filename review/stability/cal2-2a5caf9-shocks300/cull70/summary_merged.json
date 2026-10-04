@@ -1,0 +1,174 @@
+{
+ "scenario": "cull70",
+ "mode": {
+  "ticks": 720000,
+  "generations": null,
+  "sampleEvery": 1500,
+  "yearTicks": 1200
+ },
+ "params": {
+  "calendarScale": 2
+ },
+ "events": [
+  {
+   "label": "cull 70% bison",
+   "frac": 0.4,
+   "intervention": {
+    "kind": "cull",
+    "species": 0,
+    "fraction": 0.7
+   }
+  }
+ ],
+ "sources": [
+  "1:first",
+  "10:first",
+  "11:first",
+  "12:first",
+  "13:first",
+  "14:first",
+  "2:first",
+  "3:first",
+  "4:first",
+  "5:first",
+  "6:first",
+  "7:first",
+  "8:first",
+  "9:first",
+  "15:rerun",
+  "16:rerun",
+  "17:rerun",
+  "18:rerun",
+  "19:rerun",
+  "20:rerun"
+ ],
+ "aggregate": {
+  "seeds": 20,
+  "species": {
+   "bison": {
+    "key": "bison",
+    "seedsStarted": 20,
+    "persistedCount": 19,
+    "persistencePct": 95,
+    "medianMean": 1073.8765281173596,
+    "meanOfMeans": 1064.421760391198,
+    "medianCv": 0.2697452505497002,
+    "medianMaxOverMean": 1.9056823432063252,
+    "medianNearZeroFrac": 0,
+    "medianLongestNearZeroTicks": 0,
+    "medianPeaks": 41,
+    "meanPeaks": 39.7,
+    "medianPeriodTicks": 35250,
+    "periodSeeds": 16,
+    "shockSeeds": 19,
+    "leftRangePct": 100,
+    "recoveredPct": 100,
+    "medianRecoveryTicks": 25500,
+    "meanRecoveryTicks": 42710.52631578947
+   },
+   "wolf": {
+    "key": "wolf",
+    "seedsStarted": 20,
+    "persistedCount": 19,
+    "persistencePct": 95,
+    "medianMean": 53.026894865525676,
+    "meanOfMeans": 53.47449266503668,
+    "medianCv": 0.10325306724930117,
+    "medianMaxOverMean": 1.300078482090126,
+    "medianNearZeroFrac": 0,
+    "medianLongestNearZeroTicks": 0,
+    "medianPeaks": 34,
+    "meanPeaks": 32.95,
+    "medianPeriodTicks": 12000,
+    "periodSeeds": 19,
+    "shockSeeds": 19,
+    "leftRangePct": 84.21052631578948,
+    "recoveredPct": 100,
+    "medianRecoveryTicks": 82500,
+    "meanRecoveryTicks": 114236.84210526316
+   },
+   "raven": {
+    "key": "raven",
+    "seedsStarted": 20,
+    "persistedCount": 19,
+    "persistencePct": 95,
+    "medianMean": 300.39486552567234,
+    "meanOfMeans": 285.3933985330073,
+    "medianCv": 0.06192210165113003,
+    "medianMaxOverMean": 1.0863390827541817,
+    "medianNearZeroFrac": 0,
+    "medianLongestNearZeroTicks": 0,
+    "medianPeaks": 0,
+    "meanPeaks": 0.35,
+    "medianPeriodTicks": 6000,
+    "periodSeeds": 19,
+    "shockSeeds": 19,
+    "leftRangePct": 0,
+    "recoveredPct": 100,
+    "medianRecoveryTicks": 0,
+    "meanRecoveryTicks": 0
+   },
+   "pronghorn": {
+    "key": "pronghorn",
+    "seedsStarted": 20,
+    "persistedCount": 19,
+    "persistencePct": 95,
+    "medianMean": 747.3484107579461,
+    "meanOfMeans": 739.1445048899757,
+    "medianCv": 0.3934439751552608,
+    "medianMaxOverMean": 2.4970737361823923,
+    "medianNearZeroFrac": 0,
+    "medianLongestNearZeroTicks": 0,
+    "medianPeaks": 64,
+    "meanPeaks": 61.25,
+    "medianPeriodTicks": 10500,
+    "periodSeeds": 18,
+    "shockSeeds": 19,
+    "leftRangePct": 100,
+    "recoveredPct": 100,
+    "medianRecoveryTicks": 85500,
+    "meanRecoveryTicks": 119447.36842105263
+   }
+  },
+  "maxGen": 477.8801,
+  "medianGen": 436.8289
+ },
+ "verdict": {
+  "bison": {
+   "persistence": true,
+   "nearZero": true,
+   "longestStretch": true,
+   "noExplosion": true,
+   "notFlat": true,
+   "recovered": true,
+   "all": true
+  },
+  "wolf": {
+   "persistence": true,
+   "nearZero": true,
+   "longestStretch": true,
+   "noExplosion": true,
+   "notFlat": true,
+   "recovered": true,
+   "all": true
+  },
+  "raven": {
+   "persistence": true,
+   "nearZero": true,
+   "longestStretch": true,
+   "noExplosion": true,
+   "notFlat": true,
+   "recovered": true,
+   "all": true
+  },
+  "pronghorn": {
+   "persistence": true,
+   "nearZero": true,
+   "longestStretch": true,
+   "noExplosion": true,
+   "notFlat": true,
+   "recovered": true,
+   "all": true
+  }
+ }
+}

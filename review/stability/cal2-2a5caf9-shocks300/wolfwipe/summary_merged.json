@@ -1,0 +1,182 @@
+{
+ "scenario": "wolfwipe",
+ "mode": {
+  "ticks": 720000,
+  "generations": null,
+  "sampleEvery": 1500,
+  "yearTicks": 1200
+ },
+ "params": {
+  "calendarScale": 2
+ },
+ "events": [
+  {
+   "label": "wolves removed",
+   "frac": 0.35,
+   "intervention": {
+    "kind": "remove",
+    "species": 1
+   }
+  },
+  {
+   "label": "introduce 8 wolves",
+   "frac": 0.5,
+   "intervention": {
+    "kind": "introduce",
+    "species": 1,
+    "count": 8
+   }
+  }
+ ],
+ "sources": [
+  "1:first",
+  "10:first",
+  "11:first",
+  "12:first",
+  "13:first",
+  "14:first",
+  "2:first",
+  "3:first",
+  "4:first",
+  "5:first",
+  "6:first",
+  "7:first",
+  "8:first",
+  "9:first",
+  "15:rerun",
+  "16:rerun",
+  "17:rerun",
+  "18:rerun",
+  "19:rerun",
+  "20:rerun"
+ ],
+ "aggregate": {
+  "seeds": 20,
+  "species": {
+   "bison": {
+    "key": "bison",
+    "seedsStarted": 20,
+    "persistedCount": 19,
+    "persistencePct": 95,
+    "medianMean": 1286.5452322738386,
+    "meanOfMeans": 1240.0122249388755,
+    "medianCv": 0.31439424015848094,
+    "medianMaxOverMean": 2.2985025647145254,
+    "medianNearZeroFrac": 0,
+    "medianLongestNearZeroTicks": 0,
+    "medianPeaks": 44,
+    "meanPeaks": 41.8,
+    "medianPeriodTicks": 12000,
+    "periodSeeds": 9,
+    "shockSeeds": 19,
+    "leftRangePct": 100,
+    "recoveredPct": 68.42105263157895,
+    "medianRecoveryTicks": 135000,
+    "meanRecoveryTicks": 131653.84615384616
+   },
+   "wolf": {
+    "key": "wolf",
+    "seedsStarted": 20,
+    "persistedCount": 19,
+    "persistencePct": 95,
+    "medianMean": 42.55867970660147,
+    "meanOfMeans": 43.09515281173594,
+    "medianCv": 0.4858450580098299,
+    "medianMaxOverMean": 1.5920971150753918,
+    "medianNearZeroFrac": 0.17603911980440098,
+    "medianLongestNearZeroTicks": 108000,
+    "medianPeaks": 39,
+    "meanPeaks": 37.95,
+    "medianPeriodTicks": null,
+    "periodSeeds": 0,
+    "shockSeeds": 19,
+    "leftRangePct": 100,
+    "recoveredPct": 57.89473684210526,
+    "medianRecoveryTicks": 12000,
+    "meanRecoveryTicks": 31636.363636363636
+   },
+   "raven": {
+    "key": "raven",
+    "seedsStarted": 20,
+    "persistedCount": 19,
+    "persistencePct": 95,
+    "medianMean": 300.5073349633252,
+    "meanOfMeans": 285.42481662591683,
+    "medianCv": 0.06138552663517011,
+    "medianMaxOverMean": 1.0881465149012686,
+    "medianNearZeroFrac": 0,
+    "medianLongestNearZeroTicks": 0,
+    "medianPeaks": 0,
+    "meanPeaks": 0.15,
+    "medianPeriodTicks": 6000,
+    "periodSeeds": 19,
+    "shockSeeds": 19,
+    "leftRangePct": 0,
+    "recoveredPct": 100,
+    "medianRecoveryTicks": 0,
+    "meanRecoveryTicks": 0
+   },
+   "pronghorn": {
+    "key": "pronghorn",
+    "seedsStarted": 20,
+    "persistedCount": 17,
+    "persistencePct": 85,
+    "medianMean": 845.1210268948655,
+    "meanOfMeans": 784.2013508557459,
+    "medianCv": 0.5300276234395576,
+    "medianMaxOverMean": 3.7324573227362703,
+    "medianNearZeroFrac": 0.0024449877750611247,
+    "medianLongestNearZeroTicks": 1500,
+    "medianPeaks": 68,
+    "meanPeaks": 61.45,
+    "medianPeriodTicks": 7500,
+    "periodSeeds": 17,
+    "shockSeeds": 19,
+    "leftRangePct": 89.47368421052632,
+    "recoveredPct": 73.6842105263158,
+    "medianRecoveryTicks": 39000,
+    "meanRecoveryTicks": 56892.857142857145
+   }
+  },
+  "maxGen": 530.0579,
+  "medianGen": 441.67205
+ },
+ "verdict": {
+  "bison": {
+   "persistence": true,
+   "nearZero": true,
+   "longestStretch": true,
+   "noExplosion": true,
+   "notFlat": true,
+   "recovered": false,
+   "all": false
+  },
+  "wolf": {
+   "persistence": true,
+   "nearZero": false,
+   "longestStretch": false,
+   "noExplosion": true,
+   "notFlat": true,
+   "recovered": false,
+   "all": false
+  },
+  "raven": {
+   "persistence": true,
+   "nearZero": true,
+   "longestStretch": true,
+   "noExplosion": true,
+   "notFlat": true,
+   "recovered": true,
+   "all": true
+  },
+  "pronghorn": {
+   "persistence": true,
+   "nearZero": true,
+   "longestStretch": true,
+   "noExplosion": true,
+   "notFlat": true,
+   "recovered": false,
+   "all": false
+  }
+ }
+}

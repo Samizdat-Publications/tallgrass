@@ -1,0 +1,26 @@
+{
+ "scenario": "drought",
+ "mode": {
+  "ticks": 720000,
+  "generations": null,
+  "sampleEvery": 1500,
+  "yearTicks": 1200
+ },
+ "params": {
+  "calendarScale": 2
+ },
+ "events": [
+  {
+   "label": "drought (2 yr)",
+   "frac": 0.4,
+   "intervention": {
+    "kind": "drought",
+    "ticks": 4800,
+    "severity": 0.8
+   }
+  }
+ ],
+ "priorEvent": 0,
+ "recoveryEvent": 0,
+ "merged": true
+}
