@@ -19,13 +19,21 @@ import { FieldNotes, NoteTracker, NOTE_COUNT } from './fieldnotes';
 import { NotesPanel, NoteToast } from './notespanel';
 import { ResultCard } from './result';
 import { Chronicle, type ChronicleEntry } from './chronicle';
+import { CHALLENGES } from '../challenges';
+import { FieldGuide, PhotoStore } from './fieldguide';
+import { GuidePanel } from './guidepanel';
+import type { ModalPanel } from './panel';
+import { DEFAULT_SETTINGS, SettingsPanel, loadSettings, type Settings } from './settings';
+import { SetupPanel } from './setup';
+import { FirstRunTips, TitleCard } from './title';
+import { Toast } from './toast';
 import { cardRank, describeEvent, eventWeight, seasonName, seasonOfTick, yearOfTick, type DescribeContext } from './describe';
 import { FeedFilter } from './feed';
 import { SeasonLines } from './seasonlines';
 import { button, h, unitPx } from './dom';
 import { icon } from './icons';
 import { Inspector } from './inspector';
-import { TopRight } from './menu';
+import { TopRight, challengeInfo } from './menu';
 import { PopGraph, type Marker } from './popgraph';
 import { Slate } from './slate';
 import { applySpeciesVars } from './palette';
@@ -107,6 +115,22 @@ export class GameUI {
   private dimAfter = DIM_IDLE_MS;
   private hintTimer = 0;
   private onInput: () => void;
+  // the play pages: settings, valley setup, field guide, plus the title card and first-run tips
+  private settingsPanel: SettingsPanel;
+  private setupPanel: SetupPanel;
+  private guidePanel: GuidePanel;
+  private guide = new FieldGuide();
+  private photos = new PhotoStore();
+  private toast = new Toast();
+  private tips = new FirstRunTips();
+  private title: TitleCard | null = null;
+  private shutter: HTMLButtonElement;
+  private dimBase = DIM_IDLE_MS;
+  private shooting = false;
+  /** Field guide toasts are off for automated browsers, so the capture tools' stills stay clean (the guide still records). */
+  private guideToasts = true;
+  /** Behaviours witnessed in the current check, announced together once it is done. */
+  private witnessed: { species: string; label: string }[] = [];
 
   private seed = '';
   private scenario = '';
@@ -134,7 +158,47 @@ export class GameUI {
     this.inspector = new Inspector(actions);
     this.tracker = new NoteTracker(this.fieldNotes);
     this.notesPanel = new NotesPanel(this.fieldNotes, () => this.notesPanel.hide());
-    this.top = new TopRight(actions, () => this.setHidden(true), () => this.notesPanel.show());
+    this.top = new TopRight(actions, () => this.setHidden(true), () => this.openPane(null, 'notes'), {
+      onSettings: () => this.openPane(this.settingsPanel),
+      onSetup: () => this.openPane(this.setupPanel),
+      onGuide: () => this.openPane(this.guidePanel),
+      onShare: () => this.actions.share?.(),
+    });
+    this.settingsPanel = new SettingsPanel(
+      loadSettings(),
+      (s, changed) => this.onSettingsChange(s, changed),
+      (on) => this.actions.setNarrator?.(on),
+      () => this.settingsPanel.hide(),
+    );
+    this.setupPanel = new SetupPanel(
+      (seed, params) => {
+        this.setupPanel.hide();
+        this.actions.startValley?.(seed, params);
+      },
+      () => this.setupPanel.hide(),
+    );
+    this.guidePanel = new GuidePanel(this.guide, this.photos, () => void this.takePhoto(), () => this.guidePanel.hide());
+    this.guide.onChange = () => {
+      this.guidePanel.refresh();
+      const t = this.guide.total();
+      this.top.setGuideCount(t.seen, t.total);
+    };
+    this.guide.onWitness = (page, b) => {
+      this.witnessed.push({ species: page.sp.name, label: b.label });
+    };
+    {
+      const t = this.guide.total();
+      this.top.setGuideCount(t.seen, t.total);
+    }
+    this.shutter = button(
+      {
+        class: 'tg-shutter tg-glass tg-leaf',
+        'aria-label': 'Photograph',
+        title: 'Photograph: keep a picture of this view in the field guide',
+        html: icon('camera', 20),
+        onclick: () => void this.takePhoto(),
+      },
+    );
     this.top.setNotesCount(this.fieldNotes.count, NOTE_COUNT);
     this.fieldNotes.onChange = () => {
       this.top.setNotesCount(this.fieldNotes.count, NOTE_COUNT);
@@ -172,7 +236,7 @@ export class GameUI {
       h('span', { class: 'tg-cam-name', text: 'Documentary camera' }),
       h('span', { class: 'tg-cam-act', text: 'Take over' }),
     );
-    const bottom = h('div', { class: 'tg-bottom' }, h('div', { class: 'tg-camwrap' }, this.camChip), this.time.el, this.time.overlayEl);
+    const bottom = h('div', { class: 'tg-bottom' }, this.shutter, h('div', { class: 'tg-camwrap' }, this.camChip), this.time.el, this.time.overlayEl);
     const chrome = h('div', { class: 'tg-chrome' }, this.slate.el, this.goal.el, this.tools.el, right, this.pop.el, bottom);
     const bars = h('div', { class: 'tg-bars', 'aria-hidden': 'true' });
     // shown briefly when the interface goes away, so nobody is left wondering how to get it back
@@ -191,8 +255,27 @@ export class GameUI {
       /* storage unavailable: the hint just shows once per page load */
     }
 
-    this.ui = h('div', { class: 'tg-ui', dataset: { cinematic: 'false' } }, chrome, this.noteToast.el, this.notesPanel.el, this.hint, bars, this.chapterCard.el, this.result.el, this.narrCaption, this.ambientNote);
+    this.ui = h(
+      'div',
+      { class: 'tg-ui', dataset: { cinematic: 'false' } },
+      chrome,
+      this.noteToast.el,
+      this.notesPanel.el,
+      this.settingsPanel.el,
+      this.setupPanel.el,
+      this.guidePanel.el,
+      this.toast.el,
+      this.hint,
+      bars,
+      this.chapterCard.el,
+      this.result.el,
+      this.narrCaption,
+      this.ambientNote,
+      this.tips.el,
+    );
     applySpeciesVars(this.ui);
+    this.onSettingsChange(this.settingsPanel.value, 'uiScale');
+    this.onSettingsChange(this.settingsPanel.value, 'idleDim');
     root.append(this.ui);
 
     this.keyDown = (e) => this.onKeyDown(e);
@@ -210,7 +293,10 @@ export class GameUI {
     // ?dim=0 turns the dimming off (captures), ?dim=<ms> shortens it (tests)
     try {
       const dq = new URLSearchParams(window.location.search).get('dim');
-      if (dq !== null) this.dimAfter = Number(dq) > 0 ? Number(dq) : Infinity;
+      if (dq !== null) {
+        this.dimBase = Number(dq) > 0 ? Number(dq) : Infinity;
+        this.dimAfter = this.settingsPanel.value.idleDim ? this.dimBase : Infinity;
+      }
     } catch {
       /* no location: keep the default */
     }
@@ -236,6 +322,7 @@ export class GameUI {
     this.selectedId = f.selected ? f.selected.id : null;
     this.followingId = f.following;
 
+    this.ui.classList.toggle('has-pane', this.paneOpen);
     this.slate.update(f.env);
     this.time.update(f.speed, f.ticksPerSec, now);
     if (f.history.length) {
@@ -260,7 +347,7 @@ export class GameUI {
     this.firstFrame = false;
     this.flushToast(now);
     this.updateDim(now);
-    if (!this.hintDone && now - this.lastInput > HINT_IDLE_MS && !this.hidden && !this.cinematic && !this.result.isOpen) this.showHint();
+    if (!this.hintDone && now - this.lastInput > HINT_IDLE_MS && !this.hidden && !this.cinematic && !this.result.isOpen && !this.titleOpen) this.showHint();
   }
 
   /** The quiet hint about H and C. Shown once ever (per browser) after a minute of no input; also callable directly. */
@@ -279,6 +366,155 @@ export class GameUI {
   private hideHint(): void {
     window.clearTimeout(this.hintTimer);
     this.hint.classList.remove('is-on');
+  }
+
+  // ---- play pages: settings, valley setup, field guide, photographs, title card --------------------------------
+
+  /** The settings as saved (main reads them at start to pick the picture quality and the volumes). */
+  get settings(): Settings {
+    return this.settingsPanel.value;
+  }
+
+  /** The audio module has no per-bus volume yet: grey out those sliders and say why (the master volume still works). */
+  setBusesAvailable(on: boolean): void {
+    if (on) return;
+    this.settingsPanel.setUnavailable('ambience');
+    this.settingsPanel.setUnavailable('music');
+    this.settingsPanel.setUnavailable('narration');
+  }
+
+  setGuideToasts(on: boolean): void {
+    this.guideToasts = on;
+  }
+
+  /** A short line at the bottom of the screen, for confirmations from main ("Valley link copied"). */
+  notify(text: string, label = '', ms = 3200): void {
+    this.toast.show(text, label, ms);
+  }
+
+  /** The share button ticks for a moment (the link is on the clipboard). */
+  shared(ok: boolean): void {
+    this.top.flashShared(ok);
+  }
+
+  /** The field guide's check: the latest snapshot's animals against the camera focus (sim metres). Call a few times a second. */
+  observeGuide(agents: Float32Array, count: number, fx: number, fy: number): void {
+    this.guide.yearNow = this.lastYear;
+    this.witnessed = [];
+    this.guide.observe(agents, count, fx, fy);
+    const w = this.witnessed;
+    // a toast only over a plain view: not under the title card or a page, not in ambient or documentary mode
+    if (!w.length || this.hidden || this.cinematic || this.firstFrame || this.titleOpen || this.paneOpen || this.toast.showing || !this.guideToasts) return;
+    if (w.length === 1) this.toast.show(w[0].label, `Field guide: ${w[0].species}`, 4200);
+    else this.toast.show(`${w.length} new behaviours noted`, 'Field guide', 4200);
+  }
+
+  /** Open one page (and close the others). Null with which='notes' opens the field notes. */
+  openPane(p: ModalPanel | null, which: 'notes' | null = null): void {
+    this.leaveTitle();
+    for (const q of [this.settingsPanel, this.setupPanel, this.guidePanel]) if (q !== p) q.hide();
+    if (which === 'notes') {
+      this.notesPanel.show();
+    } else {
+      this.notesPanel.hide();
+      p?.show();
+    }
+  }
+
+  private get paneOpen(): boolean {
+    return this.settingsPanel.isOpen || this.setupPanel.isOpen || this.guidePanel.isOpen;
+  }
+
+  private closePanes(): void {
+    this.settingsPanel.hide();
+    this.setupPanel.hide();
+    this.guidePanel.hide();
+  }
+
+  private onSettingsChange(s: Settings, changed: keyof Settings): void {
+    if (changed === 'uiScale') {
+      this.ui.style.setProperty('--ui-scale', String(s.uiScale));
+      this.unitCache = 0;
+      this.panelRectsAt = -1e9;
+    } else if (changed === 'idleDim') {
+      this.dimAfter = s.idleDim ? this.dimBase : Infinity;
+      if (!s.idleDim && this.dimmed) this.setDimmed(false);
+    }
+    this.actions.applySettings?.(s, changed);
+  }
+
+  /** Take a photograph of the view: the game renders and reads the canvas, the field guide keeps it with what is in frame. */
+  async takePhoto(): Promise<void> {
+    if (this.shooting || !this.actions.photograph) return;
+    this.shooting = true;
+    try {
+      const blob = await this.actions.photograph();
+      if (!blob) {
+        this.toast.show('The picture could not be saved.', 'Photograph');
+        return;
+      }
+      this.flash();
+      const tags = this.guide.tagsNow();
+      const id = await this.photos.add(blob, { at: Date.now(), seed: this.seed, year: this.lastYear, species: tags.species, behaviours: tags.behaviours });
+      let msg: string;
+      if (id === null) {
+        // nowhere to keep it: hand it over as a download instead
+        const a = h('a', { href: URL.createObjectURL(blob), download: `tallgrass-${this.seed.replace(/[^\w-]+/g, '_')}-year${this.lastYear}.jpg` });
+        a.click();
+        window.setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+        msg = 'Saved to your downloads (this browser will not keep photographs).';
+      } else {
+        const names = tags.species.map((sp) => this.guide.pages.find((p) => p.sp.id === sp)?.sp.plural).filter((n): n is string => !!n);
+        msg = names.length ? `In frame: ${names.join(', ').toLowerCase()}. Kept in the field guide.` : 'Kept in the field guide.';
+      }
+      this.guide.notePhotograph(tags.behaviours);
+      this.guidePanel.photoAdded();
+      this.toast.show(msg, 'Photograph', 3800);
+    } finally {
+      this.shooting = false;
+    }
+  }
+
+  private flash(): void {
+    const f = h('div', { class: 'tg-flash' });
+    this.ui.append(f);
+    requestAnimationFrame(() => f.classList.add('is-fading'));
+    window.setTimeout(() => f.remove(), 600);
+  }
+
+  /** Open the title card over the valley (a plain page load; main decides). */
+  showTitle(): void {
+    if (this.title) return;
+    const choices = CHALLENGES.map((c) => ({ id: c.id, name: c.name, ...challengeInfo(c) }));
+    this.title = new TitleCard(
+      {
+        onWatch: () => this.watch(),
+        onChallenge: (id) => this.actions.startChallenge(id),
+        onSetup: () => this.openPane(this.setupPanel),
+        onGuide: () => this.openPane(this.guidePanel),
+      },
+      choices,
+    );
+    this.ui.append(this.title.el);
+    this.ui.classList.add('has-title');
+    this.title.show();
+  }
+
+  /** The title card's Watch: the card goes, the interface comes in, and on a first visit three tips follow. */
+  private watch(): void {
+    this.leaveTitle();
+    if (FirstRunTips.wanted()) window.setTimeout(() => !this.hidden && this.tips.show(), 900);
+  }
+
+  /** Close the title card without the tips (another page is opening in its place). */
+  private leaveTitle(): void {
+    if (!this.title?.isOpen) return;
+    this.title.hide();
+    this.ui.classList.remove('has-title');
+  }
+
+  get titleOpen(): boolean {
+    return !!this.title?.isOpen;
   }
 
   // ---- challenges --------------------------------------------------------------------------------------------
@@ -397,7 +633,7 @@ export class GameUI {
    * handle themselves.
    */
   private updateDim(now: number): void {
-    const busy = (!!this.run && !this.run.finished) || this.top.isOpen || this.time.isMenuOpen || this.notesPanel.isOpen || this.pop.isExpanded || this.result.isOpen;
+    const busy = (!!this.run && !this.run.finished) || this.top.isOpen || this.time.isMenuOpen || this.notesPanel.isOpen || this.paneOpen || this.titleOpen || this.pop.isExpanded || this.result.isOpen;
     const want = !busy && !this.hidden && !this.cinematic && now - this.lastInput > this.dimAfter;
     if (want !== this.dimmed) this.setDimmed(want);
   }
@@ -411,6 +647,7 @@ export class GameUI {
     if (on === this.narratorOn) return;
     this.narratorOn = on;
     this.top.setNarrator(on);
+    this.settingsPanel.setNarrator(on);
   }
 
   /** The spoken line as a quiet caption under the chapter card. Only cinematic mode shows it (CSS). */
@@ -454,6 +691,9 @@ export class GameUI {
     this.ambientNote.classList.toggle('is-on', hidden);
     if (hidden) {
       this.notesPanel.hide();
+      this.closePanes();
+      this.toast.hide();
+      this.tips.hide();
       this.top.close();
       this.time.closeMenu();
       this.chapterCard.clear();
@@ -468,6 +708,8 @@ export class GameUI {
     this.ui.dataset.cinematic = String(on);
     if (on) {
       this.notesPanel.hide();
+      this.closePanes();
+      this.toast.hide();
       this.top.close();
       this.time.closeMenu();
     }
@@ -492,6 +734,11 @@ export class GameUI {
     this.goalRo.disconnect();
     this.popRo.disconnect();
     this.notesPanel.destroy();
+    this.settingsPanel.destroy();
+    this.setupPanel.destroy();
+    this.guidePanel.destroy();
+    this.title?.destroy();
+    this.tips.destroy();
     this.chron.destroy();
     this.time.destroy();
     this.top.destroy();
@@ -714,6 +961,7 @@ export class GameUI {
       if (e.key === 'Escape') (e.target as HTMLElement).blur();
       return;
     }
+    if (this.titleOpen) return; // the title card handles its own keys
     const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
     switch (k) {
       case ' ':
@@ -763,7 +1011,9 @@ export class GameUI {
 
   /** Esc backs out one layer at a time: popovers, then the armed tool, then the selection, then cinematic mode. */
   private onEscape(): void {
-    if (this.notesPanel.isOpen) {
+    if (this.paneOpen) {
+      this.closePanes();
+    } else if (this.notesPanel.isOpen) {
       this.notesPanel.hide();
     } else if (this.result.isOpen) {
       this.keepWatching();
