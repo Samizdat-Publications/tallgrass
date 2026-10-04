@@ -3,17 +3,14 @@
 **Updated:** 2026-10-04 04:25 (deadline in .claude/hooks/run_until.txt: 2026-10-04 12:00)
 
 ## State
-- **Updated 07:50.** Live: deployed 07:22 from eaa58ab (water, dust, renderer round 7, Field notes, narrator, 2x calendar). Working tree clean except builder WIP.
-- Default sim = v5 on the 2x calendar (calendarScale 2): acceptance 19/20 per species, shocks merged (MORNING.md Stability). Challenges pin calendarScale 1.
-- Review round 7 done (review/round-07, critique.md, REVIEWS.md triage). Video reel + Gemini running (background; review/round-07-video). Add Gemini scores to REVIEWS.md and MORNING.md when it lands.
-- Builders briefed 07:45, report by 10:15: renderer af57fcb936ce73c50 (winter snowpack, foliage season bug, rain visible, night readability, far blur, lawn edge), water a7556909cc4d45a61 (distant river reads as pavement, rain pond blotches, dusk lavender), UI a1f8911043eb89066 (season lines in the chronicle from population history, pack break-up phrasing, founder panel, label overlap), animals a524942be7b6fd979 (near-camera wolf glitch in still 03, species-readable top view).
-- Research screens (all logged in DECISIONS.md): wA, pA, pB, evo2, rf0/rf7, L2, L3 done. L1 (prey-scaled wolves + leanLitter 0.8) finishing; L4 (bison maxLitter 1 + leanLitter 0.8) and L5 (herdEyes 1.5 + sprintCost 0.1, 16 seeds) start after L1. Landing page draft published 08:05 (https://claude.ai/artifact/JHgLkaPPUGvWmeZU5FJ3YM, source landing/). Gemini round 7 triaged; addenda sent to the animals and UI builders.
-- Running: 'Hungry wolves' acceptance (review/stability/hungrywolves-44a2bfe, scratch/accept_hw.log, ETA about 12:00 to 12:40). At 11:30 report what has finished (per-seed CSVs; tools/cycle_stats.py works on partial folders) in MORNING.md, labelled partial.
+- **Updated 09:15.** Live: deployed 09:01 from dcf4809 (all builder rounds through round 8 / animals round 7 / water round 2 / UI round 8). Working tree clean. Worktree scratch/wt has a node_modules junction now, so fonts work there.
+- Default sim = v5 on the 2x calendar; evidence in MORNING.md Stability. Opt-in scenario 'Hungry wolves' (L1 settings): its 1,000-generation acceptance is running (scratch/accept_hw.log, ETA about 10:00); first 6 finished worlds lost pronghorn (years 112 to 373); blurb already says so.
+- Review round 8 running: blind critic on review/round-08 (stills + charts), Gemini on review/round-08-video/reel.mp4 (recording). All builders idle (their rounds are committed).
 
 ## Next 3 steps
-1. Gemini round 7 result -> REVIEWS.md, MORNING.md table. L1/L3 results -> DECISIONS.md, MORNING.md Next 5 things.
-2. As builders report (by 10:15): check evidence, normalize line endings to HEAD, commit only their files, deploy, live check.
-3. Final 10:30 to 11:45: morning screenshots (`node scratch/morning_shots.mjs review/morning/sunday`), MORNING.md screenshot list and final audit (claims vs evidence, times, numbers), journey + artifact republish, push.
+1. Round 8 critiques: save critique.md and Gemini md, triage in REVIEWS.md, add to the MORNING.md table; brief builders on quick fixes only if they fit before 11:15 (deploy by 11:30).
+2. Hungry wolves acceptance: when done, charts + summary in MORNING.md and DECISIONS.md.
+3. Final: morning screenshots from the worktree (`cd scratch/wt; node ../morning_shots.mjs ../../review/morning/sunday2`), update the MORNING.md screenshot list, journey + artifact republish (making-of and landing page hero), final adversarial audit of MORNING.md, push. Deadline 12:00.
 
 ## Gotchas
 - **Before committing a shared file (src/main.ts, ui.ts, engine.ts), look at its diff: builders edit them too.** At 05:50 a commit swept in half-finished Field notes wiring; fixed by rebuilding the index entry from the previous blob.
