@@ -23,6 +23,7 @@ New since Saturday evening (overnight into Sunday):
 - **Animals you can read from the drone:** wolves keep a cool slate coat and a faint glint at distance, bison stay warm brown at dusk instead of turning into black stains, pronghorn read tan, and the species separate from straight above. Bodies bound and pitch with the slope more strongly at distance, so movement reads as effort even when legs are a few pixels tall. The selection ring is a crisp thin ring. Carcasses show a pale belly and a fresh-kill stain.
 - **Documentary camera:** it now cuts to a subject across the valley instead of flying the camera through the trees, and near moves ease in and out.
 - **UI:** the chronicle is newest first everywhere, with a season tag on each entry and an "N earlier entries" pager. Chapter cards never contradict the header: once the valley leaves the season a card names, it trims to the year, even while on screen. **H** (or the eye button by the menu) gives an ambient view with no interface for a second monitor.
+- **A landing page draft** (you mentioned the journey could become one): https://claude.ai/artifact/JHgLkaPPUGvWmeZU5FJ3YM (private to you). Film stills from the current build, what you can do in the game, a chart drawn from a real 1,000-generation run, and the controls; source in `landing/`.
 - **Snow bug fixed:** after a fast-forward on a slow frame rate, snow could linger into early summer. Weather now tracks the calendar at any frame rate.
 
 Earlier, Saturday (since 09:00):
@@ -148,4 +149,4 @@ Gemini: 3 concept images, 5 video critiques, about 60 short text and audio liste
 2. **Evolution that keeps running.** Bison speed and size climb to their limits within a century, because speed costs almost nothing and size pays for itself, and herding fades. The fix is a real sprint cost, wider limits with steep costs near them, and a stronger many-eyes payoff for herding (diagnosis in `DECISIONS.md`, 04:55 Sunday).
 3. **Herd shape.** Grazing herds still form rings and crescents. The nearest-neighbour fix looks right but cost persistence on the old calendar; worth re-screening on the new one.
 4. **Close the gap to your concept image:** close-range ground detail, water with depth and current, and the riparian green along the creek.
-5. **Landing page:** turn the making-of page and the best stills into a front page for the game, if you like it.
+5. **Landing page:** the draft is up (link above); if you like it, deploy it beside the game (for example at /about) and swap in fresh stills.
