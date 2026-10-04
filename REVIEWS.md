@@ -166,3 +166,19 @@ Stills critic: Visual 7, Readability 5, Life 6, Ecosystem 4, UI 6, Keep watching
 | G3 | Herd clipping | DEFER | lead | Sim spacing; herdSpacing changes cost persistence before. |
 | G4 | Blurry close ground | FIX (if quick) | renderer builder | |
 | G5 | No idle motion | FIX | animals builder | |
+
+## Round 9 (10:19, deployed build aee1c66 with the final quick round; stills from a clean worktree with ?dim=0) -> `review/round-09/critique.md`
+Stills critic: Visual 7, Readability 5, Life 6, Ecosystem 5, UI 7, Keep watching 6 (round 8: 7, 5, 6, 4, 6, 5). My mistake: the four charts in the folder were stale copies from round 8 (09:02), made before the 09:22 chart fixes, so the chart legend and subtitle complaints in issue 10 were already fixed.
+
+| # | Issue | Triage | Owner | Notes |
+|---|---|---|---|---|
+| 1 | Wolves and ravens flat; ravens crash in a die-off | DEFER (researched) | lead | Hungry wolves (opt-in) gives wolf CV 0.27 with a lag, but pronghorn 0/20 over 1,000 generations. Ravens are capped by nest sites; uncapping them crashed them out (00:20 Saturday). |
+| 2 | Evolution saturates by year 300; herding lost; bison twins | DEFER (researched) | lead | sprintCost, herdEyes and a bison single-calf cap (L4: 29/32) screened; next is a per-species sprint cost plus the calf cap. |
+| 3 | Winter, drought and wide shots muddy; drought mauve; night pond white ring | PARTLY | renderer builder (riparian round in progress) | The mauve in still 11 is partly the territory tints over drought ground. Drought grading and the night pond rim are next-session items. |
+| 4 | Herds as one carpet, clipping | DEFER | lead | herdNearest 6 does not visibly loosen herds (scratch/herds/compare_early.jpg); next is personal space while grazing. |
+| 5 | Donut rings around water | DEFER | lead | Same root as 4: water-seeking plus herd cohesion. |
+| 6 | UI boxes in the action | DONE (not visible in this round) | UI builder | Panels dim after 20 s idle, but these stills were captured with ?dim=0; H gives a clean ambient view. |
+| 7 | Events told, not shown | DEFER | lead | Sick animals already lower their heads; stampedes raise dust in dry ground only. |
+| 8 | Fragile, slow opening; 100x runs at 34x | DEFER | lead | Near-equilibrium start rejected (cost persistence); fast-forward is CPU-bound on the sim. |
+| 9 | Potato rocks, repeated bare trees | DEFER | renderer | Rocks were reworked at 09:44; still read as smooth ovals. |
+| 10 | Rain streaks in the map view | FIXED | lead | Streaks fade out as the camera looks steeply down (engine.ts); checked in scratch/rain_fix/sheet.jpg. Graph labels, trait captions and pink territory: deferred. |

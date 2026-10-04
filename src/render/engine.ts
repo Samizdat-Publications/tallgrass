@@ -160,6 +160,7 @@ export class Engine {
   private lastTick = 0;
   private frostSm = 0;
   private rainSm = 0;
+  private readonly rainDir = new THREE.Vector3();
   private tickPool = 0;
   private _focus = new THREE.Vector3();
   /** Fade tree canopies and trunks out of the line between the camera and the point it watches (default on). */
@@ -528,7 +529,10 @@ export class Engine {
     // (the pack follows the calendar directly; it is a slow curve, so it needs no easing of its own)
     u.snow.value = Math.max(sm.snow, keyCurve(PACK_KEYS, u.season.value));
     u.rain.value = this.rainSm;
-    this.lighting.rain = this.rainSm;
+    // the streaks are drawn on the screen falling downward, which only reads as rain from a side-on view: looking steeply down
+    // (the map view) they would look like scratches on glass, so they fade out there and the wet ground carries the rain alone
+    const down = -this.camera.getWorldDirection(this.rainDir).y;
+    this.lighting.rain = this.rainSm * (1 - smoothstep(0.62, 0.9, down));
     u.wet.value = sm.wet;
     u.rock.value.copy(ROCK_COLOR);
 

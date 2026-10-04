@@ -70,6 +70,18 @@ const SETS = {
     { name: 'ov_05_traits', eval: "window.__overlay.setMode('traits')", wait: 3000 },
     { name: 'ov_06_traits_wide', eval: "window.__cam('wide')", wait: 3000 },
   ],
+  // a summer storm held by the same __env hook as the seasons set: drone, map view and an in-between pitch (rain streaks fade when looking down)
+  rain: [
+    { name: 'r0_setup', eval: `(() => {
+      const e = window.__engine;
+      window.__envO = { season: 1.2, weather: 3, warmth: 0.7, rain: 0.6, dayFrac: 0.4 };
+      window.__envHook = e.onFrame(() => e.setEnv(window.__envO));
+      e.setEnv(window.__envO); e.applyEnvNow(); window.__speed(1); window.__followId(null); window.__cam('wide');
+    })()`, wait: 3500 },
+    { name: 'r1_storm_wide', eval: '', wait: 1500 },
+    { name: 'r2_storm_45deg', eval: "window.__engine.cam.setView({ pitchDeg: 48, distance: 400 })", wait: 3500 },
+    { name: 'r3_storm_top', eval: "window.__cam('top')", wait: 3500 },
+  ],
   // seasons and weather held by window.__env (the sim keeps running underneath): the same wide valley through the year (snowpack and
   // leaf-out), a bare-to-leafy tree row, rain early and late, and night. Each shot is lit and dressed as asked.
   seasons: [
