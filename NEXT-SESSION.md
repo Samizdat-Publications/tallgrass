@@ -1,18 +1,17 @@
 # NEXT SESSION: pick up here
 
-**Updated:** 2026-10-04 10:35 (deadline in .claude/hooks/run_until.txt: 2026-10-04 12:00)
+**Updated:** 2026-10-04 11:06 (deadline in .claude/hooks/run_until.txt: 2026-10-04 12:00)
 
 ## State
-- **Updated 10:35.** Live: 09:51 deploy from aee1c66. Committed since, not yet deployed: rain streaks fade in the map view, frozen-pond snow rim, smaller chapter cards (bc62b0f to 2d8fd02), docs.
-- Riparian builder running (report due 11:05): green ribbon along the creek and ponds, lighter broken mud rims; its uncommitted edits are in src/render/terrain.ts and src/render/grass.ts.
-- Round 9 critique saved and triaged (REVIEWS.md); scores 7, 5, 6, 5, 7, 6.
-- Hungry wolves acceptance done (19/20 bison, wolves, ravens; pronghorn 0/20). hn2 done (herdNearest 6 holds 31/32 on cal2 but shows no visible loosening; not adopted; its acceptance was stopped at 10:16).
-- Final round GPU cost: about +0.5 ms per frame at 1440p (paired, side-swapped A/B; logs scratch/gpuab_round_a.log and _b.log).
+- **Updated 11:06.** Live: 10:59 deploy from 359f512 (everything, including the riparian ribbon and all round 9 fixes). Working tree clean. Every doc current; MORNING.md audited (run steps verified from a clean clone at 10:34; challenge suite re-run 10:57, all five pass).
+- Reviews: round 9 blind critic 7, 5, 6, 5, 7, 6; round 10 Gemini video 7, 6, 3, 8, 9, 5 (its best yet). Both triaged in REVIEWS.md.
+- Frame cost tonight: final quick round about +0.5 ms, riparian about +0.35 ms (+0.8 low view) at 1440p, paired A/B.
+- Nothing running in the background. scratch/wt is at 359f512; scratch/wt2 is a second worktree for paired GPU A/B.
 
-## Next 3 steps
-1. Riparian report: check its sheet against the concept image, paired A/B if it claims more than 0.3 ms, commit its two files, build and probe in scratch/wt, deploy, live_check2, MORNING deploy line.
-2. Morning screenshots from the deployed commit (`cd scratch/wt; node ../morning_shots.mjs ../../review/morning/final`), update the MORNING.md screenshot list, journey + making-of artifact republish (map only the new files).
-3. Final adversarial audit of MORNING.md (times, numbers, links), push. Deadline 12:00.
+## Next 3 steps (for the next session)
+1. Close-range animation, the one complaint every Gemini round repeats: lengthen the kill struggle (0.25 s is too brief to read on video), check foot planting on the hunt close-ups frame by frame, vary raven flapping.
+2. The research items in MORNING.md Next 5: pronghorn under prey-scaled wolves (a fawning brake), per-species evolution costs plus a bison single-calf cap, personal space while grazing (herd shape).
+3. Drought ground that goes pale straw instead of mauve, and the bare apron on the shaded side of ponds (terrain.ts).
 
 ## Gotchas
 - **GPU A/B: one run is not a result.** An A/A run (same code both sides) showed up to 1 ms of side bias. Run each comparison twice with the builds swapped between BASE_DIR and the cwd tree (two worktrees: scratch/wt and scratch/wt2, both with node_modules junctions) and halve the difference.
