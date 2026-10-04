@@ -17,11 +17,11 @@ export const SEED_KEYS: Keys = [
 ];
 /**
  * How copper-red the bluestem stems and blades are across the year: [season, amount]. Big and little bluestem stay green through the
- * summer, flush to bronze as the grass cures (the CURE_KEYS ramp, season 1.5 to 2.0), and hold a copper-red through autumn and into
- * early winter before the colour bleaches to straw by late winter. The blade layer multiplies it by each blade's dryness.
+ * summer, flush to bronze as the grass cures (the CURE_KEYS ramp, season 1.5 to 2.0), and hold a copper-red through autumn, then weather to a dull tan-bronze
+ * through early winter (the red is gone by about season 3.5) and stay tan-grey under frost and snow. The blade layer multiplies it by each blade's dryness.
  */
 export const COPPER_KEYS: Keys = [
-  [0, 0.0], [1.5, 0.0], [1.9, 0.35], [2.3, 0.85], [2.7, 1.0], [3.3, 1.0], [3.7, 0.5], [3.95, 0.0], [4.0, 0.0],
+  [0, 0.0], [1.5, 0.0], [1.9, 0.35], [2.3, 0.85], [2.7, 1.0], [3.0, 0.5], [3.3, 0.12], [3.6, 0.0], [4.0, 0.0],
 ];
 /**
  * Cottonwood leaf cover across the year: [season, leaf amount]. Bare through winter and into early spring, buds and small leaves
