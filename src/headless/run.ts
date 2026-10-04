@@ -3,7 +3,7 @@
 // Prints one compact row every --every ticks (tick, year, species populations, grass, gen_bison) and ms/tick.
 
 import { readFileSync } from 'node:fs';
-import { setCalendarScale, SPECIES_KEYS, YEAR_TICKS } from '../sim/types';
+import { SPECIES_KEYS, YEAR_TICKS } from '../sim/types';
 import { argNum, argStr, loadCreateSim, parseCliArgs, parseParams } from './scenarios';
 
 async function main(): Promise<void> {
@@ -25,7 +25,6 @@ async function main(): Promise<void> {
   const createSim = await loadCreateSim(mock);
   const t0 = performance.now();
   const sim = createSim({ seed, params });
-  setCalendarScale(Number(params.calendarScale ?? 1));
   const initMs = performance.now() - t0;
 
   const first = sim.sample();

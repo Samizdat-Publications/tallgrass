@@ -12,15 +12,18 @@ Pillars, in priority order:
 Watch (drone camera, follow-cam, graphs) -> notice (chronicle event, swing in a graph, a stampede) -> poke (god tool) -> watch the response ripple through the trophic levels -> try a scenario or seed.
 
 ## Time scale (compressed on purpose)
-| Unit | Ticks | At 1x (10 ticks/s) |
-|---|---|---|
-| Sim tick | 1 | 0.1 s |
-| Day/night cycle | 800 | 80 s |
-| Season | 600 | 1 min |
-| Year | 2,400 | 4 min |
-| Bison generation (v5: 1,000 generations took 720 to 750 years) | ~1,750 | ~3 min |
+Default since Sunday 06:10: `calendarScale: 2` (src/sim/params.ts). Challenges pin the classic calendar (scale 1) they were tuned on.
 
-Season and year lengths scale with `calendarScale` (src/sim/params.ts, default 1 as in this table): at 2 a season is 300 ticks and a year 1,200 ticks (2 min at 1x) while lives stay the same length in ticks, so a bison lives about twice as many valley-years. See DECISIONS.md (02:45 Sunday).
+| Unit | Ticks (scale 2, default) | At 1x (10 ticks/s) | Classic (scale 1) |
+|---|---|---|---|
+| Sim tick | 1 | 0.1 s | same |
+| Day/night cycle | 800 | 80 s | same |
+| Season | 300 | 30 s | 600 ticks, 1 min |
+| Year | 1,200 | 2 min | 2,400 ticks, 4 min |
+| Bison generation (1,000 took 1,220 to 1,402 years) | ~1,550 | ~2.6 min | same in ticks |
+| Bison lifespan (maxAge) | 8,000 | about 6.7 valley-years | about 3.3 valley-years |
+
+Biology runs per tick and is the same on both calendars; the calendar only sets how fast the seasons turn, and with them the grass cycle, wolf breeding (once a year, litters scaled by 1/scale) and raven nesting. Carcass life, immunity, outbreak spacing, drought length and immigration stay fixed in ticks. See DECISIONS.md (02:45 to 06:10 Sunday).
 
 Why: the brief wants 1,000+ herbivore generations headless in minutes. At a target of under 0.6 ms per tick, 1,000 bison generations is ~1M ticks, about 10 minutes per seed, and 16 threads run 20 seeds in about 20 minutes. Individual lives (2 to 5 minutes at 1x) are still long enough to follow in documentary mode.
 

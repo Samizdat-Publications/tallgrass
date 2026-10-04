@@ -28,12 +28,16 @@ Plain predator-prey models (Lotka-Volterra) oscillate until something hits zero.
 ## Evolution
 Every animal carries speed, size, sight, boldness, herding, coat and litter genes, passed on with mutation. Trait costs are physical but mild: big bodies hold more reserves and resist wolves but need more grass and run a little slower, and a fast build adds a small metabolic cost that grows with activity. In the first century bison get faster and bigger under wolf pressure; then both traits sit near their limits (0.6 to 1.6 of the founders) and herding fades, because the costs are too weak to hold them back. Wolf traits mostly drift. A real arms race that keeps running needs steeper costs (see DECISIONS.md, 04:55 Sunday). Coat darkness is kept within each species' believable range, so bison stay dark and wolves stay pale.
 
-## Evidence (checkpoint v5 is the default; v4 numbers kept for comparison)
+## Evidence (checkpoint v5 on the 2x calendar is the default since Sunday 06:10; classic-calendar v5 and v4 kept for comparison)
+- 2x calendar (a valley year of 1,200 ticks, biology per tick unchanged): 20 worlds past 1,000 bison generations (1,220 to 1,402 valley-years): bison, wolves, ravens and pronghorn 19/20 each; bison cycle about every 10 years and recover from a crash in about 8. `review/stability/cal2-2a5caf9/`. 300-year shocks: `review/stability/cal2-2a5caf9-shocks300/` (merged with a re-run of seeds 15 to 20).
 - v5: 20 worlds past 1,000 bison generations (720 to 750 years): bison, wolves and ravens 20/20, pronghorn 18/20. `review/stability/v5P-4875c69/`.
 - Trophic cascade, Yellowstone style: `review/stability/cascade/trophic_cascade.png`.
 - v4: 20 worlds past 1,000 bison generations (600 to 670 years): bison, wolves and ravens 20/20, pronghorn 15/20. `review/stability/v4-5df7663/`.
 - Shocks over 120 years (70% cull, two-summer drought, wolf wipeout and return): `review/stability/v4-5df7663-shocks/stability_overview.png`.
 - 32 worlds x 40 years: bison, wolves and ravens 32/32, pronghorn 30/32.
 
-## Known weakness (being worked on)
-Wolves are still pinned near a ceiling set by space (den spacing fits about six packs), so their numbers respond to prey only weakly and the graphs show prey cycles more than predator cycles. And over centuries, evolution pushes the herds bigger and more fecund, so the long-run balance drifts back toward food limits (at 40 years about 25% of bison deaths are starvation; over 700 years about 60%). Experiments in progress: prey-scaled wolf capacity (`wolfPreyRef`), a litter cap for species that rarely twin, and per-animal herd protection so herding pays (`loneIndividual`).
+## Known weaknesses (being worked on)
+- Wolves are pinned near a ceiling set by space (den spacing fits about six packs), so their numbers respond to prey only weakly (annual CV about 0.1) and the graphs show prey cycles more than predator cycles. Where pronghorn and small game carry the wolves through a bison crash, the wolves can grind a herd out (seed 11). Prey-scaled pack sizes (`wolfPreyRef`) make wolves track bison but cost pronghorn over centuries; screens pairing them with a stronger refuge for rare prey are in DECISIONS.md.
+- Ravens sit on a nest-site ceiling (flat line); making carrion limit them crashed them out.
+- A severe drought starves the whole valley at once, so 10 to 15% of worlds lose their herds after one. Drought refuges along the water (`droughtRefuge`, off by default) soften it (fewer collapses, faster recovery); not yet tested over 1,000 generations.
+- Evolution plateaus within a century (see above).

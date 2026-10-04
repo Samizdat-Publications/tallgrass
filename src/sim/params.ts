@@ -224,7 +224,7 @@ export function defaultParams(): Params {
     matingWindow: 0,
     herdNearest: 0,
     climateAmp: 0,
-    calendarScale: 1,
+    calendarScale: 2,
     droughtRefuge: 0,
     cougarImmigration: 0,
     fleeMomentum: 0,

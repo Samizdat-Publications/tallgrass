@@ -66,7 +66,12 @@ Earlier, Saturday (since 09:00):
 - Every image made tonight, in order, is in `journey/` (see `journey/INDEX.md`), as you asked. **Browse them as a page with a slideshow: https://claude.ai/artifact/7jPHUFvbzTv6AUz5UCA3Mu** (private to you; republished as new images are added). Locally: open `journey/index.html`.
 
 ## Stability: what is proven and what isn't (honest)
-The default sim is now **checkpoint v5** (since 16:45 Saturday). v4 results are kept below for comparison.
+The default sim is now **checkpoint v5 on a 2x valley calendar** (since about 06:10 Sunday). Same animals and rules as v5, but a valley year is 1,200 ticks (2 minutes at 1x) instead of 2,400, so a bison lives about 6.7 valley-years instead of 3.3. Every critic since round 3 said the population swings were too fast for "years"; this is the fix I kept deferring, done properly. Challenges keep the classic calendar they were tuned on.
+
+- **2x calendar acceptance** (`review/stability/cal2-2a5caf9/`): 20 worlds, each run until its bison passed **1,000 generations (1,220 to 1,402 valley-years)**. **Bison, wolves, ravens and pronghorn each survived in 19 of 20.** The lost world is seed 11: its wolves, kept at about 57 by pronghorn and small game, grind the bison out by year 40, and the rest collapses by year 115. Every criterion passes except the ravens' "not a flat line" floor (CV 0.05 against 0.05; the nest-site cap keeps them flat on both calendars).
+- **What it buys, measured:** bison cycle about every 10 years (v5: 5), recover from a crash in about 8 years instead of 5.5, and swing less year to year (8% instead of 15%). Births run 0.42 per bison per year, close to real herds (v5: 0.85). Pronghorn do better than on v5: 19 of 20 instead of 18, never near zero, peaks 2.7x their mean instead of 3.4x. The cost is one world lost on three species. Chart: `journey/20261004-042209_chart_calendar-cycles.png` (60 years in 4 worlds, old calendar on top).
+- **2x calendar shocks over 300 years** (`review/stability/cal2-2a5caf9-shocks300/`): SHOCKS_PENDING
+- **Below: checkpoint v5 on the classic calendar,** which is still what the challenges run on.
 
 - **v5 acceptance** (`review/stability/v5P-4875c69/`): 20 seeds, each run until the bison passed **1,000 generations (720 to 750 sim-years)**. **Bison, wolves and ravens survived in 20 of 20 worlds** and pass every criterion. **Pronghorn survived in 18 of 20 (90%)**, above the brief's 80% bar (v4: 75%). One criterion still flags pronghorn: a 2.5-year stretch near zero in one world, against a 2-year limit.
 - **What changed from v4 to v5, and why:** the round-3 critic was right that v4's dynamics were bottom-up. Bison bore about one calf per animal per year, so the herd boomed and then starved (47 to 65% of bison deaths were starvation), and wolves barely moved. v5 changes four things:
@@ -112,7 +117,7 @@ Every issue and its triage is in `REVIEWS.md`.
 
 ## Decisions you might want to overrule
 - **Stack:** TypeScript + Three.js instead of Godot (ADR-001 in `DECISIONS.md`): one language for sim, harness and renderer, headless GPU capture, and the URL build.
-- **Time scale:** a year is 4 minutes at 1x, and biology is fast so that 1,000 generations fit in hours of compute: a v5 bison lives about 3.3 valley-years. That is why a realistic spring birth pulse failed (see Stability). Re-scaling the calendar would be the deeper fix and a bigger job.
+- **Time scale:** a year is now 2 minutes at 1x (seasons 30 s), down from 4. Biology runs per tick and is unchanged, so 1,000 generations still fit in a few hours of compute while a bison lives about 6.7 valley-years. If you'd rather keep the slower seasons of Saturday's build, set `calendarScale: 1` in `src/sim/params.ts` (or open the game with `?p=calendarScale:1`). The seasons now turn twice as fast as before; the day stays 80 s.
 - **The world opens in late summer** (golden, like your concept); early summer is green.
 - **Challenges** are fixed and hand-tuned, not generated; the tuning data is in `DECISIONS.md`.
 - **Cougars and rabbits:** cougars are opt-in, and their scenario lets dispersers wander in from outside (the valley is too small to hold a cat population on its own); rabbits stay abstract (wolves' "small game" in lean times).
@@ -129,7 +134,7 @@ Every issue and its triage is in `REVIEWS.md`.
 Gemini: 3 concept images, about 40 short text and audio checks, 3 video critiques. ElevenLabs: 16 sound generations. Meshy, Sketchfab: none. Every call is in `ASSETS.md`.
 
 ## Next 5 things I'd do
-1. **Wolves that follow their prey.** Even on the slower calendar, wolf numbers stay nearly flat (annual CV about 0.1): the packs are limited by territory, and pronghorn and small game carry them through a bison crash, so in a few worlds they grind the herd down (seed 11). Prey-scaled pack sizes fix the tracking (wolves follow bison at correlation 0.68), but on their own they cost pronghorn. Tonight's screens pair them with a stronger refuge for rare prey; next is a full acceptance of the best pairing.
+1. **Wolves that follow their prey.** Even on the slower calendar, wolf numbers stay nearly flat (annual CV about 0.1): the packs are limited by territory, and pronghorn and small game carry them through a bison crash, so in a few worlds they grind the herd down (seed 11). Tonight's screen of prey-scaled pack sizes plus a stronger refuge for rare prey makes wolves truly follow the bison (correlation 0.76, two years behind, CV 0.31) with bison and wolves in 31 of 31 worlds, but pronghorn drop to 24 of 31. Next: make healthy adult pronghorn genuinely hard for wolves to catch, as in life, and re-screen.
 2. **Evolution that keeps running.** Bison speed and size climb to their limits within a century, because speed costs almost nothing and size pays for itself, and herding fades. The fix is a real sprint cost, wider limits with steep costs near them, and a stronger many-eyes payoff for herding (diagnosis in `DECISIONS.md`, 04:55 Sunday).
 3. **Herd shape.** Grazing herds still form rings and crescents. The nearest-neighbour fix looks right but cost persistence on the old calendar; worth re-screening on the new one.
 4. **Close the gap to your concept image:** close-range ground detail, water with depth and current, and the riparian green along the creek.
