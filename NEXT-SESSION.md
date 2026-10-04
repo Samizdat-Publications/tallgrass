@@ -9,7 +9,7 @@
 - Nothing running in the background. scratch/wt is at 359f512; scratch/wt2 is a second worktree for paired GPU A/B.
 
 ## Next 3 steps (for the next session)
-1. Close-range animation, the one complaint every Gemini round repeats: record a reel and check the new 1.2 s takedown on video, check foot planting on the hunt close-ups frame by frame, vary raven flapping.
+1. Close-range animation, the one complaint every Gemini round repeats: the prey now struggles for 1.2 s but the wolves beside it stand still (Gemini round 11): give them lunges, bites and tugs during the takedown; check foot planting on the hunt close-ups frame by frame; vary raven flapping.
 2. The research items in MORNING.md Next 5: pronghorn under prey-scaled wolves (a fawning brake), per-species evolution costs plus a bison single-calf cap, personal space while grazing (herd shape).
 3. Drought ground that goes pale straw instead of mauve, and the bare apron on the shaded side of ponds (terrain.ts).
 

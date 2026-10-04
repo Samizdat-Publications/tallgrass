@@ -1,6 +1,6 @@
 # Good morning: Tallgrass overnight report
 
-*(Updated 11:20 Sunday. I keep working until the deadline in `.claude/hooks/run_until.txt` (Sunday 12:00); this file is refreshed at every milestone.)*
+*(Updated 11:27 Sunday. I keep working until the deadline in `.claude/hooks/run_until.txt` (Sunday 12:00); this file is refreshed at every milestone.)*
 
 ## How to run it (one step)
 Open **https://tallgrass.stewartgregerson.workers.dev** in Chrome or Edge. Click once anywhere to turn on sound. (The live build is redeployed after each verified milestone; the time of the last deploy is in the line below.)
@@ -128,6 +128,7 @@ The default sim is now **checkpoint v5 on a 2x valley calendar** (since about 06
 | 8 (09:10) | Gemini, video | 5 | 6 | 2 | 4 | 8 | 3 |
 | 9 (10:19) | blind critic, stills of the final build | 7 | 5 | 6 | 5 | 7 | 6 |
 | 10 (10:57) | Gemini, video of the final build | 7 | 6 | 3 | 8 | 9 | 5 |
+| 11 (11:24) | Gemini, video of the live 11:19 build | 6 | 7 | 2 | 5 | 8 | 3 |
 
 Every issue and its triage is in `REVIEWS.md`.
 - Round 4's verdict: animals were illegible and looked motionless at drone distance. In the drone shots a wolf is about 20 px tall, so planted feet can't read. The animal work since then targets exactly that, with whole-body motion scaled to camera distance, larger minimum sizes and a kill lunge.
@@ -137,6 +138,7 @@ Every issue and its triage is in `REVIEWS.md`.
 - Round 8 (on the 09:01 build): scores held (stills 7, 5, 6, 4, 6, 5; Gemini 5, 6, 2, 4, 8, 3). Both critics still lead with the same two things this build can't fix tonight: predators that don't move (the stills critic) and close-up animation that reads as sliding (Gemini, even after the motion smoothing). A last quick round from it is now live: natural grey wolves, species proportions from above, softer snow edges, smooth rocks, no glare discs on ponds, clearer territories, and side panels that dim when you're not touching them.
 - Round 9 (on the 09:51 build with the final quick round): ecosystem, UI and keep-watching each up a point (7, 5, 6, 5, 7, 6). Its top two are unchanged (flat wolves and ravens, evolution that stops by year 300); new complaints are muddy winter and drought colour, herds as one carpet, and rain streaks in the map view (fixed at 10:23). Its four charts were stale copies from round 8, my mistake, so its chart-legend complaints were already fixed.
 - Round 10 (Gemini, video of the final build before the riparian ribbon): its best scores yet (7, 6, 3, 8, 9, 5 against round 8's 5, 6, 2, 4, 8, 3); it calls the fast-forward view "genuinely mesmerizing" and the UI and territory overlay excellent. Close-up animation is still its top complaint (sliding, a kill without struggle, metronomic ravens), even after tonight's motion rounds, so the 0.25 s struggle and the gliding ravens didn't read on video. The struggle is now about 1.2 s (deployed 11:19, checked in a kill rig, not yet on video).
+- Round 11 (Gemini, the live 11:19 build, 27 minutes later): 6, 7, 2, 5, 8, 3. The build differs only by the riparian ribbon and the longer takedown, and Gemini called the same territory overlay "brilliant" in round 10 and "visually abrasive" in round 11, so single Gemini rounds swing by 2 to 3 points on their own. Its consistent message across all rounds: close-range animation (sliding feet, and now wolves that stand still beside the struggling prey) is the weakest part. That is the first item for the next session.
 
 ## Decisions you might want to overrule
 - **Stack:** TypeScript + Three.js instead of Godot (ADR-001 in `DECISIONS.md`): one language for sim, harness and renderer, headless GPU capture, and the URL build.
@@ -158,7 +160,7 @@ Every issue and its triage is in `REVIEWS.md`.
 - **Not built:** family tree view, river diversion and forest planting tools.
 
 ## API spend
-Gemini: 3 concept images, 8 video critiques, about 60 short text and audio listen-checks (under $1.50 in all). ElevenLabs (pay-as-you-go): 17 sound-effect generations and 24 narrator takes (1,911 characters, roughly $0.40 to $0.60). Meshy, Sketchfab: balance and search checks only. Every call is in `ASSETS.md`.
+Gemini: 3 concept images, 9 video critiques, about 60 short text and audio listen-checks (under $1.50 in all). ElevenLabs (pay-as-you-go): 17 sound-effect generations and 24 narrator takes (1,911 characters, roughly $0.40 to $0.60). Meshy, Sketchfab: balance and search checks only. Every call is in `ASSETS.md`.
 
 ## Next 5 things I'd do
 1. **Wolves that follow their prey.** On the default calendar wolf numbers stay nearly flat (annual CV about 0.1): packs are limited by territory, and pronghorn and small game carry them through a bison crash, so in a few worlds they grind the herd down (seed 11). Tonight's best screen (2x calendar + prey-scaled pack sizes + a stronger refuge for rare prey + fewer young in lean times; `scratch/L1`, 32 worlds x 200 valley-years) makes wolves truly follow the bison (correlation 0.77, two years behind, CV 0.30) with bison, wolves and ravens alive in **32 of 32** worlds. Pronghorn reach 25 of 32 at 200 years, but its 1,000-generation acceptance (`review/stability/hungrywolves-44a2bfe`, 20 worlds) ends with bison, wolves and ravens alive in 19 of 20 and the pronghorn extinct in all 20, between years 88 and 585 (median 279): they starve after overshooting on the forage the held-down bison leave (two-thirds of their deaths). So the predator side works and the pronghorn side doesn't yet; the next step is a pronghorn-specific brake on fawning. You can watch it today: Menu, Scenarios, **Hungry wolves**.

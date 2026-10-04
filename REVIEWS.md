@@ -193,3 +193,14 @@ Gemini: Visual 7, Readability 6, Life 3, Ecosystem 8, UI 9, Keep watching 5 (rou
 | G3 | Metronomic raven flight | DEFER | animals | Glides and soaring landed in round 7; still reads as mechanical in flapping flight. |
 | G4 | Night too dark to watch | REJECT for now | lead | Round 9's stills critic and earlier rounds read the night as land; Gemini sees the darkest moment of the reel. |
 | G5 | Captions hard to read on grass | DEFER | UI | A soft shadow was added in round 8; a fuller scrim is the next step. |
+
+## Round 11 (11:24, Gemini video of 86eb206: the final live build, with the riparian ribbon and the 1.2 s takedown) -> `review/round-11-video/reel.gemini.md`
+Gemini: Visual 6, Readability 7, Life 2, Ecosystem 5, UI 8, Keep watching 3 (round 10, 27 minutes earlier on a build without the ribbon and the takedown: 7, 6, 3, 8, 9, 5). The same territory overlay went from "a brilliant, readable way to visualize" (round 10) to "visually abrasive" (round 11), so single Gemini rounds swing by 2 to 3 points on their own; read the trend across rounds, not one score.
+
+| # | Issue | Triage | Owner | Notes |
+|---|---|---|---|---|
+| G1 | Sliding feet | DEFER | animals | Same as every round; next session's first item. |
+| G2 | Wolves stand still beside the struggling prey | DEFER | animals | The prey now fights for 1.2 s, but the wolves around it don't bite, lunge or tug; that is the next half of the takedown. |
+| G3 | Territory overlay too opaque | REJECT for now | UI | Round 10 Gemini praised the same overlay; round 8 and 9 stills critics asked for it stronger. |
+| G4 | Stampede feels weightless | DEFER | lead | Flight speed is sim; slower acceleration would be render-side. |
+| G5 | Carcasses stiff, no tearing | DEFER | animals | Carcasses settle on the slope since round 7; feeding tugs exist but read only up close. |
