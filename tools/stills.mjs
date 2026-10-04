@@ -40,6 +40,13 @@ const SETS = {
     { name: 'h2_herd', eval: "window.__focusHerd(); window.__engine.cam.setView({ distance: 160, pitchDeg: 32 })", wait: 4000 },
     { name: 'h3_top', eval: "window.__cam('top')", wait: 4000 },
   ],
+  // the same views early on, while the herds are big (year 1): a few seconds at 10x so the herd shape forms, then frozen light
+  herdsEarly: [
+    { name: 'e0_run', eval: "window.__speed(10); window.__cam('wide')", wait: 12000 },
+    { name: 'e1_wide', eval: "window.__speed(1); window.__timeOfDay(0.64); window.__focusHerd(); window.__cam('wide')", wait: 4500 },
+    { name: 'e2_herd', eval: "window.__focusHerd(); window.__engine.cam.setView({ distance: 160, pitchDeg: 32 })", wait: 4000 },
+    { name: 'e3_top', eval: "window.__timeOfDay(0.5); window.__cam('top')", wait: 4000 },
+  ],
   snow: [
     { name: 's1_fast', eval: "window.__speed(100); window.__cam('wide')", wait: 14000 },
     { name: 's2_fast', eval: '', wait: 6000 },
