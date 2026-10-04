@@ -623,9 +623,11 @@ export class Water {
 
           // ---- ice: from the shore inward on still water; only the shallow margins of the creek
           float ice = 0.0;
+          float iceReach = 0.0;
           if (cold > 0.02) {
             float iN = tgNoise2(p * 0.23 + 5.0) * 0.6 + tgNoise2(p * 0.9 + 1.0) * 0.4;
             float reach = cold * mix(1.25, 0.17 * (1.2 - 0.8 * riffle), isCreek);
+            iceReach = reach;
             ice = smoothstep(0.03, -0.03, depth - reach + (iN - 0.5) * mix(0.35, 0.12, isCreek) * cold) * smoothstep(0.02, 0.12, cold);
             N = normalize(mix(N, vec3(0.0, 1.0, 0.0), ice));
           }
@@ -803,7 +805,11 @@ export class Water {
             float cr = abs(tgNoise2(p * 0.55 + 2.0) - 0.5);
             iceAlb *= 1.0 - 0.22 * (1.0 - smoothstep(0.0, 0.018, cr)) * w3;
             float sn = smoothstep(0.08, 0.5, uSnow + (tgNoise2(p * 0.4 + 6.0) - 0.5) * 0.35);
-            iceAlb = mix(iceAlb, vec3(0.93, 0.94, 0.96), sn);
+            // snow drifts against the shore; the young ice toward the open water stays dark and bare, with a ragged boundary
+            float edgeK = clamp(depth / max(iceReach, 0.01), 0.0, 1.0);
+            sn *= 1.0 - smoothstep(0.35, 0.9, edgeK + (tgNoise2(p * 0.5 + 3.0) - 0.5) * 0.5);
+            // moonlit snow on the ice greys down the way the snow on the land does, so a frozen pond has no glowing rim at night
+            iceAlb = mix(iceAlb, vec3(0.93, 0.94, 0.96) * (1.0 - 0.45 * uNight), sn);
             vec3 iceCol = iceAlb * INV_PI * irr + refl * F * 0.6 * (1.0 - sn);
             src = mix(src, iceCol, ice);
             a = mix(a, 0.97, ice * smoothstep(-0.005, 0.03, depth));
