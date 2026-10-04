@@ -1,5 +1,6 @@
 // Every tunable number in the simulation lives here. Overrides arrive as a flat
 // Record<string, number> (e.g. from the batch harness: {"bison.metabolism": 0.0009}).
+import { PARAM_PREFIX } from './species';
 import { Sp, SPECIES_COUNT } from './types';
 
 export interface SpeciesParams {
@@ -286,15 +287,13 @@ export function defaultParams(): Params {
   };
 }
 
-const SPECIES_PREFIX = ['bison', 'wolf', 'raven', 'deer', 'rabbit', 'cougar'];
-
 /** Apply flat overrides like {"grassGrowth": 0.002, "bison.metabolism": 0.0008}. Unknown keys throw. */
 export function applyOverrides(p: Params, o: Record<string, number> | undefined): Params {
   if (!o) return p;
   for (const [k, v] of Object.entries(o)) {
     const dot = k.indexOf('.');
     if (dot > 0) {
-      const si = SPECIES_PREFIX.indexOf(k.slice(0, dot));
+      const si = PARAM_PREFIX.indexOf(k.slice(0, dot));
       const field = k.slice(dot + 1) as keyof SpeciesParams;
       if (si < 0 || !(field in p.species[si])) throw new Error(`unknown param ${k}`);
       (p.species[si] as unknown as Record<string, number>)[field] = v;

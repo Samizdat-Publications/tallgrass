@@ -12,6 +12,8 @@ import glob
 import os
 import statistics as st
 
+from species_cols import species_from_files
+
 
 def main():
     ap = argparse.ArgumentParser()
@@ -25,10 +27,13 @@ def main():
         seed = int(os.path.basename(f)[5:-4])
         rows_by_seed[seed] = [r for r in csv.DictReader(open(f)) if float(r['year']) <= a.max_years]
     stats = {}
+    # a world survives when every species it started with is still alive (species list read from the CSV header)
+    files = glob.glob(os.path.join(a.dir, a.scenario, 'seed_*.csv'))
+    started = [k for k in species_from_files(files) if any(rows and float(rows[0][f'pop_{k}']) > 0 for rows in rows_by_seed.values())]
     for seed, rows in sorted(rows_by_seed.items()):
         rs = [r for r in rows if float(r['year']) >= a.skip_years]
         last = rows[-1]
-        alive = all(float(last[f'pop_{k}']) > 0 for k in ['bison', 'wolf', 'raven', 'pronghorn'])
+        alive = all(float(last[f'pop_{k}']) > 0 for k in started)
         col = lambda k: [float(r[k]) for r in rs]
         b, w, p = col('pop_bison'), col('pop_wolf'), col('pop_pronghorn')
         droughts = sum(1 for x, y in zip(rows, rows[1:]) if float(y.get('drought', 0) or 0) > 0 and float(x.get('drought', 0) or 0) == 0)

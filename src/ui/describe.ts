@@ -382,10 +382,10 @@ export function describeEvent(e: SimEvent, ctx?: DescribeContext): EventText {
         const age = ageText(e.a, e.sp);
         return {
           sentence: pick(e, [
-            `An elder ${sg}, ${age} old, still roams the valley.`,
-            `At ${age}, one old ${sg} has outlived most of its kin.`,
-            `A ${sg} of ${age} is among the oldest in the valley.`,
-            `${cap(sg)} elder: ${age} old and still going.`,
+            `An elder ${sg} dies at ${age}, a great age.`,
+            `At ${age}, one old ${sg} dies, having outlived most of its kin.`,
+            `A ${sg} of ${age}, among the oldest the valley has known, dies of old age.`,
+            `${cap(sg)} elder: dead at ${age}, after a long life.`,
           ]),
         };
       }

@@ -162,7 +162,7 @@ async function main(): Promise<void> {
       w.postMessage(t.msg);
     };
     for (let i = 0; i < threads; i++) {
-      const w = new Worker(new URL('./batchWorker.ts', import.meta.url), { workerData: workerInit });
+      const w = new Worker(new URL('./batchWorkerBoot.mjs', import.meta.url), { workerData: workerInit });
       workers.push(w);
       w.on('message', (m: ProgressMsg | DoneMsg | { type: 'ready' }) => {
         if (m.type === 'ready') {

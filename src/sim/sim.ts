@@ -5,6 +5,7 @@ import { BucketGrid } from './grid';
 import { applyOverrides, defaultParams, Params, SpeciesParams } from './params';
 import { Rng } from './rng';
 import { AGENT_STRIDE, CARCASS_STRIDE, F_ALPHA, F_INFECTED, F_JUVENILE, F_MALE, F_PREGNANT, Intervention, SimLike, Snapshot, SPECIES_COUNT, SPECIES_KEYS, Sp, St, YEAR_TICKS, SEASON_TICKS, BASE_YEAR_TICKS, setCalendarScale } from './types';
+import { COAT_BASE, COAT_RANGE, DIET, IS_PREY, isGrazer, SPECIES, THREAT } from './species';
 import { STRIDE, Vegetation } from './vegetation';
 import { generateWorld, World } from './world';
 
@@ -14,7 +15,9 @@ const MAX_PACKS = 64;
 
 export type SimEventKind =
   | 'packFounded' | 'packLost' | 'drought' | 'droughtEnd' | 'outbreak' | 'stampede' | 'extinct'
-  | 'introduced' | 'removed' | 'culled' | 'fire' | 'record' | 'elder' | 'firstKill' | 'plague' | 'rain';
+  | 'introduced' | 'removed' | 'culled' | 'fire' | 'record' | 'elder' | 'firstKill' | 'plague' | 'rain'
+  | 'immigrated' | 'emigrated' | 'recolonized' | 'distemper' | 'mange' | 'townFounded' | 'townLost' | 'sylvaticPlague'
+  | 'hareBoom' | 'hareCrash' | 'coyotePups' | 'mesoRelease' | 'storm' | 'lightningFire';
 
 export interface SimEvent {
   tick: number;
@@ -40,9 +43,6 @@ export interface SimOptions {
   params?: Record<string, number>;
   world?: World;
 }
-
-const isHerbivore = (s: number) => s === Sp.Bison || s === Sp.Deer || s === Sp.Rabbit;
-const isPredator = (s: number) => s === Sp.Wolf || s === Sp.Cougar;
 
 /** Ground brightness of a season's ripe grass, for coat camouflage. */
 function grassBrightness(season: number): number {
@@ -116,6 +116,8 @@ export class Sim implements SimLike {
   coarseBrowse = new Float32Array(32 * 32);
 
   events: SimEvent[] = [];
+  /** Total events ever emitted. events[0] has serial eventSerial - events.length, so consumers survive trimming. */
+  eventSerial = 0;
   /** Life story of one followed animal (set trackedId to start a fresh story). */
   trackedId = 0;
   story: StoryEntry[] = [];
@@ -181,7 +183,7 @@ export class Sim implements SimLike {
     out[o + G_SIGHT] = j();
     out[o + G_BOLD] = j();
     out[o + G_HERD] = j();
-    out[o + G_COAT] = (sp === Sp.Bison ? 0.85 : sp === Sp.Wolf ? 0.3 : sp === Sp.Raven ? 0.97 : 0.5) + (r.next() - 0.5) * 0.12;
+    out[o + G_COAT] = (COAT_BASE[sp] ?? 0.5) + (r.next() - 0.5) * 0.12;
     out[o + G_LITTER] = j();
   }
 
@@ -386,8 +388,8 @@ export class Sim implements SimLike {
       if (!a.alive[i]) continue;
       const s = a.sp[i];
       this.pop[s]++;
-      if (isHerbivore(s)) this.preyList[this.preyN++] = i;
-      else if (isPredator(s)) {
+      if (IS_PREY[s]) this.preyList[this.preyN++] = i;
+      else if (THREAT[s] > 0) {
         this.predList[this.predN++] = i;
         const pk = a.pack[i];
         if (pk >= 0) {
@@ -411,7 +413,7 @@ export class Sim implements SimLike {
     for (let i = 0; i < a.hi; i++) {
       if (!a.alive[i]) continue;
       const s = a.sp[i];
-      if (s === Sp.Bison || s === Sp.Deer) {
+      if (isGrazer(s)) {
         if ((i + t) % 6 === 0) this.thinkHerbivore(i, P[s]);
         this.moveGround(i, P[s]);
         this.liveHerbivore(i, P[s]);
@@ -739,7 +741,8 @@ export class Sim implements SimLike {
     else if (cause === 'old') {
       this.cOld[s]++;
     } else if (cause === 'killed') this.cKilled[s]++;
-    if (cause !== 'removed' && s !== Sp.Raven) {
+    if (cause !== 'removed') {
+      // species with no meat (ravens) leave nothing: the meat > 0.05 test below drops them
       const P = this.p.species[s];
       const juvenileF = a.age[i] < P.matureAge ? 0.25 + 0.75 * (a.age[i] / P.matureAge) : 1;
       const meat = P.meat * a.genes[i * NG + G_SIZE] * juvenileF * (cause === 'starve' ? 0.6 : 1) * (cause === 'culled' ? 0.5 : 1);
@@ -860,7 +863,7 @@ export class Sim implements SimLike {
     if (a.infected[i] > 0) m *= this.p.diseaseMetab;
     if (a.age[i] < P.matureAge) m *= 0.75;
     // cold costs extra, much more for a small bird
-    m *= 1 + (a.sp[i] === Sp.Raven ? 0.5 : 0.25) * (1 - this.env.state.warmth);
+    m *= 1 + (SPECIES[a.sp[i]].flies ? 0.5 : 0.25) * (1 - this.env.state.warmth);
     return m;
   }
 
@@ -1291,6 +1294,8 @@ export class Sim implements SimLike {
             const dx = a.x[j] - x, dy = a.y[j] - y;
             const dd = Math.sqrt(dx * dx + dy * dy);
             if (dd > sight) continue;
+            const dietW = DIET[Sp.Wolf][a.sp[j]];
+            if (dietW <= 0) continue;
             const Pj = this.p.species[a.sp[j]];
             if (Pj.hideAge > 0 && a.age[j] < Pj.hideAge && a.state[j] === St.Rest && dd > 5) continue;
             const camo = Pj.camo;
@@ -1310,7 +1315,7 @@ export class Sim implements SimLike {
             // prey switching (type III): hunting effort follows the common prey, so a crashed species gets a refuge
             const np = this.pop[a.sp[j]];
             const rare = p.wolfRareHalf > 0 ? np / (np + p.wolfRareHalf) : 1;
-            const score = (pref * young * old * weak * lone * catchable * catchable * rare) / (Pj.toughness * a.genes[j * NG + G_SIZE]) / (dd + 15);
+            const score = (pref * dietW * young * old * weak * lone * catchable * catchable * rare) / (Pj.toughness * a.genes[j * NG + G_SIZE]) / (dd + 15);
             if (score > bestS) { bestS = score; best = j; }
           }
         }
@@ -1686,9 +1691,11 @@ export class Sim implements SimLike {
           const dx = a.x[j] - x, dy = a.y[j] - y;
           const d = Math.sqrt(dx * dx + dy * dy);
           if (d > r) continue;
+          const dietW = DIET[Sp.Cougar][a.sp[j]];
+          if (dietW <= 0) continue;
           const Pj = this.p.species[a.sp[j]];
           const young = a.age[j] < Pj.matureAge ? 2.5 : 1;
-          const sc = (young * (1.6 - a.energy[j])) / (Pj.toughness * a.genes[j * NG + G_SIZE]) / (d + 4);
+          const sc = (dietW * young * (1.6 - a.energy[j])) / (Pj.toughness * a.genes[j * NG + G_SIZE]) / (d + 4);
           if (sc > bestS) { bestS = sc; best = j; }
         }
       }
@@ -1852,6 +1859,7 @@ export class Sim implements SimLike {
 
   private event(kind: SimEventKind, sp: number, x: number, y: number, a: number, b: number): void {
     this.events.push({ tick: this.tick, kind, sp, x, y, a, b });
+    this.eventSerial++;
     if (this.events.length > 4000) this.events.splice(0, 1000);
   }
 
@@ -1904,7 +1912,7 @@ export class Sim implements SimLike {
       const [cx, cy] = x !== undefined && y !== undefined ? [x, y] : this.goodSpot(0.4);
       for (let k = 0; k < count; k++) {
         const i = this.spawnAdult(sp, cx + this.rng.range(-15, 15), cy + this.rng.range(-15, 15));
-        if (sp === Sp.Raven) { this.a.alt[i] = 30; this.a.state[i] = St.Fly; }
+        if (SPECIES[sp].flies) { this.a.alt[i] = 30; this.a.state[i] = St.Fly; }
       }
     }
     this.everPresent[sp] = 1;
@@ -1989,9 +1997,7 @@ export class Sim implements SimLike {
         if (a.infected[i] > 0) infBison++;
       }
     }
-    row.gen_bison = pops[Sp.Bison] ? gsum[Sp.Bison] / pops[Sp.Bison] : 0;
-    row.gen_wolf = pops[Sp.Wolf] ? gsum[Sp.Wolf] / pops[Sp.Wolf] : 0;
-    row.gen_pronghorn = pops[Sp.Deer] ? gsum[Sp.Deer] / pops[Sp.Deer] : 0;
+    for (const d of SPECIES) if (d.traits) row['gen_' + d.key] = pops[d.id] ? gsum[d.id] / pops[d.id] : 0;
     const traits: [number, number][] = [[Sp.Bison, G_SPEED], [Sp.Bison, G_SIZE], [Sp.Bison, G_COAT], [Sp.Bison, G_SIGHT], [Sp.Bison, G_HERD],
       [Sp.Wolf, G_SPEED], [Sp.Wolf, G_SIZE], [Sp.Wolf, G_COAT], [Sp.Wolf, G_SIGHT], [Sp.Deer, G_SPEED], [Sp.Deer, G_COAT],
       [Sp.Bison, G_LITTER], [Sp.Deer, G_LITTER]];
@@ -2091,8 +2097,7 @@ export class Sim implements SimLike {
   }
 }
 
-/** Coat darkness stays within a species' believable range (bison stay dark, wolves stay pale). */
-const COAT_RANGE: [number, number][] = [[0.62, 1], [0.05, 0.65], [0.85, 1], [0.2, 0.8], [0.2, 0.8], [0.15, 0.6]];
+/** Coat darkness stays within a species' believable range (bison stay dark, wolves stay pale); see COAT_RANGE in species.ts. */
 function clampCoat(sp: number, v: number): number {
   const [lo, hi] = COAT_RANGE[sp] ?? [0, 1];
   return v < lo ? lo : v > hi ? hi : v;

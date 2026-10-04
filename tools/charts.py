@@ -34,17 +34,32 @@ from matplotlib.patches import Patch  # noqa: E402
 from matplotlib.ticker import FuncFormatter  # noqa: E402
 
 YEAR = 2400.0
-SPECIES = ["bison", "wolf", "raven", "pronghorn", "rabbit", "cougar"]
-LABEL = {"bison": "Bison", "wolf": "Wolf", "raven": "Raven", "pronghorn": "Pronghorn", "rabbit": "Rabbit", "cougar": "Cougar"}
+# The species list itself comes from the CSV header (pop_<key> columns). LABEL and COLOR style the known ones and
+# fall back to a title-cased key and the next spare colour for species added later.
+class _Label(dict):
+    def __missing__(self, key):
+        return key.replace("_", " ").title()
+
+
+LABEL = _Label({"bison": "Bison", "wolf": "Wolf", "raven": "Raven", "pronghorn": "Pronghorn", "rabbit": "Rabbit", "cougar": "Cougar"})
+_SPARE = ["#b3563f", "#5a8f3d", "#7d6bb0", "#3f8fb3", "#a8873a", "#8a5f7a", "#4e9a74", "#9c6b3a"]
+
+
+class _Color(dict):
+    def __missing__(self, key):
+        self[key] = _SPARE[len(self) % len(_SPARE)]
+        return self[key]
+
+
 # the game's own species colours (src/ui/palette.ts), a little deeper so they read on a white chart
-COLOR = {
+COLOR = _Color({
     "bison": "#c27a3c",      # game bison orange-tan
     "wolf": "#4f86d0",       # game wolf blue
     "raven": "#9269c8",      # game raven violet
     "pronghorn": "#2f9f97",  # game pronghorn teal
     "rabbit": "#9a8878",     # grey-brown
     "cougar": "#c79a1a",     # ochre
-}
+})
 GRASS = "#6fae5a"
 SHOCK = "#b5422b"
 PRIOR = "#5d86b0"
@@ -114,7 +129,9 @@ class Scenario:
             self.ticks[seed] = np.asarray(arr["tick"], dtype=float)
             self.cols[seed] = {n: np.asarray(arr[n], dtype=float) for n in names if n != "tick"}
         self.seed_info = {s["seed"]: s for s in self.summary.get("seeds", [])}
-        self.species = [k for k in SPECIES if any(f"pop_{k}" in c and c[f"pop_{k}"][0] > 0 for c in self.cols.values())]
+        first = next(iter(self.cols.values()), {})
+        self.all_species = [c[4:] for c in first if c.startswith("pop_")]  # header order = registry order
+        self.species = [k for k in self.all_species if any(f"pop_{k}" in c and c[f"pop_{k}"][0] > 0 for c in self.cols.values())]
         cols0 = next(iter(self.cols.values()), {})
         self.trait_cols = [c for c in cols0 if c.startswith("trait_")]
 
@@ -560,7 +577,7 @@ def chart_traits(sc: Scenario, saved: list[Path]):
     fig, axes = plt.subplots(nrows, ncols, figsize=(5.1 * ncols + 0.4, 2.9 * nrows + 1.0), sharex=True, squeeze=False)
     for i, c in enumerate(cols):
         ax = axes[i // ncols][i % ncols]
-        sp = next((k for k in SPECIES if c.startswith(f"trait_{k}_")), None)
+        sp = next((k for k in sc.all_species if c.startswith(f"trait_{k}_")), None)
         col = COLOR.get(sp, INK)
         m = sc.matrix(c)
         for row in m:
@@ -724,7 +741,7 @@ def chart_overview(sc: Scenario, meta: dict, log: bool, saved: list[Path]):
 
 
 def chart_combined(scs: list[Scenario], meta: dict, root: Path, log: bool, saved: list[Path]):
-    keys = [k for k in SPECIES if any(k in s.species for s in scs)]
+    keys = [k for k in dict.fromkeys(k for s in scs for k in s.all_species) if any(k in s.species for s in scs)]
     nr, nc = len(scs), len(keys)
     fig, axes = plt.subplots(nr, nc, figsize=(3.9 * nc + 1.5, 2.55 * nr + 2.0), sharex=False, squeeze=False)
     for r, sc in enumerate(scs):

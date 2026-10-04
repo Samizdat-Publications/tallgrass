@@ -1,7 +1,8 @@
 // Web Worker host for the simulation. The main thread only renders and sends commands.
 import { NG, GENE_NAMES, G_COAT, G_SIZE, G_SPEED } from './agents';
 import { Sim, SimEvent, StoryEntry } from './sim';
-import { Intervention, SPECIES_COUNT, Sp, TICKS_PER_SECOND } from './types';
+import { SPECIES as REGISTRY } from './species';
+import { Intervention, SPECIES_COUNT, TICKS_PER_SECOND } from './types';
 
 export type ToWorker =
   | { type: 'init'; seed: number; params?: Record<string, number>; schedule?: { tick: number; iv: Intervention }[] }
@@ -47,11 +48,13 @@ export interface HistoryRow {
 }
 
 /** Trait series recorded in history rows: [species, gene index, label]. */
-export const TRAIT_SERIES: [number, number, string][] = [
-  [0, G_SPEED, 'Bison speed'], [0, G_SIZE, 'Bison size'], [0, G_COAT, 'Bison coat darkness'],
-  [1, G_SPEED, 'Wolf speed'], [1, G_SIZE, 'Wolf size'], [1, G_COAT, 'Wolf coat darkness'],
-  [3, G_SPEED, 'Pronghorn speed'], [3, G_COAT, 'Pronghorn coat darkness'],
-];
+const SERIES_GENES: [number, string][] = [[G_SPEED, 'speed'], [G_SIZE, 'size'], [G_COAT, 'coat darkness']];
+/** Genes recorded per species when they differ from speed, size and coat (pronghorn has no size series). */
+const SERIES_OVERRIDE: Record<string, number[]> = { pronghorn: [G_SPEED, G_COAT] };
+// one series per recorded gene of each species with traits, in registry order (src/ui/traits.ts indexes into this)
+export const TRAIT_SERIES: [number, number, string][] = REGISTRY.filter((d) => d.traits).flatMap((d) =>
+  SERIES_GENES.filter(([g]) => (SERIES_OVERRIDE[d.key] ?? [G_SPEED, G_SIZE, G_COAT]).includes(g)).map(([g, label]): [number, number, string] => [d.id, g, `${d.name} ${label}`]),
+);
 
 export type FromWorker =
   | { type: 'ready'; seed: number }
@@ -92,6 +95,7 @@ let sim: Sim | null = null;
 let schedule: { tick: number; iv: Intervention }[] = [];
 let speed = 1;
 let selectedId: number | null = null;
+/** Serial of the next event the page has not seen (compare Sim.eventSerial). */
 let eventCursor = 0;
 let history: HistoryRow[] = [];
 let lastVeg = 0;
@@ -131,16 +135,16 @@ function traitGrid(): Uint8Array {
   const out = new Uint8Array(TRAIT_GRID * TRAIT_GRID * 4);
   if (!sim) return out;
   const a = sim.a;
-  const sum = new Float64Array(8), cnt = new Int32Array(8);
+  const sum = new Float64Array(SPECIES_COUNT), cnt = new Int32Array(SPECIES_COUNT);
   for (let i = 0; i < a.hi; i++) {
-    if (!a.alive[i] || a.sp[i] === Sp.Raven) continue;
+    if (!a.alive[i] || REGISTRY[a.sp[i]].flies) continue;
     sum[a.sp[i]] += a.genes[i * NG + G_SPEED];
     cnt[a.sp[i]]++;
   }
   const rel = new Float32Array(TRAIT_GRID * TRAIT_GRID), n = new Int32Array(TRAIT_GRID * TRAIT_GRID);
   const k = TRAIT_GRID / sim.world.size;
   for (let i = 0; i < a.hi; i++) {
-    if (!a.alive[i] || a.sp[i] === Sp.Raven) continue;
+    if (!a.alive[i] || REGISTRY[a.sp[i]].flies) continue;
     const s = a.sp[i];
     const cx = Math.min(TRAIT_GRID - 1, Math.max(0, (a.x[i] * k) | 0)), cy = Math.min(TRAIT_GRID - 1, Math.max(0, (a.y[i] * k) | 0));
     const c = cy * TRAIT_GRID + cx;
@@ -211,8 +215,10 @@ function post(forceVeg: boolean): void {
   const withVeg = forceVeg || now - lastVeg > VEG_EVERY_MS;
   if (withVeg) lastVeg = now;
   const s = sim.snapshot(withVeg);
-  const events = sim.events.slice(eventCursor);
-  eventCursor = sim.events.length;
+  // serials, not array indices: the sim trims its events array
+  const base = sim.eventSerial - sim.events.length;
+  const events = sim.events.slice(Math.max(0, eventCursor - base));
+  eventCursor = sim.eventSerial;
   const sel = selectedId !== null ? detail(selectedId) : null;
   const msg: FromWorker = {
     type: 'snap', tick: s.tick, env: s.env, count: s.count, ids: s.ids, agents: s.agents, carcassCount: s.carcassCount,
@@ -234,14 +240,14 @@ function loop(): void {
   let n = 0;
   if (skipping) {
     // run flat out until an interesting event shows up (or 3 sim-years pass)
-    const startEvents = sim.events.length;
+    const startSerial = sim.eventSerial;
     const limit = sim.tick + 7200;
     while (performance.now() - t0 < 30) {
       sim.step(1);
       record();
       n++;
       let hit = false;
-      for (let k = startEvents; k < sim.events.length; k++) if (SKIP_KINDS.has(sim.events[k].kind)) hit = true;
+      for (let k = Math.max(0, startSerial - (sim.eventSerial - sim.events.length)); k < sim.events.length; k++) if (SKIP_KINDS.has(sim.events[k].kind)) hit = true;
       if (hit || sim.tick >= limit) { skipping = false; break; }
     }
   } else if (speed > 0) {

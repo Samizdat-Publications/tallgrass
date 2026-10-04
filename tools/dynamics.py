@@ -16,7 +16,7 @@ import math
 import os
 import statistics as st
 
-SPECIES = ['bison', 'wolf', 'raven', 'pronghorn', 'cougar']
+from species_cols import species_from_files
 
 
 def annual(rows, key):
@@ -54,6 +54,7 @@ def report(d, scenario, skip):
     if not files:
         print(f'{d}: no seed CSVs')
         return
+    SPECIES = species_from_files(files)  # every pop_<key> column; species that never appear are not printed
     alive = {s: 0 for s in SPECIES}
     present = {s: 0 for s in SPECIES}
     bpc, kill_sh, starve_sh, old_sh = [], [], [], []

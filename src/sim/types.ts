@@ -1,4 +1,5 @@
 // Shared contract between the sim core, the worker, the renderer and the headless harness.
+import { SPECIES } from './species';
 
 export const Sp = {
   Bison: 0,
@@ -9,9 +10,10 @@ export const Sp = {
   Cougar: 5,
 } as const;
 export type Sp = (typeof Sp)[keyof typeof Sp];
-export const SPECIES_COUNT = 6;
-export const SPECIES_NAMES = ['Bison', 'Wolf', 'Raven', 'Pronghorn', 'Rabbit', 'Cougar'] as const;
-export const SPECIES_KEYS = ['bison', 'wolf', 'raven', 'pronghorn', 'rabbit', 'cougar'] as const;
+// Derived from the registry in species.ts. Keep the `Sp` ids above in step with SPECIES[].id.
+export const SPECIES_COUNT: number = SPECIES.length;
+export const SPECIES_NAMES: string[] = SPECIES.map((s) => s.name);
+export const SPECIES_KEYS: string[] = SPECIES.map((s) => s.key);
 
 /** Behavior state shown to the renderer and inspector. */
 export const St = {
@@ -26,9 +28,10 @@ export const St = {
   Rest: 8,
   Fly: 9,
   Stalk: 10,
+  Migrate: 11,
 } as const;
 export type St = (typeof St)[keyof typeof St];
-export const STATE_NAMES = ['idle', 'grazing', 'walking', 'running', 'fleeing', 'chasing', 'feeding', 'drinking', 'resting', 'flying', 'stalking'];
+export const STATE_NAMES = ['idle', 'grazing', 'walking', 'running', 'fleeing', 'chasing', 'feeding', 'drinking', 'resting', 'flying', 'stalking', 'migrating'];
 
 /** Flag bits in the agent snapshot. */
 export const F_JUVENILE = 1;
@@ -36,6 +39,8 @@ export const F_PREGNANT = 2;
 export const F_INFECTED = 4;
 export const F_MALE = 8;
 export const F_ALPHA = 16;
+export const F_MANGE = 32;
+export const F_MIGRANT = 64;
 
 /**
  * Agent snapshot record, Float32, AGENT_STRIDE floats per alive agent:
@@ -93,6 +98,11 @@ export interface Snapshot {
   veg?: Uint8Array;
   /** Population counts by species. */
   pop: Int32Array;
+  /** Small-prey density, 32 x 32 cells x 4 channels (later work packages). */
+  small?: Uint8Array;
+  /** Storm cells and lightning strikes (later work packages). */
+  storms?: Float32Array;
+  strikes?: Float32Array;
 }
 
 /** Ticks per second of real time at 1x speed. */

@@ -63,6 +63,12 @@ export class Agents {
   genes!: Float32Array;
   mateGenes!: Float32Array;
   mateId!: Uint32Array;
+  /** 0 native, 1 immigrant, 2 vagrant (later work packages; always 0 until then). */
+  origin!: Uint8Array;
+  /** Generic countdown (migration and dispersal timers). */
+  cdv!: Uint16Array;
+  /** Mange severity 0..1. */
+  mange!: Float32Array;
 
   constructor(cap: number) {
     this.grow(cap);
@@ -117,6 +123,9 @@ export class Agents {
     this.genes = g(Float32Array, this.genes, NG);
     this.mateGenes = g(Float32Array, this.mateGenes, NG);
     this.mateId = g(Uint32Array, this.mateId);
+    this.origin = g(Uint8Array, this.origin);
+    this.cdv = g(Uint16Array, this.cdv);
+    this.mange = g(Float32Array, this.mange);
     // newly added slots go on the free list in descending order so pop() yields ascending slots
     for (let i = cap - 1; i >= old; i--) this.free.push(i);
     this.cap = cap;
@@ -152,6 +161,9 @@ export class Agents {
     this.parentA[i] = 0;
     this.parentB[i] = 0;
     this.mateId[i] = 0;
+    this.origin[i] = 0;
+    this.cdv[i] = 0;
+    this.mange[i] = 0;
     this.hydration[i] = 1;
     if (i + 1 > this.hi) this.hi = i + 1;
     this.count++;
