@@ -302,7 +302,7 @@ def smooth_year(v: np.ndarray, spacing: float, min_w: int = 1) -> np.ndarray:
 def legend_handles(sc: Scenario, grass=False, shock=False, prior=False):
     h = [Line2D([0], [0], color=COLOR[k], lw=2.2, label=LABEL[k]) for k in sc.species]
     if grass:
-        h.append(Line2D([0], [0], color=GRASS, lw=2, alpha=0.6, label="grass, 1-year mean (right axis, 0 to 1)"))
+        h.append(Line2D([0], [0], color=GRASS, lw=2, alpha=0.6, label="grass cover, 1-year mean (0 to 1 scaled to panel height)"))
     if shock and sc.events():
         h.append(Line2D([0], [0], color=SHOCK, lw=1.4, ls="--", label="shock"))
     if prior and sc.events():
@@ -561,6 +561,10 @@ def chart_traits(sc: Scenario, saved: list[Path]):
         for row in m:
             ax.plot(t, row, color=col, lw=0.5, alpha=0.18, zorder=2)
         med, q1, q3 = stats(m)
+        # when only a few worlds are still running (generation-target runs end at different times) the median jumps:
+        # end the median and band where fewer than 5 worlds (or a quarter of them) remain
+        thin = np.sum(np.isfinite(m), axis=0) < max(5, 0.25 * m.shape[0])
+        med, q1, q3 = (np.where(thin, np.nan, a) for a in (med, q1, q3))
         ax.fill_between(t, q1, q3, color=col, alpha=0.22, lw=0, zorder=3)
         ax.plot(t, med, color=col, lw=1.9, zorder=4)
         draw_events(ax, sc, text=False)
@@ -730,7 +734,8 @@ def chart_combined(scs: list[Scenario], meta: dict, root: Path, log: bool, saved
             ok, started = sc.persisted(k)
             ver = sc.summary.get("verdict", {}).get(k, {})
             good = ok / max(1, started) >= 0.8
-            ax.text(0.98, 0.96, f"{ok}/{started} persist", transform=ax.transAxes, ha="right", va="top", fontsize=9, fontweight="bold", color="#2f7d32" if good else SHOCK)
+            ax.text(0.98, 0.96, f"{ok}/{started} persist", transform=ax.transAxes, ha="right", va="top", fontsize=9, fontweight="bold", color="#2f7d32" if good else SHOCK,
+                    bbox=dict(facecolor="white", alpha=0.82, edgecolor="none", pad=1.5), zorder=20)
             if r == 0:
                 ax.set_title(LABEL[k], fontsize=12.5, color=COLOR[k] if k != "raven" else INK)
             if r == nr - 1:
