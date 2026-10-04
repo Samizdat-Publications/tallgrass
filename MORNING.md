@@ -1,11 +1,11 @@
 # Good morning: Tallgrass overnight report
 
-*(Updated 09:00 Sunday. I keep working until the deadline in `.claude/hooks/run_until.txt` (Sunday 12:00); this file is refreshed at every milestone.)*
+*(Updated 08:55 Sunday. I keep working until the deadline in `.claude/hooks/run_until.txt` (Sunday 12:00); this file is refreshed at every milestone.)*
 
 ## How to run it (one step)
 Open **https://tallgrass.stewartgregerson.workers.dev** in Chrome or Edge. Click once anywhere to turn on sound. (The live build is redeployed after each verified milestone; the time of the last deploy is in the line below.)
 
-Last deploy: 08:58 Sunday (commit 55b71ff: renderer round 8 with winter snowpack, bare winter trees, visible rain and a darker night; water rework, dust fix, Field notes, the Hungry wolves scenario, the 2x valley calendar, the narrator), verified live: no errors at 56 to 60 fps; the default world reads "1 year every 2 min" and challenges keep "1 year every 4 min".
+Last deploy: 08:48 Sunday (commit 55b71ff: renderer round 8 with winter snowpack, bare winter trees, visible rain and a darker night; water rework, dust fix, Field notes, the Hungry wolves scenario, the 2x valley calendar, the narrator), verified live: no errors at 56 to 60 fps; the default world reads "1 year every 2 min" and challenges keep "1 year every 4 min".
 
 Locally: `npm run dev`, then http://localhost:5199/.
 - `?seed=anything` picks a world, `?scenario=yellowstone` picks a scenario, `?challenge=herd` starts a challenge. The menu (top right) does all three.
