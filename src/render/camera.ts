@@ -99,6 +99,10 @@ export class DroneCamera {
 
   isCinematic(): boolean { return this.cinematic; }
 
+  /** Start the next smooth move slowly and let it build (an operator's ease-in), instead of leaving at full speed. */
+  easeIn(): void { this.moveT = 0; this.rate = Math.min(this.rate, 2); }
+  private moveT = 1e9;
+
   /** A slow, steady orbit while time is fast-forwarding and nobody is steering (0 = off), in radians per second. */
   idleDrift = 0;
   private lastInputT = -1e9;
@@ -206,7 +210,9 @@ export class DroneCamera {
       }
     }
 
-    const k = 1 - Math.exp(-dt * this.rate);
+    this.moveT += dt;
+    const ramp = 0.12 + 0.88 * smoothstep(0, 2.2, this.moveT);
+    const k = 1 - Math.exp(-dt * this.rate * ramp);
     if (this.follower) {
       // critically damped spring toward the goal (smooth catch-up, no overshoot), instead of an exponential chase
       const st = Math.max(0.05, this.followSmoothTime);
@@ -272,6 +278,7 @@ export class DroneCamera {
 
   private userInput(cancelFollow: boolean): void {
     this.rate = 11;
+    this.moveT = 1e9;
     if (cancelFollow && this.follower) this.follower = null;
     this.lastInputT = this.clockT;
     this.onUserInput?.();

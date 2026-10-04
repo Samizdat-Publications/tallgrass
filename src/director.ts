@@ -100,26 +100,32 @@ export class Director {
     this.t = shot.hold;
     this.last.push(shot.kind);
     if (this.last.length > 3) this.last.shift();
-    {
-      // film from the side with a clear line of sight
-      const v = new THREE.Vector3();
-      const ok = shot.id !== null ? this.getPos(shot.id, v) : false;
-      const sx = shot.id !== null ? (ok ? v.x : NaN) : shot.x, sy = shot.id !== null ? (ok ? v.z : NaN) : shot.y;
-      if (Number.isFinite(sx) && Number.isFinite(sy)) shot.yaw = this.clearYaw(sx, sy, shot.pitch, shot.yaw);
-    }
+    // film from the side with a clear line of sight
+    const v = new THREE.Vector3();
+    const ok = shot.id !== null ? this.getPos(shot.id, v) : false;
+    const sx = shot.id !== null ? (ok ? v.x : NaN) : shot.x, sy = shot.id !== null ? (ok ? v.z : NaN) : shot.y;
+    const known = Number.isFinite(sx) && Number.isFinite(sy);
+    if (known) shot.yaw = this.clearYaw(sx, sy, shot.pitch, shot.yaw);
+    // an editor cuts to a subject across the valley rather than flying the camera through the trees to reach it;
+    // near subjects get a glide that eases in and out
+    const focus = this.cam.getFocus(this.tmp);
+    const far = known && Math.hypot(sx - focus.x, sy - focus.z) > 0.6 * Math.max(this.cam.distance, shot.dist) + 40;
+    const turn = Math.abs(((shot.yaw - this.cam.yawDeg) % 360 + 540) % 360 - 180);
+    const cut = far || turn > 75 || Math.abs(shot.dist - this.cam.distance) > 0.6 * Math.max(shot.dist, this.cam.distance);
     // a documentary operator lets the subject drift in frame and eases after it, so the background doesn't judder
     this.cam.followSmoothTime = shot.id !== null ? 1.1 : 0.4;
     this.cam.followDeadzone = shot.id !== null ? 0.13 : 0.055;
     if (shot.id !== null) {
       const id = shot.id;
-      const v = new THREE.Vector3();
-      this.cam.follow(() => (this.getPos(id, v) ? { x: v.x, y: v.z } : null));
-      this.cam.setView({ distance: shot.dist, pitchDeg: shot.pitch, yawDeg: shot.yaw });
+      const p = new THREE.Vector3();
+      this.cam.follow(() => (this.getPos(id, p) ? { x: p.x, y: p.z } : null));
+      this.cam.setView({ ...(cut && known ? { x: sx, y: sy } : {}), distance: shot.dist, pitchDeg: shot.pitch, yawDeg: shot.yaw }, cut && known);
     } else {
       this.cam.follow(null);
-      this.cam.setView({ x: shot.x, y: shot.y, distance: shot.dist, pitchDeg: shot.pitch, yawDeg: shot.yaw });
+      this.cam.setView({ x: shot.x, y: shot.y, distance: shot.dist, pitchDeg: shot.pitch, yawDeg: shot.yaw }, cut);
     }
     this.cam.setCinematic(true);
+    if (!cut) this.cam.easeIn();
   }
 
   private recent(k: ShotKind): boolean {
