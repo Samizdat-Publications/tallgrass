@@ -68,7 +68,7 @@ Earlier, Saturday (since 09:00):
 - `1_golden_herd.png`: the creek valley from the drone in late-summer light, herds grazing along the cottonwoods.
 - `2_golden_low.png`: ground level against a low sun, bison on the rise and a fresh kill in the foreground (no interface, H).
 - `3_dusk_valley.png`: the whole valley at dusk, the creek's tree line and the pond.
-- `4_winter_dawn.png`: winter dawn, patchy snowpack, bare cottonwoods and a herd strung along the frozen creek.
+- `4_winter_dawn.png`: winter dawn, patchy snowpack, bare cottonwoods and a herd strung along the creek, whose current keeps it open.
 - `5_ui_golden.png`: the documentary interface with the chronicle's season lines.
 - `6_ui_territories.png`: wolf territories as tinted ranges with named packs, and a chapter card.
 - From the 09:10 set in `review/morning/sunday2/`: `7_follow_a_wolf_hunt.png` (following a founder wolf pup, with its traits, life story and a Field note), `8_field_notes.png`, `9_chart_60_years.png` (60 valley-years in 4 worlds), `10_chart_shocks.png` (the 300-year shock suite).
