@@ -19,9 +19,9 @@ def challenge_ids():
     return re.findall(r"^\s{4}id: '([^']+)'", src, flags=re.M)
 
 
-def run(cid, policy):
+def run(cid, policy, params=None):
     npx = shutil.which('npx') or 'npx'  # npx.cmd on Windows; no shell needed
-    cmd = [npx, 'tsx', 'tools/challenge_check.ts', '--challenge', cid] + (['--policy'] if policy else [])
+    cmd = [npx, 'tsx', 'tools/challenge_check.ts', '--challenge', cid] + (['--policy'] if policy else []) + (['--params', params] if params else [])
     out = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True, timeout=3600)
     for line in out.stdout.splitlines()[::-1]:
         if line.startswith('{'):
@@ -33,11 +33,12 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--jobs', type=int, default=6)
     ap.add_argument('--out', default='scratch/challenges/suite.jsonl')
+    ap.add_argument('--params', default=None, help='JSON sim params on top of each scenario, e.g. {"calendarScale":2}')
     a = ap.parse_args()
     ids = challenge_ids()
     jobs = [(c, p) for c in ids for p in (False, True)]
     with cf.ThreadPoolExecutor(a.jobs) as ex:
-        results = list(ex.map(lambda j: run(*j), jobs))
+        results = list(ex.map(lambda j: run(*j, a.params), jobs))
     out = ROOT / a.out
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text('\n'.join(json.dumps(r) for r in results), encoding='utf-8')
