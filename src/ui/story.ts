@@ -172,6 +172,8 @@ function causePhrase(code: number, who: StorySubject, entries: StoryEntry[], die
     }
     case 4: return 'Taken in a cull';
     case 5: return 'Removed from the valley';
+    case 6: return 'Left the valley for the open prairie';
+    case 7: return 'Died of distemper';
     default: return 'Died';
   }
 }
