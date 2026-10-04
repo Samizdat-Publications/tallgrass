@@ -7,7 +7,25 @@ import { NOISE_GLSL, OCCLUDE_GLSL, SharedUniforms, clamp, fbm2, hash2, injectSaf
 
 const R0 = 6; // nominal crown radius in meters the unit crown is designed for
 const H0 = 14; // nominal tree height
-const VARIANTS = 4;
+const VARIANTS = 6;
+
+/**
+ * One silhouette per variant, so a row of cottonwoods is not one model stamped down the creek. Crown: centre height, vertical reach,
+ * horizontal spread, lump count and size, sideways offset (crown radius units). Bark: the crown ellipsoid the limbs stay inside
+ * (centre height, half width, half height, sideways offset), fork height, primary limbs, how far they lean out, trunk bend.
+ */
+interface TreeShape {
+  cy: number; cyR: number; spread: number; lumps: number; rho: number; ox: number;
+  A: number; B: number; C: number; bx: number; fork: number; prim: number; tilt: number; bend: number;
+}
+const SHAPES: TreeShape[] = [
+  { cy: 0.58, cyR: 0.30, spread: 1.0, lumps: 58, rho: 1.0, ox: 0, A: 0.38, B: 0.31, C: 0.58, bx: 0, fork: 0.30, prim: 4, tilt: 1.0, bend: 1.0 },       // the classic round crown
+  { cy: 0.63, cyR: 0.37, spread: 0.7, lumps: 50, rho: 0.95, ox: 0, A: 0.27, B: 0.37, C: 0.62, bx: 0, fork: 0.34, prim: 3, tilt: 0.65, bend: 0.8 },     // tall and narrow
+  { cy: 0.51, cyR: 0.22, spread: 1.25, lumps: 66, rho: 1.1, ox: 0, A: 0.47, B: 0.24, C: 0.51, bx: 0, fork: 0.23, prim: 5, tilt: 1.3, bend: 1.2 },     // wide, low, spreading
+  { cy: 0.57, cyR: 0.28, spread: 1.0, lumps: 46, rho: 1.15, ox: 0.2, A: 0.34, B: 0.3, C: 0.57, bx: 0.08, fork: 0.28, prim: 4, tilt: 1.1, bend: 2.2 },   // lopsided, leaning crown
+  { cy: 0.55, cyR: 0.26, spread: 0.92, lumps: 74, rho: 0.86, ox: -0.1, A: 0.36, B: 0.28, C: 0.55, bx: -0.04, fork: 0.32, prim: 4, tilt: 0.9, bend: 0.6 }, // dense dome of small clusters
+  { cy: 0.61, cyR: 0.33, spread: 1.06, lumps: 34, rho: 1.22, ox: 0.12, A: 0.39, B: 0.33, C: 0.61, bx: 0.05, fork: 0.27, prim: 4, tilt: 1.15, bend: 1.5 }, // open, gappy old tree
+];
 const CROWN_DETAIL = 1;
 
 function mulberry32(a: number) {
@@ -29,11 +47,11 @@ interface CrownBuild {
  * volume (not a few big balls): the leaf-cluster cut-out in the shader turns them into airy, scalloped foliage with
  * gaps, and interior lumps are darker so the gaps read as depth.
  */
-function buildCrown(seed: number, detail: number): CrownBuild {
+function buildCrown(seed: number, detail: number, shape: TreeShape): CrownBuild {
   const rng = mulberry32(seed * 7919 + 13);
   const lumps: { c: THREE.Vector3; rho: number; sx: number }[] = [];
-  const cy0 = 0.58, cyR = 0.3;
-  const N = 56 + Math.floor(rng() * 8);
+  const cy0 = shape.cy, cyR = shape.cyR;
+  const N = shape.lumps + Math.floor(rng() * 8);
   for (let i = 0; i < N; i++) {
     // random direction, radius biased toward the shell
     let dx = rng() * 2 - 1, dy = rng() * 2 - 1, dz = rng() * 2 - 1;
@@ -42,21 +60,21 @@ function buildCrown(seed: number, detail: number): CrownBuild {
     const rad = 0.38 + 0.62 * Math.pow(rng(), 0.55);
     const yy = dy < 0 ? dy * 0.72 : dy;
     lumps.push({
-      c: new THREE.Vector3(dx * rad * 0.9, cy0 + yy * rad * cyR, dz * rad * 0.9),
-      rho: 0.13 + rng() * 0.1,
+      c: new THREE.Vector3(dx * rad * 0.9 * shape.spread + shape.ox, cy0 + yy * rad * cyR, dz * rad * 0.9 * shape.spread),
+      rho: (0.13 + rng() * 0.1) * shape.rho,
       sx: 0.85 + rng() * 0.4,
     });
   }
   // a cap of small lumps on top so the crown has a rounded crest
   for (let i = 0; i < 4; i++) {
     const a = rng() * Math.PI * 2, r = rng() * 0.3;
-    lumps.push({ c: new THREE.Vector3(Math.cos(a) * r, 0.85 + rng() * 0.04, Math.sin(a) * r), rho: 0.2 + rng() * 0.1, sx: 1 });
+    lumps.push({ c: new THREE.Vector3(Math.cos(a) * r + shape.ox * 0.8, cy0 + 0.27 + rng() * 0.04 + (shape.cyR - 0.3) * 0.6, Math.sin(a) * r), rho: (0.2 + rng() * 0.1) * shape.rho, sx: 1 });
   }
 
   const ico = new THREE.IcosahedronGeometry(1, detail);
   const ip = ico.getAttribute('position');
   const pos: number[] = [], nrm: number[] = [], occ: number[] = [], lmp: number[] = [];
-  const Cw = new THREE.Vector3(0, cy0 * H0, 0);
+  const Cw = new THREE.Vector3(shape.ox * R0, cy0 * H0, 0);
   const dir = new THREE.Vector3(), Pw = new THREE.Vector3(), cr = new THREE.Vector3(), nw = new THREE.Vector3();
   lumps.forEach((L, li) => {
     for (let v = 0; v < ip.count; v++) {
@@ -95,13 +113,13 @@ function buildCrown(seed: number, detail: number): CrownBuild {
  * drop: with leaves on, branch tips stay hidden inside the foliage; bare, the full fine silhouette shows.
  * maxLevel picks the LOD: 4 all twigs, 3 no outer twigs, 2 only trunk, limbs and secondaries.
  */
-const CROWN_C = 0.58, CROWN_A = 0.38, CROWN_B = 0.31;
-function shellE(x: number, y: number, z: number): number {
-  const dy = (y - CROWN_C) / CROWN_B;
-  return (x * x + z * z) / (CROWN_A * CROWN_A) + dy * dy;
+function shellE(x: number, y: number, z: number, s: TreeShape): number {
+  const dy = (y - s.C) / s.B;
+  const dx = x - s.bx;
+  return (dx * dx + z * z) / (s.A * s.A) + dy * dy;
 }
 
-function buildTreeBark(seed: number, maxLevel: number, tipsOut?: number[]): THREE.BufferGeometry {
+function buildTreeBark(seed: number, maxLevel: number, shape: TreeShape, tipsOut?: number[]): THREE.BufferGeometry {
   const rng = mulberry32(seed * 104729 + 7);
   const pos: number[] = [], nrm: number[] = [], tw: number[] = [], bas: number[] = [], idx: number[] = [];
   const V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
@@ -160,7 +178,7 @@ function buildTreeBark(seed: number, maxLevel: number, tipsOut?: number[]): THRE
     const r1 = r0 * (L.r1 / L.r0);
     // keep the tip inside the crown (inner generations well inside, so they are hidden behind the foliage)
     let end = p0.clone().addScaledVector(dir, len);
-    for (let it = 0; it < 6 && shellE(end.x, end.y, end.z) > limit; it++) {
+    for (let it = 0; it < 6 && shellE(end.x, end.y, end.z, shape) > limit; it++) {
       len *= 0.78;
       end = p0.clone().addScaledVector(dir, len);
     }
@@ -176,7 +194,7 @@ function buildTreeBark(seed: number, maxLevel: number, tipsOut?: number[]): THRE
       radii.push(r0 + (r1 - r0) * f);
     }
     const tip = pts[pts.length - 1];
-    const outer = shellE(tip.x, tip.y, tip.z) > 0.55;
+    const outer = shellE(tip.x, tip.y, tip.z, shape) > 0.55;
     tube(pts, radii, maxLevel <= 1 ? 3 : maxLevel <= 2 ? Math.min(L.sides, 4) : L.sides, outer && level >= 3 ? 1 : 0);
     if (tipsOut && outer && level >= 3) tipsOut.push(tip.x, tip.y, tip.z, pts[0].x, pts[0].y, pts[0].z);
     if (level >= maxLevel) return;
@@ -195,16 +213,16 @@ function buildTreeBark(seed: number, maxLevel: number, tipsOut?: number[]): THRE
   };
 
   // trunk: a slight sweep, flaring at the base, forking about a third of the way up
-  const bend = V((rng() - 0.5) * 0.05, 0, (rng() - 0.5) * 0.05);
-  const forkY = 0.3 + rng() * 0.04;
+  const bend = V((rng() - 0.5) * 0.05 * shape.bend + shape.bx * 0.25, 0, (rng() - 0.5) * 0.05 * shape.bend);
+  const forkY = shape.fork + rng() * 0.04;
   const trunk = [V(0, -0.03, 0), V(bend.x * 0.3, 0.08, bend.z * 0.3), V(bend.x * 0.7, 0.19, bend.z * 0.7), V(bend.x, forkY, bend.z)];
   tube(trunk, [0.046, 0.034, 0.028, 0.024], maxLevel >= 3 ? 8 : maxLevel === 2 ? 6 : 5, 0);
   const fork = trunk[trunk.length - 1];
-  const nPrim = 4;
+  const nPrim = shape.prim;
   const a0 = rng() * Math.PI * 2;
   for (let i = 0; i < nPrim; i++) {
     const a = a0 + (i / nPrim) * Math.PI * 2 + (rng() - 0.5) * 0.6;
-    const tilt = i === 0 ? 0.18 + rng() * 0.12 : 0.55 + rng() * 0.45; // one near-vertical leader, the rest lean out
+    const tilt = i === 0 ? 0.18 + rng() * 0.12 : (0.55 + rng() * 0.45) * shape.tilt; // one near-vertical leader, the rest lean out
     const d = V(Math.sin(a) * Math.sin(tilt), Math.cos(tilt), Math.cos(a) * Math.sin(tilt)).normalize();
     grow(fork, d, 1, i === 0 ? 1.05 : 1, 0.019);
   }
@@ -463,8 +481,10 @@ function foliageMaterial(shared: SharedUniforms, shrub: boolean, tuft = false): 
           float fade = tgOcclusionFade( wpw );
           diffuseColor.a = cover * fade;
 
-          float mixT = clamp( 0.5 + ( tone - 0.5 ) * 0.6 + ( inst.g - 0.5 ) * 0.5 + ( vLump - 0.5 ) * 0.06, 0.0, 1.0 );
+          float mixT = clamp( 0.5 + ( tone - 0.5 ) * 0.6 + ( inst.g - 0.5 ) * 0.95 + ( vLump - 0.5 ) * 0.06, 0.0, 1.0 );
           vec3 leaf = mix( uLeafA, uLeafB, mixT );
+          // each tree leans a little cooler (blue-green) or warmer (yellow-green), so a grove is not one colour
+          leaf *= mix( vec3( 0.9, 1.0, 1.08 ), vec3( 1.12, 1.0, 0.82 ), clamp( inst.b * 0.5 + inst.g * 0.5, 0.0, 1.0 ) );
           // vOcc is interpolated per MSAA pixel center and can overshoot at silhouette pixels: clamp before any pow
           float occ = clamp( vOcc, 0.0, 1.0 );
           float shade = 0.2 + 0.9 * pow( occ, 1.15 );
@@ -526,7 +546,7 @@ if ( !( dot( normal, normal ) > 0.25 ) ) normal = vec3( 0.0, 1.0, 0.0 );`)
       );
     shader.fragmentShader = injectSafeOutput( shader.fragmentShader );
   };
-  mat.customProgramCacheKey = () => (shrub ? 'tg-shrub-v5' : tuft ? 'tg-foliage-tuft-v1' : 'tg-foliage-v7');
+  mat.customProgramCacheKey = () => (shrub ? 'tg-shrub-v5' : tuft ? 'tg-foliage-tuft-v2' : 'tg-foliage-v8');
   return mat;
 }
 
@@ -536,7 +556,7 @@ function barkMaterial(shared: SharedUniforms): THREE.MeshStandardMaterial {
   mat.alphaToCoverage = true;
   mat.onBeforeCompile = (shader) => {
     injectTerrainShadow(shader, shared);
-    shader.uniforms.uLightDir = shared.lightDir; shader.uniforms.uLightColor = shared.lightColor; shader.uniforms.uSkyMid = shared.skyMid;
+    shader.uniforms.uLightDir = shared.lightDir; shader.uniforms.uLightColor = shared.lightColor; shader.uniforms.uSkyMid = shared.skyMid; shader.uniforms.uSkyHorizon = shared.skyHorizon;
     shader.uniforms.uTime = shared.time; shader.uniforms.uWind = shared.wind;
     shader.uniforms.uOccCam = shared.occCam; shader.uniforms.uOccFocus = shared.occFocus; shader.uniforms.uOccParams = shared.occParams;
     shader.uniforms.uLeaf = shared.leafAmount; shader.uniforms.uSnow = shared.snow;
@@ -549,7 +569,7 @@ function barkMaterial(shared: SharedUniforms): THREE.MeshStandardMaterial {
         vBarkPos = transformed;`)
       .replace('#include <project_vertex>', swayChunk(false));
     shader.fragmentShader = shader.fragmentShader
-      .replace('void main() {', `varying vec3 vBarkPos;\nuniform float uSnow;\nuniform float uLeaf;\nuniform vec3 uLightDir;\nuniform vec3 uLightColor;\nuniform vec3 uSkyMid;\n${NOISE_GLSL}\n${OCCLUDE_GLSL}\n${WORLDPOS_GLSL}\nvoid main() {`)
+      .replace('void main() {', `varying vec3 vBarkPos;\nuniform float uSnow;\nuniform float uLeaf;\nuniform vec3 uLightDir;\nuniform vec3 uLightColor;\nuniform vec3 uSkyMid;\nuniform vec3 uSkyHorizon;\n${NOISE_GLSL}\n${OCCLUDE_GLSL}\n${WORLDPOS_GLSL}\nvoid main() {`)
       .replace(
         '#include <color_fragment>',
         `#include <color_fragment>
@@ -579,14 +599,16 @@ function barkMaterial(shared: SharedUniforms): THREE.MeshStandardMaterial {
           vec3 Vv = normalize( vViewPosition );
           float backD = max( dot( -Vv, Lv ), 0.0 );
           float rimB = 1.0 - abs( dot( normalize( vNormal ), Vv ) );
-          // in full leaf the limbs seen through the gaps sit inside the canopy's own shade: no rim light, less bounce
+          // trunks in the shade of their own crown (or lit from behind at dusk) get the sky and the warm ground back as fill, so they
+          // stay grey-brown wood and never read as charred black; in full leaf the limbs seen through the gaps sit inside the canopy's
+          // own shade: no rim light, less bounce
           float leafK = smoothstep( 0.35, 0.8, uLeaf );
-          totalEmissiveRadiance += diffuseColor.rgb * ( ( uSkyMid * 0.2 + vec3( 0.07, 0.055, 0.04 ) + uLightColor * 0.04 ) * mix( 1.0, 0.4, leafK ) + uLightColor * pow( backD, 2.0 ) * rimB * rimB * 0.35 * gTgShadow * ( 1.0 - leafK ) );
+          totalEmissiveRadiance += diffuseColor.rgb * ( ( uSkyMid * 0.42 + uSkyHorizon * 0.34 + uLightColor * 0.03 ) * mix( 1.0, 0.45, leafK ) + uLightColor * pow( backD, 2.0 ) * rimB * rimB * 0.35 * gTgShadow * ( 1.0 - leafK ) );
         }`,
       );
     shader.fragmentShader = injectSafeOutput( shader.fragmentShader );
   };
-  mat.customProgramCacheKey = () => 'tg-bark-v6';
+  mat.customProgramCacheKey = () => 'tg-bark-v7';
   return mat;
 }
 
@@ -662,26 +684,50 @@ export class Trees {
     const depthMat = swayDepthMaterial(shared);
     this.disposables.push(foliageMat, tuftMat, shrubMat, bark, depthMat);
 
-    // collect tree placements: the valley's own trees, then distant tree lines beyond the rim
+    // collect tree placements: the valley's own trees, then distant groves and lone trees beyond the rim
     interface P { x: number; z: number; h: number; r: number; far: boolean }
     const places: P[] = [];
     for (let i = 0; i < world.trees.length; i += 4) {
       places.push({ x: world.trees[i], z: world.trees[i + 1], h: world.trees[i + 2], r: world.trees[i + 3], far: false });
     }
     const S = world.size;
-    for (let k = 0; k < 9000 && places.length < world.trees.length / 4 + 520; k++) {
-      const x = -1100 + hash2(k, 1, 71) * (S + 2200);
-      const z = -1100 + hash2(k, 2, 71) * (S + 2200);
-      if (x > -30 && x < S + 30 && z > -30 && z < S + 30) continue;
-      const g = fbm2(x * 0.011 + 3, z * 0.011 - 9, 3, 5);
-      if (g < 0.58 || hash2(k, 3, 71) > smoothstep(0.58, 0.7, g) * 0.9) continue;
-      const h = 11 + hash2(k, 4, 71) * 13;
-      places.push({ x, z, h, r: h * (0.4 + hash2(k, 5, 71) * 0.1), far: true });
+    // Far trees stand where a real prairie keeps them: in groves along the draws and in the lee of the ridges, a few lone trees on
+    // the open ground between, never in a regular scatter. Groves are 2 to 11 trees of mixed height packed within about 20 m; the
+    // density thins out toward the horizon and steep bluffs stay bare.
+    const R = 1700, FAR_MAX = 500;
+    let farCount = 0;
+    for (let k = 0; k < 40000 && farCount < FAR_MAX; k++) {
+      const x = -R + hash2(k, 1, 71) * (S + 2 * R);
+      const z = -R + hash2(k, 2, 71) * (S + 2 * R);
+      const ox = Math.max(-x, x - S, 0), oz = Math.max(-z, z - S, 0);
+      const d = Math.hypot(ox, oz);
+      if (d < 26) continue;
+      const draw = 1 - Math.abs(2 * fbm2(x * 0.0046 + 9.1, z * 0.0046 - 4.3, 3, 7) - 1);
+      const patch = fbm2(x * 0.0125 + 3, z * 0.0125 - 9, 3, 5);
+      const dens = (smoothstep(0.62, 0.9, draw) * 0.85 + smoothstep(0.62, 0.78, patch) * 0.4) * (1 - 0.6 * smoothstep(900, 1700, d));
+      if (hash2(k, 3, 71) > dens * 0.55) continue;
+      const h0 = heightAt(x, z);
+      const sl = Math.hypot(heightAt(x + 14, z) - heightAt(x - 14, z), heightAt(x, z + 14) - heightAt(x, z - 14)) / 28;
+      if (sl > 0.42) continue;
+      // in the lee: lower than the ground about 40 m around it
+      const avg = 0.25 * (heightAt(x + 40, z) + heightAt(x - 40, z) + heightAt(x, z + 40) + heightAt(x, z - 40));
+      if (h0 > avg + 3 && hash2(k, 8, 71) < 0.7) continue;
+      const lone = hash2(k, 9, 71) < 0.22;
+      const nTrees = lone ? 1 : 2 + Math.floor(Math.pow(hash2(k, 6, 71), 1.4) * 10);
+      const rad = 5 + hash2(k, 7, 71) * 15;
+      for (let m = 0; m < nTrees && farCount < FAR_MAX; m++) {
+        const a = hash2(k, 10 + m, 71) * Math.PI * 2, rr = Math.sqrt(hash2(k, 40 + m, 71)) * rad * (lone ? 0 : 1);
+        const px = x + Math.cos(a) * rr, pz = z + Math.sin(a) * rr;
+        const h = 8.5 + Math.pow(hash2(k, 70 + m, 71), 1.3) * 15.5;
+        places.push({ x: px, z: pz, h, r: h * (0.34 + hash2(k, 90 + m, 71) * 0.26), far: true });
+        farCount++;
+      }
     }
     this.treeCount = places.length;
 
     const dummy = new THREE.Object3D();
     const col = new THREE.Color();
+    dummy.rotation.order = 'YXZ';
     const crownDetails = [2, 1, 0];
     const crownLimits = [60, 190, Infinity];
     for (let v = 0; v < VARIANTS; v++) {
@@ -689,28 +735,36 @@ export class Trees {
       const N = mine.length;
       if (!N) continue;
       const crownMats = new Float32Array(N * 16), barkMats = new Float32Array(N * 16);
-      const cols = new Float32Array(N * 3), pos = new Float32Array(N * 3);
+      const cols = new Float32Array(N * 3), pos = new Float32Array(N * 3), barkCols = new Float32Array(N * 3);
+      const shape = SHAPES[v % SHAPES.length];
       mine.forEach((p, i) => {
         const y = heightAt(p.x, p.z) - 0.2;
         const rot = hash2(i, v, 13) * Math.PI * 2;
+        // a few degrees of lean (about the base, the same for trunk and crown) and a size jitter, so no two trees stand alike
+        const lean = 0.03 + 0.07 * hash2(i, v, 37);
+        const leanA = hash2(i, v, 41) * Math.PI * 2;
+        const grow = 0.9 + 0.22 * hash2(i, v, 43);
         dummy.position.set(p.x, y, p.z);
-        dummy.rotation.set(0, rot, 0);
-        dummy.scale.set(p.h, p.h, p.h);
+        dummy.rotation.set(Math.cos(leanA) * lean, rot, Math.sin(leanA) * lean);
+        dummy.scale.set(p.h * grow, p.h * grow, p.h * grow);
         dummy.updateMatrix();
         dummy.matrix.toArray(barkMats, i * 16);
-        const sw = (0.92 + hash2(i, v, 17) * 0.2) * 0.8;
-        dummy.scale.set(p.r * sw, p.h * 0.94, p.r * sw * (0.92 + hash2(i, v, 19) * 0.16));
+        const sw = (0.88 + hash2(i, v, 17) * 0.28) * 0.8;
+        dummy.scale.set(p.r * sw * grow, p.h * grow * 0.94, p.r * sw * grow * (0.88 + hash2(i, v, 19) * 0.24));
         dummy.updateMatrix();
         dummy.matrix.toArray(crownMats, i * 16);
         // (brightness, hue shift, season phase)
-        col.setRGB(0.85 + hash2(i, v, 23) * 0.3, hash2(i, v, 29), hash2(i, v, 31));
+        col.setRGB(0.78 + hash2(i, v, 23) * 0.44, hash2(i, v, 29), hash2(i, v, 31));
         cols[i * 3] = col.r; cols[i * 3 + 1] = col.g; cols[i * 3 + 2] = col.b;
+        // bark: lighter or darker, warmer or greyer, per tree
+        const bb = 0.8 + 0.4 * hash2(i, v, 47), bw = hash2(i, v, 53) - 0.5;
+        barkCols[i * 3] = bb * (1 + 0.14 * bw); barkCols[i * 3 + 1] = bb; barkCols[i * 3 + 2] = bb * (1 - 0.18 * bw);
         pos[i * 3] = p.x; pos[i * 3 + 1] = y + p.h * 0.6; pos[i * 3 + 2] = p.z;
       });
 
       const crownMeshes: THREE.InstancedMesh[] = [];
       crownDetails.forEach((detail, li) => {
-        const crown = buildCrown(v + 1, detail);
+        const crown = buildCrown(v + 1, detail, shape);
         this.disposables.push(crown.geo);
         const m = new THREE.InstancedMesh(crown.geo, foliageMat, N);
         m.name = `cottonwood-crown-${v}-lod${li}`;
@@ -718,7 +772,7 @@ export class Trees {
         crownMeshes.push(m);
       });
       const tips: number[] = [];
-      const barkGeos = [buildTreeBark(v + 1, 4, tips), buildTreeBark(v + 1, 2), buildTreeBark(v + 1, 1)];
+      const barkGeos = [buildTreeBark(v + 1, 4, shape, tips), buildTreeBark(v + 1, 2, shape), buildTreeBark(v + 1, 1, shape)];
       this.disposables.push(...barkGeos);
       const tuftGeo = buildTufts(tips, v + 1);
       this.disposables.push(tuftGeo);
@@ -735,6 +789,7 @@ export class Trees {
       const barkMeshes = barkGeos.map((g, li) => {
         const m = new THREE.InstancedMesh(g, bark, N);
         m.name = `cottonwood-bark-${v}-lod${li}`;
+        m.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(N * 3), 3);
         return m;
       });
       for (const m of [...crownMeshes, ...barkMeshes]) {
@@ -747,7 +802,7 @@ export class Trees {
         this.meshes.push(m);
       }
       this.lods.push(new LodInstances(N, crownMats, cols, pos, crownMeshes, crownLimits));
-      this.lods.push(new LodInstances(N, barkMats, null, pos, barkMeshes, [48, 140, Infinity]));
+      this.lods.push(new LodInstances(N, barkMats, barkCols, pos, barkMeshes, [48, 140, Infinity]));
     }
 
     // shrubs: thin the sim's even scatter into thickets (along water, in draws and on rocky slopes), vary size, shape and family,

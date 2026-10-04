@@ -317,18 +317,29 @@ void main() {
   if (up > 0.0) {
     vec2 cp = d.xz / (up * 0.9 + 0.22);
     vec2 drift = uWind.xy * uTime * 0.006;
+    // twilight: the sun is low or just set, so the cloud deck is lit from below
+    float tw = smoothstep(0.42, 0.04, uSunDir.y) * smoothstep(-0.26, -0.03, uSunDir.y);
     vec2 q = cp * vec2(0.5, 0.8) + drift;
     float cn = tgFbm2(q);
     float cn2 = tgFbm2(q + uSunDir.xz * 0.12);
-    float th = mix(0.64, 0.30, clamp(uCloud, 0.0, 1.0));
+    float th = mix(0.64, 0.30, clamp(uCloud, 0.0, 1.0)) - 0.1 * tw;
     float dens = smoothstep(th, th + 0.2, cn) * smoothstep(0.0, 0.16, up);
     float lit = clamp(0.55 + (cn - cn2) * 5.0, 0.0, 1.0);
     vec3 shade = uSkyMid * 0.75 + uSkyHorizon * 0.15;
     vec3 sunlit = uSkyHorizon * 0.9 + uSunGlow * 0.55 + 0.12;
     vec3 cc = mix(shade, sunlit, lit);
     cc = mix(cc, vec3(dot(cc, vec3(0.333))) * vec3(0.8, 0.84, 0.92), uOvercast * 0.7);
+    // underlit by the low sun: gold on the sun's side of the sky, rose on the far side, brightest along the cloud's lit edges
+    float sunSide = 0.5 + 0.5 * dot(normalize(uSunDir.xz + vec2(1e-4)), normalize(d.xz + vec2(1e-4)));
+    vec3 under = mix(vec3(0.95, 0.5, 0.4), uSunGlow * 1.1 + vec3(0.1, 0.05, 0.0), sunSide);
+    cc = mix(cc, under * (0.5 + 0.75 * lit) * (0.55 + 0.6 * sunSide), tw * 0.8 * (1.0 - uOvercast));
     // thin cloud lets the sky through; thick cloud is opaque
-    col = mix(col, cc, dens * (0.55 + 0.4 * uCloud));
+    col = mix(col, cc, dens * (0.55 + 0.4 * uCloud + 0.15 * tw));
+    // high cirrus: long, thin streaks across the sky, catching the low sun's colour at dusk and dawn
+    float ci = tgFbm2(vec2(cp.x * 0.15 + drift.x * 0.6, cp.y * 1.2 + drift.y * 0.6) + 31.0);
+    float cir = smoothstep(0.5, 0.75, ci) * smoothstep(0.04, 0.3, up) * (1.0 - uOvercast) * mix(0.32, 0.7, tw);
+    vec3 cirC = mix(uSkyHorizon * 0.9 + vec3(0.08), under * (0.6 + 0.5 * sunSide), tw);
+    col = mix(col, cirC, cir * 0.7);
   }
 
   gl_FragColor = vec4(col, 1.0);

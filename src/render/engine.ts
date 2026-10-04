@@ -14,6 +14,7 @@ import type { World } from '../sim/world';
 import { SEASON_TICKS, type EnvState } from '../sim/types';
 import { SharedUniforms, clamp, createSharedUniforms, lerp, smoothstep } from './common';
 import { Terrain } from './terrain';
+import { TgSunShadow } from './sunshadow';
 import { Water } from './water';
 import { Sky, computeAtmosphere, createLighting, Lighting, Smoothed } from './sky';
 import { Trees } from './trees';
@@ -210,6 +211,8 @@ export class Engine {
     this.smoke = new Smoke(world, this.uniforms, this.terrain.heightAt);
 
     this.sun = new SunLight(0xffffff, 1);
+    // two cascades with a wide blend band, so the drop in shadow resolution fades in instead of showing as a line (see sunshadow.ts)
+    this.sun.shadow = new TgSunShadow();
     this.sun.castShadow = true;
     this.sun.shadow.mapSize.set(2048, 2048);
     this.sun.shadow.camera.near = 1;

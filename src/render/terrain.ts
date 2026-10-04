@@ -177,6 +177,8 @@ export class Terrain {
   /** Baked periodic macro-variation maps (see bakeMacro): R/G/B/A fields of tgGround, 2 m texels over a 4096 m repeating tile. */
   private macroRT: THREE.WebGLRenderTarget[] = [];
   private macroBaked = false;
+  /** Small tileable random texture (4 independent channels) the ground shader samples for fine grain instead of evaluating hash noise. */
+  private detailTex!: THREE.DataTexture;
   private shadowQuad: FullScreenQuad;
   private shadowMat: THREE.ShaderMaterial;
   private lastLight = new THREE.Vector3(9, 9, 9);
@@ -192,8 +194,7 @@ export class Terrain {
   /** Distance in meters from each height vertex to the creek centerline (large far from it). */
   readonly creekDist: Float32Array;
   private heightFn!: (x: number, z: number) => number;
-  private axis: Float32Array | null = null;
-  private hts: Float32Array | null = null;
+  private rings: Array<{ s: number; d0: number; d1: number }> | null = null;
 
   constructor(world: World, private shared: SharedUniforms) {
     this.world = world;
@@ -250,8 +251,9 @@ export class Terrain {
 
     // ---- height function with far-field extension
     const S = size;
-    // Beyond the playable square the boundary profile (rim, creek gap) is blurred and faded into a rim baseline
-    // so nothing gets extruded outward as a straight canyon, then the rim keeps rising and rolls into hazy hills.
+    // Beyond the playable square the valley keeps rolling at its own level for a while, then a round basin wall rises into ridge
+    // lines and bluffs and the ground keeps climbing and softening into haze. The wall is measured from a circle around the
+    // valley centre, not from the square, so the world edge never reads as a rectangle from above.
     let rimSum = 0, rimCount = 0;
     for (let i = 0; i < hn; i++) {
       rimSum += blurred[i] + blurred[(hn - 1) * hn + i] + blurred[i * hn] + blurred[i * hn + hn - 1];
@@ -259,18 +261,17 @@ export class Terrain {
     }
     const rimBase = rimSum / rimCount;
     const L = 75;
-    // Far ring. Trend: the wide-blur field continued past the border with its outward slope easing to zero (C1, no crease; the blur
-    // makes it smooth along the border so nothing extrudes into streaks). Detail: the ground's own high-pass detail mirrored
-    // across the border and domain-warped, fading out over about 250 m, so the first stretch of far ring looks like more valley.
-    const Lg = 50;
-    const gClamp = (g: number) => clamp(g, -0.3, 0.6);
     const bAt = (x: number, z: number) => sampleHeight(blurred, hn, cell, clamp(x, 0, S), clamp(z, 0, S));
-    const trendX = (x: number, zc: number): number => {
-      const cx = clamp(x, 0, S);
-      const hb = bAt(cx, zc);
-      if (x === cx) return hb;
-      const g = gClamp((hb - bAt(x < 0 ? 12 : S - 12, zc)) / 12);
-      return hb + g * Lg * (1 - Math.exp(-Math.abs(x - cx) / Lg));
+    // the blurred border field continued outward by averaging it on a ring that widens with distance: smooth, and nothing extrudes
+    // into long streaks perpendicular to the border (a plain gradient continuation does)
+    const ringAvg = (x: number, z: number, d: number): number => {
+      const rho = 0.55 * d + 1;
+      let s = bAt(x, z);
+      for (let k = 0; k < 8; k++) {
+        const a = k * Math.PI * 0.25 + 0.3;
+        s += bAt(x + Math.cos(a) * rho, z + Math.sin(a) * rho);
+      }
+      return s / 9;
     };
     const mirror = (v: number): number => {
       let m = v;
@@ -279,38 +280,63 @@ export class Terrain {
       }
       return clamp(m, 0, S);
     };
+    // fold into the valley like a triangle wave (any distance), used for the rotated detail that takes over from the mirrored one
+    const fold = (v: number): number => {
+      const t = ((v / S) % 2 + 2) % 2;
+      return (t > 1 ? 2 - t : t) * S;
+    };
+    const C0 = S * 0.5, R0 = S * 0.74;
     this.heightFn = (x: number, z: number) => {
       const cx = clamp(x, 0, S), cz = clamp(z, 0, S);
       const dx = x - cx, dz = z - cz;
       if (dx === 0 && dz === 0) return sampleHeight(rh, hn, cell, cx, cz);
       const d = Math.hypot(dx, dz);
-      const e0 = trendX(x, cz);
-      let trend = e0;
-      if (dz !== 0) {
-        const gz = gClamp((e0 - trendX(x, dz < 0 ? 12 : S - 12)) / 12);
-        trend = e0 + gz * Lg * (1 - Math.exp(-Math.abs(dz) / Lg));
-      }
+      const trend = ringAvg(x, z, d);
+      // Detail: the ground's own high-pass detail, mirrored across the border (so it joins seamlessly) and domain-warped; farther out
+      // it is swapped for a rotated, folded copy so the far valley does not look like a mirror image of the near one
       const warp = smoothstep(0, 70, d);
       const wx = x + 34 * warp * (vnoise2(x * 0.011 + 3, z * 0.011 - 2, 17) - 0.5);
       const wz = z + 34 * warp * (vnoise2(x * 0.011 - 8, z * 0.011 + 5, 19) - 0.5);
       const mx = mirror(wx), mz = mirror(wz);
-      const detail = sampleHeight(rh, hn, cell, mx, mz) - sampleHeight(blurred, hn, cell, mx, mz);
+      const detailM = sampleHeight(rh, hn, cell, mx, mz) - sampleHeight(blurred, hn, cell, mx, mz);
       // the creek channel itself does not continue outside the world (it would read as a dry gully with cliff-like banks)
-      const ci = Math.min(hn - 1, Math.max(0, Math.round(mx / cell))), cj = Math.min(hn - 1, Math.max(0, Math.round(mz / cell)));
-      const creekFade = 1 - (1 - smoothstep(14, 46, shaped.creekDist[cj * hn + ci])) * smoothstep(0, 70, d);
-      const detailFade = (1 - smoothstep(30, 280, d)) * creekFade;
-      const inner = trend + detail * detailFade;
-      const t = smoothstep(0, 220, d);
-      const gain = 0.2 * L * (1 - Math.exp(-d / L));
-      const far = smoothstep(150, 2600, d);
+      const creekAt = (u: number, v: number) => {
+        const ci = Math.min(hn - 1, Math.max(0, Math.round(u / cell))), cj = Math.min(hn - 1, Math.max(0, Math.round(v / cell)));
+        return 1 - (1 - smoothstep(14, 46, shaped.creekDist[cj * hn + ci])) * smoothstep(0, 70, d);
+      };
+      let detail = detailM * creekAt(mx, mz);
+      const rotW = smoothstep(70, 190, d);
+      if (rotW > 0) {
+        const ca = 0.62, sa = 0.78; // about 38 degrees
+        const rx = fold(C0 + (wx - C0) * ca - (wz - C0) * sa + 91), rz = fold(C0 + (wx - C0) * sa + (wz - C0) * ca - 57);
+        const detailR = (sampleHeight(rh, hn, cell, rx, rz) - sampleHeight(blurred, hn, cell, rx, rz)) * creekAt(rx, rz);
+        detail += (detailR - detail) * rotW;
+      }
+      const inner = trend + detail * (1 - smoothstep(40, 330, d));
+      // basin wall, from the circle around the valley centre
+      const rc = Math.max(0, Math.hypot(x - C0, z - C0) - R0);
       const big = fbm2(x * 0.0021 + 7.3, z * 0.0021 - 3.1, 4, 11);
       const mid = fbm2(x * 0.0075 - 2.2, z * 0.0075 + 8.4, 3, 29);
       const near = fbm2(x * 0.02 + 1.7, z * 0.02 - 6.1, 3, 41);
-      // broad relief at the scale of the valley's own hills, fading in as the mirrored detail fades out
+      const azi = fbm2(x * 0.0016 - 13.7, z * 0.0016 + 4.2, 3, 53);        // slow variation of how high the rim stands around the valley
+      const wallT = smoothstep(0, 380, rc);
+      const gain = 0.2 * L * (1 - Math.exp(-rc / L));
+      const rim = (rimBase + 8) + gain + (4 + 30 * azi) + 6 * big;
+      // ridge lines: thin winding crests (ridged noise) that stand above the rim from about 250 m out, with saddles between them
+      const rA = smoothstep(180, 620, d) * (1 - 0.55 * smoothstep(2400, 4200, d));
+      const rn1 = 1 - Math.abs(2 * fbm2(x * 0.0038 + 21.3, z * 0.0038 - 9.1, 3, 71) - 1);
+      const rn2 = 1 - Math.abs(2 * fbm2(x * 0.0094 - 5.5, z * 0.0094 + 33.7, 3, 83) - 1);
+      const crest = rA * (34 * Math.pow(rn1, 2.2) * (0.35 + 0.9 * azi) + 12 * Math.pow(rn2, 2.0) * smoothstep(0.2, 0.7, mid));
       const midA = smoothstep(120, 400, d) * (1 - smoothstep(500, 900, d)) + smoothstep(0, 60, d) * (1 - smoothstep(60, 400, d)) * 0.45;
       const nearA = smoothstep(150, 260, d) * (1 - smoothstep(260, 420, d)) * 0.7;
-      const farBase = (rimBase + 5) + gain + (6 + 24 * big);
-      return inner * (1 - t) + farBase * t + 16 * (mid - 0.5) * midA + 9 * (near - 0.5) * nearA + far * (20 + 90 * big) + d * 0.008;
+      // rolling relief at the valley's own scale (hills 100 to 250 m across, 15 to 40 m high) all the way out, so the far field keeps
+      // the light-and-shade structure of real prairie hills instead of flattening into a hazy plain; it grows in as the mirrored detail fades
+      const rollA = smoothstep(90, 300, d) * (1 - 0.35 * smoothstep(1600, 3600, d));
+      const roll1 = fbm2(x * 0.0052 + 41.7, z * 0.0052 - 17.3, 3, 91);
+      const roll2 = fbm2(x * 0.0141 - 7.9, z * 0.0141 + 22.1, 3, 97);
+      const rolling = rollA * (46 * (roll1 - 0.5) + 19 * (roll2 - 0.5) * (1 - 0.6 * smoothstep(900, 2400, d)));
+      const far = smoothstep(150, 2600, d);
+      return inner * (1 - wallT) + rim * wallT + crest + rolling + 16 * (mid - 0.5) * midA + 9 * (near - 0.5) * nearA + far * (20 + 90 * big) + d * 0.008;
     };
 
     for (let i = 0; i < 3; i++) {
@@ -322,7 +348,22 @@ export class Terrain {
       rt.texture.name = 'terrain.macro' + (i + 1);
       this.macroRT.push(rt);
     }
-    this.heightAt = (x: number, z: number) => (this.axis ? this.meshHeight(x, z) : this.heightFn(x, z));
+    {
+      const N = 256;
+      const d = new Uint8Array(N * N * 4);
+      let s = 0x9e3779b9;
+      for (let i = 0; i < d.length; i++) {
+        s ^= s << 13; s ^= s >>> 17; s ^= s << 5; s >>>= 0;
+        d[i] = s & 255;
+      }
+      this.detailTex = new THREE.DataTexture(d, N, N, THREE.RGBAFormat, THREE.UnsignedByteType);
+      this.detailTex.wrapS = this.detailTex.wrapT = THREE.RepeatWrapping;
+      this.detailTex.minFilter = this.detailTex.magFilter = THREE.LinearFilter;
+      this.detailTex.generateMipmaps = false;
+      this.detailTex.needsUpdate = true;
+      this.detailTex.name = 'terrain.detail';
+    }
+    this.heightAt = (x: number, z: number) => (this.rings ? this.meshHeight(x, z) : this.heightFn(x, z));
     this.mesh = this.buildMesh();
     this.mesh.name = 'terrain';
     this.material = this.mesh.material as THREE.MeshStandardMaterial;
@@ -546,102 +587,167 @@ export class Terrain {
     mat.dispose();
   }
 
-  /** Interpolate the mesh the way the GPU does (triangles (a,c,b) and (b,c,d)). */
-  private meshHeight(x: number, z: number): number {
-    const axis = this.axis!, hts = this.hts!;
-    const M = axis.length;
-    const find = (v: number): number => {
-      if (v <= axis[0]) return 0;
-      if (v >= axis[M - 1]) return M - 2;
-      let lo = 0, hi = M - 1;
-      while (hi - lo > 1) {
-        const mid = (lo + hi) >> 1;
-        if (axis[mid] <= v) lo = mid; else hi = mid;
-      }
-      return lo;
-    };
-    const i = find(x), j = find(z);
-    const tx = clamp((x - axis[i]) / (axis[i + 1] - axis[i]), 0, 1);
-    const tz = clamp((z - axis[j]) / (axis[j + 1] - axis[j]), 0, 1);
-    const a = hts[j * M + i], b = hts[j * M + i + 1], c = hts[(j + 1) * M + i], d = hts[(j + 1) * M + i + 1];
-    return tx + tz <= 1 ? a + (b - a) * tx + (c - a) * tz : d + (c - d) * (1 - tx) + (b - d) * (1 - tz);
+  /**
+   * Terrain mesh as concentric rectangular rings around the playable square instead of one stretched tensor grid. A tensor grid
+   * that coarsens outward leaves the side strips with cells 100 m wide and 2 m tall, so every far-field attribute (height, normal,
+   * curvature) streaked along the strip. Here the playable square keeps its 2 m cells and each ring outward doubles the spacing
+   * (4, 8, 16 ... 256 m) in both axes, so cells stay square at every distance. A ring that borders a finer one splits the
+   * edge cells into a three-triangle fan through the neighbour's midpoint vertex, so there are no cracks.
+   */
+  private ringLayout(): Array<{ s: number; d0: number; d1: number }> {
+    const { size, cell } = this.world;
+    const outerCells = [32, 80, 160, 320, 640, 1280, 2304];
+    const rings: Array<{ s: number; d0: number; d1: number }> = [];
+    let d0 = 0;
+    for (let l = 1; l <= outerCells.length; l++) {
+      const s = cell * Math.pow(2, l);
+      const d1 = outerCells[l - 1] * cell;
+      // every ring boundary must land on this ring's lattice, and the playable square must be a whole number of its cells
+      if (size % s !== 0 || d1 % s !== 0 || d0 % s !== 0) break;
+      rings.push({ s, d0, d1 });
+      d0 = d1;
+    }
+    return rings;
   }
 
-  private buildAxis(): Float32Array {
-    const { size, n, cell } = this.world;
-    const outer = 4600, growth = 1.16, cap = 128;
-    const left: number[] = [];
-    let step = cell, x = 0;
-    while (-x < outer) { x -= step; left.push(x); step = Math.min(step * growth, cap); }
-    const right: number[] = [];
-    step = cell; x = size;
-    while (x - size < outer) { x += step; right.push(x); step = Math.min(step * growth, cap); }
-    const axis = new Float32Array(left.length + n + 1 + right.length);
-    let k = 0;
-    for (let i = left.length - 1; i >= 0; i--) axis[k++] = left[i];
-    for (let i = 0; i <= n; i++) axis[k++] = i * cell;
-    for (let i = 0; i < right.length; i++) axis[k++] = right[i];
-    return axis;
+  /** Surface height at (x, z) exactly as the GPU interpolates the ring mesh (see ringLayout). */
+  private meshHeight(x: number, z: number): number {
+    const { size, hn, cell } = this.world;
+    const rh = this.renderHeight;
+    if (x >= 0 && z >= 0 && x <= size && z <= size) {
+      const fx = Math.min(x / cell, hn - 1.0001), fz = Math.min(z / cell, hn - 1.0001);
+      const i = Math.floor(fx), j = Math.floor(fz);
+      const tx = fx - i, tz = fz - j;
+      const a = rh[j * hn + i], b = rh[j * hn + i + 1], c = rh[(j + 1) * hn + i], d = rh[(j + 1) * hn + i + 1];
+      return tx + tz <= 1 ? a + (b - a) * tx + (c - a) * tz : d + (c - d) * (1 - tx) + (b - d) * (1 - tz);
+    }
+    const dOut = Math.max(-x, x - size, -z, z - size);
+    const rings = this.rings!;
+    let l = 0;
+    while (l < rings.length && dOut > rings[l].d1) l++;
+    if (l >= rings.length) return this.heightFn(x, z);
+    const { s, d0, d1 } = rings[l];
+    // which block of the ring (top and bottom take the full width, left and right fill between them)
+    let bx0: number, bz0: number, side: 0 | 1 | 2 | 3;
+    if (z < -d0) { bx0 = -d1; bz0 = -d1; side = 0; }
+    else if (z > size + d0) { bx0 = -d1; bz0 = size + d0; side = 1; }
+    else if (x < -d0) { bx0 = -d1; bz0 = -d0; side = 2; }
+    else { bx0 = size + d0; bz0 = -d0; side = 3; }
+    const cx = Math.floor((x - bx0) / s), cz = Math.floor((z - bz0) / s);
+    const px = bx0 + cx * s, pz = bz0 + cz * s;
+    const u = (x - px) / s, v = (z - pz) / s;
+    const h = (xx: number, zz: number) => this.heightFn(xx, zz);
+    const h00 = h(px, pz), h10 = h(px + s, pz), h01 = h(px, pz + s), h11 = h(px + s, pz + s);
+    // is this a stitched cell (its edge toward the inner ring)?
+    let stitch = -1; // 0 top (z = pz), 1 bottom (z = pz + s), 2 left (x = px), 3 right (x = px + s)
+    {
+      const inX = px >= -d0 && px + s <= size + d0;
+      if (side === 0 && inX && Math.abs(pz + s + d0) < 1e-6) stitch = 1;
+      else if (side === 1 && inX && Math.abs(pz - (size + d0)) < 1e-6) stitch = 0;
+      else if (side === 2 && Math.abs(px + s + d0) < 1e-6) stitch = 3;
+      else if (side === 3 && Math.abs(px - (size + d0)) < 1e-6) stitch = 2;
+    }
+    if (stitch < 0) return u + v <= 1 ? h00 + (h10 - h00) * u + (h01 - h00) * v : h11 + (h01 - h11) * (1 - u) + (h10 - h11) * (1 - v);
+    // fan: edge endpoints E0, E1 (with midpoint M) and the opposite corners O0, O1
+    let e0: number, e1: number, o0: number, o1: number, eu: number, ev: number, mx: number, mz: number;
+    if (stitch === 1) { e0 = h01; e1 = h11; o0 = h00; o1 = h10; mx = px + s * 0.5; mz = pz + s; }
+    else if (stitch === 0) { e0 = h00; e1 = h10; o0 = h01; o1 = h11; mx = px + s * 0.5; mz = pz; }
+    else if (stitch === 2) { e0 = h00; e1 = h01; o0 = h10; o1 = h11; mx = px; mz = pz + s * 0.5; }
+    else { e0 = h10; e1 = h11; o0 = h00; o1 = h01; mx = px + s; mz = pz + s * 0.5; }
+    const m = h(mx, mz);
+    // work in a frame where the fine edge is the "bottom" (t along it, w = distance from it, both 0..1)
+    if (stitch === 1) { eu = u; ev = 1 - v; }
+    else if (stitch === 0) { eu = u; ev = v; }
+    else if (stitch === 2) { eu = v; ev = u; }
+    else { eu = v; ev = 1 - u; }
+    // triangles in that frame: (E0, M, O0), (M, E1, O1), (M, O1, O0) with E0=(0,0), M=(.5,0), E1=(1,0), O0=(0,1), O1=(1,1)
+    // barycentric in the left triangle (E0, M, O0)
+    const bary = (ax: number, ay: number, bx: number, by: number, cx2: number, cy2: number, ha: number, hb: number, hc: number, qx: number, qy: number): number | null => {
+      const det = (by - cy2) * (ax - cx2) + (cx2 - bx) * (ay - cy2);
+      const l1 = ((by - cy2) * (qx - cx2) + (cx2 - bx) * (qy - cy2)) / det;
+      const l2 = ((cy2 - ay) * (qx - cx2) + (ax - cx2) * (qy - cy2)) / det;
+      const l3 = 1 - l1 - l2;
+      if (l1 < -1e-9 || l2 < -1e-9 || l3 < -1e-9) return null;
+      return l1 * ha + l2 * hb + l3 * hc;
+    };
+    return bary(0, 0, 0.5, 0, 0, 1, e0, m, o0, eu, ev)
+      ?? bary(0.5, 0, 1, 0, 1, 1, m, e1, o1, eu, ev)
+      ?? bary(0.5, 0, 1, 1, 0, 1, m, o1, o0, eu, ev)
+      ?? m;
   }
 
   private buildMesh(): THREE.Mesh {
-    const axis = this.buildAxis();
-    const M = axis.length;
-    const pos = new Float32Array(M * M * 3);
-    const nor = new Float32Array(M * M * 3);
-    const hts = new Float32Array(M * M);
-    for (let j = 0; j < M; j++) {
-      for (let i = 0; i < M; i++) {
-        const k = j * M + i;
-        const h = this.heightFn(axis[i], axis[j]);
-        hts[k] = h;
-        pos[k * 3] = axis[i]; pos[k * 3 + 1] = h; pos[k * 3 + 2] = axis[j];
+    const { size, hn, cell } = this.world;
+    const rings = this.rings = this.ringLayout();
+    const pos: number[] = [], nor: number[] = [], curv: number[] = [], idx: number[] = [];
+    const cache = new Map<number, number>();
+    const hf = this.heightFn;
+    // one vertex per distinct position; normal and curvature use the spacing of the first ring that asks for it
+    const vtx = (x: number, z: number, sp: number): number => {
+      const key = Math.round(x * 4 + 40000) * 100003 + Math.round(z * 4 + 40000);
+      const hit = cache.get(key);
+      if (hit !== undefined) return hit;
+      const id = pos.length / 3;
+      const h = hf(x, z);
+      const e = Math.max(sp, cell);
+      const dhdx = (hf(x + e, z) - hf(x - e, z)) / (2 * e);
+      const dhdz = (hf(x, z + e) - hf(x, z - e)) / (2 * e);
+      const l = Math.hypot(dhdx, 1, dhdz);
+      // Ridge and hollow signal: height excess over the average of the four neighbours about 16 m (or one cell) away, normalised so
+      // +1 is a pronounced crest and -1 a pronounced draw. The ground shader turns it into dry pale ridges and deep olive draws.
+      const R = Math.max(16, sp * 2.5); // wide enough that coarse far rings do not alias into block-sized tints
+      const avg = 0.25 * (hf(x - R, z) + hf(x + R, z) + hf(x, z - R) + hf(x, z + R));
+      pos.push(x, h, z);
+      nor.push(-dhdx / l, 1 / l, -dhdz / l);
+      curv.push(clamp((h - avg) / (R * 0.1), -1, 1));
+      cache.set(key, id);
+      return id;
+    };
+    const tri = (a: number, b: number, c: number) => {
+      // wind so the normal points +Y
+      const ax = pos[a * 3], az = pos[a * 3 + 2], bx = pos[b * 3], bz = pos[b * 3 + 2], cx = pos[c * 3], cz = pos[c * 3 + 2];
+      const cross = (bz - az) * (cx - ax) - (bx - ax) * (cz - az);
+      if (cross > 0) idx.push(a, b, c); else idx.push(a, c, b);
+    };
+    // a regular block of nx by nz cells of size s starting at (x0, z0); stitchEdge: which edge borders a finer ring
+    // (0 top, 1 bottom, 2 left, 3 right, -1 none), optionally only over cells whose span lies inside [lo, hi] along the edge
+    const block = (x0: number, z0: number, nx: number, nz: number, s: number, stitchEdge: number, lo = -Infinity, hi = Infinity) => {
+      for (let j = 0; j < nz; j++) {
+        for (let i = 0; i < nx; i++) {
+          const x = x0 + i * s, z = z0 + j * s;
+          const a = vtx(x, z, s), b = vtx(x + s, z, s), c = vtx(x, z + s, s), d = vtx(x + s, z + s, s);
+          let st = -1;
+          if (stitchEdge === 1 && j === nz - 1 && x >= lo && x + s <= hi) st = 1;
+          else if (stitchEdge === 0 && j === 0 && x >= lo && x + s <= hi) st = 0;
+          else if (stitchEdge === 3 && i === nx - 1) st = 3;
+          else if (stitchEdge === 2 && i === 0) st = 2;
+          if (st < 0) { tri(a, c, b); tri(b, c, d); continue; }
+          // fan through the midpoint of the fine edge
+          let e0: number, e1: number, o0: number, o1: number, m: number;
+          if (st === 1) { e0 = c; e1 = d; o0 = a; o1 = b; m = vtx(x + s * 0.5, z + s, s); }
+          else if (st === 0) { e0 = a; e1 = b; o0 = c; o1 = d; m = vtx(x + s * 0.5, z, s); }
+          else if (st === 2) { e0 = a; e1 = c; o0 = b; o1 = d; m = vtx(x, z + s * 0.5, s); }
+          else { e0 = b; e1 = d; o0 = a; o1 = c; m = vtx(x + s, z + s * 0.5, s); }
+          tri(e0, m, o0); tri(m, e1, o1); tri(m, o1, o0);
+        }
       }
-    }
-    for (let j = 0; j < M; j++) {
-      const j0 = Math.max(0, j - 1), j1 = Math.min(M - 1, j + 1);
-      for (let i = 0; i < M; i++) {
-        const i0 = Math.max(0, i - 1), i1 = Math.min(M - 1, i + 1);
-        const dhdx = (hts[j * M + i1] - hts[j * M + i0]) / (axis[i1] - axis[i0]);
-        const dhdz = (hts[j1 * M + i] - hts[j0 * M + i]) / (axis[j1] - axis[j0]);
-        const l = Math.hypot(dhdx, 1, dhdz);
-        const k = (j * M + i) * 3;
-        nor[k] = -dhdx / l; nor[k + 1] = 1 / l; nor[k + 2] = -dhdz / l;
-      }
-    }
-    // Ridge and hollow signal per vertex: height excess over the average of the four neighbours about 16 m away (spacing-aware),
-    // normalised so +1 is a pronounced crest and -1 a pronounced draw. The ground shader turns it into dry pale ridges and
-    // deep olive draws, which is most of what makes a far hill read as grass instead of smooth sand.
-    const curv = new Float32Array(M * M);
-    for (let j = 0; j < M; j++) {
-      for (let i = 0; i < M; i++) {
-        const sp = (axis[Math.min(M - 1, i + 1)] - axis[Math.max(0, i - 1)]) * 0.5;
-        const k = Math.max(1, Math.round(16 / Math.max(sp, 0.5)));
-        const i0 = Math.max(0, i - k), i1 = Math.min(M - 1, i + k), j0 = Math.max(0, j - k), j1 = Math.min(M - 1, j + k);
-        const avg = 0.25 * (hts[j * M + i0] + hts[j * M + i1] + hts[j0 * M + i] + hts[j1 * M + i]);
-        const R = Math.max(1, 0.25 * (axis[i1] - axis[i0] + axis[j1] - axis[j0]));
-        curv[j * M + i] = clamp((hts[j * M + i] - avg) / (R * 0.1), -1, 1);
-      }
-    }
-    this.axis = axis;
-    this.hts = hts;
-    const idx = new Uint32Array((M - 1) * (M - 1) * 6);
-    let p = 0;
-    for (let j = 0; j < M - 1; j++) {
-      for (let i = 0; i < M - 1; i++) {
-        const a = j * M + i, b = a + 1, c = a + M, d = c + 1;
-        // (a, c, b) and (b, c, d): normals point +Y
-        idx[p++] = a; idx[p++] = c; idx[p++] = b;
-        idx[p++] = b; idx[p++] = c; idx[p++] = d;
-      }
+    };
+    // the playable square at full resolution (the sim's own grid)
+    block(0, 0, hn - 1, hn - 1, cell, -1);
+    for (const { s, d0, d1 } of rings) {
+      const wide = Math.round((size + 2 * d1) / s), band = Math.round((d1 - d0) / s), inner = Math.round((size + 2 * d0) / s);
+      block(-d1, -d1, wide, band, s, 1, -d0, size + d0);                 // top: bottom row meets the inner ring
+      block(-d1, size + d0, wide, band, s, 0, -d0, size + d0);                          // bottom: top row meets the inner ring
+      block(-d1, -d0, band, inner, s, 3);                                                // left: right column
+      block(size + d0, -d0, band, inner, s, 2);                                          // right: left column
     }
     const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-    geo.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
-    geo.setAttribute('aCurv', new THREE.BufferAttribute(curv, 1));
-    geo.setIndex(new THREE.BufferAttribute(idx, 1));
+    geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(pos), 3));
+    geo.setAttribute('normal', new THREE.BufferAttribute(new Float32Array(nor), 3));
+    geo.setAttribute('aCurv', new THREE.BufferAttribute(new Float32Array(curv), 1));
+    geo.setIndex(new THREE.BufferAttribute(new Uint32Array(idx), 1));
     geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(this.world.size / 2, 20, this.world.size / 2), 9000);
-    geo.boundingBox = new THREE.Box3(new THREE.Vector3(-5000, -20, -5000), new THREE.Vector3(5600, 400, 5600));
+    geo.boundingBox = new THREE.Box3(new THREE.Vector3(-5000, -20, -5000), new THREE.Vector3(5600, 600, 5600));
 
     const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.95, metalness: 0 });
     const sh = this.shared;
@@ -674,6 +780,7 @@ export class Terrain {
       u.tMacro1 = { value: this.macroRT[0].texture };
       u.tMacro2 = { value: this.macroRT[1].texture };
       u.tMacro3 = { value: this.macroRT[2].texture };
+      u.tDetail = { value: this.detailTex };
       shader.vertexShader = shader.vertexShader
         .replace('void main() {', 'attribute float aCurv;\nvarying float vTgCurv;\nvarying vec3 vTgWorld;\nvarying vec3 vTgNormal;\nvoid main() {')
         .replace('#include <begin_vertex>', '#include <begin_vertex>\nvTgWorld = (modelMatrix * vec4(transformed, 1.0)).xyz;\nvTgNormal = normal;\nvTgCurv = aCurv;');
@@ -725,6 +832,7 @@ export class Terrain {
     this.shadowFarRT.dispose();
     this.extHeightTex.dispose();
     for (const rt of this.macroRT) rt.dispose();
+    this.detailTex.dispose();
     this.shadowMat.dispose();
     this.shadowQuad.dispose();
   }
@@ -741,6 +849,17 @@ uniform sampler2D tTrail;
 uniform sampler2D tMacro1;
 uniform sampler2D tMacro2;
 uniform sampler2D tMacro3;
+uniform sampler2D tDetail;
+// fine grain from the baked random texture: one lattice cell per texel, so scale s metres per cell = coordinate xz / (s * 256)
+// (cubic-eased between lattice points, so the slope is continuous: plain bilinear gives hard-edged facets in the bump lighting)
+float tgDet(vec2 xz, float cellM, int ch, vec2 off){
+  vec2 q = (xz / (cellM * 256.0) + off) * 256.0;
+  vec2 i = floor(q), f = fract(q);
+  f = f * f * (3.0 - 2.0 * f);
+  // explicit LOD 0: the eased coordinate jumps at cell borders, so an implicit mip level would turn every border into a grey line
+  vec4 v = textureLod(tDetail, (i + f + 0.5) * (1.0 / 256.0), 0.0);
+  return ch == 0 ? v.r : ch == 1 ? v.g : ch == 2 ? v.b : v.a;
+}
 uniform vec2 uFarStats;
 uniform float uWorldSize;
 uniform float uTime;
@@ -782,23 +901,28 @@ float tgCombN(vec2 q, vec4 ow, float across, float along, float seed){
 
 vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
   vec2 xz = wp.xz;
-  vec2 cuv = clamp(xz / uWorldSize, 0.0, 1.0);
+  vec2 cuvR = xz / uWorldSize;
+  vec2 cuv = clamp(cuvR, 0.0, 1.0);
+  // beyond the border the valley's own data continues as a reflection (a triangle wave), so nothing stretches into streaks
+  vec2 cuvM = 1.0 - abs(fract(cuvR * 0.5) * 2.0 - 1.0);
   // signed distance to the playable square (negative inside); the data-driven look dissolves into a continuing
   // far-field look across the edge so no rectangle shows from any angle
   vec2 qd = abs(xz - 0.5 * uWorldSize) - 0.5 * uWorldSize;
   float sd = max(qd.x, qd.y);
   float edgeW = smoothstep(-110.0, 150.0, sd);
+  // 1 inside the playable square, 0 a few metres outside: for data that must not repeat (trails, burn, fear, canopy, water distance)
+  float inS = 1.0 - smoothstep(0.0, 16.0, sd);
 
   float lodFine = 1.0 - smoothstep(70.0, 320.0, dist);
   float lodMid = 1.0 - smoothstep(300.0, 1100.0, dist);
   float nA = 0.5;
-  if (lodMid > 0.002) nA = mix(0.5, tgNoise2(xz * 0.33) * 0.62 + tgNoise2(xz * 0.93 + 5.0) * 0.38, lodMid);
+  if (lodMid > 0.002) nA = mix(0.5, tgDet(xz, 3.0, 1, vec2(0.0)) * 0.62 + tgDet(xz, 1.08, 2, vec2(0.31)) * 0.38, lodMid);
   float nC = 0.5;
-  if (lodFine > 0.002) nC = mix(0.5, tgNoise2(xz * 1.9), lodFine);
+  if (lodFine > 0.002) nC = mix(0.5, tgDet(xz, 0.53, 0, vec2(0.17)), lodFine);
 
-  vec4 veg = texture2D(tVeg, cuv);
-  vec4 st = texture2D(tStatic, cuv);
-  float trod = texture2D(tTrail, cuv).r * (1.0 - edgeW);
+  vec4 veg = texture2D(tVeg, cuvM);
+  vec4 st = texture2D(tStatic, cuvM);
+  float trod = texture2D(tTrail, cuv).r * inS;
   // ---- macro variation (about 40 m, 120 m and 400 m patches, draws, outcrops, drifts): static hash noise baked once into three
   // periodic maps (see Terrain.bakeMacro), so the pixel shader pays three fetches instead of a dozen fbm evaluations
   vec2 muv = xz * (1.0 / ${MACRO_PERIOD}.0);
@@ -816,13 +940,13 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
   float dirt = smoothstep(0.64, 0.8, nM1 + 0.1 * (nM2 - 0.5));
   bio *= 1.0 - dirt * mix(0.4, 0.5, edgeW);
   float fert = mix(veg.g, 0.6, edgeW);
-  float burn = veg.b * (1.0 - edgeW);
-  float fear = veg.a * (1.0 - edgeW);
+  float burn = veg.b * inS;
+  float fear = veg.a * inS;
   float farMoist = uFarStats.y + 0.22 * (nE - 0.5) + 0.2 * draw - 0.3 * highGround;
   float moist = mix(st.r, farMoist, edgeW);
   moist = clamp(moist + 0.28 * draw * (1.0 - edgeW) - 0.1 * highGround * (1.0 - edgeW), 0.0, 1.0);
-  float cover = st.g * (1.0 - edgeW);
-  float wd = mix(st.a * 64.0, 90.0, edgeW);
+  float cover = st.g * inS;
+  float wd = mix(90.0, st.a * 64.0, inS);
 
   float slopeG = sqrt(max(1.0 - nrm.y * nrm.y, 0.0)) / max(nrm.y, 0.05);
   float winterK = smoothstep(2.5, 3.0, uSeason) * (1.0 - smoothstep(3.6, 3.95, uSeason));
@@ -857,13 +981,17 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
   float s4 = tgNoise2(wq * 0.0065 + 4.0);
   // crisp strokes, not mush: push the mid-scale noise through a contrast curve so hills show distinct combed lines
   float c2s = smoothstep(0.3, 0.7, s2), c3s = smoothstep(0.32, 0.68, s3);
-  float farCalm = 1.0 - 0.4 * smoothstep(500.0, 2200.0, dist);   // the biggest strokes read as smears from far away: soften them there
-  float streakTone = (s1 - 0.5) * 0.4 * f1 + (c2s - 0.5) * 0.7 * f2 + (c3s - 0.5) * 0.4 * f3 * farCalm + (s4 - 0.5) * 0.12;
+  // long strokes read as smeared brush work, not grass, once they are a few pixels wide: fade them out with distance and let the
+  // footprint-sized grain below carry the far field instead
+  float calm2 = 1.0 - 0.6 * smoothstep(70.0, 260.0, dist);
+  float calm3 = 1.0 - 0.7 * smoothstep(120.0, 480.0, dist);
+  float farCalm = calm3;
+  float streakTone = (s1 - 0.5) * 0.4 * f1 + (c2s - 0.5) * 0.7 * f2 * calm2 + (c3s - 0.5) * 0.4 * f3 * calm3 + (s4 - 0.5) * 0.12;
   float graze = smoothstep(0.04, 0.3, max(-rayDir.y, 0.0));
   // looking straight down (map view) combed strokes read as fur or smear, so thin them out; they belong to oblique views
   float topK = smoothstep(0.7, 0.96, -rayDir.y);
   streakTone *= mix(1.0, 0.3, topK);
-  gTgH = ((s1 - 0.5) * 0.1 * f1 + (s2 - 0.5) * 0.22 * f2 + (s3 - 0.5) * 0.55 * f3 * farCalm) * mix(0.5, 1.0, graze) * (0.4 + 0.6 * farK) * mix(1.0, 0.3, topK);
+  gTgH = ((s1 - 0.5) * 0.1 * f1 + (s2 - 0.5) * 0.22 * f2 * calm2 + (s3 - 0.5) * 0.55 * f3 * farCalm) * mix(0.5, 1.0, graze) * (0.4 + 0.6 * farK) * mix(1.0, 0.3, topK);
   // rolling wind waves of light and dark
   vec2 sp = vec2(dot(xz, wv), dot(xz, vec2(-wv.y, wv.x)));
   sp.x += 26.0 * tgNoise2(xz * 0.013) + 6.0 * nD;
@@ -916,27 +1044,47 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
   grassCol.r = min(grassCol.r, grassCol.g * mix(2.15, 1.7, autumnK) + 0.003);
   grassCol = mix(vec3(lumG0), grassCol, mix(0.95, 0.76, smoothstep(150.0, 900.0, dist)));
 
-  // distance grain: tufts and clumps whose size follows the pixel footprint (about 4 pixels across), so a far hill keeps a grassy
-  // stipple of olive and straw instead of a smooth dune; far copses of trees are dark dotted patches along the draws
+  // distance grain: tufts and clumps whose size follows the pixel footprint (two to eight pixels across), so a far hill keeps a
+  // grassy stipple of olive and straw instead of a smooth dune; far copses of trees are dark dotted patches along the draws
   float grain = 0.5;
-  float grW = smoothstep(40.0, 220.0, dist) * mix(1.0, 0.4, topK);
+  float grW = smoothstep(35.0, 200.0, dist);
   if (grW > 0.01) {
-    float gk = log2(max(fp * 4.5, 1.0));
+    float gk = log2(max(fp * 2.2, 0.35)) + 1.0;
     float gb = floor(gk);
+    float gf = gk - gb;
     float gs = exp2(gb);
-    float gn1 = tgNoise2(xz / gs + 13.0);
-    float gn2 = tgNoise2(xz / (gs * 2.0) + 13.0);
-    grain = mix(gn1, gn2, gk - gb);
-    grassCol *= 1.0 + (grain - 0.5) * 0.46 * grW;
-    grassCol = mix(grassCol, grassCol * vec3(0.9, 1.04, 0.8), (gn2 - 0.5) * 0.8 * grW);
+    float ga = tgDet(xz, gs, 0, vec2(0.05)), gb2 = tgDet(xz, gs * 2.0, 1, vec2(0.62));
+    // crossfade the octave pair as the footprint grows so tufts never pop; the coarse term comes from the baked patch map
+    float fine = mix(ga, gb2, gf), mid2 = fine, coarse = nM1;
+    // contrast restore: a crossfade of two noises is flatter than either alone (about 0.7 at the midpoint)
+    fine = 0.5 + (fine - 0.5) * (1.0 + 0.42 * (1.0 - abs(2.0 * gf - 1.0)));
+    grain = fine * 0.65 + coarse * 0.35;
+    float amp = mix(0.62, 0.3, topK) * grW;
+    grassCol *= 1.0 + (grain - 0.5) * amp + (fine - 0.5) * 0.3 * grW * (1.0 - topK);
+    grassCol = mix(grassCol, grassCol * vec3(0.88, 1.05, 0.78), (fine - 0.5) * 0.6 * grW);
+    // pale seed heads and dry tufts catch the sun: sparse bright flecks in the finest octave
+    grassCol += grassCol * 0.5 * smoothstep(0.78, 0.95, fine) * grW * ts * (1.0 - topK) * (1.0 - winterK);
   }
-  float groveAmt = smoothstep(0.62, 0.74, groveN + 0.12 * (draw - 0.2) - 0.07 * highGround) * edgeW * smoothstep(120.0, 480.0, dist) * smoothstep(0.18, 0.5, grain);
+  float groveAmt = smoothstep(0.62, 0.74, groveN + 0.12 * (draw - 0.2) - 0.07 * highGround) * edgeW * smoothstep(120.0, 480.0, dist) * smoothstep(0.18, 0.5, grain) * (1.0 - topK);
   grassCol = mix(grassCol, grassCol * vec3(0.46, 0.62, 0.4), groveAmt * 0.85 * (1.0 - 0.55 * winterK));
 
   // blade-scale speckle so ground the grass layer does not cover (beyond the world edge) reads as grass, not as a smooth plane
   if (dist < 110.0) {
-    float speck = tgNoise2(xz * 5.5) * 0.6 + tgNoise2(xz * 14.0) * 0.4;
-    grassCol *= 1.0 + (speck - 0.5) * 0.5 * (1.0 - smoothstep(25.0, 110.0, dist)) * (0.35 + 0.65 * edgeW);
+    float speck = tgDet(xz, 0.18, 3, vec2(0.0)) * 0.6 + tgDet(xz, 0.071, 2, vec2(0.5)) * 0.4;
+    grassCol *= 1.0 + (speck - 0.5) * 0.5 * (1.0 - smoothstep(25.0, 110.0, dist)) * (0.2 + 0.8 * edgeW);
+  }
+  // close range: grass grows in tussocks about a metre across with darker gaps of shade and soil between them, and the blades combed
+  // along the wind, instead of a fuzzy even carpet. Brightness stays balanced (clumps a touch lighter, gaps a touch darker).
+  float closeK = 1.0 - smoothstep(14.0, 85.0, dist);
+  if (closeK > 0.01) {
+    float clLow = tgDet(vec2(xz.x * 1.1 + xz.y * 0.35, xz.y * 1.1 - xz.x * 0.35), 1.0, 2, vec2(0.23));
+    float cl = clLow * 0.65 + tgDet(xz, 0.18, 3, vec2(0.0)) * 0.35;
+    float tuss = smoothstep(0.2, 0.8, cl);
+    grassCol *= mix(1.0, mix(0.74, 1.12, tuss), closeK * 0.85);
+    grassCol = mix(grassCol, grassCol * vec3(0.92, 0.88, 0.8) + uSoil * 0.04, (1.0 - tuss) * 0.22 * closeK * (0.4 + 0.6 * stubA));
+    // fine combed blade lines inside the clumps (the blade layer carries them nearer; this keeps the ground from going flat between)
+    grassCol *= 1.0 + (s1 - 0.5) * 0.22 * closeK * (1.0 - topK * 0.5);
+    gTgH += (clLow - 0.5) * 0.1 * closeK;   // metres: a few centimetres of relief over a metre, so the normal tilts a few degrees, not 45
   }
 
   // winter ground is dull grey-brown straw under the snow, not warm sand
@@ -1068,7 +1216,9 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
 
   // rain darkens and glosses the ground
   col *= mix(1.0, 0.74, uWet * (1.0 - snowCover));
-  gTgRough = mix(0.95, 0.62, uWet);
+  // wet ground is darker and a little glossier near the camera, but a low sun on a wet slope at grazing angles reflects as a pale
+  // sheen that reads as snow or mist: keep the far ground rough so it never goes whiter than dry grass
+  gTgRough = mix(mix(0.95, 0.66, uWet), 1.0, smoothstep(90.0, 420.0, dist) * (0.4 + 0.6 * uWet));
 
   // looking toward a low sun makes standing grass glow: forward scattering through the blades
   float fwd = max(dot(rayDir, uLightDir), 0.0);

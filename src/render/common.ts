@@ -179,11 +179,17 @@ vec3 tgSkyBase(vec3 d){
   vec3 col = mix(uSkyMid, uSkyZenith, smoothstep(0.03, 0.9, up));
   float mu = clamp(dot(d, uSunDir), 0.0, 1.0);
   // the horizon is warm toward the sun and cooler (lavender-blue) away from it, like the belt of Venus at dusk
-  vec3 horC = mix(uSkyHorizon, uSkyMid * 1.08 + vec3(0.015), 0.5 * (1.0 - clamp(mu * 1.7, 0.0, 1.0)));
+  vec3 horC = mix(uSkyHorizon, uSkyMid * 1.08 + vec3(0.015), 0.36 * (1.0 - clamp(mu * 1.7, 0.0, 1.0)));
   col = mix(horC, col, smoothstep(0.0, 0.40, up));
   float h = 1.0 - up;
   float glow = 0.22 * pow(mu, 3.0) + 0.5 * pow(mu, 14.0) + 1.1 * pow(mu, 90.0);
   col += uSunGlow * glow * (0.35 + 0.65 * h * h);
+  // low sun: a wide warm band along the horizon, strongest on the sun's side and fading around the sky, so a dusk shot with the
+  // sun out of frame still has a glowing horizon
+  float lowS = smoothstep(0.55, 0.06, uSunDir.y) * smoothstep(-0.3, -0.04, uSunDir.y);
+  vec2 shd = normalize(uSunDir.xz + vec2(1e-4)), dhd = normalize(d.xz + vec2(1e-4));
+  float az = 0.5 + 0.5 * dot(shd, dhd);
+  col += uSunGlow * lowS * (0.46 * pow(az, 3.0) + 0.2) * exp(-up * 5.2);
   return col;
 }
 `;
