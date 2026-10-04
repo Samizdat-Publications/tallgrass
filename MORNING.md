@@ -5,7 +5,7 @@
 ## How to run it (one step)
 Open **https://tallgrass.stewartgregerson.workers.dev** in Chrome or Edge. Click once anywhere to turn on sound. (The live build is redeployed after each verified milestone; the time of the last deploy is in the line below.)
 
-Last deploy: 21:00 Saturday (commit e958d19: v5 ecology, round 4 and 5 animals, trees, terrain, UI), verified: loads with no errors at 60 fps, default world and `?challenge=homecoming`.
+Last deploy: 01:50 Sunday (commit b679901: everything through renderer, animal and UI round 6, the documentary camera, death sounds), verified: loads with no errors at 60 fps, default world and `?challenge=homecoming`.
 
 Locally: `npm run dev`, then http://localhost:5199/.
 - `?seed=anything` picks a world, `?scenario=yellowstone` picks a scenario, `?challenge=herd` starts a challenge. The menu (top right) does all three.
