@@ -1006,8 +1006,18 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
   float stubA = 1.0 - f * f * (3.0 - 2.0 * f);
   float um = clamp((moist - 0.4) / 0.26, 0.0, 1.0);
   float up = 1.0 - um * um * (3.0 - 2.0 * um);
-  float riparian = 1.0 - smoothstep(6.0, 34.0, wd);
-  float dry = clamp(uCure + (0.55 - moist) * 1.1 + stubA * 0.55 + 0.3 * up + (nB - 0.5) * 0.24 + (nM2 - 0.5) * 0.26 - 0.45 * riparian - mix(0.5, 0.3, edgeW) * draw * (0.4 + 0.6 * (1.0 - uCure)) - 0.2 * (nM1 - 0.5), 0.0, 1.0);
+  // riparian ribbon: a belt of living grass along the creek and round the ponds. Its width wanders from about 10 to 35 m on low-frequency
+  // noise (so it swells in places and pinches in others, never a constant tube), the outer edge is feathered and ragged, and the
+  // season shapes it: full in the green months, still greener than the uplands through the cure, dull under winter, and drier where
+  // drought or grazing has cut the grass back (the stubble term). The blade layer (grass.ts) runs the same function, so near and far field agree.
+  float riparian = 0.0;
+  if (wd < 58.0) {   // the belt never reaches past about 57 m (the distance texture holds 64), so the open prairie skips the noise
+    float ripBroad = tgNoise2(xz * 0.011 + vec2(31.7, 12.3)) * 0.6 + tgNoise2(xz * 0.027 + vec2(7.3, 55.1)) * 0.4;
+    float ripW = mix(20.0, 50.0, smoothstep(0.22, 0.66, ripBroad)) * (0.85 + 0.3 * tgNoise2(xz * 0.07 + vec2(3.1, 91.7)));
+    riparian = (1.0 - smoothstep(0.3 * ripW, ripW, wd)) * mix(1.0, 0.8, uCure) * (1.0 - 0.9 * winterK);
+  }
+  float dry = clamp(uCure + (0.55 - moist) * 1.1 + stubA * 0.55 + 0.3 * up + (nB - 0.5) * 0.24 + (nM2 - 0.5) * 0.26 - mix(0.5, 0.3, edgeW) * draw * (0.4 + 0.6 * (1.0 - uCure)) - 0.2 * (nM1 - 0.5), 0.0, 1.0);
+  dry = mix(dry, min(dry, 0.02 + 0.12 * uCure + 0.4 * stubA), riparian);
   vec3 grassCol = mix(uGrassGreen, uGrassDry, dry) * vec3(1.0 + 0.08 * up * dry, 1.0 - 0.07 * up * dry, 1.0 - 0.16 * up * dry);
   // the blades add their own shading; the far-field ground is the canopy average: slightly olive and a little less saturated
   grassCol *= vec3(1.04, 1.01, 0.86);
@@ -1035,6 +1045,9 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
   float drainK = clamp(draw * 0.9 + hollowK * 0.55 + (1.0 - up) * 0.15, 0.0, 1.0) * (1.0 - ridgeK);
   vec3 drainCol = mix(uGrassGreen, uGrassDry, 0.22) * vec3(0.84, 0.98, 0.62) * (0.85 + 0.3 * nA);
   grassCol = mix(grassCol, drainCol, drainK * smoothstep(0.25, 0.85, uCure) * mix(0.44, 0.26, winterK));
+  // the riparian belt itself: sage to fresh green, olive-leaning and never lime, a little richer than the upland drains
+  vec3 ripCol = mix(uGrassGreen, uGrassDry, 0.08 + 0.1 * uCure) * vec3(0.94, 1.12, 0.72) * (1.16 + 0.26 * nA);
+  grassCol = mix(grassCol, ripCol, riparian * 0.9);
 
   // honey, not orange: dry ridges go lighter and straw-gold, swales and draws go deeper olive-gold, and the redness is capped
   // (the light is already warm, so red ground under red light reads as wine at dusk)
@@ -1106,7 +1119,7 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
 
   // short grass: a little of the soil shows through, darker and earthier, never light sand
   float soilShow = smoothstep(0.1, 0.0, bio + (nC - 0.5) * 0.05) + dirt * 0.25 * edgeW;
-  soilShow = clamp(soilShow, 0.0, 1.0);
+  soilShow = clamp(soilShow * (1.0 - 0.45 * riparian), 0.0, 1.0);   // bare shore is partly grassed over where the riparian belt is
   vec3 shortGrass = mix(grassCol, grassCol * vec3(0.9, 0.84, 0.74) + uSoil * 0.12, stubA * 0.5);
   // grazed ground is stubble, not a smooth plane: short blade flecks (dark gaps, pale cut ends) at close and middle range
   if (stubA > 0.05 && dist < 220.0) {
@@ -1136,11 +1149,19 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
     gTgGrass *= 1.0 - 0.45 * trodK;
   }
 
-  // damp banks, mud at the waterline
-  float damp = (1.0 - smoothstep(0.0, 9.0, wd)) * (0.6 + 0.4 * nA);
-  col = mix(col, col * vec3(0.52, 0.47, 0.38), damp * 0.5);
-  float mud = 1.0 - smoothstep(0.0, 3.4, wd + (nC - 0.5) * 1.6);
-  col = mix(col, vec3(0.2, 0.16, 0.115) * (0.8 + 0.4 * nC), mud * 0.82);
+  // water's edge: a thin wet line at the waterline, a faint damp band, and a narrow mud lip that is ragged and broken (some stretches of
+  // bank run straight from the water to green grass), so from above the riparian green frames the water and not a dark ring
+  float damp = (1.0 - smoothstep(0.0, 5.5, wd)) * (0.6 + 0.4 * nA);
+  col = mix(col, col * vec3(0.8, 0.76, 0.66), damp * 0.22);
+  float wetLine = 1.0 - smoothstep(0.0, 1.1, wd);
+  col = mix(col, col * vec3(0.62, 0.57, 0.48), wetLine * 0.4);
+  if (wd < 3.0) {
+    float lipN = tgNoise2(xz * 0.31 + vec2(5.3, 17.9)) * 0.6 + tgNoise2(xz * 0.9 + vec2(41.0, 3.3)) * 0.4;
+    lipN = mix(0.5, lipN, 1.0 - smoothstep(120.0, 420.0, dist));
+    float lipW = 0.3 + 1.6 * smoothstep(0.38, 0.72, lipN);
+    float mud = 1.0 - smoothstep(0.0, lipW, wd + (nC - 0.5) * 0.9);
+    col = mix(col, vec3(0.22, 0.175, 0.125) * (0.8 + 0.4 * nC), mud * 0.62);
+  }
 
   // under tree and shrub cover: cooler, darker, leaf litter
   col = mix(col, col * vec3(0.55, 0.58, 0.4) * (0.8 + 0.4 * nC), cover * 0.5);

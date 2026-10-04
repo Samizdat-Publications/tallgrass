@@ -286,6 +286,7 @@ uniform float uPixW;
 uniform float uMaxH;
 uniform float uBladeW;
 uniform float uCure;
+uniform float uWinterK;
 uniform float uSeedFrac;
 uniform float uMoistK;
 uniform float uWindGain;
@@ -299,6 +300,7 @@ varying vec4 vP1;
 varying vec4 vP2;
 varying float vTS;
 varying vec4 vP3;
+varying float vRip;
 
 uint pcg(uint v) {
   uint s = v * 747796405u + 2891336453u;
@@ -306,6 +308,16 @@ uint pcg(uint v) {
   return (w >> 22u) ^ w;
 }
 float u01(uint h) { return float(h) * (1.0 / 4294967296.0); }
+
+// same hash and value noise as the ground shader (common.ts NOISE_GLSL), for the riparian belt's width
+float rpHash(vec2 p) { vec3 p3 = fract(vec3(p.xyx) * .1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
+float rpNoise(vec2 p) {
+  vec2 i = floor(p), f = fract(p);
+  vec2 u = f * f * (3.0 - 2.0 * f);
+  float a = rpHash(i), b = rpHash(i + vec2(1.0, 0.0));
+  float c = rpHash(i + vec2(0.0, 1.0)), d = rpHash(i + vec2(1.0, 1.0));
+  return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
+}
 
 float terrainH(vec2 p) {
   vec2 f = clamp(p / uWorld.z, vec2(0.0), vec2(uWorld.w - 1.001));
@@ -337,7 +349,7 @@ vec4 vegAt(vec2 p) {
 void cullBlade() {
   gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
   vUv = vec2(0.0); vN = vec3(0.0, 1.0, 0.0); vNg = vec3(0.0, 1.0, 0.0); vWP = vec3(0.0);
-  vP0 = vec4(0.0); vP1 = vec4(0.0); vP2 = vec4(0.0); vP3 = vec4(0.0); vTS = 1.0;
+  vP0 = vec4(0.0); vP1 = vec4(0.0); vP2 = vec4(0.0); vP3 = vec4(0.0); vTS = 1.0; vRip = 0.0;
 }
 
 void main() {
@@ -533,12 +545,25 @@ void main() {
 
   float stub = max(1.0 - smoothstep(0.06, 0.42, bio), 0.9 * trodK);
   float dry = uCure + (0.55 - moist) * uMoistK - st1.g * 0.28 + (patch1 - 0.5) * 0.3 + (rC - 0.5) * 0.22 * (1.0 - smoothstep(25.0, 90.0, dist)) + stub * 0.55 + 0.3 * ridge;
+  dry = clamp(dry, 0.0, 1.0);
+  // riparian belt: the ground shader (terrain.ts) draws the same belt of living grass along the creek and round the ponds from the same
+  // width noise and falloff, so the blades and the ground under them agree at every range. Distance to water comes back out of the
+  // exp(-d / 16) the static texture holds.
+  float rip = 0.0;
+  if (st1.g > 0.02) {
+    float wdw = -16.0 * log(max(st1.g, 1e-3));
+    float ripBroad = rpNoise(p * 0.011 + vec2(31.7, 12.3)) * 0.6 + rpNoise(p * 0.027 + vec2(7.3, 55.1)) * 0.4;
+    float ripW = mix(20.0, 50.0, smoothstep(0.22, 0.66, ripBroad)) * (0.85 + 0.3 * rpNoise(p * 0.07 + vec2(3.1, 91.7)));
+    rip = (1.0 - smoothstep(0.3 * ripW, ripW, wdw)) * mix(1.0, 0.8, uCure) * (1.0 - 0.9 * uWinterK);
+    dry = mix(dry, min(dry, 0.02 + 0.12 * uCure + 0.4 * stub), rip);
+  }
 
   vUv = vec2(side, vg);
   vN = Nb;
   vNg = Ng;
   vWP = wp3;
-  vP0 = vec4(clamp(dry, 0.0, 1.0), rD, rE, seedFlag);
+  vP0 = vec4(dry, rD, rE, seedFlag);
+  vRip = rip;
   vP1 = vec4(bio, gust, burn, stub);
   vP2 = vec4(rA, dist, swath, patch1);
   vP3 = vec4(fType, fTone, tusC, ridge);
@@ -599,6 +624,7 @@ varying vec4 vP1;
 varying vec4 vP2;
 varying float vTS;
 varying vec4 vP3;
+varying float vRip;
 
 // Never let a zero-length or NaN input escape: every normalize in this shader goes through here.
 vec3 sn(vec3 v) { return v * inversesqrt(max(dot(v, v), 1e-12)); }
@@ -636,6 +662,8 @@ void main() {
   vec3 aGreen = grad3(uGreenB, uGreenM, uGreenT, vc);
   vec3 aDry = grad3(uDryB, uDryM, uDryT, vc);
   vec3 albedo = mix(aGreen, aDry, dry);
+  // riparian belt: sage to fresh green, olive-leaning and never lime (the ground shader pushes the same way)
+  albedo *= mix(vec3(1.0), vec3(1.03, 1.25, 0.78), vRip * 0.9);
   // per-blade variation fades with distance so the mid field is smooth, not salt and pepper
   float nearK = 1.0 - smoothstep(25.0, 90.0, vP2.y);
   albedo *= mix(1.0, 0.8 + 0.4 * bright, nearK * (1.0 - 0.35 * uMoon));
@@ -867,6 +895,7 @@ export class GrassField {
       uMaxH: { value: 1.05 },
       uBladeW: { value: 0.014 },
       uCure: { value: 0.5 },
+      uWinterK: { value: 0 },
       uSeedFrac: { value: 0.1 },
       uMoistK: { value: 1.1 },
       uWindGain: { value: 1 },
@@ -1101,6 +1130,11 @@ export class GrassField {
     seasonColor(DRY_KEYS, env.season, 1, u.uDryM.value);
     seasonColor(DRY_KEYS, env.season, 2, u.uDryT.value);
     u.uCure.value = keyCurve(CURE_KEYS, env.season);
+    {
+      // same winter curve as the ground shader's winterK, for the riparian belt
+      const ws = ((env.season % 4) + 4) % 4;
+      u.uWinterK.value = smooth01((ws - 2.5) / 0.5) * (1 - smooth01((ws - 3.6) / 0.35));
+    }
     u.uSeedFrac.value = keyCurve(SEED_KEYS, env.season);
     {
       const sn = ((env.season % 4) + 4) % 4;
