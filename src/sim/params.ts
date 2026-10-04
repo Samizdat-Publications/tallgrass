@@ -110,6 +110,9 @@ export interface Params {
   /** Herd-minded animals heed their neighbours' alarm more (0 = off): the many-eyes vigilance from neighbours is scaled by
    *  1 + herdEyes * (herding gene - 1), so herding pays against wolves instead of fading. */
   herdEyes: number;
+  /** Lean-times births (0 = off): each newborn grazer is lost with a chance of leanLitter x (1 - mother's condition), where
+   *  condition runs from 0 at energy 0.3 to 1 at 0.8, so a crowded, hungry herd raises fewer young before it starves. */
+  leanLitter: number;
   /** Rate per year at which a pair of cougars wanders in while fewer than two live in the valley (0 = closed valley). */
   cougarImmigration: number;
   /** When an already-fleeing grazer is scared again, how much of its current flight line it keeps (0 = turn straight away from the new threat). */
@@ -234,6 +237,7 @@ export function defaultParams(): Params {
     droughtRefuge: 0,
     sprintCost: 0,
     herdEyes: 0,
+    leanLitter: 0,
     cougarImmigration: 0,
     fleeMomentum: 0,
     fearKill: 0.7,

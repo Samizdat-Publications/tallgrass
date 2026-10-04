@@ -1189,9 +1189,17 @@ export class Sim implements SimLike {
     }
     if (!this.vitals(i, P)) return;
     if (a.pregnant[i] > 0 && --a.pregnant[i] === 0) {
-      const litter = Math.min(P.maxLitter, Math.max(1, Math.round(P.litter * a.genes[i * NG + G_LITTER] + (this.rng.next() - 0.5) * 0.6)));
+      let litter = Math.min(P.maxLitter, Math.max(1, Math.round(P.litter * a.genes[i * NG + G_LITTER] + (this.rng.next() - 0.5) * 0.6)));
+      if (this.p.leanLitter > 0) {
+        // in lean times fewer young make it through their first days
+        const cond = Math.min(1, Math.max(0, (a.energy[i] - 0.3) / 0.5));
+        const lose = this.p.leanLitter * (1 - cond);
+        let kept = 0;
+        for (let k = 0; k < litter; k++) if (this.rng.next() >= lose) kept++;
+        litter = kept;
+      }
       for (let k = 0; k < litter; k++) this.birth(i, -1, a.sp[i], a.x[i] + this.rng.range(-1, 1), a.y[i] + this.rng.range(-1, 1));
-      this.logStory(i, 'birth', litter);
+      if (litter > 0) this.logStory(i, 'birth', litter);
       a.energy[i] -= 0.12 * litter;
       a.cooldown[i] = P.birthCooldown;
       if (a.energy[i] <= 0) this.die(i, 'starve');
