@@ -9,7 +9,7 @@ Last deploy: 06:30 Sunday (commit 02b5744: the 2x valley calendar, the documenta
 
 Locally: `npm run dev`, then http://localhost:5199/.
 - `?seed=anything` picks a world, `?scenario=yellowstone` picks a scenario, `?challenge=herd` starts a challenge. The menu (top right) does all three.
-- Performance, measured on this machine's RTX 5070 Ti Laptop GPU (01:55 Sunday, forced renders with a GPU sync): **1080p 7.7 to 11.5 ms per frame, 1440p 10 to 15.4 ms**, so 60 fps with headroom at both. On bigger or high-DPI screens the game lowers its render resolution a little if it has to, to hold 60 fps.
+- Performance on this machine's RTX 5070 Ti Laptop GPU, after renderer round 7 (06:30 Sunday, GPU timers, median ms per frame at 1440p): wide golden 10.0, low golden 15.8, herd 10.3, top 9.6, winter 9.2, night 11.4. Every view holds 60 fps; the low grass view has the least headroom. On bigger or high-DPI screens the game lowers its render resolution a little if it has to, to hold 60 fps.
 - Keys: Space pause, 1/2/3 speed, **N next event** (the camera flies to it), **C cinematic documentary mode**, **P photo** (saves a clean PNG of the frame), G big graph, E evolution chart, L log scale, F follow the selected animal, **H ambient view** (hides all UI; any key or click brings it back), **V narrator on/off**, M mute, Esc back out. Click an animal to inspect it and read its life story. Left-drag orbits, right-drag pans, wheel zooms.
 
 ## What it is
