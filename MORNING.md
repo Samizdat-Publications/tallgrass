@@ -20,6 +20,25 @@ New since 09:00:
 - **Life story** in the inspector, with an "In memoriam" card when the animal dies. **Named worlds** in the menu (seeds with remarkable histories). **Photo mode** (P).
 - **Cougars** in the "Cougar country" scenario: ambush hunters that wait in cover by the water.
 - Renderer round 3: fire leaves a charred scar with smoke and greens back up; autumn dusk no longer wine-red; the square world edge is gone; late summer is honey gold rather than orange.
+- Round 4 (Saturday afternoon and evening):
+  - **Animals:**
+    - Feet plant on the ground (measured slip fell from 47 to 67% of body speed to 8 to 12%).
+    - Running animals visibly bound at drone distance, and turns are smooth with banking.
+    - A kill shows a lunge and the prey stumbling over.
+    - Stampedes kick up dust.
+    - Ravens cast no shadows in flight.
+    - Bison are chocolate, and pronghorn tan and white.
+  - **World:**
+    - Distant hills read as combed grass with green draws instead of sand.
+    - Trees and rocks are rebuilt.
+    - Water is darker, with reflections.
+    - Snow follows the slopes.
+  - **UI:**
+    - The big graph shows one row per species.
+    - The chronicle groups by year.
+    - Chapter cards sit in the lower third.
+    - Founding animals have a backstory.
+  - **Camera:** it drifts slowly during fast-forward.
 
 ## What to look at first
 1. Open the link and leave it at 1x for a minute: the camera opens on the biggest herd.
@@ -57,10 +76,8 @@ The default sim is now **checkpoint v5** (since 16:45 Saturday). v4 results are 
   - The strict "bison back inside their pre-shock range" metric fails (30 to 65%). The chart shows why: the herds don't fall short, they **overshoot and settle higher** (about 450 before, about 1,000 after). The bison are still evolving bigger and faster through their first century, so a shock at year 48 lands mid-way through that climb. A fair test shocks after evolution settles; a 300-year version is queued.
 - **Predators control the herd (measured):** `review/stability/cascade/trophic_cascade.png`. With no predators the herd climbs to 2,500 to 3,000 on grazed-down grass; when 12 wolves arrive, it settles far lower and the grass recovers. The Yellowstone trophic cascade, emergent, not scripted.
 - **v4, for comparison** (`review/stability/v4-5df7663*`): 1,000 generations, bison, wolves and ravens 20/20, pronghorn 15/20. Shocks: the cull passed for every species; the drought passed except pronghorn recovery; the wolf wipeout failed strict recovery.
-- **Still open:**
-  - Wolves sit near a ceiling set by territory space, so they respond to prey only weakly.
-  - Over centuries the herds evolve bigger and more fecund, which drifts the balance back toward food limits.
-  - Experiments in progress: prey-scaled wolf capacity, which makes wolves visibly rise and fall about a year behind their prey (wolf-prey correlation 0.41 to 0.63 in a 32-world screen at equal persistence); a raven-cap relaxation; and per-animal herd protection so herding pays.
+- **What I tried next and did not ship (v6, Saturday evening):** about 20 more screens chasing the critics' "wolves should rise and fall a few years behind their prey". Prey-scaled wolf capacity does exactly that, lifting wolf-prey correlation from 0.29 to 0.58 at a one-year lag. Adding litter caps and individual herd protection stops the evolutionary drift and keeps herding alive. At 40 and 100 years it looked like a clear win (100 years: bison 32, wolves 31, ravens 32, pronghorn 28 of 32). But the 1,000-generation acceptance lost pronghorn in **every** finished world, between years 117 and 390: wolves that follow the pronghorn booms make each crash deeper. In this model a faster predator response trades directly against prey persistence, so **v5 stays the default**. The mechanisms are in the code, off by default, with every result in `DECISIONS.md` (18:10 to 20:35).
+- **Also rejected:** a spring birth pulse (calves only in spring). It collapsed everything, because bison live only about 3.3 valley-years in the compressed calendar, so one calf a year can't replace them; a real birth pulse needs the calendar re-scaled. Slow climate cycles also cost persistence.
 - Cougars (opt-in "Cougar country"): they ride the pronghorn boom and bust and die out in most worlds within 40 years. Revisit after the ecology settles.
 
 ## Reviews so far
