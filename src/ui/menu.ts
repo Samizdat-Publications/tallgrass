@@ -54,9 +54,27 @@ function inChallengeCalendar<T>(c: Challenge, read: () => T): T {
   }
 }
 
+/** What a challenge's menu entry (and the title card's) says: its blurb and length, read under its own calendar. */
+export function challengeInfo(c: Challenge): { blurb: string; meta: string } {
+  const { years, blurb } = inChallengeCalendar(c, () => ({ years: c.years, blurb: c.blurb }));
+  const meta = `${years} years, ${c.maxTools === null ? 'any number of interventions' : c.maxTools === 1 ? 'one intervention' : `up to ${c.maxTools} interventions`}`;
+  return { blurb, meta };
+}
+
+/** The pages the menu and the top row can open (settings, valley setup, field guide) and the share button. */
+export interface TopRightPages {
+  onSettings(): void;
+  onSetup(): void;
+  onGuide(): void;
+  onShare(): void;
+}
+
 export class TopRight {
   readonly el: HTMLElement;
   private seedBtn: HTMLButtonElement;
+  private shareBtn: HTMLButtonElement;
+  private guideCount: HTMLElement;
+  private shareTimer = 0;
   private seedText: HTMLElement;
   private ambientBtn: HTMLButtonElement;
   private narratorBtn: HTMLButtonElement;
@@ -77,7 +95,12 @@ export class TopRight {
   private copiedTimer = 0;
   private onDocDown: (e: PointerEvent) => void;
 
-  constructor(private actions: UIActions, private onAmbient: () => void = () => {}, private onNotes: () => void = () => {}) {
+  constructor(
+    private actions: UIActions,
+    private onAmbient: () => void = () => {},
+    private onNotes: () => void = () => {},
+    private pages: TopRightPages = { onSettings() {}, onSetup() {}, onGuide() {}, onShare() {} },
+  ) {
     this.seedText = h('span', { class: 'tg-seed-text' });
     this.seedName = h('span', { class: 'tg-seed-name' });
     this.seedIcon = h('span', { class: 'tg-seed-ic', html: icon('copy', 14) });
@@ -88,6 +111,13 @@ export class TopRight {
       this.seedText,
       this.seedIcon,
     );
+    this.shareBtn = button({
+      class: 'tg-ambientbtn tg-sharebtn tg-glass tg-leaf',
+      'aria-label': 'Copy a link to this valley',
+      title: 'Share: copy a link that reopens this valley, with everything you have done in it',
+      html: icon('share', 20),
+      onclick: () => this.pages.onShare(),
+    });
     this.ambientBtn = button({
       class: 'tg-ambientbtn tg-glass tg-leaf',
       'aria-label': 'Hide the interface',
@@ -131,8 +161,7 @@ export class TopRight {
 
     const challenges = h('div', { class: 'tg-menu-list' });
     for (const c of CHALLENGES) {
-      const { years, blurb } = inChallengeCalendar(c, () => ({ years: c.years, blurb: c.blurb }));
-      const meta = `${years} years, ${c.maxTools === null ? 'any number of interventions' : c.maxTools === 1 ? 'one intervention' : `up to ${c.maxTools} interventions`}`;
+      const { blurb, meta } = challengeInfo(c);
       const b = button(
         { class: 'tg-sc', 'aria-pressed': 'false', onclick: () => this.startChallenge(c.id) },
         h('span', { class: 'tg-sc-dot', 'aria-hidden': 'true' }),
@@ -172,9 +201,22 @@ export class TopRight {
       h('span', { class: 'tg-menurow-ic', html: icon('chevronRight', 14) }),
     );
 
+    // pages the menu opens: each closes the menu and hands over to its own page
+    const pageRow = (name: string, blurb: string, ic: string, open: () => void, count?: HTMLElement): HTMLButtonElement =>
+      button(
+        { class: 'tg-menurow', onclick: () => { this.close(); open(); } },
+        h('span', { class: 'tg-switch-text' }, h('span', { class: 'tg-sc-name', text: name }), h('span', { class: 'tg-sc-blurb', text: blurb })),
+        count ?? null,
+        h('span', { class: 'tg-menurow-ic', html: icon(ic, 14) }),
+      );
+    this.guideCount = h('span', { class: 'tg-menurow-count' });
+
     this.menu = h(
       'div',
       { class: 'tg-menu tg-glass', role: 'dialog', 'aria-label': 'Menu', hidden: true },
+      pageRow('New valley', 'Choose who lives here, the weather and the calendar.', 'chevronRight', () => this.pages.onSetup()),
+      pageRow('Field guide', 'What each animal does, and the moments to catch.', 'chevronRight', () => this.pages.onGuide(), this.guideCount),
+      pageRow('Settings', 'Picture quality, sound, camera and interface size.', 'chevronRight', () => this.pages.onSettings()),
       this.narratorBtn,
       this.notesBtn,
       h('h2', { class: 'tg-menu-h', text: 'Scenarios' }),
@@ -194,7 +236,7 @@ export class TopRight {
       keys,
     );
 
-    this.el = h('div', { class: 'tg-topright' }, h('div', { class: 'tg-topright-row' }, this.seedBtn, this.ambientBtn, this.menuBtn), this.menu);
+    this.el = h('div', { class: 'tg-topright' }, h('div', { class: 'tg-topright-row' }, this.seedBtn, this.shareBtn, this.ambientBtn, this.menuBtn), this.menu);
 
     this.onDocDown = (e) => {
       if (this.open && !this.el.contains(e.target as Node)) this.close();
@@ -213,6 +255,22 @@ export class TopRight {
   /** The count on the Field notes entry: "7 of 18". */
   setNotesCount(n: number, total: number): void {
     setText(this.notesCount, `${n} of ${total}`);
+  }
+
+  /** The count on the Field guide entry: "7 of 24 witnessed". */
+  setGuideCount(n: number, total: number): void {
+    setText(this.guideCount, `${n} of ${total}`);
+  }
+
+  /** The share button shows a tick for a moment once the link is on the clipboard. */
+  flashShared(ok: boolean): void {
+    this.shareBtn.innerHTML = icon(ok ? 'check' : 'share', 20);
+    this.shareBtn.classList.toggle('is-copied', ok);
+    window.clearTimeout(this.shareTimer);
+    this.shareTimer = window.setTimeout(() => {
+      this.shareBtn.innerHTML = icon('share', 20);
+      this.shareBtn.classList.remove('is-copied');
+    }, 1600);
   }
 
   /** Reflect the narrator switch in the menu. */

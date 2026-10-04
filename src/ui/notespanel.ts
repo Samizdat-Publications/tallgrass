@@ -4,11 +4,11 @@ import { icon } from './icons';
 import { NOTES, NOTE_COUNT, type FieldNotes, type NoteDef } from './fieldnotes';
 
 /** A tick drawn a little unevenly, like a pencil mark, so the notebook does not look stamped. */
-const TICK =
+export const TICK =
   '<svg class="tg-tick" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
   '<path d="M3.6 12.9c1.9 1.2 3.2 2.9 4.5 5.3 1.7-4.9 5.6-9.5 11.6-13.2"/></svg>';
 /** The empty box of a note not yet earned: a loose, open circle. */
-const RING =
+export const RING =
   '<svg class="tg-ring" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" aria-hidden="true">' +
   '<path d="M12.4 4.6c4.1.1 7.2 3.2 7 7.4-.2 4-3.4 7.1-7.5 7.1-4 0-7.2-3.1-7.1-7.2.1-3.8 2.7-6.9 6.8-7.2" stroke-dasharray="2.6 2.2"/></svg>';
 

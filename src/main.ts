@@ -5,6 +5,9 @@ import { GrassField } from './render/grass';
 import { AnimalLayer } from './render/animals';
 import { OverlayLayer } from './render/overlay';
 import { GameUI, type OverlayId, type ToolId } from './ui/ui';
+import { loadSettings, type QualityPreset, type Settings } from './ui/settings';
+import { titleWanted } from './ui/title';
+import { decodeShare, shareUrl, type DecodedShare, type LoggedIntervention } from './sim/sharecode';
 import { packName } from './ui/describe';
 import { generateWorld } from './sim/world';
 import { hashSeed } from './sim/rng';
@@ -20,21 +23,36 @@ import { isPredator } from './sim/species';
 import type { FromWorker, ToWorker } from './sim/worker';
 
 const q = new URLSearchParams(location.search);
-// a challenge brings its own world: ?challenge=herd overrides seed and scenario
-const challenge = challengeById(q.get('challenge'));
-const seedStr = challenge?.seed ?? q.get('seed') ?? 'tallgrass';
-const seed = /^\d+$/.test(seedStr) ? Number(seedStr) : hashSeed(seedStr);
-const scenario = scenarioById(challenge?.scenario ?? q.get('scenario') ?? 'prairie');
+// a shared valley (?w=): the whole world, interventions included. A code that cannot be read starts the usual valley
+let shared: DecodedShare | null = null;
+let shareError = false;
+if (q.has('w')) {
+  try {
+    shared = decodeShare(q.get('w') ?? '');
+  } catch {
+    shareError = true;
+  }
+}
+// a challenge brings its own world: ?challenge=herd overrides seed and scenario (a share code overrides both)
+const challenge = shared ? null : challengeById(q.get('challenge'));
+const seedStr = shared ? String(shared.state.seed) : challenge?.seed ?? q.get('seed') ?? 'tallgrass';
+const seed = shared ? shared.state.seed : /^\d+$/.test(seedStr) ? Number(seedStr) : hashSeed(seedStr);
+const scenario = scenarioById(shared ? shared.state.scenario : challenge?.scenario ?? q.get('scenario') ?? 'prairie');
+
+// picture quality: ?q= wins (captures pin it), else the player's saved preset, else High (today's look)
+const savedSettings = loadSettings();
+const startPreset: QualityPreset = q.has('q') ? (q.get('q') === 'medium' ? 'medium' : 'high') : savedSettings.quality;
+const qualityTier = (p: QualityPreset): 'medium' | 'high' => (p === 'low' || p === 'medium' ? 'medium' : 'high');
 
 const world = generateWorld(seed);
 const host = document.getElementById('app')!;
 const engine = new Engine(host, world, {
-  quality: q.get('q') === 'medium' ? 'medium' : 'high',
+  quality: qualityTier(startPreset),
   toneMapping: (q.get('tm') as 'aces' | 'agx' | 'neutral' | null) ?? undefined,
 });
 // grass and animals sit on the terrain as rendered (the creek banks are reshaped for drawing)
 const renderWorld = { ...world, height: engine.terrain.heightTex.image.data as Float32Array };
-const grass = new GrassField(renderWorld, engine.vegTexture, { quality: q.get('q') === 'medium' ? 'medium' : 'high' });
+const grass = new GrassField(renderWorld, engine.vegTexture, { quality: qualityTier(startPreset) });
 engine.scene.add(grass.object3D);
 engine.excludeFromAO(grass.object3D);
 if (q.get('grass') === '0') grass.object3D.visible = false;
@@ -43,6 +61,29 @@ engine.scene.add(animals.object3D);
 engine.cam.preset((q.get('cam') as 'wide' | 'low' | 'top' | null) ?? 'wide', true);
 // captures pin full resolution; players get an automatic render scale that holds 60 fps
 engine.autoScale = q.get('autoscale') !== '0';
+/**
+ * Picture quality presets. Low and Medium use the engine's lighter tier (Low also draws at three quarters size), High is
+ * the default look, Ultra pins full sharpness and supersamples ordinary screens. Low and Ultra switch the automatic
+ * render scale off (it would undo their pixel ratio). Grass density is chosen when the grass is built, so a change of
+ * tier there waits for the next load.
+ */
+let builtGrassTier = qualityTier(startPreset);
+function applyQuality(p: QualityPreset): void {
+  engine.setQuality(qualityTier(p));
+  const dpr = window.devicePixelRatio || 1;
+  if (p === 'low') {
+    engine.autoScale = false;
+    engine.renderer.setPixelRatio(Math.min(dpr, 1.25) * 0.75);
+    engine.resize();
+  } else if (p === 'ultra') {
+    engine.autoScale = false;
+    engine.renderer.setPixelRatio(Math.min(Math.max(dpr, 1.5), 2));
+    engine.resize();
+  } else {
+    engine.autoScale = q.get('autoscale') !== '0';
+  }
+}
+if (startPreset === 'low' || startPreset === 'ultra') applyQuality(startPreset);
 const coverCell = world.size / world.n;
 const director = new Director(engine.cam, (id, out) => animals.getPosition(id, out), world.size, (x, y) => {
   const cx = Math.floor(x / coverCell), cy = Math.floor(y / coverCell);
@@ -97,6 +138,10 @@ let skipEvents: Extract<FromWorker, { type: 'snap' }>['events'] = [];
 
 worker.onmessage = (e: MessageEvent<FromWorker>) => {
   const m = e.data;
+  if (m.type === 'log') {
+    finishShare(m.log);
+    return;
+  }
   if (m.type !== 'snap') return;
   // "Next event": collect what happened during the skip, then cut the camera to it
   if (m.speed === -1) { skipping = true; skipEvents = skipEvents.concat(m.events); }
@@ -138,10 +183,11 @@ for (const kv of (q.get('p') ?? '').split(',')) {
   const [k, v] = kv.split(':');
   if (k && v !== undefined && Number.isFinite(Number(v))) devParams[k.trim()] = Number(v);
 }
-const simParams = { ...scenario.params, ...(challenge?.params ?? {}), ...devParams };
+// a share code carries the complete param set (the scenario's included), so it replaces the scenario's own
+const simParams: Record<string, number> = shared ? { ...shared.state.params } : { ...scenario.params, ...(challenge?.params ?? {}), ...devParams };
 // the game's own clocks (UI calendar, weather easing) follow the same valley calendar as the sim in the worker
 try { setCalendarScale(applyOverrides(defaultParams(), simParams).calendarScale); } catch { /* unknown dev param: the worker reports it */ }
-send({ type: 'init', seed, params: simParams, schedule: scenario.schedule });
+send({ type: 'init', seed, params: simParams, schedule: scenario.schedule, replay: shared?.state.log });
 send({ type: 'speed', speed });
 
 /** Frame the biggest bison herd like a documentary opening shot. */
@@ -200,18 +246,116 @@ const ui = new GameUI(document.getElementById('ui')!, {
   newWorld: (s, sc) => {
     const u = new URL(location.href);
     u.searchParams.delete('challenge');
+    u.searchParams.delete('w');
     u.searchParams.set('seed', s);
     u.searchParams.set('scenario', sc);
     location.href = u.toString();
   },
   startChallenge: (id) => {
     const u = new URL(location.href);
+    u.searchParams.delete('w');
     u.searchParams.delete('seed');
     u.searchParams.delete('scenario');
     u.searchParams.set('challenge', id);
     location.href = u.toString();
   },
+  share: () => send({ type: 'getLog' }),
+  startValley: (s, params) => {
+    // a fresh valley: the setup page's param overrides ride along as ?p=key:value,... (the same keys the harness uses)
+    const u = new URL(location.href);
+    for (const k of ['challenge', 'w', 'p', 'seed', 'scenario', 'notitle', 'title']) u.searchParams.delete(k);
+    u.searchParams.set('seed', s);
+    u.searchParams.set('scenario', 'prairie');
+    const p = Object.entries(params).map(([k, v]) => `${k}:${v}`).join(',');
+    if (p) u.searchParams.set('p', p);
+    location.href = u.toString();
+  },
+  applySettings: (s, changed) => applySetting(s, changed),
+  photograph: () => {
+    // the drawing buffer is only readable in the same task as the render
+    engine.renderOnce(0);
+    return new Promise<Blob | null>((resolve) => engine.renderer.domElement.toBlob((b) => resolve(b), 'image/jpeg', 0.9));
+  },
 });
+
+// ------------------------------------------------------------------ share, settings, title
+
+/** Copy text to the clipboard; falls back to a hidden textarea where the async clipboard is blocked. */
+async function copyText(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    const ta = document.createElement('textarea');
+    ta.style.cssText = 'position:fixed;opacity:0;pointer-events:none';
+    ta.setAttribute('aria-hidden', 'true');
+    ta.value = text;
+    document.body.append(ta);
+    ta.select();
+    let ok = false;
+    try {
+      ok = document.execCommand('copy');
+    } catch {
+      /* nothing more to try */
+    }
+    ta.remove();
+    return ok;
+  }
+}
+
+/** The worker's reply to the share button: the intervention log, which with the seed and params is the whole valley. */
+function finishShare(log: LoggedIntervention[]): void {
+  const url = shareUrl(location.href, { seed, scenario: scenario.id, params: simParams, log });
+  (window as unknown as Record<string, unknown>).__shareUrl = url;
+  void copyText(url).then((ok) => {
+    ui.shared(ok);
+    if (ok) ui.notify('Valley link copied');
+    else {
+      // no clipboard at all: put the link in the address bar so it can be copied from there
+      try { history.replaceState(null, '', url); } catch { /* ignore */ }
+      ui.notify('Copy blocked. The link is now in the address bar.', 'Share', 5000);
+    }
+  });
+}
+
+/** What the audio module offers beyond the master volume: per-bus setters, if it has them (see the report). */
+interface BusAudio {
+  setBusVolume?: (bus: 'ambience' | 'music' | 'voice', v: number) => void;
+}
+const busAudio = audio as unknown as BusAudio;
+const hasBuses = typeof busAudio.setBusVolume === 'function';
+
+let autoCamEnabled = savedSettings.autoCamera;
+let startNotice: { text: string; label: string; ms: number } | null = null;
+function applySetting(s: Settings, changed: keyof Settings): void {
+  switch (changed) {
+    case 'quality':
+      applyQuality(s.quality);
+      if (qualityTier(s.quality) !== builtGrassTier) {
+        builtGrassTier = qualityTier(s.quality);
+        ui.notify('Grass detail changes the next time the page loads.', 'Picture', 4500);
+      }
+      break;
+    case 'master':
+      audio.setVolume(s.master);
+      break;
+    case 'ambience':
+      busAudio.setBusVolume?.('ambience', s.ambience);
+      break;
+    case 'music':
+      busAudio.setBusVolume?.('music', s.music);
+      break;
+    case 'narration':
+      busAudio.setBusVolume?.('voice', s.narration);
+      break;
+    case 'autoCamera':
+      autoCamEnabled = s.autoCamera;
+      if (!autoCamEnabled && autoCam) takeCamera();
+      break;
+    default:
+      break; // idleDim and uiScale are the interface's own
+  }
+}
 
 ui.setChallenge(challenge);
 
@@ -233,6 +377,28 @@ function takeCamera(): void {
   if (autoCam) { autoCam = false; if (!cinematicOn) director.setEnabled(false); }
 }
 engine.cam.onUserInput = takeCamera;
+
+// the saved settings take effect (the picture quality already did, at the engine); then the title card, on a plain visit only
+{
+  const s0 = ui.settings;
+  audio.setVolume(s0.master);
+  if (hasBuses) {
+    busAudio.setBusVolume?.('ambience', s0.ambience);
+    busAudio.setBusVolume?.('music', s0.music);
+    busAudio.setBusVolume?.('voice', s0.narration);
+  } else {
+    ui.setBusesAvailable(false);
+  }
+  ui.setGuideToasts(!navigator.webdriver || q.get('title') === '1');
+  // said once the valley is on screen (a toast shown while the page is still building would be gone before anyone saw it)
+  if (shareError) startNotice = { text: 'That valley code could not be read. Starting the usual valley.', label: 'Share', ms: 6000 };
+  else if (shared?.warning) startNotice = { text: shared.warning, label: 'Share', ms: 7000 };
+  if (titleWanted(location.search, !!navigator.webdriver)) {
+    ui.showTitle();
+    // the valley is alive behind the card: the documentary camera drifts over it until somebody takes over
+    if (autoCamAllowed && autoCamEnabled) { autoCam = true; director.setEnabled(true); }
+  }
+}
 
 function select(id: number | null): void {
   if (id !== null) takeCamera();
@@ -288,6 +454,7 @@ function groundHit(r: THREE.Raycaster): THREE.Vector3 | null {
 const sun = { dir: engine.uniforms.lightDir.value, color: engine.uniforms.lightColor.value };
 let fpsAcc = 0, fpsN = 0;
 let audioFrame = 0;
+let guideAt = 0;
 let nearbyCache = { bison: 0, wolf: 0, raven: 0, pronghorn: 0 };
 const heardDeaths = new Map<number, number>();
 // field notes: a fresh carcass with a predator beside it is a kill; one the documentary camera caught close to its focus
@@ -312,7 +479,7 @@ engine.onFrame((dt, t) => {
   // years flying by: let the camera drift slowly instead of sitting like a security camera
   engine.cam.idleDrift = speed >= 10 ? 0.025 : 0;
   animals.update(dt, alpha, t);
-  if (autoCamAllowed && !autoCam && !cinematicOn && following === null && performance.now() - lastCamInput > 25000) {
+  if (autoCamAllowed && autoCamEnabled && !autoCam && !cinematicOn && following === null && performance.now() - lastCamInput > 25000) {
     autoCam = true;
     director.setEnabled(true);
   }
@@ -331,6 +498,12 @@ engine.onFrame((dt, t) => {
     const cp = engine.camera.position; // three x = sim x, three z = sim y
     const camHeight = Math.max(0, cp.y - engine.groundHeight(cp.x, cp.z));
     audioFrame++;
+    // the field guide: what the camera is looking at, a few times a second, while time runs at a watchable pace
+    if (!skipping && pending.speed >= 0 && pending.speed <= 10 && performance.now() - guideAt > 400) {
+      guideAt = performance.now();
+      engine.cam.getFocus(focusV);
+      ui.observeGuide(pending.agents, pending.count, focusV.x, focusV.z);
+    }
     if ((audioFrame & 3) === 0) nearbyCache = countNearby(pending.agents, pending.count, cp.x, cp.z, 250);
     audio.update(dt, { env: pending.env, camX: cp.x, camY: cp.z, camHeight, speed: pending.speed, nearby: nearbyCache, nearWater: nearWater01(world, cp.x, cp.z) });
     if (!skipping) for (const ev of pendingEvents) if (ev.x !== 0 || ev.y !== 0) audio.onEvent(ev, Math.hypot(ev.x - cp.x, ev.y - cp.z, camHeight));
@@ -358,7 +531,13 @@ engine.onFrame((dt, t) => {
   }
   fpsAcc += dt; fpsN++;
   if (fpsAcc > 1) { w.__fps = Math.round(fpsN / fpsAcc); fpsAcc = 0; fpsN = 0; }
-  if (ready && t > 1.5) w.__ready = true;
+  if (ready && t > 1.5) {
+    w.__ready = true;
+    if (startNotice) {
+      ui.notify(startNotice.text, startNotice.label, startNotice.ms);
+      startNotice = null;
+    }
+  }
 });
 engine.start();
 
