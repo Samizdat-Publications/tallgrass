@@ -38,7 +38,13 @@ if (q.get('grass') === '0') grass.object3D.visible = false;
 const animals = new AnimalLayer(renderWorld);
 engine.scene.add(animals.object3D);
 engine.cam.preset((q.get('cam') as 'wide' | 'low' | 'top' | null) ?? 'wide', true);
-const director = new Director(engine.cam, (id, out) => animals.getPosition(id, out), world.size);
+// captures pin full resolution; players get an automatic render scale that holds 60 fps
+engine.autoScale = q.get('autoscale') !== '0';
+const coverCell = world.size / world.n;
+const director = new Director(engine.cam, (id, out) => animals.getPosition(id, out), world.size, (x, y) => {
+  const cx = Math.floor(x / coverCell), cy = Math.floor(y / coverCell);
+  return cx < 0 || cy < 0 || cx >= world.n || cy >= world.n ? 0 : world.cover[cy * world.n + cx];
+});
 // sound starts itself on the first click or key press (browser autoplay rules)
 const audio = new AudioDirector();
 void audio.load();
@@ -93,7 +99,7 @@ worker.onmessage = (e: MessageEvent<FromWorker>) => {
     const evs = skipEvents.concat(m.events).filter((ev) => ev.x !== 0 || ev.y !== 0);
     skipEvents = [];
     const ev = evs[evs.length - 1];
-    if (ev) { engine.cam.follow(null); following = null; engine.cam.flyTo(ev.x, ev.y, 150, 28); }
+    if (ev) { takeCamera(); engine.cam.follow(null); following = null; engine.cam.flyTo(ev.x, ev.y, 150, 28); }
   }
   // keep events and history from every message even if frames skip some
   pendingEvents = pendingEvents.concat(m.events);
@@ -168,6 +174,7 @@ const ui = new GameUI(document.getElementById('ui')!, {
   armTool: (t) => { armed = t; ui.setArmedTool(t); host.style.cursor = t ? 'crosshair' : ''; },
   applyTool: (t) => { const iv = toolIntervention(t); if (iv && ui.tryUseTool()) send({ type: 'apply', iv }); },
   follow: (id) => {
+    takeCamera();
     following = id;
     if (id === null) engine.cam.follow(null);
     else {
@@ -176,9 +183,9 @@ const ui = new GameUI(document.getElementById('ui')!, {
     }
   },
   select: (id) => select(id),
-  flyTo: (x, y) => engine.cam.flyTo(x, y),
+  flyTo: (x, y) => { takeCamera(); engine.cam.flyTo(x, y); },
   setOverlay: (o: OverlayId) => overlay.setMode(o),
-  setCinematic: (on) => { following = null; director.setEnabled(on); },
+  setCinematic: (on) => { following = null; cinematicOn = on; autoCam = false; director.setEnabled(on); takeCamera(); },
   newWorld: (s, sc) => {
     const u = new URL(location.href);
     u.searchParams.delete('challenge');
@@ -204,7 +211,20 @@ const overlay = new OverlayLayer(world.size, (x, z) => engine.groundHeight(x, z)
 engine.scene.add(overlay.object3D);
 engine.excludeFromAO(overlay.object3D);
 
+// Documentary camera by default: when nobody has touched the camera for a while, the director films hunts, kills,
+// herds and vistas with the UI still up. Any camera input, fly-to, selection or follow hands control straight back.
+const autoCamAllowed = q.get('autocam') !== '0';
+let autoCam = false;
+let cinematicOn = false;
+let lastCamInput = performance.now();
+function takeCamera(): void {
+  lastCamInput = performance.now();
+  if (autoCam) { autoCam = false; if (!cinematicOn) director.setEnabled(false); }
+}
+engine.cam.onUserInput = takeCamera;
+
 function select(id: number | null): void {
+  if (id !== null) takeCamera();
   animals.setSelected(id);
   send({ type: 'select', id });
   if (id === null && following !== null) { following = null; engine.cam.follow(null); }
@@ -267,6 +287,10 @@ engine.onFrame((dt, t) => {
   // years flying by: let the camera drift slowly instead of sitting like a security camera
   engine.cam.idleDrift = speed >= 10 ? 0.025 : 0;
   animals.update(dt, alpha, t);
+  if (autoCamAllowed && !autoCam && !cinematicOn && following === null && performance.now() - lastCamInput > 25000) {
+    autoCam = true;
+    director.setEnabled(true);
+  }
   director.update(dt, pending ? { count: pending.count, ids: pending.ids, agents: pending.agents, carcassCount: pending.carcassCount, carcasses: pending.carcasses, dayFrac: pending.env.dayFrac } : null);
   grass.viewportHeight = engine.renderer.domElement.height;
   overlay.update(dt, engine.camera, engine.renderer.domElement);

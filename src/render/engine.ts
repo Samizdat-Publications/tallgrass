@@ -302,6 +302,7 @@ export class Engine {
     this.last = performance.now();
     const loop = (now: number) => {
       if (!this.running) return;
+      this.adaptScale(now - this.last, now);
       const dt = Math.min(0.1, (now - this.last) / 1000);
       this.last = now;
       this.renderOnce(dt);
@@ -327,10 +328,43 @@ export class Engine {
     this.firstFrame = false;
   }
 
+  /** Hold 60 fps on big or high-DPI screens: the render scale steps down when frames run long and creeps back up. */
+  autoScale = true;
+  private renderScale = 1;
+  private basePixelRatio = 1;
+  private slowMs = 0;
+  private fastMs = 0;
+  private lastScaleT = 0;
+  private ceilingScale = 1;
+
+  private adaptScale(frameMs: number, now: number): void {
+    if (!this.autoScale || frameMs > 250 || (typeof document !== 'undefined' && document.hidden)) return;
+    if (frameMs > 19.5) { this.slowMs += frameMs; this.fastMs = 0; }
+    else { this.fastMs += frameMs; this.slowMs = Math.max(0, this.slowMs - frameMs * 0.5); }
+    if (now - this.lastScaleT < 3000) return;
+    if (this.slowMs > 2000 && this.renderScale > 0.6) {
+      // remember where it struggled, so it doesn't bounce straight back up into the same wall
+      this.ceilingScale = this.renderScale;
+      this.setRenderScale(Math.max(0.6, this.renderScale - 0.1), now);
+    } else if (this.fastMs > 15000 && this.renderScale < 1) {
+      if (this.renderScale + 0.1 <= this.ceilingScale - 1e-3 || this.fastMs > 60000) this.setRenderScale(Math.min(1, this.renderScale + 0.1), now);
+    }
+  }
+
+  private setRenderScale(s: number, now: number): void {
+    this.renderScale = s;
+    this.lastScaleT = now;
+    this.slowMs = 0;
+    this.fastMs = 0;
+    this.renderer.setPixelRatio(this.basePixelRatio * s);
+    this.resize();
+  }
+
   setQuality(q: Quality): void {
     this.quality = q;
     const high = q === 'high';
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, high ? 2 : 1.25));
+    this.basePixelRatio = Math.min(window.devicePixelRatio || 1, high ? 2 : 1.25);
+    this.renderer.setPixelRatio(this.basePixelRatio * this.renderScale);
     const map = high ? 2048 : 1024;
     if (this.sun.shadow.mapSize.x !== map) {
       this.sun.shadow.mapSize.set(map, map);
@@ -407,7 +441,10 @@ export class Engine {
     // and melting instead of snapping
     const ease = (cur: number, target: number, tau: number, minReal = 0) => {
       const kSim = simTicks / tau;
-      const kReal = minReal > 0 && !this.firstFrame ? dt / minReal : Infinity;
+      // the real-time floor keeps 10x from snapping, but at 100x it must not let snow trail its season by months:
+      // cap the floor so the lag never exceeds about 200 ticks of valley time
+      const floor = minReal > 0 && simTicks > 0 ? Math.min(minReal, (200 * dt) / simTicks) : minReal;
+      const kReal = floor > 0 && !this.firstFrame ? dt / floor : Infinity;
       return cur + (target - cur) * (1 - Math.exp(-Math.min(kSim, kReal)));
     };
     sm.overcast = ease(sm.overcast, overTarget, 160);

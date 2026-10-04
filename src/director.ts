@@ -41,7 +41,26 @@ export class Director {
     private cam: DroneCamera,
     private getPos: (id: number, out: THREE.Vector3) => boolean,
     private worldSize: number,
+    /** Tree and shrub cover 0..1 at a sim position, so shots aren't filmed through a grove. */
+    private coverAt: (x: number, y: number) => number = () => 0,
   ) {}
+
+  /**
+   * Of eight headings around the subject, the one with the least canopy between camera and subject. Only the stretch
+   * where the camera ray is still below crown height (about 12 m) can be blocked.
+   */
+  private clearYaw(sx: number, sy: number, pitchDeg: number, baseYaw: number): number {
+    const reach = Math.min(70, 12 / Math.max(0.05, Math.tan((pitchDeg * Math.PI) / 180)));
+    let best = baseYaw, bestScore = Infinity;
+    for (let k = 0; k < 8; k++) {
+      const yaw = baseYaw + k * 45;
+      const r = (yaw * Math.PI) / 180, dx = Math.sin(r), dy = Math.cos(r);
+      let score = 0;
+      for (let d = 5; d <= reach; d += 3) score += this.coverAt(sx + dx * d, sy + dy * d) * (1 - d / (reach + 1));
+      if (score < bestScore - 1e-6) { bestScore = score; best = yaw; }
+    }
+    return best % 360;
+  }
 
   setEnabled(on: boolean): void {
     this.enabled = on;
@@ -79,6 +98,13 @@ export class Director {
     this.t = shot.hold;
     this.last.push(shot.kind);
     if (this.last.length > 3) this.last.shift();
+    {
+      // film from the side with a clear line of sight
+      const v = new THREE.Vector3();
+      const ok = shot.id !== null ? this.getPos(shot.id, v) : false;
+      const sx = shot.id !== null ? (ok ? v.x : NaN) : shot.x, sy = shot.id !== null ? (ok ? v.z : NaN) : shot.y;
+      if (Number.isFinite(sx) && Number.isFinite(sy)) shot.yaw = this.clearYaw(sx, sy, shot.pitch, shot.yaw);
+    }
     if (shot.id !== null) {
       const id = shot.id;
       const v = new THREE.Vector3();

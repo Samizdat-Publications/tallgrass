@@ -63,7 +63,7 @@ try {
   const page = await browser.newPage({ viewport: { width: W, height: H } });
   page.on('pageerror', (e) => console.log('[page exception]', e.message.slice(0, 300)));
   page.on('console', (m) => { if (m.type() === 'error') console.log('[page error]', m.text().slice(0, 300)); });
-  await page.goto(base + '/index.html' + (query ? '?' + query : ''), { waitUntil: 'load', timeout: loadTimeout });
+  await page.goto(base + '/index.html?autoscale=0&autocam=0' + (query ? '&' + query : ''), { waitUntil: 'load', timeout: loadTimeout });
   await page.waitForFunction(() => window.__ready === true, null, { timeout: loadTimeout });
   await page.waitForTimeout(1500);
   mkdirSync(out, { recursive: true });

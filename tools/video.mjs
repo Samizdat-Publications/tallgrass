@@ -37,7 +37,7 @@ try {
   const ctx = await browser.newContext({ viewport: { width: W, height: H }, recordVideo: { dir: tmpDir, size: { width: W, height: H } } });
   const page = await ctx.newPage();
   page.on('pageerror', (e) => console.log('[page exception]', e.message.slice(0, 300)));
-  await page.goto(base + '/index.html' + (query ? '?' + query : ''), { waitUntil: 'load', timeout: 180000 });
+  await page.goto(base + '/index.html?autoscale=0&autocam=0' + (query ? '&' + query : ''), { waitUntil: 'load', timeout: 180000 });
   await page.waitForFunction(() => window.__ready === true, null, { timeout: 180000 });
   await page.waitForTimeout(1000);
   const t0 = Date.now();
