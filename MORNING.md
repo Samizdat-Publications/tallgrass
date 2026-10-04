@@ -87,15 +87,19 @@ The default sim is now **checkpoint v5** (since 16:45 Saturday). v4 results are 
 | 2 (06:20) | Gemini, 99 s video | 5 | 8 | 2 | 4 | 9 | 3 |
 | 3 (12:00) | blind critic, stills + 650-year charts | 6 | 4 | 5 | 4 | 7 | 5 |
 | 3 (12:00) | Gemini, 108 s video | 4 | 7 | 2 | 4 | 8 | 3 |
+| 4 (18:30) | blind critic, stills + v5 charts | 6 | 4 | 5 | 5 | 6 | 5 |
+| 4 (18:30) | Gemini, 108 s video | 4 | 8 | 1 | 6 | 9 | 3 |
 
-Triage of every issue is in `REVIEWS.md`. The two biggest open items: **feet sliding** (both video reviews; root cause found and fixed at 12:15: leg cadence now follows on-screen speed, the animals builder is verifying) and the **bottom-up dynamics** above. Three builders are working on the rest now: animals (feet, predator visibility, palette, raven shadows), world (distant hills read as sand, trees, rocks, water, dusk, snow) and UI (chronicle height, graph, labels, honest speed readout).
+Every issue and its triage is in `REVIEWS.md`.
+- Round 4's verdict: animals were illegible and looked motionless at drone distance. In the drone shots a wolf is about 20 px tall, so planted feet can't read. The animal work since then targets exactly that, with whole-body motion scaled to camera distance, larger minimum sizes and a kill lunge.
+- Round 5 (stills, video and both critics) runs once the current long simulations free the CPU, so the fast-forward footage isn't throttled.
 
 ## Decisions you might want to overrule
 - **Stack:** TypeScript + Three.js instead of Godot (ADR-001 in `DECISIONS.md`): one language for sim, harness and renderer, headless GPU capture, and the URL build.
-- **Time scale:** a year is 4 minutes at 1x, and biology is fast (a bison generation is well under a year) so that 1,000 generations fit in hours of compute. The critic rightly calls the breeding implausible; v5 slows it, which makes the 1,000-generation runs proportionally longer.
+- **Time scale:** a year is 4 minutes at 1x, and biology is fast so that 1,000 generations fit in hours of compute: a v5 bison lives about 3.3 valley-years. That is why a realistic spring birth pulse failed (see Stability). Re-scaling the calendar would be the deeper fix and a bigger job.
 - **The world opens in late summer** (golden, like your concept); early summer is green.
 - **Challenges** are fixed and hand-tuned, not generated; the tuning data is in `DECISIONS.md`.
-- **Cougars and rabbits:** cougars are opt-in (above); rabbits stay abstract (wolves' "small game" in lean times).
+- **Cougars and rabbits:** cougars are opt-in, and under v5 they currently starve within a few years (being retuned tonight); rabbits stay abstract (wolves' "small game" in lean times).
 - **No immigration:** wolves never wander in from outside the valley, so persistence numbers are for a closed valley.
 
 ## Blocked / cut
@@ -109,8 +113,8 @@ Triage of every issue is in `REVIEWS.md`. The two biggest open items: **feet sli
 Gemini: 3 concept images, about 40 short text and audio checks, 3 video critiques. ElevenLabs: 16 sound generations. Meshy, Sketchfab: none. Every call is in `ASSETS.md`.
 
 ## Next 5 things I'd do
-1. Finish the v5 ecology screens and, if one wins, run the full acceptance and shock suite on it.
-2. Land the three builders' round-3 fixes, verify, redeploy, and run review round 4 (stills and video).
-3. Close the gap to your concept image: grass character on distant hills, a riparian look along the creek, water.
-4. Revisit evolution trade-offs (traits hit their limits by year 100) and the raven cap.
-5. Assemble the `journey/` record into a start-to-finish slideshow for a landing page.
+1. Review round 5 on the current build (stills, video and both critics), then fix its top issues.
+2. A deeper ecology change that gets predator-prey cycles without losing pronghorn: likely a re-scaled calendar (animals living longer in valley-years) so that slower, seasonal breeding becomes possible. Tonight's screens show that shortcuts trade one goal for the other.
+3. Herd geometry: grazing herds still form rings. The nearest-neighbour fix looks right but cost persistence, so it needs a compensating change.
+4. Close the remaining gap to your concept image: canopy shape, the riparian green along the creek, and the far horizon.
+5. Turn the making-of page into a landing page for the game, if you like it.
