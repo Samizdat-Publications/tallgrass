@@ -122,7 +122,7 @@ export function buildPronghorn(): ModelDef {
     // from the drone view the pale coat is pulled down a little so a herd reads as tan and white, not a bright smear
     far: { gain: 0.9, rim: 0, hunt: 0, rimCol: [1, 1, 1], d0: 100, d1: 340, tint: [0.4, 0.255, 0.13], mix: 0.28, lowFill: 0.3,
     // pale all over with a tan back and a white rump; the pale legs read as bones from above, so they are toned down
-    top: [0.5, 0.34, 0.19], topMix: 0.75, side: 0.12, legs: 0.5, calm: 0.8, widen: 0.55 },
+    top: [0.5, 0.34, 0.19], topMix: 0.75, side: 0.12, legs: 0.5, calm: 0.8, widen: 0.4 },
     params: {
       ...DEFAULT_PARAMS,
       kind: 0,
@@ -140,7 +140,7 @@ export function buildPronghorn(): ModelDef {
       lieDrop: 0.45, lieHipF: 1.25, lieKneeF: -2.3, lieHipH: -0.8, lieKneeH: 1.6,
       crouchDrop: 0.1,
       deadDrop: 0.38, deadHipF: 0.9, deadHipH: -0.6,
-      length: 1.4, height: 1.2, ring: 1.0, minPx: 10, boostLen: 1.4,
+      length: 1.4, height: 1.2, ring: 1.0, minPx: 9, boostLen: 1.4,
     },
   };
 }

@@ -422,7 +422,7 @@ export class KillSites {
  */
 const MARKER: Array<[number, number, number, number, number, boolean] | null> = [
   null, // bison
-  [0.7, 0.8, 0.98, 13, 0.08, true], // wolf: a cool pale glint under the dark slate body
+  [0.82, 0.83, 0.85, 12, 0.05, true], // wolf: a faint neutral glint under the grey body
   null, // raven
   null, // pronghorn
   null, // rabbit
@@ -440,7 +440,7 @@ const PING_NEAR = 200;
 const PING_FAR = 330;
 /** Ripple tint per predator species id (linear-ish rgb) and strength: cool slate for wolves, warm umber for cougars. */
 const PING_TINT: Record<number, [number, number, number, number]> = {
-  1: [0.46, 0.58, 0.82, 0.3],
+  1: [0.7, 0.71, 0.74, 0.24],
   5: [0.82, 0.6, 0.36, 0.28],
 };
 const PING_CELL = 14;

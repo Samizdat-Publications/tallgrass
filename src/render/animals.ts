@@ -892,6 +892,21 @@ export class AnimalLayer {
       if (fi && fi.t < FALL_TIME + 2) fi.t += running;
       const h = fi ? fi.h : seed * Math.PI * 2;
       const fall = fi ? clamp(fi.t / FALL_TIME, 0, 1) : 1;
+      // the struggle: earth and dust kicked up round the animal while it fights the takedown (about the first 0.7 s)
+      if (fi && fi.t > 0.05 && fi.t < 0.75 && running > 0 && Math.random() < 0.55) {
+        const dryS = this.dust.dryness * this.groundDry(x, z);
+        if (dryS > 0.08) {
+          const bigS = sp === Sp.Bison ? 1.5 : 0.85;
+          const a = Math.random() * Math.PI * 2, rr = (0.3 + Math.random() * 0.9) * bigS;
+          const px = x + Math.cos(a) * rr, pz = z + Math.sin(a) * rr;
+          const v = (1.0 + Math.random() * 1.6) * bigS;
+          this.dust.emit(
+            px, sampleHeight(H, hn, cell, px, pz) + 0.25, pz,
+            Math.cos(a) * v * 0.5, 0.9 + Math.random() * 1.3, Math.sin(a) * v * 0.5,
+            (0.55 + Math.random() * 0.6) * bigS, 0.6 + Math.random() * 0.6, 0.3 + Math.random() * 0.15, Math.random(), dryS,
+          );
+        }
+      }
       // the stumble: the pace it died at decays as it loses its footing, and the legs keep cycling at that pace
       let stumblePh = 0, stumblePace = 0;
       if (fi && fall < 0.55) {

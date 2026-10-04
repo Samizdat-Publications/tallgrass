@@ -254,14 +254,23 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
 #if KIND == 2
     graze *= aLook.z; // birds: head pecks only while perched (fold = 1)
 #endif
-    float raise = smoothstep(0.5, 0.85, sin(t * 0.37 + seed * 40.0)) * (1.0 - 0.8 * tug); // a feeding animal keeps its head down
+    // a head lift to look about: every 8 to 14 s (its own period and phase), about 2 s long
+    float lper = 0.45 + 0.3 * fract(seed * 4.3);
+    float raise = smoothstep(0.72, 0.93, sin(t * lper + seed * 40.0)) * (1.0 - 0.8 * tug); // a feeding animal keeps its head down
     float dn = graze * (1.0 - 0.85 * raise);
+    // standing still: between bites the head comes up and goes down again (a slow cycle of 3 to 6 s), clearly enough that a
+    // grazing animal reads as alive from 40 to 120 m (stronger with distance, where the head is a few pixels)
+    float idleK = (1.0 - wWalk - wTrot - wGal) * (1.0 - lie);
+    float bite = 0.5 + 0.5 * sin(t * (1.0 + 0.9 * fract(seed * 3.1)) + seed * 23.0);
+    float biteUp = idleK * graze * (1.0 - raise) * smoothstep(0.55, 1.0, bite) * (0.4 + 0.35 * farK);
     float nod = (wWalk + wTrot) * NOD_W * sin(2.0 * cyc + 1.0) + wGal * NOD_G * sin(cyc + 2.0);
     float chew = dn * 0.05 * sin(t * 7.0 + seed * 20.0);
     float yaw = LOOK_YAW * sin(t * 0.45 + seed * 13.0) * (1.0 - dn) * (1.0 - wGal) * (1.0 - lie * 0.5);
     float ang = -HEAD_DN * dn + nod + chew - 0.45 * crouchBody - 0.5 * sick * (1.0 - 0.5 * dn);
-    ang += tugPull * 0.6 - peck * 1.0 + peckUp;
+    ang += tugPull * 0.6 - peck * 1.0 + peckUp + biteUp;
     yaw += tugShake * 0.3;
+    // after lifting the head it turns to look, then back
+    yaw += idleK * raise * (fract(seed * 6.1) - 0.5) * 1.0 * sin(t * 0.9 + seed * 7.0);
     // from the drone view the head pumps harder so a trot or a gallop reads as a body moving, not sliding
     float pump = farK * (wWalk * 0.1 * sin(2.0 * cyc + 1.0) + wTrot * 0.16 * sin(2.0 * cyc + 1.0) + wGal * 0.32 * sin(cyc + 2.0));
     ang += pump;
@@ -278,7 +287,8 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
 #endif
     if (dead) {
       // the head drops as the animal goes, then lies slack
-      ang = mix(ang, -0.8, smoothstep(0.0, 0.3, fallen));
+      ang += smoothstep(0.0, 0.06, fallen) * (1.0 - smoothstep(0.22, 0.45, fallen)) * 0.55 * sin(fallen * 41.0); // head tosses
+      ang = mix(ang, -0.8, smoothstep(0.1, 0.4, fallen));
       ang = mix(ang, -0.35 - 0.5 * fract(seed * 6.7), smoothstep(0.5, 1.0, fallen));
       yaw = (fract(seed * 9.1) - 0.5) * 1.2 * fallen;
     }
@@ -287,6 +297,10 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
   } else if (part == 6) {
     float sway = TAIL_SWAY * sin(t * 2.1 + seed * 17.0) + wWalk * 0.15 * sin(cyc);
     float lift = mix(TAIL_REST, TAIL_RUN, clamp(wGal + 0.4 * wTrot, 0.0, 1.0)) + 0.05 * sin(t * 1.3 + seed * 9.0);
+    // a flick now and then (flies): a quick burst of side to side with a lift, a few times a minute
+    float flick = smoothstep(0.88, 0.98, sin(t * (0.38 + 0.2 * fract(seed * 2.7)) + seed * 31.0)) * (1.0 - lie * 0.7);
+    sway += flick * (0.5 + 0.3 * farK) * sin(t * 17.0 + seed * 5.0);
+    lift += flick * 0.3 * (0.5 + 0.5 * sin(t * 15.0));
     if (dead) { float lim = 1.0 - smoothstep(0.1, 0.6, fallen); lift *= lim; sway *= lim; }
     tgRotZ(p, n, aPivot, lift);
     tgRotY(p, n, aPivot, sway);
@@ -370,6 +384,10 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
     float dip = sin(3.14159265 * smoothstep(0.0, 0.5, fallen)) * (1.0 - smoothstep(0.5, 0.75, fallen));
     tgRotZ(p, n, vec3(-0.25 * BODY_LEN, COM_Y, 0.0), -0.3 * dip);
     float roll = side * 1.45 * smoothstep(0.3, 1.0, fallen);
+    // the takedown: it bucks and twists against the weight on its back before it gives way
+    float strug = smoothstep(0.0, 0.06, fallen) * (1.0 - smoothstep(0.22, 0.5, fallen));
+    roll += strug * 0.3 * sin(fallen * 46.0 + seed * 9.0);
+    tgRotY(p, n, vec3(0.0, COM_Y, 0.0), strug * 0.12 * sin(fallen * 38.0 + 1.0));
     tgRotX(p, n, vec3(0.0, COM_Y, 0.0), roll);
     p.y -= DEAD_DROP * smoothstep(0.3, 1.0, fallen);
     float f3 = smoothstep(0.3, 1.0, fallen);
@@ -502,14 +520,17 @@ export function makeAnimalMaterials(sp: number, def: ModelDef, shared: AnimalSha
       // darken with the scene instead of glowing against the dark herds at dusk and night.
       .replace('#include <color_fragment>', `vec3 tgC = vTgColor * mix(1.0, uFarGain, vTgFar);
         // at range the coat is pulled toward its species colour (see ModelDef.far), keeping part of its own shading
-        tgC = mix(tgC, uFarTint * (0.75 + 0.5 * clamp(dot(vTgColor, vec3(0.2126, 0.7152, 0.0722)) * 6.0, 0.0, 1.0)), uFarMix * vTgFar);
+        // (in a dim scene the lift is mostly withdrawn: at dusk and in the rain a herd stays darker than the ground it is on)
+        float tgDim = 1.0 - 0.7 * uLow;
+        tgC = mix(tgC, uFarTint * (0.75 + 0.5 * clamp(dot(vTgColor, vec3(0.2126, 0.7152, 0.0722)) * 6.0, 0.0, 1.0)), uFarMix * vTgFar * tgDim);
         // silhouette at range: a pale back on an oval, darker flanks (see ModelDef.far)
         float tgTop = smoothstep(0.62, 0.96, vTgUp);
         float tgLum0 = dot(vTgColor, vec3(0.2126, 0.7152, 0.0722));
         float tgKeep = 1.0 - smoothstep(0.2, 0.42, tgLum0); // bright markings (a white rump) stay as they are
-        tgC = mix(tgC, uTopCol * (0.75 + 0.5 * clamp(tgLum0 * 6.0, 0.0, 1.0)), uTopMix * tgTop * vTgFar * tgKeep);
+        tgC = mix(tgC, uTopCol * (0.75 + 0.5 * clamp(tgLum0 * 6.0, 0.0, 1.0)), uTopMix * tgTop * vTgFar * tgKeep * (1.0 - 0.8 * uLow));
         tgC *= 1.0 - uSideDark * vTgFar * (1.0 - smoothstep(0.1, 0.6, vTgUp));
         float tgL = dot(tgC, vec3(0.2126, 0.7152, 0.0722));
+        tgC = mix(tgC, vec3(tgL), 0.3 * uLow * vTgFar);
         tgC *= 1.0 - 0.8 * uLow * max(tgL - 0.16, 0.0) / max(tgL, 1e-3);
         diffuseColor.rgb *= tgC;`)
       // sky fill: pull toward a warm neutral (so brown coats stay brown in blue shade), then boost it so the shaded side keeps form
@@ -526,7 +547,7 @@ export function makeAnimalMaterials(sp: number, def: ModelDef, shared: AnimalSha
         totalEmissiveRadiance += uRimCol * vTgFar * (uRimK + vTgHunt * uHuntK) * tgEdge * (1.0 - 0.9 * uLow);
         // ambient floor: a share of the scene's own ambient light reaches the coat unshadowed, so a herd in shade or at dusk
         // keeps its value above the shadows; it scales with the light, so it dims with the scene and never glows
-        totalEmissiveRadiance += diffuseColor.rgb * uAmb * uFloor * vTgFar;`,
+        totalEmissiveRadiance += diffuseColor.rgb * uAmb * uFloor * vTgFar * (1.0 - 0.75 * uLow);`,
       );
   };
   material.customProgramCacheKey = () => `tg-animal-${sp}`;

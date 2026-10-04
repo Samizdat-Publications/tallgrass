@@ -108,19 +108,19 @@ export function buildWolf(): ModelDef {
   return {
     geometry,
     triangles: b.triangleCount,
-    coatPale: lin(0x9a9da2),
-    coatDark: lin(0x41444a),
+    coatPale: lin(0x9d9a94),
+    coatDark: lin(0x45423d),
     bone: lin(0xd8d0bc),
     roughness: 0.92,
     fill: 1.2,
-    warm: [0.97, 1.0, 1.05],
-    neutral: 0.4,
+    warm: [1.0, 0.99, 0.96],
+    neutral: 0.75,
     // from the wide view a wolf is a little darker (value contrast with gold grass) and one that stalks, chases or feeds
     // gets a cool rim of light
     // from 70 m out a wolf deepens to a cool slate (a hue the gold grass and brown herds do not have) and gets a cool rim
-    far: { gain: 0.8, rim: 0.08, hunt: 0.3, rimCol: [0.8, 0.88, 1.0], d0: 70, d1: 280, tint: [0.095, 0.1, 0.125], mix: 0.7, floor: 0.12,
+    far: { gain: 0.8, rim: 0.05, hunt: 0.25, rimCol: [0.92, 0.93, 0.95], d0: 70, d1: 280, tint: [0.105, 0.1, 0.092], mix: 0.7, floor: 0.12,
       // a slim cool-grey form with a paler back; the legs swing less so the outline is not a crumpled scrap
-      top: [0.27, 0.29, 0.34], topMix: 0.6, side: 0.22, legs: 0.85, calm: 0.6, widen: 0.3 },
+      top: [0.29, 0.275, 0.255], topMix: 0.55, side: 0.22, legs: 0.85, calm: 0.6, widen: 0.1 },
     params: {
       ...DEFAULT_PARAMS,
       kind: 0,
@@ -139,7 +139,7 @@ export function buildWolf(): ModelDef {
       crouchDrop: 0.18,
       curl: 1, curlAng: 1.6, curlX: 0.14, curlLen: 0.95,
       deadDrop: 0.36, deadHipF: 0.9, deadHipH: -0.6,
-      length: 1.5, height: 0.85, ring: 1.1, minPx: 15, boostLen: 1.5,
+      length: 1.5, height: 0.85, ring: 1.1, minPx: 10.5, boostLen: 1.5,
     },
   };
 }
