@@ -129,8 +129,8 @@ Every issue and its triage is in `REVIEWS.md`.
 Gemini: 3 concept images, about 40 short text and audio checks, 3 video critiques. ElevenLabs: 16 sound generations. Meshy, Sketchfab: none. Every call is in `ASSETS.md`.
 
 ## Next 5 things I'd do
-1. Review round 5 on the current build (stills, video and both critics), then fix its top issues.
-2. A deeper ecology change that gets predator-prey cycles without losing pronghorn: likely a re-scaled calendar (animals living longer in valley-years) so that slower, seasonal breeding becomes possible. Tonight's screens show that shortcuts trade one goal for the other.
-3. Herd geometry: grazing herds still form rings. The nearest-neighbour fix looks right but cost persistence, so it needs a compensating change.
-4. Close the remaining gap to your concept image: canopy shape, the riparian green along the creek, and the far horizon.
-5. Turn the making-of page into a landing page for the game, if you like it.
+1. **Wolves that follow their prey.** Even on the slower calendar, wolf numbers stay nearly flat (annual CV about 0.1): the packs are limited by territory, and pronghorn and small game carry them through a bison crash, so in a few worlds they grind the herd down (seed 11). Prey-scaled pack sizes fix the tracking (wolves follow bison at correlation 0.68), but on their own they cost pronghorn. Tonight's screens pair them with a stronger refuge for rare prey; next is a full acceptance of the best pairing.
+2. **Evolution that keeps running.** Bison speed and size climb to their limits within a century, because speed costs almost nothing and size pays for itself, and herding fades. The fix is a real sprint cost, wider limits with steep costs near them, and a stronger many-eyes payoff for herding (diagnosis in `DECISIONS.md`, 04:55 Sunday).
+3. **Herd shape.** Grazing herds still form rings and crescents. The nearest-neighbour fix looks right but cost persistence on the old calendar; worth re-screening on the new one.
+4. **Close the gap to your concept image:** close-range ground detail, water with depth and current, and the riparian green along the creek.
+5. **Landing page:** turn the making-of page and the best stills into a front page for the game, if you like it.
