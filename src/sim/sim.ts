@@ -4,7 +4,8 @@ import { Environment } from './env';
 import { BucketGrid } from './grid';
 import { applyOverrides, defaultParams, Params, SpeciesParams } from './params';
 import { Rng } from './rng';
-import { AGENT_STRIDE, CARCASS_STRIDE, F_ALPHA, F_INFECTED, F_JUVENILE, F_MALE, F_PREGNANT, Intervention, SimLike, Snapshot, SPECIES_COUNT, SPECIES_KEYS, Sp, St, YEAR_TICKS, SEASON_TICKS, BASE_YEAR_TICKS, setCalendarScale } from './types';
+import { RegionalPool } from './region';
+import { AGENT_STRIDE, CARCASS_STRIDE, F_ALPHA, F_INFECTED, F_JUVENILE, F_MALE, F_MIGRANT, F_PREGNANT, Intervention, SimLike, Snapshot, SPECIES_COUNT, SPECIES_KEYS, Sp, St, YEAR_TICKS, SEASON_TICKS, BASE_YEAR_TICKS, setCalendarScale } from './types';
 import { COAT_BASE, COAT_RANGE, DIET, IS_PREY, isGrazer, SPECIES, THREAT } from './species';
 import { STRIDE, Vegetation } from './vegetation';
 import { generateWorld, World } from './world';
@@ -34,7 +35,7 @@ export interface SimEvent {
 export interface StoryEntry {
   tick: number;
   kind: 'fled' | 'chase' | 'kill' | 'birth' | 'infected' | 'recovered' | 'dispersed' | 'died';
-  /** kind-specific: species involved, litter size, or death cause code (0 starve, 1 thirst, 2 old, 3 killed, 4 culled, 5 removed). */
+  /** kind-specific: species involved, litter size, or death cause code (0 starve, 1 thirst, 2 old, 3 killed, 4 culled, 5 removed, 6 emigrated). */
   a: number;
 }
 
@@ -137,6 +138,15 @@ export class Sim implements SimLike {
   private cStarveJuv = 0;
   totalKills = 0;
   private pop = new Int32Array(SPECIES_COUNT);
+  /** Open prairie (S1): the regional gene pool, null unless openPrairie or ravenVagrants is on. */
+  region: RegionalPool | null = null;
+  /** Immigrants and emigrants per species since the last sample() call. */
+  private cImm = new Int32Array(SPECIES_COUNT);
+  private cEmig = new Int32Array(SPECIES_COUNT);
+  private cVagIn = 0;
+  private cVagOut = 0;
+  /** Vagrant ravens alive (counted at the top of each tick). */
+  private vagrants = 0;
   private everPresent = new Uint8Array(SPECIES_COUNT);
   private lastStampede = -99999;
   private lastOutbreak = -99999;
@@ -171,6 +181,10 @@ export class Sim implements SimLike {
       }
     }
     this.populate();
+    if (this.p.openPrairie > 0 || this.p.ravenVagrants > 0) {
+      this.region = new RegionalPool(this.seed, COAT_BASE);
+      this.region.seedFrom(this.a.sp, this.a.alive, this.a.genes, this.a.hi);
+    }
   }
 
   // ------------------------------------------------------------------ setup
@@ -375,6 +389,7 @@ export class Sim implements SimLike {
     this.preyN = 0;
     this.predN = 0;
     this.pop.fill(0);
+    this.vagrants = 0;
     this.packSize.fill(0);
     this.packCandF.fill(-1);
     this.packCandM.fill(-1);
@@ -388,6 +403,7 @@ export class Sim implements SimLike {
       if (!a.alive[i]) continue;
       const s = a.sp[i];
       this.pop[s]++;
+      if (a.origin[i] === 2 && s === Sp.Raven) this.vagrants++;
       if (IS_PREY[s]) this.preyList[this.preyN++] = i;
       else if (THREAT[s] > 0) {
         this.predList[this.predN++] = i;
@@ -408,11 +424,13 @@ export class Sim implements SimLike {
     this.prey.build(this.preyList, this.preyN, a.x, a.y);
     this.pred.build(this.predList, this.predN, a.x, a.y);
     this.updatePacks();
+    if (this.region !== null) this.openPrairieStep(t);
 
     // agents
     for (let i = 0; i < a.hi; i++) {
       if (!a.alive[i]) continue;
       const s = a.sp[i];
+      if (a.state[i] === St.Migrate) { this.migrantTick(i, t, P[s]); continue; }
       if (isGrazer(s)) {
         if ((i + t) % 6 === 0) this.thinkHerbivore(i, P[s]);
         this.moveGround(i, P[s]);
@@ -556,7 +574,7 @@ export class Sim implements SimLike {
     let best = -1, bd = 1e9;
     for (let k = 0; k < this.predN; k++) {
       const i = this.predList[k];
-      if (!a.alive[i] || a.sp[i] !== Sp.Wolf || a.male[i] !== male || a.age[i] < mature) continue;
+      if (!a.alive[i] || a.sp[i] !== Sp.Wolf || a.male[i] !== male || a.age[i] < mature || a.state[i] === St.Migrate) continue;
       const q = a.pack[i];
       if (q === pk) continue;
       if (q >= 0 && (this.packAlphaF[q] === i || this.packAlphaM[q] === i)) continue;
@@ -732,16 +750,16 @@ export class Sim implements SimLike {
     return c;
   }
 
-  private die(i: number, cause: 'starve' | 'thirst' | 'old' | 'killed' | 'culled' | 'removed'): void {
+  private die(i: number, cause: 'starve' | 'thirst' | 'old' | 'killed' | 'culled' | 'removed' | 'emigrated'): void {
     const a = this.a;
-    this.logStory(i, 'died', ['starve', 'thirst', 'old', 'killed', 'culled', 'removed'].indexOf(cause));
+    this.logStory(i, 'died', ['starve', 'thirst', 'old', 'killed', 'culled', 'removed', 'emigrated'].indexOf(cause));
     const s = a.sp[i];
     if (cause === 'starve') { this.cStarve[s]++; if (s === Sp.Bison && a.age[i] < this.p.species[s].matureAge) this.cStarveJuv++; }
     else if (cause === 'thirst') this.cThirst[s]++;
     else if (cause === 'old') {
       this.cOld[s]++;
     } else if (cause === 'killed') this.cKilled[s]++;
-    if (cause !== 'removed') {
+    if (cause !== 'removed' && cause !== 'emigrated') {
       // species with no meat (ravens) leave nothing: the meat > 0.05 test below drops them
       const P = this.p.species[s];
       const juvenileF = a.age[i] < P.matureAge ? 0.25 + 0.75 * (a.age[i] / P.matureAge) : 1;
@@ -1390,6 +1408,7 @@ export class Sim implements SimLike {
         dvx = Math.cos(ang) * trot; dvy = Math.sin(ang) * trot;
         state = St.Walk;
         this.lonerSocial(i);
+        if (this.p.openPrairie > 0 && this.lonerWander(i, P)) state = St.Migrate;
       }
     }
     a.dvx[i] = dvx;
@@ -1422,7 +1441,7 @@ export class Sim implements SimLike {
         const b = yy * nb + xx;
         for (let k = g.start[b], e = g.start[b + 1]; k < e; k++) {
           const j = g.items[k];
-          if (j === i || !a.alive[j] || a.sp[j] !== Sp.Wolf || a.pack[j] >= 0 || a.male[j] === a.male[i]) continue;
+          if (j === i || !a.alive[j] || a.sp[j] !== Sp.Wolf || a.pack[j] >= 0 || a.male[j] === a.male[i] || a.state[j] === St.Migrate) continue;
           if (a.age[j] < this.p.species[Sp.Wolf].matureAge) continue;
           const site = this.findDenSite(x, y);
           if (!site) return;
@@ -1808,7 +1827,7 @@ export class Sim implements SimLike {
     }
     // reproduce in pairs
     if (a.energy[i] > 0.8 && a.age[i] > P.matureAge && a.cooldown[i] === 0 && !a.male[i] && this.env.state.season < 1.2
-      && rng.next() < 1 - this.pop[Sp.Raven] / this.p.ravenNestSites) {
+      && a.origin[i] !== 2 && rng.next() < 1 - (this.pop[Sp.Raven] - this.vagrants) / this.p.ravenNestSites) {
       a.cooldown[i] = P.birthCooldown;
       a.energy[i] -= 0.3;
       const n = Math.max(1, Math.round(P.litter * a.genes[i * NG + G_LITTER] + (rng.next() - 0.5)));
@@ -1965,6 +1984,313 @@ export class Sim implements SimLike {
     }
   }
 
+  // ------------------------------------------------------------------ open prairie (S1)
+  // Animals leave and enter the valley through the eight border corridors (world.corridors). Everything random in
+  // here draws from the regional pool's own generator (region.rng), never from this.rng, so with the rates at zero a
+  // run is identical to a closed valley. Only findDenSite() (wolf arrivals) touches the main stream, and only on a
+  // successful arrival roll.
+  //
+  // A migrating animal is in St.Migrate and is driven by migrantTick instead of its species' think. a.target says
+  // which way: -2 outbound (a.tx/ty is the border point it heads for), -3 inbound (a.tx/ty is the point it walks to,
+  // or for a vagrant raven the carcass it flies to). a.mig is the migration clock in ticks.
+
+  /** Distance (m) from a point to the nearest border of the valley. */
+  private edgeDist(x: number, y: number): number {
+    const s = this.world.size;
+    return Math.min(x, y, s - x, s - y);
+  }
+
+  /** The border point nearest to (x, y) and its inward unit normal: [x, y, nx, ny]. */
+  private nearestEdge(x: number, y: number): [number, number, number, number] {
+    const s = this.world.size;
+    const dW = x, dE = s - x, dS = y, dN = s - y;
+    const m = Math.min(dW, dE, dS, dN);
+    if (m === dW) return [0, y, 1, 0];
+    if (m === dE) return [s, y, -1, 0];
+    if (m === dS) return [x, 0, 0, 1];
+    return [x, s, 0, -1];
+  }
+
+  /** Index of the corridor nearest to a point. */
+  private nearestCorridor(x: number, y: number): number {
+    const c = this.world.corridors;
+    let best = 0, bd = 1e18;
+    for (let k = 0; k < c.length / 4; k++) {
+      const dx = c[k * 4] - x, dy = c[k * 4 + 1] - y;
+      const d2 = dx * dx + dy * dy;
+      if (d2 < bd) { bd = d2; best = k; }
+    }
+    return best;
+  }
+
+  /** Total meat left on all carcasses, in cMeat units (the carrion the vagrant ravens follow). */
+  sumRemainingMeat(): number {
+    let s = 0;
+    for (let k = 0; k < this.cN; k++) if (this.cMeat[k] > 0) s += this.cMeat[k];
+    return s;
+  }
+
+  /** Browse summed over land cells (the numerator of browse per pronghorn). */
+  private sumBrowse(): number {
+    const b = this.veg.browse, wat = this.world.water;
+    let s = 0;
+    for (let c = 0; c < b.length; c++) if (!wat[c]) s += b[c];
+    return s;
+  }
+
+  private vagrantCount(): number {
+    const a = this.a;
+    let n = 0;
+    for (let i = 0; i < a.hi; i++) if (a.alive[i] && a.sp[i] === Sp.Raven && a.origin[i] === 2) n++;
+    return n;
+  }
+
+  private meanGen(sp: number): number {
+    const a = this.a;
+    let s = 0, n = 0;
+    for (let i = 0; i < a.hi; i++) if (a.alive[i] && a.sp[i] === sp) { s += a.gen[i]; n++; }
+    return n ? Math.round(s / n) : 0;
+  }
+
+  private openPrairieStep(t: number): void {
+    const p = this.p;
+    if (p.ravenVagrants > 0 && t % 50 === 0) this.vagrantRavens();
+    if (p.openPrairie <= 0) return;
+    if (t > 0 && t % 100 === 0) this.wolfArrivals();
+    const yt = this.env.yearTick(t);
+    if (yt === Math.round(2.6 * SEASON_TICKS)) this.pronghornExodus();
+    else if (yt === Math.round(0.25 * SEASON_TICKS)) this.pronghornReturn();
+  }
+
+  private beginMigrate(i: number, outbound: boolean, tx: number, ty: number): void {
+    const a = this.a;
+    a.state[i] = St.Migrate;
+    a.target[i] = outbound ? -2 : -3;
+    a.targetId[i] = 0;
+    a.tx[i] = tx;
+    a.ty[i] = ty;
+    a.mig[i] = 0;
+    a.flee[i] = 0;
+  }
+
+  /** Send an animal to the nearest corridor. */
+  private beginEmigration(i: number): void {
+    const a = this.a, c = this.world.corridors;
+    const k = this.nearestCorridor(a.x[i], a.y[i]);
+    this.beginMigrate(i, true, c[k * 4], c[k * 4 + 1]);
+  }
+
+  private endMigrate(i: number): void {
+    const a = this.a;
+    a.target[i] = -1;
+    a.mig[i] = 0;
+    a.state[i] = SPECIES[a.sp[i]].flies ? St.Fly : St.Idle;
+  }
+
+  /** The animal reached the border: it is gone. No carcass; the regional pool takes up its genes. */
+  private leaveValley(i: number): void {
+    const a = this.a, s = a.sp[i];
+    if (a.origin[i] === 2) this.cVagOut++;
+    else {
+      this.cEmig[s]++;
+      this.region?.absorb(s, a.genes, i * NG);
+    }
+    this.die(i, 'emigrated');
+  }
+
+  /** One think for a migrating animal: steer for the target at half run speed (flyers at flying speed). */
+  private thinkMigrant(i: number, P: SpeciesParams): void {
+    const a = this.a;
+    const x = a.x[i], y = a.y[i];
+    a.mig[i] = Math.min(65535, a.mig[i] + 6);
+    const dx = a.tx[i] - x, dy = a.ty[i] - y;
+    const d = Math.sqrt(dx * dx + dy * dy) + 1e-3;
+    if (a.target[i] === -2) {
+      // outbound: gone once within 4 m of the border (or after a year of trying, so nothing is stuck forever)
+      if (this.edgeDist(x, y) < 4 || a.mig[i] > BASE_YEAR_TICKS) { this.leaveValley(i); return; }
+    } else {
+      // inbound: a vagrant raven is done once it is near its carcass, anything else once it is 30 m inside
+      const arrived = a.origin[i] === 2 ? d < 40 : this.edgeDist(x, y) >= 30;
+      if (arrived || a.mig[i] > 1200) { this.endMigrate(i); return; }
+    }
+    const v = SPECIES[a.sp[i]].flies ? P.walkSpeed : 0.5 * P.runSpeed;
+    a.dvx[i] = (dx / d) * v;
+    a.dvy[i] = (dy / d) * v;
+    a.state[i] = St.Migrate;
+  }
+
+  /** A whole tick of a migrating animal: no species think, just steering, movement and the body's own upkeep. */
+  private migrantTick(i: number, t: number, P: SpeciesParams): void {
+    const a = this.a, s = a.sp[i];
+    if ((i + t) % 6 === 0) {
+      this.thinkMigrant(i, P);
+      if (!a.alive[i]) return;
+    }
+    if (SPECIES[s].flies) { this.liveRaven(i, P); return; }
+    this.moveGround(i, P);
+    if (s === Sp.Wolf) this.liveWolf(i, P);
+    else if (s === Sp.Cougar) this.liveCougar(i, P);
+    else this.liveHerbivore(i, P);
+  }
+
+  /** A pack-less wolf counts its wandering; past wolfOutAfter base years an adult heads for the border. Returns true when it sets off. */
+  private lonerWander(i: number, P: SpeciesParams): boolean {
+    const a = this.a;
+    if (a.pack[i] >= 0) { a.mig[i] = 0; return false; }
+    a.mig[i] = Math.min(65535, a.mig[i] + 3);
+    if (a.age[i] < P.matureAge || a.mig[i] <= this.p.wolfOutAfter * BASE_YEAR_TICKS) return false;
+    this.event('emigrated', Sp.Wolf, a.x[i], a.y[i], 1, 0);
+    this.beginEmigration(i);
+    return true;
+  }
+
+  /**
+   * n adults of one species arrive as a loose group at the border point (bx, by), inward normal (nx, ny), walking (or for
+   * a vagrant raven flying) to (tx, ty). Genes come from the regional pool. Returns their slots.
+   */
+  private spawnArrivals(sp: number, n: number, bx: number, by: number, nx: number, ny: number, tx: number, ty: number, origin: number, spread: number): number[] {
+    const a = this.a, r = this.region!.rng, size = this.world.size;
+    const P = this.p.species[sp];
+    const gen = this.meanGen(sp);
+    const slots: number[] = [];
+    for (let q = 0; q < n; q++) {
+      const off = (r.next() - 0.5) * 2 * spread;
+      const dep = 4 + r.next() * spread * 0.5;
+      const x = Math.min(size - 3, Math.max(3, bx + nx * dep - ny * off));
+      const y = Math.min(size - 3, Math.max(3, by + ny * dep + nx * off));
+      const i = a.spawn();
+      a.sp[i] = sp;
+      a.x[i] = x;
+      a.y[i] = y;
+      a.heading[i] = Math.atan2(ty - y, tx - x);
+      a.male[i] = q % 2;
+      // an adult in its prime years, not a founder-style spread over the whole life
+      const lo = P.matureAge * 1.2;
+      a.age[i] = Math.round(lo + r.next() * (P.maxAge * 0.5 - lo));
+      a.born[i] = this.tick - a.age[i];
+      a.energy[i] = 0.75 + r.next() * 0.15;
+      a.hydration[i] = 0.8 + r.next() * 0.2;
+      this.region!.draw(sp, r, a.genes, i * NG);
+      for (let g = 0; g < NG; g++) a.genes[i * NG + g] = g === G_COAT ? clampCoat(sp, a.genes[i * NG + g]) : clampGene(g, a.genes[i * NG + g]);
+      a.gen[i] = gen;
+      a.origin[i] = origin;
+      if (SPECIES[sp].flies) a.alt[i] = 30;
+      this.beginMigrate(i, false, tx - ny * off, ty + nx * off);
+      slots.push(i);
+    }
+    if (n > 0) {
+      if (origin === 2) this.cVagIn += n;
+      else {
+        this.cImm[sp] += n;
+        if (!this.everPresent[sp]) this.event('recolonized', sp, bx, by, n, 0);
+        this.everPresent[sp] = 1;
+      }
+    }
+    return slots;
+  }
+
+  /** Every 100 ticks a wolf pair may arrive, if there is room for a den. They found a pack at the free site and walk in from the nearest corridor. */
+  private wolfArrivals(): void {
+    const a = this.a, r = this.region!.rng;
+    if (r.next() >= (this.p.wolfInRate * 100) / BASE_YEAR_TICKS) return;
+    const den = this.findDenSite();
+    if (!den) return;
+    const pk = this.newPack(den[0], den[1]);
+    if (pk < 0) return;
+    const c = this.world.corridors, k = this.nearestCorridor(den[0], den[1]);
+    const bx = c[k * 4], by = c[k * 4 + 1], nx = c[k * 4 + 2], ny = c[k * 4 + 3];
+    const slots = this.spawnArrivals(Sp.Wolf, 2, bx, by, nx, ny, bx + nx * 35, by + ny * 35, 1, 5);
+    for (const i of slots) { a.pack[i] = pk; a.energy[i] = 0.85; }
+    this.event('immigrated', Sp.Wolf, bx, by, 2, 0);
+  }
+
+  /** Pronghorn per unit of browse: summed browse over land cells divided by the pronghorn alive. */
+  private browsePerPronghorn(pop: number): number {
+    return pop > 0 ? this.sumBrowse() / pop : 0;
+  }
+
+  /**
+   * Autumn exodus (season 2.6, once per valley year). A poor browse year (B below deerBref) sends a fraction
+   * f = deerOutK x (1 - B / deerBref), at most half, of the adults to the nearest corridors. They leave in groups: a seed animal
+   * and the herd-mates within 25 m, repeated until f of the adults is reached. Hidden fawns stay.
+   */
+  private pronghornExodus(): void {
+    const a = this.a, p = this.p, r = this.region!.rng;
+    const pop = this.pop[Sp.Deer];
+    if (pop === 0) return;
+    const B = this.browsePerPronghorn(pop);
+    const f = Math.min(0.5, Math.max(0, p.deerOutK * (1 - B / p.deerBref)));
+    if (f <= 0) return;
+    const mature = p.species[Sp.Deer].matureAge;
+    const adults: number[] = [];
+    for (let i = 0; i < a.hi; i++) if (a.alive[i] && a.sp[i] === Sp.Deer && a.age[i] >= mature && a.state[i] !== St.Migrate) adults.push(i);
+    let left = Math.round(f * adults.length), leaving = 0;
+    let ex = 0, ey = 0;
+    let pool = adults.slice();
+    while (left > 0 && pool.length > 0) {
+      const seed = pool[r.int(pool.length)];
+      const sx = a.x[seed], sy = a.y[seed];
+      if (leaving === 0) { ex = sx; ey = sy; }
+      // the seed first, then herd-mates within 25 m in slot order, until the quota is met
+      this.beginEmigration(seed);
+      left--; leaving++;
+      for (let q = 0; q < pool.length && left > 0; q++) {
+        const j = pool[q];
+        if (j === seed || a.state[j] === St.Migrate) continue;
+        const dx = a.x[j] - sx, dy = a.y[j] - sy;
+        if (dx * dx + dy * dy > 625) continue;
+        this.beginEmigration(j);
+        left--; leaving++;
+      }
+      pool = pool.filter((j) => a.state[j] !== St.Migrate);
+    }
+    if (leaving > 0) this.event('emigrated', Sp.Deer, ex, ey, leaving, f);
+  }
+
+  /** Spring return (season 0.25): a share deerInK of the gap to deerKb walks back in as one group, with a rescue group when the herd is nearly gone. */
+  private pronghornReturn(): void {
+    const p = this.p, r = this.region!.rng;
+    const pop = this.pop[Sp.Deer];
+    let n = Math.min(p.deerInMax, Math.max(0, Math.round(p.deerInK * (p.deerKb - pop))));
+    if (pop < 20) n = Math.max(n, p.deerRescue);
+    if (n <= 0) return;
+    const c = this.world.corridors, k = r.int(c.length / 4);
+    const bx = c[k * 4], by = c[k * 4 + 1], nx = c[k * 4 + 2], ny = c[k * 4 + 3];
+    this.spawnArrivals(Sp.Deer, n, bx, by, nx, ny, bx + nx * 35, by + ny * 35, 1, 12);
+    this.event('immigrated', Sp.Deer, bx, by, n, 0);
+  }
+
+  /**
+   * Vagrant ravens: scavengers from outside the valley that follow carrion. Every 50 ticks the target number is
+   * ravenVagrantK x carrion, raised by half in deep winter, capped at ravenVagrantCap. Below target a few (at most 8) appear at the
+   * border nearest the richest carcass and fly to it. Once the carrion cannot support a fifth of those present, a twentieth
+   * of them head for the nearest edge. Vagrants (origin 2) never breed.
+   */
+  private vagrantRavens(): void {
+    const a = this.a, p = this.p, r = this.region!.rng;
+    const carrion = this.sumRemainingMeat();
+    const winter = Math.max(0, Math.cos(((this.env.state.season - 3.5) / 4) * 2 * Math.PI));
+    const target = Math.min(p.ravenVagrantCap, p.ravenVagrantK * carrion * (1 + 0.5 * winter));
+    const vag = this.vagrants;
+    if (vag < target) {
+      let best = -1, bm = 0;
+      for (let k = 0; k < this.cN; k++) if (this.cMeat[k] > bm) { bm = this.cMeat[k]; best = k; }
+      if (best < 0) return;
+      const n = Math.min(8, Math.ceil((target - vag) * 0.1));
+      const cx = this.cX[best], cy = this.cY[best];
+      const [bx, by, nx, ny] = this.nearestEdge(cx, cy);
+      this.spawnArrivals(Sp.Raven, n, bx, by, nx, ny, cx, cy, 2, 40);
+    } else if (p.ravenVagrantK * carrion < 0.2 * vag) {
+      const cand: number[] = [];
+      for (let i = 0; i < a.hi; i++) if (a.alive[i] && a.sp[i] === Sp.Raven && a.origin[i] === 2 && a.target[i] !== -2) cand.push(i);
+      for (let q = Math.ceil(vag * 0.05); q > 0 && cand.length > 0; q--) {
+        const i = cand.splice(r.int(cand.length), 1)[0];
+        const [bx, by] = this.nearestEdge(a.x[i], a.y[i]);
+        this.beginMigrate(i, true, bx, by);
+      }
+    }
+  }
+
   // ------------------------------------------------------------------ output
 
   populations(): number[] {
@@ -2029,6 +2355,16 @@ export class Sim implements SimLike {
     row.packs = packs;
     row.carcasses = this.cN;
     row.drought = this.env.droughtTicks > 0 ? 1 : 0;
+    // open prairie (S1): arrivals and departures since the last sample, vagrant ravens, and the two calibration inputs
+    for (let s = 0; s < SPECIES_COUNT; s++) {
+      row['imm_' + SPECIES_KEYS[s]] = this.cImm[s];
+      row['emig_' + SPECIES_KEYS[s]] = this.cEmig[s];
+    }
+    row.vagrants = this.vagrantCount();
+    row.vagrant_in = this.cVagIn;
+    row.vagrant_out = this.cVagOut;
+    row.carrion = this.sumRemainingMeat();
+    row.browse_pp = pops[Sp.Deer] > 0 ? this.sumBrowse() / pops[Sp.Deer] : NaN;
     this.cKills = 0;
     this.cKillsDeer = 0;
     this.cStrife = 0;
@@ -2041,6 +2377,10 @@ export class Sim implements SimLike {
     this.cKilled.fill(0);
     this.cThirst.fill(0);
     this.cStarveJuv = 0;
+    this.cImm.fill(0);
+    this.cEmig.fill(0);
+    this.cVagIn = 0;
+    this.cVagOut = 0;
     return row;
   }
 
@@ -2068,6 +2408,7 @@ export class Sim implements SimLike {
       let f = 0;
       if (a.age[i] < P.matureAge) f |= F_JUVENILE;
       if (a.pregnant[i] > 0) f |= F_PREGNANT;
+      if (a.state[i] === St.Migrate) f |= F_MIGRANT;
       if (a.infected[i] > 0) f |= F_INFECTED;
       if (a.male[i]) f |= F_MALE;
       const pk = a.pack[i];

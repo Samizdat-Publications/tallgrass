@@ -118,6 +118,31 @@ export interface Params {
   cougarImmigration: number;
   /** When an already-fleeing grazer is scared again, how much of its current flight line it keeps (0 = turn straight away from the new threat). */
   fleeMomentum: number;
+  // open prairie (S1): animals come and go through the border corridors. Rates are per base year (2,400 ticks).
+  /** Master switch (0 = closed valley). The vagrant ravens below have their own switch. */
+  openPrairie: number;
+  /** Wolf pairs arriving per base year, rolled every 100 ticks, when a den site is free. */
+  wolfInRate: number;
+  /** Base years a pack-less adult wolf wanders before it leaves the valley. */
+  wolfOutAfter: number;
+  /** Pronghorn autumn exodus: fraction leaving = deerOutK x (1 - browse per pronghorn / deerBref), clamped to 0..0.5. */
+  deerOutK: number;
+  /** Pronghorn spring return: share of the gap to deerKb that walks back in. */
+  deerInK: number;
+  /** Most pronghorn that return in one spring. */
+  deerInMax: number;
+  /** A group of this many walks in each spring when fewer than 20 pronghorn remain. */
+  deerRescue: number;
+  /** Browse per pronghorn (summed browse over land cells / pronghorn) in autumn (season 2.6) that sends nobody away. Measured. */
+  deerBref: number;
+  /** Pronghorn equilibrium population the spring return refills toward. Measured. */
+  deerKb: number;
+  /** Vagrant ravens (0 = off): scavengers from outside that follow carrion into the valley and never breed. */
+  ravenVagrants: number;
+  /** Vagrants wanted per unit of remaining carcass meat (the unit of cMeat). Measured. */
+  ravenVagrantK: number;
+  /** Vagrant ceiling. */
+  ravenVagrantCap: number;
   // fear
   fearKill: number;
   fearKillRadius: number;
@@ -241,6 +266,18 @@ export function defaultParams(): Params {
     leanLitter: 0,
     cougarImmigration: 0,
     fleeMomentum: 0,
+    openPrairie: 0,
+    wolfInRate: 0.2,
+    wolfOutAfter: 1.0,
+    deerOutK: 0.6,
+    deerInK: 0.5,
+    deerInMax: 60,
+    deerRescue: 12,
+    deerBref: 35,
+    deerKb: 367,
+    ravenVagrants: 0,
+    ravenVagrantK: 0.16,
+    ravenVagrantCap: 400,
     fearKill: 0.7,
     fearKillRadius: 22,
     fearPredatorStamp: 0.0008,
