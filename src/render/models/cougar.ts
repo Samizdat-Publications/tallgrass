@@ -113,7 +113,7 @@ export function buildCougar(): ModelDef {
       // on-screen m/s at 1x
       trot0: 2.6, trot1: 3.6, gal0: 8.5, gal1: 11.5,
       ampW: 0.5, ampT: 0.66, ampG: 1.0,
-      dutyW: 0.62, dutyT: 0.5, dutyG: 0.36,
+      dutyW: 0.62, dutyT: 0.5, dutyG: 0.36, dutyGF: 0.25, fast0: 11.5, fast1: 24,
       kneeW: 0.55, kneeT: 0.85, kneeG: 1.3,
       bobW: 0.015, bobT: 0.03, bobG: 0.08,
       pitchT: 0.03, pitchG: 0.15,

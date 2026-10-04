@@ -67,11 +67,14 @@ function strideFor(p: AnimParams, gaitSpd: number): number {
   const wW = smoothstep(0.08, 0.4, gaitSpd) * (1 - s1);
   const sum = wW + wT + wG;
   if (sum < 1e-3) return plantedStride(p, 0);
-  return (wW * plantedStride(p, 0) + wT * plantedStride(p, 1) + wG * plantedStride(p, 2)) / sum;
+  return (wW * plantedStride(p, 0) + wT * plantedStride(p, 1) + wG * plantedStride(p, 2, gaitSpd)) / sum;
 }
 
-/** Most leg cycles per second the cadence may reach (faster than this the legs alias on screen). */
-const MAX_CADENCE = 6;
+/**
+ * Most leg cycles per second the cadence may reach (faster than this the legs alias on screen). Raised from 6: the fastest
+ * gallops (a pronghorn in flight, a wolf closing at 25 m/s on screen) need about 5 to 6 Hz even with the long fast-gallop stride.
+ */
+const MAX_CADENCE = 7.5;
 
 /**
  * Render-side heading dynamics per species: natural frequency (rad/s) of the critically damped spring that chases the sim
@@ -90,17 +93,23 @@ const TURN: Array<[number, number]> = [
 const BANK_MAX = [0.2, 0.42, 0.75, 0.42, 0.3, 0.42];
 
 /** How the whole fall of a carcass plays out, in seconds. */
-const FALL_TIME = 1.3;
+const FALL_TIME = 2.0;
 /** A predator within this many metres of a fresh kill (and hunting) lunges. */
 const POUNCE_R = 7;
-const POUNCE_TIME = 0.9;
+const POUNCE_TIME = 1.15;
+/** Distance (m) between the lunging predator's centre and the prey's centre when the lunge connects (muzzle on the flank). */
+const CONTACT_D = 1.75;
 
 interface FallInfo {
   /** Seconds since the animal began to go down (large for carcasses that were already lying there). */
   t: number;
-  /** Heading and on-screen speed of the animal that died here. */
+  /** Heading and on-screen speed of the animal that died here, its drawn scale, and its leg cycle phase when it went down. */
   h: number;
   v: number;
+  vs: number;
+  ph: number;
+  /** Pace of the stumble, decaying from `v` as the animal loses its footing. */
+  pace: number;
   /** Snapshot generation that last saw this carcass (so stale entries can be dropped). */
   g: number;
 }
@@ -163,8 +172,10 @@ class Batch {
     mesh.name = 'animals-' + this.sp;
     const sh = this.shared;
     mesh.onBeforeRender = (_r, _s, camera) => {
+      const expo = (_r as THREE.WebGLRenderer).toneMappingExposure ?? 1;
       // the min-screen-size boost in the vertex shader needs the viewing camera (not the shadow camera)
       if ((camera as THREE.PerspectiveCamera).isPerspectiveCamera) {
+        sh.probe?.(_s, expo);
         sh.uCamPos.value.setFromMatrixPosition(camera.matrixWorld);
         sh.uPxK.value = 900 / (2 * Math.tan(((camera as THREE.PerspectiveCamera).fov * Math.PI) / 360));
       }
@@ -201,8 +212,11 @@ class Slots {
   /** Drawn heading (rad) and its angular velocity: a critically damped follower of the sim heading. */
   hs = new Float32Array(this.cap);
   hw = new Float32Array(this.cap);
-  /** Seconds since a pounce began (negative = not pouncing). */
+  /** Seconds since a pounce began (negative = not pouncing), and what it is aimed at: a live animal id, or a fixed point. */
   pounce = new Float32Array(this.cap).fill(-1);
+  ptid = new Uint32Array(this.cap);
+  ptx = new Float32Array(this.cap);
+  ptz = new Float32Array(this.cap);
   hdn = new Float32Array(this.cap);
   lie = new Float32Array(this.cap);
   crouch = new Float32Array(this.cap);
@@ -239,6 +253,9 @@ class Slots {
     this.hs = g(this.hs, Float32Array);
     this.hw = g(this.hw, Float32Array);
     { const b = new Float32Array(n).fill(-1); b.set(this.pounce); this.pounce = b; }
+    this.ptid = g(this.ptid, Uint32Array);
+    this.ptx = g(this.ptx, Float32Array);
+    this.ptz = g(this.ptz, Float32Array);
     this.hdn = g(this.hdn, Float32Array);
     this.lie = g(this.lie, Float32Array);
     this.crouch = g(this.crouch, Float32Array);
@@ -263,7 +280,17 @@ export class AnimalLayer {
   private world: World;
   private batches: Batch[] = [];
   private uTime = { value: 0 };
-  private shared: AnimalShared = { uTime: this.uTime, uCamPos: { value: new THREE.Vector3(256, 400, 256) }, uPxK: { value: 900 / (2 * Math.tan((45 * Math.PI) / 360)) } };
+  private shared: AnimalShared = {
+    uTime: this.uTime, uCamPos: { value: new THREE.Vector3(256, 400, 256) }, uPxK: { value: 900 / (2 * Math.tan((45 * Math.PI) / 360)) },
+    uLow: { value: 0 },
+    probe: (scene, exposure) => {
+      this.lit.probe(scene);
+      const v = this.lit.value;
+      // dark scene: little light reaches the animals, or the camera has opened up (exposure rises at dusk and night, which is
+      // what makes bright coat areas glow against the dark ground)
+      this.shared.uLow.value = Math.max(1 - clamp((v.x + v.y + v.z) / 3 / 0.7, 0, 1), smoothstep(1.05, 1.5, exposure));
+    },
+  };
   private lit = new SceneLit();
   private dust: Dust;
   private kills: KillSites;
@@ -281,6 +308,9 @@ export class AnimalLayer {
   private carcassCounts = new Int32Array(SPECIES_COUNT);
 
   private falls = new Map<number, FallInfo>();
+  /** Slots of the animals that left the snapshot this time (id to slot), so a body that just died can keep its gait phase. */
+  private goneSlot = new Map<number, number>();
+  private tmpV = new THREE.Vector3();
   private timeSec = 0;
   private lastSnapT = -1;
   private snapDt = 0.1;
@@ -374,10 +404,12 @@ export class AnimalLayer {
       if (sp >= 0 && sp < SPECIES_COUNT) this.counts[sp]++;
     }
     // free the slots of animals that are gone
+    this.goneSlot.clear();
     for (const [id, slot] of S.map) {
       if (S.stamp[slot] !== this.gen) {
         S.map.delete(id);
         S.free.push(slot);
+        this.goneSlot.set(id, slot);
       }
     }
     for (let k = 0; k < snap.carcassCount; k++) {
@@ -407,7 +439,7 @@ export class AnimalLayer {
       let fi = this.falls.get(key);
       if (!fi) {
         const sp = Math.round(snap.carcasses[o + 3]);
-        fi = { t: 1e3, h: hash01((Math.floor(cx * 13) * 73856093) ^ (Math.floor(cz * 13) * 19349663)) * Math.PI * 2, v: 0, g: gen };
+        fi = { t: 1e3, h: hash01((Math.floor(cx * 13) * 73856093) ^ (Math.floor(cz * 13) * 19349663)) * Math.PI * 2, v: 0, vs: 1, ph: 0, pace: 0, g: gen };
         this.falls.set(key, fi);
         if (!fast && P) {
           let bj = -1, bd = 36;
@@ -418,7 +450,13 @@ export class AnimalLayer {
             const d = dx * dx + dz * dz;
             if (d < bd) { bd = d; bj = j; }
           }
-          if (bj >= 0) { fi.h = P[bj * AGENT_STRIDE + 3]; fi.v = P[bj * AGENT_STRIDE + 4] * VIS_PER_SIM; }
+          if (bj >= 0) {
+            const q = bj * AGENT_STRIDE;
+            fi.h = P[q + 3]; fi.v = P[q + 4] * VIS_PER_SIM; fi.pace = fi.v;
+            fi.vs = P[q + 5] * this.speciesScale[sp];
+            const gs = this.goneSlot.get(this.prev!.ids[bj]);
+            if (gs !== undefined) fi.ph = this.slots.phase[gs];
+          }
           fi.t = 0;
           if (budget-- > 0) this.killBurst(snap, cx, cz, sp, fi);
         }
@@ -454,6 +492,11 @@ export class AnimalLayer {
       if (dx * dx + dz * dz > POUNCE_R * POUNCE_R) continue;
       const slot = this.currSlot[i];
       if (S.pounce[slot] < 0.35 * POUNCE_TIME || S.pounce[slot] > POUNCE_TIME) S.pounce[slot] = 0;
+      // the lunge ends on the fallen animal: aimed at where it is going down
+      const sl = Math.min(fi.v * 0.1, 1.4) * 0.6;
+      S.ptid[slot] = 0;
+      S.ptx[slot] = cx + Math.cos(fi.h) * sl;
+      S.ptz[slot] = cz + Math.sin(fi.h) * sl;
     }
   }
 
@@ -477,6 +520,9 @@ export class AnimalLayer {
         if (d2 > 3.6 * 3.6 || d2 < 0.2) continue;
         if (dx * hx + dz * hz < 0.4 * Math.sqrt(d2)) continue; // only prey ahead of it
         S.pounce[slot] = 0;
+        S.ptid[slot] = snap.ids[j];
+        S.ptx[slot] = A[q + 1];
+        S.ptz[slot] = A[q + 2];
         break;
       }
     }
@@ -602,8 +648,22 @@ export class AnimalLayer {
       if (S.pounce[slot] >= 0) {
         S.pounce[slot] += running;
         const u = S.pounce[slot] / POUNCE_TIME;
-        if (u < 1) pounceE = u < 0.28 ? smoothstep(0, 0.28, u) : 1 - smoothstep(0.45, 1, u);
+        // spring on over a quarter of the lunge, hold on the prey, then let go
+        if (u < 1) pounceE = u < 0.24 ? smoothstep(0, 0.24, u) : u < 0.58 ? 1 : 1 - smoothstep(0.58, 1, u);
         if (S.pounce[slot] > POUNCE_TIME * 2.4) S.pounce[slot] = -1;
+      }
+      if (pounceE > 0.001) {
+        // The lunge connects: the predator is carried to the prey and turned onto it, so it ends with its forelegs on the
+        // shoulder or flank instead of beside it (the sim only keeps it within a couple of metres).
+        let tx = S.ptx[slot], tz = S.ptz[slot];
+        if (S.ptid[slot] !== 0 && this.getPosition(S.ptid[slot], this.tmpV)) { tx = this.tmpV.x; tz = this.tmpV.z; S.ptx[slot] = tx; S.ptz[slot] = tz; }
+        const ddx = tx - x, ddz = tz - z, dd = Math.hypot(ddx, ddz);
+        if (dd > 0.05 && dd < 9) {
+          const pull = Math.max(0, dd - CONTACT_D * (sp === Sp.Cougar ? 1.1 : 1)) * pounceE;
+          x += (ddx / dd) * pull;
+          z += (ddz / dd) * pull;
+          h += wrapPi(Math.atan2(ddz, ddx) - h) * Math.min(1, pounceE * 1.1);
+        }
       }
       // a creature that is not actually going anywhere (blocked, turning on the spot) stands rather than marching in place
       const gaitSpd = Math.min(spdS, S.vis[slot] * 1.6 + 0.15);
@@ -754,6 +814,15 @@ export class AnimalLayer {
       if (fi && fi.t < FALL_TIME + 2) fi.t += running;
       const h = fi ? fi.h : seed * Math.PI * 2;
       const fall = fi ? clamp(fi.t / FALL_TIME, 0, 1) : 1;
+      // the stumble: the pace it died at decays as it loses its footing, and the legs keep cycling at that pace
+      let stumblePh = 0, stumblePace = 0;
+      if (fi && fall < 0.55) {
+        fi.pace = fi.v * Math.exp(-fi.t * 2.2);
+        const pr0 = b.def.params;
+        if (pr0.kind === 0 && fi.pace > 0.3) fi.ph = (fi.ph + running * Math.min(fi.pace / (strideFor(pr0, fi.pace) * fi.vs), MAX_CADENCE)) % 1;
+        stumblePh = fi.ph;
+        stumblePace = fi.pace;
+      }
       const ch = Math.cos(h), sh = Math.sin(h);
       // the animal skids on a little in the direction it was running as it goes down
       const slide = fi && fi.t < 1e2 ? Math.min(fi.v * 0.1, 1.4) * (1 - Math.exp(-fi.t * 3.2)) : 0;
@@ -768,12 +837,12 @@ export class AnimalLayer {
       if (world.water[wc]) cy = Math.max(cy, world.waterHeight[wc] - 0.3); // a carcass in a pond floats at the surface
       // while it is still going down the body is the full-size living animal, so no ground lift
       if (fall < 1) cy = ground + 0.22 * fall;
-      this.writeInstance(b, cx, cy, cz, ch, sh, pitch, 0, fall < 1 ? this.speciesScale[sp] * (1 - fall) + fall : 1);
+      this.writeInstance(b, cx, cy, cz, ch, sh, pitch, 0, fall < 1 && fi ? fi.vs * (1 - fall) + fall : 1);
       const k = b.count - 1;
       const gp = k * 4;
       const gait = b.gait.array as Float32Array;
       const look = b.look.array as Float32Array;
-      gait[gp] = 0;
+      gait[gp] = stumblePh;
       gait[gp + 1] = -1;
       gait[gp + 2] = clamp(rem, 0, 1);
       gait[gp + 3] = 0;
@@ -782,7 +851,7 @@ export class AnimalLayer {
       look[gp + 2] = 0;
       look[gp + 3] = 0;
       const fxc = b.fx.array as Float32Array;
-      fxc[gp] = 0; fxc[gp + 1] = 0; fxc[gp + 2] = 0; fxc[gp + 3] = fall;
+      fxc[gp] = 0; fxc[gp + 1] = 0; fxc[gp + 2] = stumblePace; fxc[gp + 3] = fall;
       b.ids[k] = 0;
       b.centers[k * 4 + 3] = 0; // not pickable
     }

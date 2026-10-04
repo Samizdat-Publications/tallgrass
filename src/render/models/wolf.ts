@@ -117,7 +117,7 @@ export function buildWolf(): ModelDef {
     neutral: 0.4,
     // from the wide view a wolf is a little darker (value contrast with gold grass) and one that stalks, chases or feeds
     // gets a cool rim of light
-    far: { gain: 0.74, rim: 0.08, hunt: 0.5, rimCol: [0.7, 0.8, 1.0] },
+    far: { gain: 0.66, rim: 0.1, hunt: 0.35, rimCol: [0.72, 0.84, 1.0] },
     params: {
       ...DEFAULT_PARAMS,
       kind: 0,
@@ -125,7 +125,7 @@ export function buildWolf(): ModelDef {
       // on-screen m/s at 1x: a wolf "walking" (1.9 to 7) travels at a walk then a trot, a chase (12 to 20) is a full gallop
       trot0: 2.4, trot1: 3.4, gal0: 8.0, gal1: 11.0,
       ampW: 0.5, ampT: 0.68, ampG: 1.0,
-      dutyW: 0.62, dutyT: 0.5, dutyG: 0.36,
+      dutyW: 0.62, dutyT: 0.5, dutyG: 0.36, dutyGF: 0.25, fast0: 11, fast1: 24,
       kneeW: 0.5, kneeT: 0.8, kneeG: 1.25,
       bobW: 0.012, bobT: 0.025, bobG: 0.07,
       pitchT: 0.025, pitchG: 0.12,

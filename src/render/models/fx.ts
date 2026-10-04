@@ -64,6 +64,8 @@ export class Dust {
   now = 0;
   private uNow = { value: 0 };
   private uColor = { value: new THREE.Vector3(0.76, 0.66, 0.55) };
+  /** 1 by day; falls toward 0.2 as the camera opens up for dusk and night, so dust stays a dim brown haze instead of glowing. */
+  private uDim = { value: 1 };
   private lit: SceneLit;
 
   constructor(lit: SceneLit) {
@@ -86,7 +88,7 @@ export class Dust {
 
     const mat = new THREE.ShaderMaterial({
       transparent: true, depthWrite: false, depthTest: true, fog: false,
-      uniforms: { uNow: this.uNow, uColor: this.uColor, uLit: lit as unknown as { value: THREE.Vector3 } },
+      uniforms: { uNow: this.uNow, uColor: this.uColor, uDim: this.uDim, uLit: lit as unknown as { value: THREE.Vector3 } },
       vertexShader: /* glsl */ `
         attribute vec4 aP; attribute vec4 aV; attribute vec4 aQ;
         uniform float uNow;
@@ -111,7 +113,7 @@ export class Dust {
         }`,
       fragmentShader: /* glsl */ `
         precision highp float;
-        uniform vec3 uColor; uniform vec3 uLit;
+        uniform vec3 uColor; uniform vec3 uLit; uniform float uDim;
         varying vec2 vUv; varying float vAlpha; varying float vSeed;
         void main() {
           float r = length(vUv);
@@ -120,7 +122,9 @@ export class Dust {
           float a = 1.0 - smoothstep(0.0, 1.0, r);
           a = a * a * (0.6 + 0.4 * a);
           if (a * vAlpha < 0.002) discard;
-          vec3 col = uColor * max(uLit, vec3(0.1)) * (0.85 + 0.3 * (1.0 - r));
+          // lit like the ground it sits over: capped, because the camera opens up at dusk and night and an uncapped sun colour
+          // turned the dust into a white smear against the dark terrain
+          vec3 col = uColor * clamp(uLit * 0.8, vec3(0.08), vec3(0.62)) * (0.85 + 0.3 * (1.0 - r)) * uDim * mix(vec3(1.0), vec3(1.12, 0.92, 0.72), 1.0 - uDim);
           gl_FragColor = vec4(col, a * vAlpha);
         }`,
     });
@@ -128,8 +132,10 @@ export class Dust {
     this.mesh.frustumCulled = false;
     this.mesh.renderOrder = 20;
     this.mesh.name = 'dust';
-    this.mesh.onBeforeRender = (_r, scene) => {
+    this.mesh.onBeforeRender = (r, scene) => {
       this.lit.probe(scene);
+      const ex = (r as THREE.WebGLRenderer).toneMappingExposure ?? 1;
+      this.uDim.value = 1 - 0.8 * Math.min(1, Math.max(0, (ex - 1.0) / 0.4));
       // the ambient-occlusion G-buffer pass renders the scene with an override material: keep sprites out of it
       if (scene.overrideMaterial) g.instanceCount = 0;
     };

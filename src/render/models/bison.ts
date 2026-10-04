@@ -158,7 +158,7 @@ export function buildBison(): ModelDef {
       // herd trots, a stampede (flee, 7 to 16) gallops
       trot0: 3.0, trot1: 4.2, gal0: 7.0, gal1: 9.5,
       ampW: 0.5, ampT: 0.6, ampG: 0.8,
-      dutyW: 0.64, dutyT: 0.5, dutyG: 0.42,
+      dutyW: 0.64, dutyT: 0.5, dutyG: 0.42, dutyGF: 0.34, fast0: 9.5, fast1: 18,
       kneeW: 0.45, kneeT: 0.7, kneeG: 1.1,
       bobW: 0.02, bobT: 0.04, bobG: 0.08,
       pitchT: 0.02, pitchG: 0.07,

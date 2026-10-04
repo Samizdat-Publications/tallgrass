@@ -65,6 +65,14 @@ export interface AnimParams {
   dutyT: number;
   dutyG: number;
   /**
+   * Stance fraction at the fastest gallop (chases and flights run well above the gallop band): the foot is on the ground
+   * for less of each stride, so the stride grows and the cadence stays within what the eye (and the frame rate) can
+   * follow. Blends from dutyG to this between `fast0` and `fast1` (pace in on-screen m/s). Defaults: no change.
+   */
+  dutyGF?: number;
+  fast0?: number;
+  fast1?: number;
+  /**
    * Metres per leg cycle at a walk and at a full gallop, and the speed at which the interpolation completes. Used for
    * hoppers and birds only: quadrupeds derive their stride from the hip amplitude and stance fraction (plantedStride).
    */
@@ -100,10 +108,18 @@ export function footReach(amp: number): number {
  * 2 * L * reach(hip amplitude) along the ground, spread over the stance fraction of the cycle. Run the cycle at
  * speed / stride Hz and the planted foot stands still on the ground.
  */
-export function plantedStride(p: AnimParams, gait: 0 | 1 | 2): number {
+export function plantedStride(p: AnimParams, gait: 0 | 1 | 2, pace = 0): number {
   const amp = gait === 0 ? p.ampW : gait === 1 ? p.ampT : p.ampG;
-  const duty = gait === 0 ? p.dutyW : gait === 1 ? p.dutyT : p.dutyG;
+  const duty = gait === 0 ? p.dutyW : gait === 1 ? p.dutyT : gallopDuty(p, pace);
   return (2 * (p.legL ?? p.comY) * footReach(amp)) / duty;
+}
+
+/** Gallop stance fraction at a given pace (the shader evaluates the same curve). */
+export function gallopDuty(p: AnimParams, pace: number): number {
+  if (p.dutyGF === undefined) return p.dutyG;
+  const a = p.fast0 ?? p.gal1, b = p.fast1 ?? p.gal1 * 2.2;
+  const t = Math.min(1, Math.max(0, (pace - a) / (b - a)));
+  return p.dutyG + (p.dutyGF - p.dutyG) * t * t * (3 - 2 * t);
 }
 
 export interface ModelDef {

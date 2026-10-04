@@ -6,7 +6,7 @@ import { DEFAULT_PARAMS, type ModelDef } from './types';
 export function buildPronghorn(): ModelDef {
   const b = new MeshBuilder();
   const hornCol = lin(0x0c0a08);
-  const white = 0.76;
+  const white = 0.64;
 
   /** Blend from tan coat (multiplier) to white (absolute) by w. */
   const toWhite = (k: number, w: number): Paint => [mix(k, white, w), mix(k, white * 0.97, w), mix(k, white * 0.9, w), 1 - w];
@@ -119,6 +119,8 @@ export function buildPronghorn(): ModelDef {
     fill: 1.5,
     warm: [1.1, 1.0, 0.84],
     neutral: 0.7,
+    // from the drone view the pale coat is pulled down a little so a herd reads as tan and white, not a bright smear
+    far: { gain: 0.86, rim: 0, hunt: 0, rimCol: [1, 1, 1] },
     params: {
       ...DEFAULT_PARAMS,
       kind: 0,
@@ -126,7 +128,7 @@ export function buildPronghorn(): ModelDef {
       // on-screen m/s at 1x: walking herds (0.6 to 5) walk then trot, a flight (10 to 24) is a full gallop
       trot0: 3.0, trot1: 4.0, gal0: 8.0, gal1: 11.0,
       ampW: 0.55, ampT: 0.66, ampG: 1.0,
-      dutyW: 0.62, dutyT: 0.5, dutyG: 0.36,
+      dutyW: 0.62, dutyT: 0.5, dutyG: 0.36, dutyGF: 0.25, fast0: 11, fast1: 26,
       kneeW: 0.5, kneeT: 0.8, kneeG: 1.2,
       bobW: 0.012, bobT: 0.03, bobG: 0.08,
       pitchT: 0.02, pitchG: 0.09,

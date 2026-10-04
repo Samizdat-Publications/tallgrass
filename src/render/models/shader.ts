@@ -33,6 +33,7 @@ function defines(p: AnimParams): string {
     `#define HOCK_K ${f(p.hockK)}`,
     `#define OFF_W ${v4(p.offW)}`, `#define OFF_T ${v4(p.offT)}`, `#define OFF_G ${v4(p.offG)}`,
     `#define DUTY_W ${f(p.dutyW)}`, `#define DUTY_T ${f(p.dutyT)}`, `#define DUTY_G ${f(p.dutyG)}`,
+    `#define DUTY_GF ${f(p.dutyGF ?? p.dutyG)}`, `#define FAST0 ${f(p.fast0 ?? p.gal1)}`, `#define FAST1 ${f(p.fast1 ?? p.gal1 * 2.2)}`,
     `#define REACH_W ${f(footReach(p.ampW))}`, `#define REACH_T ${f(footReach(p.ampT))}`, `#define REACH_G ${f(footReach(p.ampG))}`,
     `#define STRETCH_CAP ${f(STRETCH_CAP)}`, `#define STRETCH_Y ${f(Math.sqrt(STRETCH_CAP * STRETCH_CAP - 1))}`,
     `#define FLAP_HZ ${f(p.flapHz)}`,
@@ -102,6 +103,11 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
   int part = int(aPart.x + 0.5);
   float spd = aGait.y;
   bool dead = spd < -0.5;
+  // A body that has just been killed keeps the running pace it died at (aFx.z) while its legs go loose: the gait fades out
+  // over the first part of the fall (aFx.w, 0 = just hit, 1 = down) instead of the animal freezing stiff and tipping over.
+  float fallen = dead ? clamp(aFx.w, 0.0, 1.0) : 1.0;
+  float stag = dead ? (1.0 - smoothstep(0.08, 0.5, fallen)) : 1.0;
+  float spdG = dead ? aFx.z : spd;
   float seed = aLook.y;
   float sick = dead ? 0.0 : fract(aLook.w);
   float lie = dead ? 0.0 : aGait.w;
@@ -118,14 +124,13 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
   // invisible and only whole-body motion (bounding, spine flex, head pumping, sway) tells walking from running.
   float farK = smoothstep(ANIM_NEAR, ANIM_FAR, distance(uCamPos, vec3(instanceMatrix[3])));
   float pounce = dead ? 0.0 : aFx.w;
-  float fallen = dead ? clamp(aFx.w, 0.0, 1.0) : 1.0;
 
   // gait weights from speed
-  float s1 = smoothstep(TROT0, TROT1, spd);
-  float wGal = smoothstep(GAL0, GAL1, spd);
+  float s1 = smoothstep(TROT0, TROT1, spdG);
+  float wGal = smoothstep(GAL0, GAL1, spdG);
   float wTrot = s1 * (1.0 - wGal);
-  float wWalk = smoothstep(0.08, 0.4, spd) * (1.0 - s1);
-  float moveK = dead ? 0.0 : (1.0 - lie);
+  float wWalk = smoothstep(0.08, 0.4, spdG) * (1.0 - s1);
+  float moveK = dead ? stag : (1.0 - lie);
   wWalk *= moveK; wTrot *= moveK; wGal *= moveK;
 
   // whole-body bob and pitch
@@ -174,7 +179,7 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
 #if KIND == 0
     vec2 lw = tgLegWave(ph + ow, DUTY_W);
     vec2 lt = tgLegWave(ph + ot, DUTY_T);
-    vec2 lg = tgLegWave(ph + og, DUTY_G);
+    vec2 lg = tgLegWave(ph + og, mix(DUTY_G, DUTY_GF, smoothstep(FAST0, FAST1, spdG)));
     hip = wWalk * tgHipFor(lw.x * REACH_W) + wTrot * tgHipFor(lt.x * REACH_T) + wGal * tgHipFor(lg.x * REACH_G);
     lift = wWalk * KNEE_W * lw.y + wTrot * KNEE_T * lt.y + wGal * KNEE_G * lg.y;
     // how planted this foot is (1 on the ground, 0 mid swing), used to keep it from riding up with the body
@@ -201,13 +206,16 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
     knee = 0.0;
 #endif
     if (dead) {
-      // a fallen animal lies on its side with the legs folded, not stiff spikes; while it is still going down they flail
-      float flail = (1.0 - fallen) * sin(fallen * 22.0 + float(part) * 1.7) * 0.7;
+      // A fallen animal lies on its side with the legs folded, not stiff spikes. Going down it first stumbles on (the gait it
+      // died in fading out), the forelegs buckle ahead of the hind legs and every leg flops loose, then it folds up.
+      float loose = sin(3.14159265 * clamp((fallen - 0.06) / 0.8, 0.0, 1.0));
+      float flopH = loose * (0.55 * sin(fallen * 17.0 + float(part) * 1.9) + (front ? 0.35 : -0.15));
+      float flopK = loose * 0.9 * (0.5 + 0.5 * sin(fallen * 13.0 + float(part) * 2.3)) * (front ? -1.0 : HOCK_K);
       float fh = front ? mix(DEAD_HIP_F, LIE_HIP_F, 0.7) : mix(DEAD_HIP_H, LIE_HIP_H, 0.7);
       float fk = (front ? LIE_KNEE_F : LIE_KNEE_H) * 0.7;
-      float f2 = smoothstep(0.3, 1.0, fallen);
-      hip = mix(0.0, fh, f2) + flail;
-      knee = mix(0.0, fk, f2);
+      float f2 = smoothstep(front ? 0.2 : 0.4, 1.0, fallen);
+      hip = mix(hip, fh, f2) + flopH * (1.0 - f2);
+      knee = mix(knee, fk, f2) + flopK * (1.0 - f2);
     }
     tgRotZ(p, n, aPivot2, knee * aPart.y);
     tgRotZ(p, n, aPivot, hip);
@@ -234,13 +242,18 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
     ang += pump;
     ang -= pounce * 0.55; // the head drives forward and down onto the prey
     ang = mix(ang, 0.15, lie * 0.7);
-    if (dead) { ang = mix(0.0, -0.55, smoothstep(0.2, 1.0, fallen)); yaw = 0.25 * fallen; }
+    if (dead) {
+      // the head drops as the animal goes, then lies slack
+      ang = mix(ang, -0.8, smoothstep(0.0, 0.3, fallen));
+      ang = mix(ang, -0.55, smoothstep(0.5, 1.0, fallen));
+      yaw = 0.25 * fallen;
+    }
     tgRotY(p, n, aPivot, yaw);
     tgRotZ(p, n, aPivot, ang);
   } else if (part == 6) {
     float sway = TAIL_SWAY * sin(t * 2.1 + seed * 17.0) + wWalk * 0.15 * sin(cyc);
     float lift = mix(TAIL_REST, TAIL_RUN, clamp(wGal + 0.4 * wTrot, 0.0, 1.0)) + 0.05 * sin(t * 1.3 + seed * 9.0);
-    if (dead) { lift = 0.0; sway = 0.0; }
+    if (dead) { float lim = 1.0 - smoothstep(0.1, 0.6, fallen); lift *= lim; sway *= lim; }
     tgRotZ(p, n, aPivot, lift);
     tgRotY(p, n, aPivot, sway);
   } else if (part == 7 || part == 8) {
@@ -265,7 +278,7 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
     if (dead) { /* carcass wings stay as modelled */ }
   }
 
-  p.y += bob + breathe - lie * LIE_DROP - crouchBody * CROUCH_DROP;
+  p.y += bob + breathe - lie * LIE_DROP - crouchBody * CROUCH_DROP - sick * 0.035 * COM_Y; // a sick animal sags a little
   tgRotZ(p, n, vec3(0.0, COM_Y, 0.0), pitch);
 
 #if KIND == 0
@@ -300,8 +313,8 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
     float r = clamp(aGait.z, 0.0, 1.0);
     float side = (fract(seed * 5.31) > 0.5 ? 1.0 : -1.0);
     // the stumble: the nose dips as the forelegs buckle, then the body rolls onto its side
-    float dip = sin(3.14159265 * smoothstep(0.0, 0.55, fallen)) * (1.0 - smoothstep(0.55, 0.8, fallen));
-    tgRotZ(p, n, vec3(0.0, COM_Y, 0.0), -0.22 * dip);
+    float dip = sin(3.14159265 * smoothstep(0.0, 0.5, fallen)) * (1.0 - smoothstep(0.5, 0.75, fallen));
+    tgRotZ(p, n, vec3(-0.25 * BODY_LEN, COM_Y, 0.0), -0.3 * dip);
     float roll = side * 1.45 * smoothstep(0.3, 1.0, fallen);
     tgRotX(p, n, vec3(0.0, COM_Y, 0.0), roll);
     p.y -= DEAD_DROP * smoothstep(0.3, 1.0, fallen);
@@ -338,19 +351,23 @@ void tgShade() {
   if (dead) {
     float r = aGait.z;
     col *= 0.5; // a dead body reads darker than the living herd, so a kill is a dark mark in the grass
-    vec3 flesh = vec3(0.22, 0.035, 0.03);
-    float fleshW = (1.0 - smoothstep(0.38, 0.62, r)) * 0.85;
+    // Exposed meat shows through the hide in patches as it is eaten: dark, dull maroon (not bright red), with the hide
+    // left in between, and the bone only at the very end.
+    vec3 flesh = vec3(0.1, 0.034, 0.028);
+    float hh = fract(sin(dot(position * 5.3 + aLook.y * 17.0, vec3(12.9898, 78.233, 37.719))) * 43758.5453);
+    float fleshW = (1.0 - smoothstep(0.35, 0.7, r + (hh - 0.5) * 0.55)) * 0.8;
     float boneW = (1.0 - smoothstep(0.04, 0.22, r));
     col = mix(mix(col, flesh, fleshW), uBone * 0.85, boneW);
   }
+  // Sickness: a duller, greyer, slightly darker coat (the head droop and the slower gait are in tgAnimate). Never a tint.
   float sick = dead ? 0.0 : fract(aLook.w);
   float luma = dot(col, vec3(0.2126, 0.7152, 0.0722));
-  col = mix(col, vec3(luma * 1.1) * vec3(0.96, 0.97, 0.95) + vec3(0.015), 0.5 * sick);
+  col = mix(col, vec3(luma * 0.92) * vec3(0.97, 0.97, 0.96), 0.6 * sick) * (1.0 - 0.1 * sick);
   vTgColor = col;
   vTgSel = floor(aLook.w + 0.001);
   // distance readability: 0 close up, 1 from the wide view (see ModelDef.far)
   vTgFar = smoothstep(FAR_NEAR, FAR_FAR, distance(uCamPos, vec3(instanceMatrix[3])));
-  vTgHunt = aFx.z;
+  vTgHunt = dead ? 0.0 : aFx.z;
 }
 `;
 
@@ -368,6 +385,10 @@ export interface AnimalShared {
   uCamPos: { value: THREE.Vector3 };
   /** Pixels per meter at 1 m distance for a 900 px tall viewport. */
   uPxK: { value: number };
+  /** How dark the scene is, 0 bright day .. 1 night (from the scene's lights); updated by `probe`. */
+  uLow: { value: number };
+  /** Reads the lights of the scene being rendered into `uLow` (called once per draw of the main view). */
+  probe?: (scene: THREE.Object3D, exposure: number) => void;
 }
 
 export function makeAnimalMaterials(sp: number, def: ModelDef, shared: AnimalShared): AnimalMaterials {
@@ -388,6 +409,7 @@ export function makeAnimalMaterials(sp: number, def: ModelDef, shared: AnimalSha
     shader.uniforms.uRimCol = { value: new THREE.Vector3(...far.rimCol) };
     shader.uniforms.uRimK = { value: far.rim };
     shader.uniforms.uHuntK = { value: far.hunt };
+    shader.uniforms.uLow = shared.uLow;
     material.userData.shader = shader; // exposed for live tuning from the console
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', `#include <common>\n${defs}\n${COMMON_DECL}\n${VERT_SHADE_DECL}`)
@@ -397,12 +419,17 @@ export function makeAnimalMaterials(sp: number, def: ModelDef, shared: AnimalSha
       )
       .replace('#include <begin_vertex>', 'vec3 transformed = tgP;');
     shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', `#include <common>\nvarying vec3 vTgColor;\nvarying float vTgSel;\nvarying float vTgFar;\nvarying float vTgHunt;\nuniform float uFill;\nuniform vec3 uWarm;\nuniform float uNeutral;\nuniform float uFarGain;\nuniform vec3 uRimCol;\nuniform float uRimK;\nuniform float uHuntK;`)
-      .replace('#include <color_fragment>', 'diffuseColor.rgb *= vTgColor * mix(1.0, uFarGain, vTgFar);')
+      .replace('#include <common>', `#include <common>\nvarying vec3 vTgColor;\nvarying float vTgSel;\nvarying float vTgFar;\nvarying float vTgHunt;\nuniform float uFill;\nuniform vec3 uWarm;\nuniform float uNeutral;\nuniform float uFarGain;\nuniform vec3 uRimCol;\nuniform float uRimK;\nuniform float uHuntK;\nuniform float uLow;`)
+      // Bright parts of the coat (the white bands and rump) are pulled toward a mid value as the light drops, so they
+      // darken with the scene instead of glowing against the dark herds at dusk and night.
+      .replace('#include <color_fragment>', `vec3 tgC = vTgColor * mix(1.0, uFarGain, vTgFar);
+        float tgL = dot(tgC, vec3(0.2126, 0.7152, 0.0722));
+        tgC *= 1.0 - 0.8 * uLow * max(tgL - 0.16, 0.0) / max(tgL, 1e-3);
+        diffuseColor.rgb *= tgC;`)
       // sky fill: pull toward a warm neutral (so brown coats stay brown in blue shade), then boost it so the shaded side keeps form
       .replace(
         '#include <lights_fragment_end>',
-        `irradiance = mix(irradiance, vec3(dot(irradiance, vec3(0.2126, 0.7152, 0.0722))) * uWarm, uNeutral) * uFill;\n#include <lights_fragment_end>`,
+        `irradiance = mix(irradiance, vec3(dot(irradiance, vec3(0.2126, 0.7152, 0.0722))) * uWarm, uNeutral) * uFill * (1.0 - 0.3 * uLow);\n#include <lights_fragment_end>`,
       )
       .replace(
         '#include <emissivemap_fragment>',
@@ -410,7 +437,7 @@ export function makeAnimalMaterials(sp: number, def: ModelDef, shared: AnimalSha
         float tgRim = pow(1.0 - clamp(dot(normalize(vViewPosition), normal), 0.0, 1.0), 3.0);
         totalEmissiveRadiance += vec3(1.0, 0.8, 0.35) * vTgSel * (0.015 + 0.45 * tgRim);
         float tgEdge = pow(1.0 - clamp(dot(normalize(vViewPosition), normal), 0.0, 1.0), 1.6);
-        totalEmissiveRadiance += uRimCol * vTgFar * (uRimK + vTgHunt * uHuntK) * tgEdge;`,
+        totalEmissiveRadiance += uRimCol * vTgFar * (uRimK + vTgHunt * uHuntK) * tgEdge * (1.0 - 0.9 * uLow);`,
       );
   };
   material.customProgramCacheKey = () => `tg-animal-${sp}`;
