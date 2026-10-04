@@ -5,7 +5,7 @@
 ## How to run it (one step)
 Open **https://tallgrass.stewartgregerson.workers.dev** in Chrome or Edge. Click once anywhere to turn on sound. (The live build is redeployed after each verified milestone; the time of the last deploy is in the line below.)
 
-Last deploy: 06:30 Sunday (commit 02b5744: the 2x valley calendar, the documentary narrator, animal and UI round 6, ambient view, faster fast-forward, documentary camera cuts), verified live: no errors at 59 to 60 fps; the default world reads "1 year every 2 min" and challenges keep the classic "1 year every 4 min".
+Last deploy: 07:10 Sunday (commit 9e94dd9: renderer round 7 with the new world edge and skies, Field notes, the 2x valley calendar, the narrator, animal and UI round 6), verified live: no errors; the default world reads "1 year every 2 min" and challenges keep "1 year every 4 min". The live check measured 43 to 44 fps while the machine was also running three simulation batches; a clean measurement follows.
 
 Locally: `npm run dev`, then http://localhost:5199/.
 - `?seed=anything` picks a world, `?scenario=yellowstone` picks a scenario, `?challenge=herd` starts a challenge. The menu (top right) does all three.
