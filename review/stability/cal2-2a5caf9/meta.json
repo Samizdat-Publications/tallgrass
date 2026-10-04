@@ -1,0 +1,68 @@
+{
+ "args": {
+  "seeds": 20,
+  "seedBase": 1,
+  "ticks": 3600000,
+  "generations": 1000,
+  "sampleEvery": 2000,
+  "threads": 11,
+  "scenarios": [
+   "baseline"
+  ],
+  "params": {
+   "calendarScale": 2
+  },
+  "mock": false,
+  "maxMinutes": 0,
+  "progressSec": 15,
+  "out": "C:\\Users\\stewa\\Documents\\Claude\\ecosystem-sim\\review\\stability\\cal2-2a5caf9",
+  "argv": [
+   "--seeds",
+   "20",
+   "--generations",
+   "1000",
+   "--ticks",
+   "3600000",
+   "--sample",
+   "2000",
+   "--threads",
+   "11",
+   "--out",
+   "review/stability/cal2-2a5caf9",
+   "--scenario",
+   "baseline",
+   "--params",
+   "{\"calendarScale\":2}"
+  ]
+ },
+ "commit": "2a5caf9 (frozen copy)",
+ "node": "v24.19.0",
+ "platform": "win32 x64",
+ "startedAt": "2026-10-04T06:38:20.132Z",
+ "finishedAt": "2026-10-04T09:28:08.178Z",
+ "wallSeconds": 10188.02,
+ "stopReason": null,
+ "tasks": {
+  "total": 20,
+  "completed": 20,
+  "errors": 0,
+  "aborted": 0,
+  "skipped": 0
+ },
+ "msPerTick": 3.103596,
+ "ticksRun": 29862000,
+ "ticksPerSecWall": 2931,
+ "scenarios": {
+  "baseline": {
+   "seeds": 20,
+   "completed": 20,
+   "persistencePct": {
+    "bison": 95,
+    "wolf": 95,
+    "raven": 95,
+    "pronghorn": 95
+   },
+   "maxGen": 1001.9566433566433
+  }
+ }
+}
