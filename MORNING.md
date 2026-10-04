@@ -1,11 +1,11 @@
 # Good morning: Tallgrass overnight report
 
-*(Updated 06:35 Sunday. I keep working until the deadline in `.claude/hooks/run_until.txt` (Sunday 12:00); this file is refreshed at every milestone.)*
+*(Updated 09:00 Sunday. I keep working until the deadline in `.claude/hooks/run_until.txt` (Sunday 12:00); this file is refreshed at every milestone.)*
 
 ## How to run it (one step)
 Open **https://tallgrass.stewartgregerson.workers.dev** in Chrome or Edge. Click once anywhere to turn on sound. (The live build is redeployed after each verified milestone; the time of the last deploy is in the line below.)
 
-Last deploy: 07:10 Sunday (commit 9e94dd9: renderer round 7 with the new world edge and skies, Field notes, the 2x valley calendar, the narrator, animal and UI round 6), verified live: no errors; the default world reads "1 year every 2 min" and challenges keep "1 year every 4 min". The live check measured 43 to 44 fps while the machine was also running three simulation batches; a clean measurement follows.
+Last deploy: 08:58 Sunday (commit 55b71ff: renderer round 8 with winter snowpack, bare winter trees, visible rain and a darker night; water rework, dust fix, Field notes, the Hungry wolves scenario, the 2x valley calendar, the narrator), verified live: no errors at 56 to 60 fps; the default world reads "1 year every 2 min" and challenges keep "1 year every 4 min".
 
 Locally: `npm run dev`, then http://localhost:5199/.
 - `?seed=anything` picks a world, `?scenario=yellowstone` picks a scenario, `?challenge=herd` starts a challenge. The menu (top right) does all three.
@@ -24,6 +24,8 @@ New since Saturday evening (overnight into Sunday):
 - **Documentary camera:** it now cuts to a subject across the valley instead of flying the camera through the trees, and near moves ease in and out.
 - **UI:** the chronicle is newest first everywhere, with a season tag on each entry and an "N earlier entries" pager. Chapter cards never contradict the header: once the valley leaves the season a card names, it trims to the year, even while on screen. **H** (or the eye button by the menu) gives an ambient view with no interface for a second monitor.
 - **A landing page draft** (you mentioned the journey could become one): https://claude.ai/artifact/JHgLkaPPUGvWmeZU5FJ3YM (private to you). Film stills from the current build, what you can do in the game, a chart drawn from a real 1,000-generation run, and the controls; source in `landing/`.
+- **Winters and weather that read:** on the short calendar snow storms were rare, so winters looked like autumn. Deep winter now carries a patchy snowpack, trees stay bare until spring (a leaf-curve bug had them greening in late winter), rain brings overcast light and streaks, and nights keep their relief instead of a flat teal.
+- **Water that reads as water:** depth and a visible bed, a creek current that scrolls downstream, wet banks, reflections of the banks and trees, and ponds that freeze from the shore in winter.
 - **Snow bug fixed:** after a fast-forward on a slow frame rate, snow could linger into early summer. Weather now tracks the calendar at any frame rate.
 
 Earlier, Saturday (since 09:00):
