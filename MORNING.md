@@ -64,14 +64,14 @@ Earlier, Saturday (since 09:00):
 4. Overlays, **Wolf territories**, then 10x: watch packs form, bud and fall apart.
 5. Press **G**, then 100x: decades of booms and crashes, now on the slower calendar. **E** for evolution.
 
-## Screenshots (current build, captured about 09:10 in `review/morning/sunday2/`; earlier sets in `review/morning/`)
-- `2_golden_low.png`: bison against a low sun, the new horizon and dusk glow (no interface, H).
-- `1_golden_herd.png`: the valley from the drone at golden hour, with the creek reading as water.
-- `4_winter_dawn.png`: winter dawn with the new snowpack, bare cottonwoods and a herd along the creek.
-- `5_ui_golden.png`: the documentary interface with the chronicle's season lines ("Pups at the dens, and the wolves rise from 24 to 40").
-- `7_follow_a_wolf_hunt.png`: following a founder wolf pup on a hunt, with its traits and life story and a Field note.
-- `6_ui_territories.png`: wolf territories with named packs, and a chapter card.
-- `8_field_notes.png`, `9_chart_60_years.png` (60 valley-years in 4 worlds), `10_chart_shocks.png` (the 300-year shock suite).
+## Screenshots (the deployed build, captured at 10:40 in `review/morning/final/`; earlier sets in `review/morning/`)
+- `1_golden_herd.png`: the creek valley from the drone in late-summer light, herds grazing along the cottonwoods.
+- `2_golden_low.png`: ground level against a low sun, bison on the rise and a fresh kill in the foreground (no interface, H).
+- `3_dusk_valley.png`: the whole valley at dusk, the creek's tree line and the pond.
+- `4_winter_dawn.png`: winter dawn, patchy snowpack, bare cottonwoods and a herd strung along the frozen creek.
+- `5_ui_golden.png`: the documentary interface with the chronicle's season lines.
+- `6_ui_territories.png`: wolf territories as tinted ranges with named packs, and a chapter card.
+- From the 09:10 set in `review/morning/sunday2/`: `7_follow_a_wolf_hunt.png` (following a founder wolf pup, with its traits, life story and a Field note), `8_field_notes.png`, `9_chart_60_years.png` (60 valley-years in 4 worlds), `10_chart_shocks.png` (the 300-year shock suite).
 - Every image made tonight, in order, is in `journey/` (see `journey/INDEX.md`), as you asked. **Browse them as a page with a slideshow: https://claude.ai/artifact/7jPHUFvbzTv6AUz5UCA3Mu** (private to you; republished as new images are added). Locally: open `journey/index.html`.
 
 ## Stability: what is proven and what isn't (honest)
