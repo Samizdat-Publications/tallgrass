@@ -1,21 +1,24 @@
 # Good morning: Tallgrass overnight report
 
-*(Updated 02:20 Sunday. I keep working until the deadline in `.claude/hooks/run_until.txt` (Sunday 12:00); this file is refreshed at every milestone.)*
+*(Updated 06:45 Sunday. I keep working until the deadline in `.claude/hooks/run_until.txt` (Sunday 12:00); this file is refreshed at every milestone.)*
 
 ## How to run it (one step)
 Open **https://tallgrass.stewartgregerson.workers.dev** in Chrome or Edge. Click once anywhere to turn on sound. (The live build is redeployed after each verified milestone; the time of the last deploy is in the line below.)
 
-Last deploy: about 01:40 Sunday (commit b679901: everything through renderer, animal and UI round 6, the documentary camera, death sounds), verified: loads with no errors at 60 fps, default world and `?challenge=homecoming`.
+Last deploy: 06:40 Sunday (commit 02b5744: the 2x valley calendar, the documentary narrator, animal and UI round 6, ambient view, faster fast-forward, documentary camera cuts), verified live: no errors at 59 to 60 fps; the default world reads "1 year every 2 min" and challenges keep the classic "1 year every 4 min".
 
 Locally: `npm run dev`, then http://localhost:5199/.
 - `?seed=anything` picks a world, `?scenario=yellowstone` picks a scenario, `?challenge=herd` starts a challenge. The menu (top right) does all three.
 - Performance, measured on this machine's RTX 5070 Ti Laptop GPU (01:55 Sunday, forced renders with a GPU sync): **1080p 7.7 to 11.5 ms per frame, 1440p 10 to 15.4 ms**, so 60 fps with headroom at both. On bigger or high-DPI screens the game lowers its render resolution a little if it has to, to hold 60 fps.
-- Keys: Space pause, 1/2/3 speed, **N next event** (the camera flies to it), **C cinematic documentary mode**, **P photo** (saves a clean PNG of the frame), G big graph, E evolution chart, L log scale, F follow the selected animal, H hide UI, M mute, Esc back out. Click an animal to inspect it and read its life story. Left-drag orbits, right-drag pans, wheel zooms.
+- Keys: Space pause, 1/2/3 speed, **N next event** (the camera flies to it), **C cinematic documentary mode**, **P photo** (saves a clean PNG of the frame), G big graph, E evolution chart, L log scale, F follow the selected animal, **H ambient view** (hides all UI; any key or click brings it back), **V narrator on/off**, M mute, Esc back out. Click an animal to inspect it and read its life story. Left-drag orbits, right-drag pans, wheel zooms.
 
 ## What it is
 **Tallgrass**: a living tallgrass prairie seen like a drone nature documentary. Grass greens and cures with the seasons; bison graze it and pronghorn browse forbs and shrubs; wolf packs hold named territories, bud new packs and fight over borders; ravens follow every kill; carcasses feed the soil. Every animal carries heritable traits (speed, size, sight, boldness, herding, coat, litter) that evolve. The sim runs in a Web Worker, deterministic from the seed. The renderer is Three.js (WebGL2) with about a million wind-blown grass blades, procedurally animated instanced animals, a golden-hour sky with a slow day cycle, seasons, snow, fire with smoke and regrowth. The UI is a "documentary broadcast" overlay: location slate, chronicle, chapter cards, population and evolution graphs, inspector with each animal's life story, god tools, map overlays. Ambient sound and SFX by ElevenLabs.
 
 New since Saturday evening (overnight into Sunday):
+- **A slower, truer calendar:** a valley year is now 2 minutes at 1x, so a bison lives about 6.7 valley-years and the herds boom and bust over a decade instead of a few years. Proven over 1,000 generations (see Stability).
+- **A documentary narrator:** a calm voice speaks a line when something big happens (a drought, a stampede, a new pack, a fire, the first kill), only while the documentary camera or cinematic mode is filming at 1x or 10x, at most once every 40 seconds. **V** or the menu switch turns it off. In cinematic mode the line also shows as a caption.
+- **Fast-forward is faster:** 100x had been running at about a quarter of that; the sim now gets more of each frame.
 - **Animals you can read from the drone:** wolves keep a cool slate coat and a faint glint at distance, bison stay warm brown at dusk instead of turning into black stains, pronghorn read tan, and the species separate from straight above. Bodies bound and pitch with the slope more strongly at distance, so movement reads as effort even when legs are a few pixels tall. The selection ring is a crisp thin ring. Carcasses show a pale belly and a fresh-kill stain.
 - **Documentary camera:** it now cuts to a subject across the valley instead of flying the camera through the trees, and near moves ease in and out.
 - **UI:** the chronicle is newest first everywhere, with a season tag on each entry and an "N earlier entries" pager. Chapter cards never contradict the header. **H** (or the eye button by the menu) gives an ambient view with no interface for a second monitor.
