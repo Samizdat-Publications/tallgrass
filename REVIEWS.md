@@ -111,3 +111,9 @@ Gemini video: Visual 4, Readability 6, Life and motion 2, Ecosystem 7, UI 9, Kee
 | G5 | Riverside trees all the same | FIX | renderer builder | Same as 7. |
 | G6 | Cinematic camera moves in straight lines | FIX | lead | Ease the cinematic path. |
 | G7 | Flat river | DEFER | renderer builder | After the above. |
+
+Round 6 outcomes (04:40):
+- Fixed: 5 (snow lag, e82a67b, verified with stills set 'snow'), G6 (director cuts and eased glides, 94182a0, verified by logging camera moves), 4 + 6 + G1 + G3 (animal layer round 6, ac1a420: wolves at distance, dusk herds warm brown, species separable from above, 1.5 to 2x distance motion, crisp ring, carcass belly and stain; frame cost flat), 10 (UI round 6, 948ffb6: chronicle order and pager, cards never contradict the header, H ambient view, calmer notice).
+- In progress: 7, 9, G2, G4, G5 (renderer builder: world edge and ridges first).
+- Research: 1 (calendar re-scale cal2: 100-year screen within noise of v5 and visibly slower cycles, chart journey/20261004-042209_chart_calendar-cycles.png; acceptance and 300-year shocks running), 2 (wolf-tracking screens queued on cal2).
+- Also from this round: the documentary narrator (18 lines, being wired in), and fast-forward throughput (the worker stepped only 11 ms per 27 ms cycle).
