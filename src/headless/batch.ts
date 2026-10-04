@@ -15,7 +15,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { Worker } from 'node:worker_threads';
-import { YEAR_TICKS } from '../sim/types';
+import { setCalendarScale, YEAR_TICKS } from '../sim/types';
 import { aggregate, renderMarkdown, verdict, type SeedMetrics } from './metrics';
 import { SCENARIOS, argNum, argStr, parseCliArgs, parseParams, resolveScenarios } from './scenarios';
 import type { DoneMsg, ProgressMsg, TaskMsg, WorkerInit } from './batchWorker';
@@ -77,6 +77,8 @@ async function main(): Promise<void> {
   const mock = args.mock === true;
   const scenarios = resolveScenarios(argStr(args, 'scenario'));
   const params = parseParams(argStr(args, 'params'), (p) => readFileSync(p, 'utf8'));
+  // the workers set the calendar when they build each sim; the reports here need the same year length
+  setCalendarScale(Number(params.calendarScale ?? 1));
   const maxMinutes = argNum(args, 'max-minutes', 0);
   const progressSec = Math.max(1, argNum(args, 'progress-sec', 15));
   const stamp = startedAt.toISOString().replace(/[:.]/g, '-').slice(0, 19);

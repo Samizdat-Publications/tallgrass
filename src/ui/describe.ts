@@ -8,8 +8,9 @@ import type { SimEvent } from '../sim/sim';
 /** Valley size in metres (DESIGN.md). Used only to turn an x,y into "eastern", "northern" and so on. */
 const WORLD_SIZE = 512;
 
-/** The sim opens late in the calendar year, so the calendar is offset exactly like env.ts does it. */
-const CALENDAR_OFFSET = Math.round(START_SEASON * SEASON_TICKS);
+/** The sim opens late in the calendar year, so the calendar is offset exactly like env.ts does it (read at use time:
+ *  the calendar scale is set at startup). */
+const calendarOffset = () => Math.round(START_SEASON * SEASON_TICKS);
 
 export interface EventText {
   sentence: string;
@@ -58,17 +59,17 @@ export function weatherWord(w: number): string {
 
 /** Calendar year shown to the player. The sim's env.year is zero-based, the player's first year is year 1. */
 export function yearOfTick(tick: number): number {
-  return Math.floor((tick + CALENDAR_OFFSET) / YEAR_TICKS) + 1;
+  return Math.floor((tick + calendarOffset()) / YEAR_TICKS) + 1;
 }
 
 /** First tick of a player-facing year (inverse of yearOfTick). */
 export function yearStartTick(year: number): number {
-  return (year - 1) * YEAR_TICKS - CALENDAR_OFFSET;
+  return (year - 1) * YEAR_TICKS - calendarOffset();
 }
 
 /** Continuous season value (0..4) for a tick. */
 export function seasonOfTick(tick: number): number {
-  return (((tick + CALENDAR_OFFSET) % YEAR_TICKS) + YEAR_TICKS) % YEAR_TICKS / SEASON_TICKS;
+  return (((tick + calendarOffset()) % YEAR_TICKS) + YEAR_TICKS) % YEAR_TICKS / SEASON_TICKS;
 }
 
 /** "Year 12, late summer" */

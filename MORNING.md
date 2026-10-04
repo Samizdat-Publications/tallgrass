@@ -1,11 +1,11 @@
 # Good morning: Tallgrass overnight report
 
-*(Updated 12:30 Saturday. I keep working until the deadline in `.claude/hooks/run_until.txt` (Sunday 12:00); this file is refreshed at every milestone.)*
+*(Updated 02:20 Sunday. I keep working until the deadline in `.claude/hooks/run_until.txt` (Sunday 12:00); this file is refreshed at every milestone.)*
 
 ## How to run it (one step)
 Open **https://tallgrass.stewartgregerson.workers.dev** in Chrome or Edge. Click once anywhere to turn on sound. (The live build is redeployed after each verified milestone; the time of the last deploy is in the line below.)
 
-Last deploy: 01:50 Sunday (commit b679901: everything through renderer, animal and UI round 6, the documentary camera, death sounds), verified: loads with no errors at 60 fps, default world and `?challenge=homecoming`.
+Last deploy: about 01:40 Sunday (commit b679901: everything through renderer, animal and UI round 6, the documentary camera, death sounds), verified: loads with no errors at 60 fps, default world and `?challenge=homecoming`.
 
 Locally: `npm run dev`, then http://localhost:5199/.
 - `?seed=anything` picks a world, `?scenario=yellowstone` picks a scenario, `?challenge=herd` starts a challenge. The menu (top right) does all three.
@@ -94,10 +94,15 @@ The default sim is now **checkpoint v5** (since 16:45 Saturday). v4 results are 
 | 3 (12:00) | Gemini, 108 s video | 4 | 7 | 2 | 4 | 8 | 3 |
 | 4 (18:30) | blind critic, stills + v5 charts | 6 | 4 | 5 | 5 | 6 | 5 |
 | 4 (18:30) | Gemini, 108 s video | 4 | 8 | 1 | 6 | 9 | 3 |
+| 5 (23:10) | blind critic, stills + v5 charts | 6 | 4 | 5 | 5 | 7 | 5 |
+| 5 (23:10) | Gemini, video | 5 | 8 | 3 | 6 | 9 | 5 |
+| 6 (01:40) | blind critic, stills + v5 charts | 7 | 5 | 7 | 4 | 7 | 6 |
+| 6 (01:40) | Gemini, video | 4 | 6 | 2 | 7 | 9 | 5 |
 
 Every issue and its triage is in `REVIEWS.md`.
 - Round 4's verdict: animals were illegible and looked motionless at drone distance. In the drone shots a wolf is about 20 px tall, so planted feet can't read. The animal work since then targets exactly that, with whole-body motion scaled to camera distance, larger minimum sizes and a kill lunge.
-- Round 5 (stills, video and both critics) runs once the current long simulations free the CPU, so the fast-forward footage isn't throttled.
+- Rounds 5 and 6: the stills critic's visual, life and keep-watching scores rose (visual 6 to 7, life 5 to 7). Its top complaint, three rounds running, is that population swings are too fast for "years": a bison lives about 3.3 valley-years, so a crash heals in about 5 years. That is the calendar trade-off described under "Decisions you might want to overrule", and I'm screening a fix for it (below). Gemini's top complaint is gait and weight in wide shots. A frame-by-frame check of its clip found a 70 to 100 m wide shot where legs are 2 to 3 px tall, so the fix is distance cues (body bob, slope pitch), not foot IK.
+- Round 6 also found a real bug: deep snow in early summer after fast-forward at a low frame rate. Fixed (e82a67b).
 
 ## Decisions you might want to overrule
 - **Stack:** TypeScript + Three.js instead of Godot (ADR-001 in `DECISIONS.md`): one language for sim, harness and renderer, headless GPU capture, and the URL build.

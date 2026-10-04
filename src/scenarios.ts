@@ -1,5 +1,5 @@
 // Scenarios: starting conditions plus scheduled interventions. Shared by the game and the harness.
-import { Intervention, Sp, YEAR_TICKS } from './sim/types';
+import { BASE_YEAR_TICKS as Y, Intervention, Sp } from './sim/types';
 
 export interface Scenario {
   id: string;
@@ -19,7 +19,7 @@ export const SCENARIOS: Scenario[] = [
     id: 'yellowstone', name: 'Yellowstone return',
     blurb: 'No wolves for three years, so the herds and the grazing pressure build. Then a few wolves arrive.',
     params: { 'wolf.initial': 0 },
-    schedule: [{ tick: YEAR_TICKS * 3, iv: { kind: 'introduce', species: Sp.Wolf, count: 12 } }],
+    schedule: [{ tick: Y * 3, iv: { kind: 'introduce', species: Sp.Wolf, count: 12 } }],
   },
   {
     id: 'island', name: 'Island of plenty',
@@ -30,13 +30,13 @@ export const SCENARIOS: Scenario[] = [
     id: 'drought', name: 'The long drought',
     blurb: 'A dry spell settles in after the first year and lasts two summers.',
     params: {},
-    schedule: [{ tick: YEAR_TICKS, iv: { kind: 'drought', ticks: YEAR_TICKS * 2, severity: 0.85 } }],
+    schedule: [{ tick: Y, iv: { kind: 'drought', ticks: Y * 2, severity: 0.85 } }],
   },
   {
     id: 'dryyears', name: 'The dry years',
     blurb: 'Drought comes in the second year, then returns every four years and lasts a year and a half.',
     params: {},
-    schedule: [1, 5, 9, 13, 17, 21, 25, 29].map((y) => ({ tick: YEAR_TICKS * y, iv: { kind: 'drought' as const, ticks: YEAR_TICKS * 1.5, severity: 0.7 } })),
+    schedule: [1, 5, 9, 13, 17, 21, 25, 29].map((y) => ({ tick: Y * y, iv: { kind: 'drought' as const, ticks: Y * 1.5, severity: 0.7 } })),
   },
   {
     id: 'cougars', name: 'Cougar country',

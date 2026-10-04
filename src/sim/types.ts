@@ -98,8 +98,17 @@ export interface Snapshot {
 /** Ticks per second of real time at 1x speed. */
 export const TICKS_PER_SECOND = 10;
 export const DAY_TICKS = 800;
-export const SEASON_TICKS = 600;
-export const YEAR_TICKS = 2400;
+/** Ticks per season and per valley year. Live bindings: setCalendarScale(k) shortens the year k-fold (params.calendarScale);
+ *  the default is a 2,400-tick year. Read them at use time, never copy them into a module-level constant. */
+export let SEASON_TICKS = 600;
+export let YEAR_TICKS = 2400;
+/** The original year length, for timers that stay fixed in ticks whatever the calendar (carcass life, immunity...). */
+export const BASE_YEAR_TICKS = 2400;
+/** Set the valley calendar (call before anything reads YEAR_TICKS: the sim does it on construction, the game at startup). */
+export function setCalendarScale(k: number): void {
+  SEASON_TICKS = Math.round(600 / (k > 0 ? k : 1));
+  YEAR_TICKS = SEASON_TICKS * 4;
+}
 
 /** Shocks and god tools. Applied through SimLike.apply. */
 export type Intervention =

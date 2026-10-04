@@ -96,6 +96,11 @@ export interface Params {
   herdNearest: number;
   /** Amplitude of the slow climate cycle on grass growth (0 = off; 0.3 = +/-30%). */
   climateAmp: number;
+  /** Shortens the valley year k-fold (1 = 2,400-tick years). Biology per tick is unchanged, so animals live k times as
+   *  many valley-years and booms and recoveries take k times as many years; only the seasons turn faster. Wolf litters
+   *  are divided by k because wolves breed once a year. Timers that aren't seasons (carcass life, immunity, outbreak
+   *  spacing, drought length, immigration) stay fixed in ticks. */
+  calendarScale: number;
   /** Rate per year at which a pair of cougars wanders in while fewer than two live in the valley (0 = closed valley). */
   cougarImmigration: number;
   /** When an already-fleeing grazer is scared again, how much of its current flight line it keeps (0 = turn straight away from the new threat). */
@@ -216,6 +221,7 @@ export function defaultParams(): Params {
     matingWindow: 0,
     herdNearest: 0,
     climateAmp: 0,
+    calendarScale: 1,
     cougarImmigration: 0,
     fleeMomentum: 0,
     fearKill: 0.7,

@@ -13,7 +13,8 @@ import { challengeById } from './challenges';
 import { Director } from './director';
 import { AudioDirector } from './audio/audio';
 import { countNearby, nearWater01 } from './audio/inputs';
-import { DAY_TICKS, Sp, YEAR_TICKS, type Intervention, type Snapshot } from './sim/types';
+import { DAY_TICKS, setCalendarScale, Sp, YEAR_TICKS, type Intervention, type Snapshot } from './sim/types';
+import { applyOverrides, defaultParams } from './sim/params';
 import type { FromWorker, ToWorker } from './sim/worker';
 
 const q = new URLSearchParams(location.search);
@@ -132,7 +133,10 @@ for (const kv of (q.get('p') ?? '').split(',')) {
   const [k, v] = kv.split(':');
   if (k && v !== undefined && Number.isFinite(Number(v))) devParams[k.trim()] = Number(v);
 }
-send({ type: 'init', seed, params: { ...scenario.params, ...devParams }, schedule: scenario.schedule });
+const simParams = { ...scenario.params, ...devParams };
+// the game's own clocks (UI calendar, weather easing) follow the same valley calendar as the sim in the worker
+try { setCalendarScale(applyOverrides(defaultParams(), simParams).calendarScale); } catch { /* unknown dev param: the worker reports it */ }
+send({ type: 'init', seed, params: simParams, schedule: scenario.schedule });
 send({ type: 'speed', speed });
 
 /** Frame the biggest bison herd like a documentary opening shot. */

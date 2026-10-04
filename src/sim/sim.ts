@@ -4,7 +4,7 @@ import { Environment } from './env';
 import { BucketGrid } from './grid';
 import { applyOverrides, defaultParams, Params, SpeciesParams } from './params';
 import { Rng } from './rng';
-import { AGENT_STRIDE, CARCASS_STRIDE, F_ALPHA, F_INFECTED, F_JUVENILE, F_MALE, F_PREGNANT, Intervention, SimLike, Snapshot, SPECIES_COUNT, SPECIES_KEYS, Sp, St, YEAR_TICKS, SEASON_TICKS } from './types';
+import { AGENT_STRIDE, CARCASS_STRIDE, F_ALPHA, F_INFECTED, F_JUVENILE, F_MALE, F_PREGNANT, Intervention, SimLike, Snapshot, SPECIES_COUNT, SPECIES_KEYS, Sp, St, YEAR_TICKS, SEASON_TICKS, BASE_YEAR_TICKS, setCalendarScale } from './types';
 import { STRIDE, Vegetation } from './vegetation';
 import { generateWorld, World } from './world';
 
@@ -145,6 +145,7 @@ export class Sim implements SimLike {
   constructor(opts: SimOptions) {
     this.seed = opts.seed >>> 0;
     this.p = applyOverrides(defaultParams(), opts.params);
+    setCalendarScale(this.p.calendarScale);
     this.rng = new Rng(this.seed);
     this.world = opts.world ?? generateWorld(this.seed);
     this.env = new Environment(this.rng.fork(11));
@@ -477,7 +478,7 @@ export class Sim implements SimLike {
         if (crowd) continue;
         // a pack only raises pups on meat from real kills: no larder, no litter
         if (this.packStore[pk] < this.p.wolfBreedStore) continue;
-        let litter = Math.round(P.litter * a.genes[f * NG + G_LITTER] * (this.p.wolfLitterBase + this.p.wolfLitterSpan * Math.min(1, this.packStore[pk])) + (this.rng.next() - 0.5) * 2);
+        let litter = Math.round((P.litter / this.p.calendarScale) * a.genes[f * NG + G_LITTER] * (this.p.wolfLitterBase + this.p.wolfLitterSpan * Math.min(1, this.packStore[pk])) + (this.rng.next() - 0.5) * 2);
         litter = Math.max(1, Math.min(8, litter));
         for (let k = 0; k < litter; k++) {
           const c = this.birth(f, m, Sp.Wolf, this.packDenX[pk] + this.rng.range(-3, 3), this.packDenY[pk] + this.rng.range(-3, 3));
@@ -504,11 +505,11 @@ export class Sim implements SimLike {
       }
     }
     // rescue immigration (off by default): a pair walks in from outside the valley
-    if (this.p.wolfImmigration > 0 && this.pop[Sp.Wolf] < 6 && this.rng.next() < this.p.wolfImmigration / YEAR_TICKS) {
+    if (this.p.wolfImmigration > 0 && this.pop[Sp.Wolf] < 6 && this.rng.next() < this.p.wolfImmigration / BASE_YEAR_TICKS) {
       this.introduce(Sp.Wolf, 2);
     }
     // the valley holds only a few cougar ranges; when they empty, a pair of dispersers from the wider country moves in
-    if (this.p.cougarImmigration > 0 && this.pop[Sp.Cougar] < 2 && this.rng.next() < this.p.cougarImmigration / YEAR_TICKS) {
+    if (this.p.cougarImmigration > 0 && this.pop[Sp.Cougar] < 2 && this.rng.next() < this.p.cougarImmigration / BASE_YEAR_TICKS) {
       this.introduce(Sp.Cougar, 2);
     }
   }
@@ -766,7 +767,7 @@ export class Sim implements SimLike {
     for (let k = 0; k < this.cN; k++) {
       this.cAge[k]++;
       this.cMeat[k] -= rot * (0.5 + this.env.state.warmth) + this.cMeat[k] * 0.0006 * (0.4 + this.env.state.warmth);
-      if (this.cMeat[k] <= 0 || this.cAge[k] > YEAR_TICKS) {
+      if (this.cMeat[k] <= 0 || this.cAge[k] > BASE_YEAR_TICKS) {
         // the remains feed the soil: kill sites green up
         this.veg.stamp(this.veg.soil, this.cX[k], this.cY[k], 7, this.p.carcassSoil * Math.min(4, this.cMeat0[k]), 1.4);
         const last = --this.cN;
@@ -880,7 +881,7 @@ export class Sim implements SimLike {
       }
     }
     if (a.infected[i] > 0) {
-      if (--a.infected[i] === 0) { a.immune[i] = YEAR_TICKS; this.logStory(i, 'recovered'); }
+      if (--a.infected[i] === 0) { a.immune[i] = BASE_YEAR_TICKS; this.logStory(i, 'recovered'); }
     } else if (a.immune[i] > 0) a.immune[i]--;
     if (a.cooldown[i] > 0) a.cooldown[i]--;
     if (a.flee[i] > 0) a.flee[i]--;
@@ -944,7 +945,7 @@ export class Sim implements SimLike {
       if (pInf > 0 && rng.next() < pInf) {
         a.infected[i] = p.diseaseTicks;
         this.logStory(i, 'infected');
-        if (infNear === 0 && this.tick - this.lastOutbreak > YEAR_TICKS / 2) {
+        if (infNear === 0 && this.tick - this.lastOutbreak > BASE_YEAR_TICKS / 2) {
           this.lastOutbreak = this.tick;
           this.event('outbreak', s, x, y, n, 0);
         }
@@ -1858,7 +1859,7 @@ export class Sim implements SimLike {
         const i = this.preyList[k];
         if (a.alive[i] && a.flee[i] > 0 && a.sp[i] === Sp.Bison) { fleeing++; sx += a.x[i]; sy += a.y[i]; }
       }
-      if (fleeing >= 45 && t - this.lastStampede > YEAR_TICKS) {
+      if (fleeing >= 45 && t - this.lastStampede > BASE_YEAR_TICKS) {
         this.lastStampede = t;
         this.event('stampede', Sp.Bison, sx / fleeing, sy / fleeing, fleeing, 0);
       }

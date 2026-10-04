@@ -1,6 +1,6 @@
 // Calendar, day/night, weather. Deterministic from the sim RNG.
 import { Rng } from './rng';
-import { DAY_TICKS, EnvState, SEASON_TICKS, Weather, YEAR_TICKS } from './types';
+import { BASE_YEAR_TICKS, DAY_TICKS, EnvState, SEASON_TICKS, Weather, YEAR_TICKS } from './types';
 
 /** The world opens on a late-summer morning: golden grass, low sun. */
 export const START_SEASON = 1.8;
@@ -25,7 +25,7 @@ export class Environment {
   climate(): number {
     if (this.climateAmp <= 0) return 0;
     if (this.climatePhase < 0) this.climatePhase = this.rng.next() * Math.PI * 2;
-    const y = this.state.tick / YEAR_TICKS;
+    const y = this.state.tick / BASE_YEAR_TICKS;
     return 0.6 * Math.sin((y / 11) * Math.PI * 2 + this.climatePhase) + 0.4 * Math.sin((y / 17.3) * Math.PI * 2 + this.climatePhase * 1.7);
   }
 
@@ -74,7 +74,7 @@ export class Environment {
     const si = Math.floor(season) % 4;
     // natural dry spells: mostly summer
     if (si === 1 && r < 0.1) {
-      this.droughtTicks = Math.round(SEASON_TICKS * (1 + this.rng.next() * 1.5));
+      this.droughtTicks = Math.round((BASE_YEAR_TICKS / 4) * (1 + this.rng.next() * 1.5));
       this.droughtSeverity = 0.6 + 0.3 * this.rng.next();
       return;
     }

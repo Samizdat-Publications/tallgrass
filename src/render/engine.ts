@@ -11,7 +11,7 @@
 import * as THREE from 'three';
 import { SunLight } from 'three/addons/lights/SunLight.js';
 import type { World } from '../sim/world';
-import type { EnvState } from '../sim/types';
+import { SEASON_TICKS, type EnvState } from '../sim/types';
 import { SharedUniforms, clamp, createSharedUniforms, lerp, smoothstep } from './common';
 import { Terrain } from './terrain';
 import { Water } from './water';
@@ -479,11 +479,13 @@ export class Engine {
     this.lastTick = env.tick;
     // sim-time easing, but never faster than a floor in real seconds, so 10x or 100x fast-forward still shows snow settling
     // and melting instead of snapping
+    // the easing times are tuned for 600-tick seasons; a shorter valley year (calendarScale) shortens them alike
+    const cal = SEASON_TICKS / 600;
     const ease = (cur: number, target: number, tau: number, minReal = 0) => {
-      const kSim = simTicks / tau;
+      const kSim = simTicks / (tau * cal);
       // the real-time floor keeps 10x from snapping, but at 100x it must not let snow trail its season by months:
       // cap the floor so the lag never exceeds about 200 ticks of valley time
-      const floor = minReal > 0 && simTicks > 0 ? Math.min(minReal, (200 * dt) / simTicks) : minReal;
+      const floor = minReal > 0 && simTicks > 0 ? Math.min(minReal, (200 * cal * dt) / simTicks) : minReal;
       const kReal = floor > 0 && !this.firstFrame ? dt / floor : Infinity;
       return cur + (target - cur) * (1 - Math.exp(-Math.min(kSim, kReal)));
     };
@@ -499,7 +501,7 @@ export class Engine {
     const winter = smoothstep(2.4, 3.1, u.season.value) * (1 - smoothstep(3.55, 3.95, u.season.value));
     const frostTime = 1 - smoothstep(0.36, 0.5, env.dayFrac) * (1 - smoothstep(0.62, 0.74, env.dayFrac));
     const frostTarget = winter * frostTime * (1 - 0.6 * env.warmth);
-    this.frostSm = this.firstFrame ? frostTarget : this.frostSm + (frostTarget - this.frostSm) * (1 - Math.exp(-simTicks / 90));
+    this.frostSm = this.firstFrame ? frostTarget : this.frostSm + (frostTarget - this.frostSm) * (1 - Math.exp(-simTicks / (90 * cal)));
     if (frostTarget === 0 && this.frostSm < 0.01) this.frostSm = 0;
     u.frost.value = this.frostSm;
     u.snow.value = sm.snow;
