@@ -135,6 +135,8 @@ export class Engine {
   private frostSm = 0;
   private rainSm = 0;
   private dustSm = 0;
+  /** Falling-snow intensity 0..1: eased faster than the snowpack (flakes start and stop within seconds of the weather). */
+  private snowfallSm = 0;
   private readonly rainDir = new THREE.Vector3();
   private tickPool = 0;
   private _focus = new THREE.Vector3();
@@ -223,6 +225,7 @@ export class Engine {
     let hmin = 1e9;
     for (let i = 0; i < world.height.length; i++) hmin = Math.min(hmin, world.height[i]);
     this.post.setMistBase(hmin);
+    this.post.setPoolMap(world.size, this.terrain.heightAt);
 
     // 'low' preset: open grassland (no trees or water within 22 m, gentle slope) near the middle of the valley
     let lowAnchor = { x: world.size / 2, z: world.size / 2 };
@@ -493,6 +496,10 @@ export class Engine {
     u.drought.value = this.dustSm;   // the same eased value drives the ground and blade shaders' straw bleach (season.ts DROUGHT)
     sm.snow = ease(sm.snow, snowTarget, snowTarget > sm.snow ? 320 : 220, snowTarget > sm.snow ? 7 : 9);
     sm.wet = ease(sm.wet, wetTarget, wetTarget > sm.wet ? 90 : 200);
+    // R2 falling snow and dawn fog: flakes follow the weather quickly; the dawn mist reads the night just past from the env
+    this.snowfallSm = ease(this.snowfallSm, snowTarget, snowTarget > this.snowfallSm ? 20 : 45, 3);
+    if (snowTarget === 0 && this.snowfallSm < 0.02) this.snowfallSm = 0;
+    this.post.trackNight(env, simTicks, this.rainSm);
     // the eased values only approach their targets asymptotically: snap the last trace to zero so no ghost snow or frost lingers
     if (snowTarget === 0 && sm.snow < 0.03) sm.snow = 0;
     if (wetTarget === 0 && sm.wet < 0.02) sm.wet = 0;
@@ -577,6 +584,7 @@ export class Engine {
     }
 
     this.terrain.updateShadow(this.renderer, u.lightDir.value);
+    this.post.updateSnow(dt, this.snowfallSm, env, aboveGround, L);
     this.post.apply(L);
   }
 

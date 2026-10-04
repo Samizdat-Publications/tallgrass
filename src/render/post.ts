@@ -8,10 +8,17 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { FXAAPass } from 'three/addons/postprocessing/FXAAPass.js';
 import { CopyShader } from 'three/addons/shaders/CopyShader.js';
-import { SKY_GLSL, SharedUniforms, smoothstep } from './common';
+import { NOISE_GLSL, SKY_GLSL, SharedUniforms, clamp, smoothstep } from './common';
 import type { Lighting } from './sky';
+import type { EnvState } from '../sim/types';
+import { Snow, SnowPass, blizzardAmount } from './snow';
 
 export type Quality = 'high' | 'medium';
+
+/** God ray gain (additive HDR, scaled by the haze terms), and the dawn pool's extinction per metre at the valley floor. */
+const GODRAY_GAIN = 2.4;
+const DAWN_DENSITY = 0.07;
+const _snowCol = new THREE.Color();
 
 const FS_VERT = 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }';
 
@@ -100,6 +107,14 @@ class FogPass extends Pass {
         uDust: { value: 0.0 },
         uAerialWarm: { value: 0.0 },
         uAerialNight: { value: 0.0 },
+        // dawn pool (R2.8): mist density (extinction per metre at the valley floor), height falloff, and the clock and wind that drift it
+        uDawn: { value: 0.0 },
+        uDawnFall: { value: 0.0 },
+        tPool: { value: null },
+        uPoolRect: { value: new THREE.Vector4(0, 0, 512, 1 / 512) },
+        uPoolTop: { value: -1000.0 },
+        uTime: shared.time,
+        uWind: shared.wind,
         uSunDir: shared.sunDir,
         uSkyZenith: shared.skyZenith,
         uSkyMid: shared.skyMid,
@@ -128,7 +143,15 @@ class FogPass extends Pass {
         uniform float uDust;
         uniform float uAerialWarm;
         uniform float uAerialNight;
+        uniform float uDawn;
+        uniform float uDawnFall;
+        uniform sampler2D tPool;
+        uniform vec4 uPoolRect;
+        uniform float uPoolTop;
+        uniform float uTime;
+        uniform vec3 uWind;
         ${SKY_GLSL}
+        ${NOISE_GLSL}
         // Henyey-Greenstein phase, divided by its forward peak so the value is 1 straight at the sun and falls off with angle
         float tgHGn(float cosT, float g) {
           float g2 = g * g;
@@ -176,18 +199,58 @@ class FogPass extends Pass {
             mistOd = uMist * e0 * dist;
           }
           mistOd = min(max(mistOd, 0.0), 0.9);
+          // Dawn pool: after a clear, calm night mist lies in the low ground. The pool surface is read from a coarse map of the valley
+          // floor (tPool: the local lowest ground a few metres up, built once from the terrain), so it fills creek valleys and swales
+          // and leaves hilltops and upper slopes clear above a soft top surface. The ray is marched a few steps through the part of it
+          // below the highest pool top; rays that stay above that (sky, hills, a high camera looking out) skip it entirely.
+          float dawnOd = 0.0;
+          if (uDawn > 0.002) {
+            float yc = uCamPos.y;
+            float tIn = 0.0, tOut = dist;
+            if (yc > uPoolTop) { if (dy >= -1e-4) tOut = 0.0; else tIn = (yc - uPoolTop) / (-dy); }
+            else if (dy > 1e-4) tOut = min(tOut, (uPoolTop - yc) / dy);
+            tOut = min(tOut, tIn + 700.0);
+            if (tOut > tIn + 0.01) {
+              float len = tOut - tIn;
+              float jit = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
+              vec2 drift = uWind.xy * (0.6 + 1.8 * uWind.z) * uTime * 0.35;
+              float acc = 0.0;
+              for (int i = 0; i < 12; i++) {
+                float s0 = (float(i) + 0.25 + 0.5 * jit) / 12.0;
+                float t = tIn + len * pow(s0, 1.5);
+                float wgt = len * 1.5 * sqrt(s0) / 12.0;
+                vec3 p = uCamPos + dir * t;
+                vec2 puv = (p.xz - uPoolRect.xy) * uPoolRect.w;
+                float top = texture2D(tPool, puv).r - uDawnFall;
+                float inside = min(min(puv.x, puv.y), min(1.0 - puv.x, 1.0 - puv.y));
+                float occ = (1.0 - smoothstep(top - 2.2, top + 0.8, p.y)) * smoothstep(-0.05, 0.0, inside);
+                // banks: slow drifting patches, and a little thicker toward the floor
+                float bank = tgNoise2(p.xz * 0.02 - drift * 0.05);
+                float body = 0.45 + 1.1 * smoothstep(0.2, 0.8, bank);
+                body *= 0.65 + 0.35 * clamp((top - p.y) / 3.0, 0.0, 1.0);
+                acc += occ * body * wgt;
+              }
+              dawnOd = min(uDawn * acc, 2.2);
+            }
+          }
           // Aerial perspective: Beer-Lambert extinction over the whole view ray (thinning with altitude like the near term), so the
           // mid and far hills visibly lose contrast and take on the colour of the light scattered into the ray.
           float aerOd = max(dist - 90.0, 0.0) * uAerial * alt * (1.0 + 0.9 * uDust);
           float cosS = dot(dir, uSunDir);
           float aerFog = 1.0 - exp(-aerOd);
-          float fog0 = min(1.0 - exp(-(od + mistOd)), uFogMax);
+          float fog0 = min(1.0 - exp(-(od + mistOd + dawnOd)), uFogMax);
           float fog = min(1.0 - (1.0 - fog0) * (1.0 - aerFog), uFogMax);
 
           vec3 fdir = normalize(vec3(dir.x, max(dir.y, 0.0) * 0.5 + 0.015, dir.z));
           vec3 fc = tgSkyBase(fdir);
-          float mf = mistOd / (od + mistOd + 1e-5);
+          float mf = mistOd / (od + mistOd + dawnOd + 1e-5);
           fc = mix(fc, fc * vec3(0.92, 0.97, 1.04) + vec3(0.02, 0.03, 0.04), mf * 0.6);
+          // dawn mist is lit by the low sun: pale and soft, warm toward the light
+          float dShare = dawnOd / (od + mistOd + dawnOd + 1e-5);
+          // (desaturated toward the sky's own brightness, so it reads pale warm white, then lit gold on the sun's side)
+          vec3 mc = mix(fc, vec3(dot(fc, vec3(0.3333))), 0.62) * 1.08 + vec3(0.02, 0.022, 0.028);
+          mc += uSunTint * (0.04 + 0.24 * tgHGn(cosS, 0.6)) * smoothstep(-0.05, 0.12, uSunDir.y) * (1.0 - uAerialNight);
+          fc = mix(fc, mc, dShare * 0.92);
           // forward-scattering lobe toward the sun (HG g 0.75) plus a broad warm floor, tinted by the sun colour, applied in
           // proportion to how much of the fog is aerial haze. Dust (drought) swaps the cool-away-from-sun side for a tan.
           float aerShare = aerFog / (aerFog + fog0 + 1e-4);
@@ -223,6 +286,163 @@ class FogPass extends Pass {
   }
 
   override dispose(): void { this.material.dispose(); this.quad.dispose(); }
+}
+
+/**
+ * God rays (R2.6): crepuscular light shafts when the sun is within 45 degrees of the view centre. Half resolution, three small
+ * passes: an occlusion mask from the scene depth (sky = 1, weighted toward the sun), a 64-tap radial blur toward the sun's screen
+ * position (jittered per pixel), and an additive composite straight into the frame before bloom. Costs nothing when the sun is
+ * out of view, below the horizon, or the strength is zero (render returns before touching the GPU).
+ */
+class GodRayPass extends Pass {
+  /** 0..1 overall strength from haze, dust, sun height and cloud (set by PostFX.apply). */
+  strength = 0;
+  private maskRT: THREE.WebGLRenderTarget;
+  private rayRT: THREE.WebGLRenderTarget;
+  private maskMat: THREE.ShaderMaterial;
+  private rayMat: THREE.ShaderMaterial;
+  private compMat: THREE.ShaderMaterial;
+  private maskQuad: FullScreenQuad;
+  private rayQuad: FullScreenQuad;
+  private compQuad: FullScreenQuad;
+  private sunClip = new THREE.Vector4();
+  private fwd = new THREE.Vector3();
+
+  constructor(private shared: SharedUniforms, private camera: THREE.PerspectiveCamera, private scenePass: ScenePass, w: number, h: number,
+              private tint: THREE.Color) {
+    super();
+    this.needsSwap = false;
+    // the mask is the thing the 64-tap loop reads, so it is as narrow as it can be (two 8-bit channels); the result is one half float
+    const mk = (format: THREE.PixelFormat, type: THREE.TextureDataType) => new THREE.WebGLRenderTarget(Math.max(2, w >> 1), Math.max(2, h >> 1), {
+      format, type, depthBuffer: false, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter,
+    });
+    this.maskRT = mk(THREE.RGFormat, THREE.UnsignedByteType);
+    this.rayRT = mk(THREE.RedFormat, THREE.HalfFloatType);
+    this.maskMat = new THREE.ShaderMaterial({
+      uniforms: {
+        tDepth: { value: null },
+        uTexel: { value: new THREE.Vector2(1 / 1600, 1 / 900) },
+        uInvProj: { value: new THREE.Matrix4() },
+        uCamWorld: { value: new THREE.Matrix4() },
+        uSunDir: shared.sunDir,
+      },
+      vertexShader: FS_VERT,
+      fragmentShader: /* glsl */ `
+        precision highp float;
+        varying vec2 vUv;
+        uniform sampler2D tDepth;
+        uniform vec2 uTexel;
+        uniform mat4 uInvProj;
+        uniform mat4 uCamWorld;
+        uniform vec3 uSunDir;
+        float sky(vec2 uv) { return step(0.999999, texture2D(tDepth, uv).x); }
+        void main() {
+          vec2 o = uTexel * 0.5;
+          float s = 0.25 * (sky(vUv + vec2(-o.x, -o.y)) + sky(vUv + vec2(o.x, -o.y)) + sky(vUv + vec2(-o.x, o.y)) + sky(vUv + vec2(o.x, o.y)));
+          vec4 vp = uInvProj * vec4(vUv * 2.0 - 1.0, 1.0, 1.0);
+          vec3 dir = normalize((uCamWorld * vec4(normalize(vp.xyz / vp.w), 0.0)).xyz);
+          float c = max(dot(dir, uSunDir), 0.0);
+          // sky near the sun carries the light: weight the source toward it so the shafts fan out from the disc
+          float w = 0.025 + pow(c, 9.0);
+          gl_FragColor = vec4(s * w, s, 0.0, 1.0);
+        }`,
+      depthTest: false, depthWrite: false,
+    });
+    this.rayMat = new THREE.ShaderMaterial({
+      uniforms: { tMask: { value: null }, uSunUv: { value: new THREE.Vector2(0.5, 0.5) } },
+      vertexShader: FS_VERT,
+      fragmentShader: /* glsl */ `
+        precision highp float;
+        varying vec2 vUv;
+        uniform sampler2D tMask;
+        uniform vec2 uSunUv;
+        void main() {
+          vec2 d = uSunUv - vUv;
+          vec2 stp = d * (0.8 / 64.0);
+          float jit = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
+          vec2 p = vUv + stp * jit;
+          float acc = 0.0, wgt = 1.0, sw = 0.0;
+          for (int i = 0; i < 64; i++) {
+            acc += texture2D(tMask, p).r * wgt;
+            sw += wgt;
+            wgt *= 0.972;
+            p += stp;
+          }
+          // light seen through the air falls off with the angle from the sun; a pixel that is itself open sky gets much less
+          // (the sky is already bright), so the shafts read mostly over the land, the trees and the haze
+          float own = texture2D(tMask, vUv).g;
+          gl_FragColor = vec4(acc / sw * (1.0 - 0.8 * own), 0.0, 0.0, 1.0);
+        }`,
+      depthTest: false, depthWrite: false,
+    });
+    this.compMat = new THREE.ShaderMaterial({
+      uniforms: { tRay: { value: null }, uColor: { value: new THREE.Color() } },
+      vertexShader: FS_VERT,
+      fragmentShader: /* glsl */ `
+        precision highp float;
+        varying vec2 vUv;
+        uniform sampler2D tRay;
+        uniform vec3 uColor;
+        void main() { gl_FragColor = vec4(uColor * texture2D(tRay, vUv).r, 0.0); }`,
+      depthTest: false, depthWrite: false, transparent: true,
+      blending: THREE.CustomBlending, blendEquation: THREE.AddEquation,
+      blendSrc: THREE.OneFactor, blendDst: THREE.OneFactor, blendSrcAlpha: THREE.ZeroFactor, blendDstAlpha: THREE.OneFactor,
+    });
+    this.maskQuad = new FullScreenQuad(this.maskMat);
+    this.rayQuad = new FullScreenQuad(this.rayMat);
+    this.compQuad = new FullScreenQuad(this.compMat);
+  }
+
+  override setSize(w: number, h: number): void {
+    this.maskRT.setSize(Math.max(2, w >> 1), Math.max(2, h >> 1));
+    this.rayRT.setSize(Math.max(2, w >> 1), Math.max(2, h >> 1));
+  }
+
+  override render(renderer: THREE.WebGLRenderer, _writeBuffer: THREE.WebGLRenderTarget, readBuffer: THREE.WebGLRenderTarget): void {
+    if (this.strength < 0.01) return;
+    const sd = this.shared.sunDir.value;
+    if (sd.y < -0.02) return;
+    // only when the sun is within 45 degrees of the view centre (fading in from 45 to 32)
+    this.camera.getWorldDirection(this.fwd);
+    const cosA = this.fwd.dot(sd);
+    const view = smoothstep(Math.cos(Math.PI * 0.25), Math.cos(Math.PI * 0.18), cosA);
+    if (view < 0.005) return;
+    // sun screen position (a direction, so w = 0: it works at any distance and off screen)
+    this.sunClip.set(sd.x, sd.y, sd.z, 0).applyMatrix4(this.camera.matrixWorldInverse).applyMatrix4(this.camera.projectionMatrix);
+    if (this.sunClip.w <= 1e-4) return;
+    const su = (this.sunClip.x / this.sunClip.w) * 0.5 + 0.5, sv = (this.sunClip.y / this.sunClip.w) * 0.5 + 0.5;
+
+    const sc = this.scenePass;
+    const m = this.maskMat.uniforms;
+    m.tDepth.value = sc.depthTexture;
+    (m.uTexel.value as THREE.Vector2).set(1 / sc.rt.width, 1 / sc.rt.height);
+    (m.uInvProj.value as THREE.Matrix4).copy(this.camera.projectionMatrixInverse);
+    (m.uCamWorld.value as THREE.Matrix4).copy(this.camera.matrixWorld);
+    renderer.setRenderTarget(this.maskRT);
+    this.maskQuad.render(renderer);
+
+    const r = this.rayMat.uniforms;
+    r.tMask.value = this.maskRT.texture;
+    (r.uSunUv.value as THREE.Vector2).set(su, sv);
+    renderer.setRenderTarget(this.rayRT);
+    this.rayQuad.render(renderer);
+
+    const c = this.compMat.uniforms;
+    c.tRay.value = this.rayRT.texture;
+    (c.uColor.value as THREE.Color).copy(this.tint).multiplyScalar(this.strength * view);
+    // additive, in place: the quad must not clear the frame it is adding onto
+    const prevAuto = renderer.autoClear;
+    renderer.autoClear = false;
+    renderer.setRenderTarget(readBuffer);
+    this.compQuad.render(renderer);
+    renderer.autoClear = prevAuto;
+  }
+
+  override dispose(): void {
+    this.maskRT.dispose(); this.rayRT.dispose();
+    this.maskMat.dispose(); this.rayMat.dispose(); this.compMat.dispose();
+    this.maskQuad.dispose(); this.rayQuad.dispose(); this.compQuad.dispose();
+  }
 }
 
 class GradePass extends Pass {
@@ -357,6 +577,9 @@ export class PostFX {
   readonly scenePass: ScenePass;
   readonly gtao: GTAOPass;
   readonly fog: FogPass;
+  readonly godrays: GodRayPass;
+  readonly snow = new Snow();
+  readonly snowPass: SnowPass;
   readonly bloom: UnrealBloomPass;
   readonly grade: GradePass;
   readonly output: OutputPass;
@@ -391,6 +614,12 @@ export class PostFX {
 
     this.fog = new FogPass(shared, camera, this.scenePass);
     this.composer.addPass(this.fog);
+
+    // god rays and falling snow go over the fogged frame and before bloom (so the shafts and the bright flakes glow)
+    this.godrays = new GodRayPass(shared, camera, this.scenePass, w, h, this.fog.material.uniforms.uSunTint.value as THREE.Color);
+    this.composer.addPass(this.godrays);
+    this.snowPass = new SnowPass(this.snow, camera, () => this.scenePass.depthTexture);
+    this.composer.addPass(this.snowPass);
 
     this.bloom = new UnrealBloomPass(new THREE.Vector2(w, h), 0.3, 0.7, 1.15);
     this.composer.addPass(this.bloom);
@@ -430,8 +659,15 @@ export class PostFX {
   /** Push per-frame lighting state into the passes. */
   apply(L: Lighting): void {
     const f = this.fog.material.uniforms;
-    f.uHaze.value = L.hazeDensity;
+    // blizzard: heavier fog (visibility down to about a hundred metres) and a higher fog ceiling
+    // (a ground-level whiteout: it thins with the camera's height, so the drone view still sees the valley through it)
+    const bz = this.blizzard * (0.22 + 0.78 * Math.exp(-this.camAbove / 55));
+    f.uHaze.value = L.hazeDensity + (Math.max(L.hazeDensity, 0.0065) - L.hazeDensity) * bz;
+    f.uFogMax.value = 0.94 + 0.035 * bz;
     f.uMist.value = L.mistDensity;
+    // dawn pool: density at the valley floor, and a falloff that tightens toward the ground as it burns off
+    f.uDawn.value = this.dawnNow * DAWN_DENSITY;
+    f.uDawnFall.value = 3.2 * (1 - this.dawnEnv);   // the pool surface sinks as it burns off
     this.applyAerial(f);
     const g = this.grade.material.uniforms;
     (g.uShadowTint.value as THREE.Color).copy(L.gradeShadow);
@@ -459,6 +695,66 @@ export class PostFX {
    * eased value here (it stays 0 until something calls this).
    */
   dust = 0;
+  /** Blizzard amount 0..1 (snowing with wind past 0.6), set by updateSnow. Thickens the fog. */
+  blizzard = 0;
+  private camAbove = 0;
+  /** Dawn pool amount (envelope of the clock x calm clear night x not raining) and the bare clock envelope. */
+  private dawnNow = 0;
+  private dawnEnv = 0;
+  // the previous night, tracked from the env: sim-time-weighted wind and the share of it that was wet
+  private nightWind = 0;
+  private nightWet = 0;
+  private nightW = 0;
+  private wasNight = false;
+  private nightSeeded = false;
+  private nightCalm = 1;
+  private rainNow = 0;
+
+  /**
+   * Track whether the night just past was clear and calm (no rain or snow, mean wind under 0.35), and set the dawn mist amount from
+   * the clock: it pools from dayFrac 0.2 and has burned off by 0.35. Renderer-side only, from the env the engine already has.
+   * `simTicks` is the sim time since the last frame (a huge value means the clock jumped, which re-seeds from the present env).
+   */
+  trackNight(env: EnvState, simTicks: number, rainVisible: number): void {
+    const df = env.dayFrac;
+    const night = df >= 0.78 || df < 0.2;
+    const wet = env.weather === 1 || env.weather === 3 || env.weather === 4 || env.rain > 0.05 ? 1 : 0;
+    if (simTicks >= 1e5 || !this.nightSeeded) {
+      // no continuity (first frame, or the calendar was set directly): the night is whatever the env says right now
+      this.nightWind = env.windStrength * 0.5; this.nightWet = wet * 0.5; this.nightW = 0.5;
+      this.nightSeeded = true;
+      this.wasNight = night;
+    } else if (night) {
+      if (!this.wasNight) { this.nightWind = 0; this.nightWet = 0; this.nightW = 0; }
+      const w = Math.min(simTicks, 200) + 1e-3;
+      this.nightWind += env.windStrength * w; this.nightWet += wet * w; this.nightW += w;
+      this.wasNight = true;
+    } else {
+      this.wasNight = false;
+    }
+    if (this.nightW > 0) {
+      const mean = this.nightWind / this.nightW, wetFrac = this.nightWet / this.nightW;
+      this.nightCalm = (1 - smoothstep(0.25, 0.35, mean)) * (1 - smoothstep(0.04, 0.2, wetFrac));
+    }
+    this.dawnEnv = smoothstep(0.17, 0.215, df) * (1 - smoothstep(0.22, 0.35, df));
+    this.rainNow = rainVisible;
+    this.dawnNow = this.dawnEnv * this.nightCalm * (1 - clamp(env.rain * 2 + rainVisible, 0, 1));
+  }
+
+  /** Falling snow: `fall` is the eased snowfall 0..1 (0 = off, the pass is skipped), `aboveGround` the camera height in metres. */
+  updateSnow(dt: number, fall: number, env: EnvState, aboveGround: number, L: Lighting): void {
+    const ws = clamp(env.windStrength, 0, 1);
+    this.blizzard = blizzardAmount(fall, ws);
+    this.camAbove = aboveGround;
+    if (fall <= 0.01) { this.snow.update(dt, this.camera, { fall: 0, windStrength: ws, windX: 1, windZ: 0, aboveGround, color: _snowCol }); return; }
+    const lc = this.shared.lightColor.value;
+    // a flake is lit like the snowpack: albedo/pi times the ambient plus the key light at a half-lit angle
+    _snowCol.setRGB(
+      L.hemiSky.r * L.hemiIntensity + lc.r * 0.45, L.hemiSky.g * L.hemiIntensity + lc.g * 0.45, L.hemiSky.b * L.hemiIntensity + lc.b * 0.45,
+    ).multiplyScalar(0.92 / Math.PI * 1.7);
+    this.snow.update(dt, this.camera, { fall, windStrength: ws, windX: Math.cos(env.windDir), windZ: Math.sin(env.windDir), aboveGround, color: _snowCol });
+  }
+
   /** Bloom multiplier from the aerial pass (a little extra glow at low sun, 1 otherwise). */
   private hazeBloom = 1;
 
@@ -485,10 +781,61 @@ export class PostFX {
     f.uAerialWarm.value = (0.35 + 0.65 * low) * (1 - over) * (1 - 0.5 * winter);
     this.hazeBloom = 1 + 0.3 * low * (1 - over) * (1 - night);
     f.uAerialNight.value = Math.min(1, night * 1.15);
+    // god rays: need a sun above the horizon and no cloud; stronger in haze and dust and with the sun low, off at night
+    const haze = clamp(f.uAerial.value / 0.00022, 0, 1.6);
+    const sunUp = smoothstep(0.0, 0.1, sh.sunDir.value.y);
+    this.godrays.strength = GODRAY_GAIN * sunUp * Math.pow(1 - over, 2.5) * (0.3 + 0.55 * haze) * (1 + 0.9 * dust) * (0.55 + 0.45 * low) * (1 - night);
     // tint: the key-light colour normalised to unit peak, nudged warm
     const lc = sh.lightColor.value;
     const m = Math.max(lc.r, lc.g, lc.b, 1e-3);
     (f.uSunTint.value as THREE.Color).setRGB(lc.r / m, lc.g / m * 0.97, lc.b / m * 0.9);
+  }
+
+  /**
+   * Build the dawn pool map once: for a 64 x 64 grid over the valley, the local lowest ground within about 50 m (the floor the mist
+   * settles on), smoothed, plus the pool depth. A pool top that follows the valley floor leaves hills and upper slopes above it.
+   */
+  setPoolMap(worldSize: number, heightAt: (x: number, z: number) => number, depth = 4.5): void {
+    const G = 64, cell = worldSize / G;
+    const h = new Float32Array(G * G);
+    for (let j = 0; j < G; j++) for (let i = 0; i < G; i++) h[j * G + i] = heightAt((i + 0.5) * cell, (j + 0.5) * cell);
+    const R = 6;
+    const m = new Float32Array(G * G);
+    for (let j = 0; j < G; j++) for (let i = 0; i < G; i++) {
+      let lo = 1e9;
+      for (let dj = -R; dj <= R; dj++) for (let di = -R; di <= R; di++) {
+        if (di * di + dj * dj > R * R) continue;
+        const x = Math.min(G - 1, Math.max(0, i + di)), y = Math.min(G - 1, Math.max(0, j + dj));
+        lo = Math.min(lo, h[y * G + x]);
+      }
+      m[j * G + i] = lo;
+    }
+    // smooth the floor so the pool top is a gentle surface, not a stepped one
+    let src = m;
+    for (let pass = 0; pass < 3; pass++) {
+      const dst = new Float32Array(G * G);
+      for (let j = 0; j < G; j++) for (let i = 0; i < G; i++) {
+        let sum = 0, n = 0;
+        for (let dj = -2; dj <= 2; dj++) for (let di = -2; di <= 2; di++) {
+          const x = Math.min(G - 1, Math.max(0, i + di)), y = Math.min(G - 1, Math.max(0, j + dj));
+          sum += src[y * G + x]; n++;
+        }
+        dst[j * G + i] = sum / n;
+      }
+      src = dst;
+    }
+    const data = new Uint16Array(G * G);
+    let top = -1e9;
+    for (let k = 0; k < G * G; k++) { const t = src[k] + depth; top = Math.max(top, t); data[k] = THREE.DataUtils.toHalfFloat(t); }
+    const tex = new THREE.DataTexture(data, G, G, THREE.RedFormat, THREE.HalfFloatType);
+    tex.minFilter = tex.magFilter = THREE.LinearFilter;
+    tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
+    tex.generateMipmaps = false;
+    tex.needsUpdate = true;
+    const u = this.fog.material.uniforms;
+    u.tPool.value = tex;
+    (u.uPoolRect.value as THREE.Vector4).set(0, 0, worldSize, 1 / worldSize);
+    u.uPoolTop.value = top + 0.8;
   }
 
   setMistBase(y: number): void { this.fog.material.uniforms.uMistBase.value = y; }
@@ -500,6 +847,8 @@ export class PostFX {
   dispose(): void {
     this.scenePass.dispose();
     this.fog.dispose();
+    this.godrays.dispose();
+    this.snow.dispose();
     this.grade.dispose();
     this.finish.dispose();
     this.gtao.dispose();
