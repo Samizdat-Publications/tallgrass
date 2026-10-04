@@ -33,6 +33,9 @@ export interface Challenge {
   seed: string;
   scenario: string;
   years: number;
+  /** Sim params on top of the scenario's. Every challenge pins the classic 2,400-tick calendar it was tuned and
+   *  validated on (tools/challenge_suite.py), whatever the game's default calendar. */
+  params?: Record<string, number>;
   /** Interventions allowed; null means unlimited. */
   maxTools: number | null;
   /** Called every UI frame; may keep its own memory between calls (create a fresh one per attempt). */
@@ -43,6 +46,8 @@ const NAMES: Record<number, string> = { [Sp.Bison]: 'bison', [Sp.Wolf]: 'wolves'
 const CORE = [Sp.Bison, Sp.Wolf, Sp.Raven, Sp.Deer];
 
 const yr = (y: number) => Math.floor(y) + 1;
+/** The calendar the challenges were tuned on. */
+const CLASSIC = { calendarScale: 1 };
 /** Challenge times were tuned in 2,400-tick years; this turns a tuned length into the valley's own calendar (calendarScale).
  *  Read at use time, after the game has set the calendar. */
 const Y = (base: number) => Math.round((base * BASE_YEAR_TICKS) / YEAR_TICKS);
@@ -65,7 +70,7 @@ export const CHALLENGES: Challenge[] = [
     name: 'The wolves come home',
     blurb: 'The wolves are gone and the herds have grown bold. Bring them back and help them hold the valley.',
     get goals() { return ['Three wolf packs holding territory at once', `Before year ${Y(15)}`, 'At most 3 interventions']; },
-    seed: '21', scenario: 'island', get years() { return Y(15); }, maxTools: 3,
+    seed: '21', scenario: 'island', get years() { return Y(15); }, maxTools: 3, params: CLASSIC,
     makeCheck() {
       let introduced = false;
       return (s) => {
@@ -85,7 +90,7 @@ export const CHALLENGES: Challenge[] = [
     name: 'Island of plenty',
     blurb: 'No predators and endless grass, for now. Stop the herd from overrunning the valley.',
     get goals() { return [`Keep the bison under 2,500 from year ${Y(4)} on`, `Survive ${Y(30)} years`, 'At most 6 interventions']; },
-    seed: '7', scenario: 'island', get years() { return Y(30); }, maxTools: 6,
+    seed: '7', scenario: 'island', get years() { return Y(30); }, maxTools: 6, params: CLASSIC,
     makeCheck() {
       return (s) => {
         const b = s.pop[Sp.Bison];
@@ -107,7 +112,7 @@ export const CHALLENGES: Challenge[] = [
     name: 'Save the herd',
     get blurb() { return `In this valley the wolves slowly grind the bison down until none are left. Keep every species alive for ${Y(40)} years.`; },
     get goals() { return [`Bison, wolves, ravens and pronghorn all alive at year ${Y(40)}`, 'At most 5 interventions']; },
-    seed: '26', scenario: 'prairie', get years() { return Y(40); }, maxTools: 5,
+    seed: '26', scenario: 'prairie', get years() { return Y(40); }, maxTools: 5, params: CLASSIC,
     makeCheck() {
       const guard = extinctionGuard(CORE);
       return (s) => {
@@ -123,7 +128,7 @@ export const CHALLENGES: Challenge[] = [
     name: 'Pull it back',
     blurb: 'Fifteen hundred bison and a single small pack. Without more predators the pronghorn boom and then crash. Keep them from collapsing.',
     get goals() { return [`Keep the pronghorn above 100 from year ${Y(3)} on`, 'Nothing goes extinct', `Survive ${Y(30)} years`, 'At most 4 interventions']; },
-    seed: '23', scenario: 'collapse', get years() { return Y(30); }, maxTools: 4,
+    seed: '23', scenario: 'collapse', get years() { return Y(30); }, maxTools: 4, params: CLASSIC,
     makeCheck() {
       const guard = extinctionGuard(CORE);
       return (s) => {
@@ -144,7 +149,7 @@ export const CHALLENGES: Challenge[] = [
     name: 'The dry years',
     get blurb() { return `Drought arrives in year ${Y(1) + 1} and returns every ${Y(4)} years. Carry every species through ${Y(20)} years.`; },
     get goals() { return [`Bison, wolves, ravens and pronghorn all alive at year ${Y(20)}`, 'At most 4 interventions']; },
-    seed: '11', scenario: 'dryyears', get years() { return Y(20); }, maxTools: 4,
+    seed: '11', scenario: 'dryyears', get years() { return Y(20); }, maxTools: 4, params: CLASSIC,
     makeCheck() {
       const guard = extinctionGuard(CORE);
       return (s) => {

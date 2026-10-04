@@ -137,7 +137,7 @@ for (const kv of (q.get('p') ?? '').split(',')) {
   const [k, v] = kv.split(':');
   if (k && v !== undefined && Number.isFinite(Number(v))) devParams[k.trim()] = Number(v);
 }
-const simParams = { ...scenario.params, ...devParams };
+const simParams = { ...scenario.params, ...(challenge?.params ?? {}), ...devParams };
 // the game's own clocks (UI calendar, weather easing) follow the same valley calendar as the sim in the worker
 try { setCalendarScale(applyOverrides(defaultParams(), simParams).calendarScale); } catch { /* unknown dev param: the worker reports it */ }
 send({ type: 'init', seed, params: simParams, schedule: scenario.schedule });

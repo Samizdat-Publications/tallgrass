@@ -39,7 +39,7 @@ const toolLog: string[] = [];
 const sc = scenarioById(ch.scenario);
 
 const extra: Record<string, number> = arg('params') ? JSON.parse(arg('params')!) : {};
-const sim = new Sim({ seed, params: { ...sc.params, ...extra } });
+const sim = new Sim({ seed, params: { ...sc.params, ...(ch.params ?? {}), ...extra } });
 const schedule = sc.schedule.slice().sort((a, b) => a.tick - b.tick);
 const check = ch.makeCheck();
 const N = 4;
