@@ -87,3 +87,27 @@ Gemini video: Visual 5, Readability 8, Life and motion 3 (was 1), Ecosystem 6, U
 | G4 | Weightless kills | FIX | animals builder | Stagger before the roll. |
 | G6 | Chapter cards linger at 100x | FIX | UI builder | |
 | G7 | Shadow flicker | FIX | renderer builder | |
+
+## Round 6 (01:40, deployed build b679901: stills, v5 charts, Gemini video) -> `review/round-06/critique.md`, `review/round-06-video/reel.gemini.md`
+Stills critic: Visual 7 (was 6), Readability 5 (was 4), Life 7 (was 5), Ecosystem 4 (was 5), UI 7, Keep watching 6 (was 5).
+Gemini video: Visual 4, Readability 6, Life and motion 2, Ecosystem 7, UI 9, Keep watching 5. Gemini praises the graphs as showing booms, crashes and lags; the stills critic reads the 700-year charts as noise. Both are about the same data at different zooms.
+
+| # | Issue | Triage | Owner | Notes |
+|---|---|---|---|---|
+| 1 | Dynamics too fast for "years"; shocks heal in 5 years; births in autumn | RESEARCH | lead | Third round in a row. Screening a calendar re-scale (a year of 600 ticks instead of 2,400, biology unchanged per tick) on a frozen copy: compute-neutral, so 1,000 generations still fit. Adopt only if it passes the same acceptance and shock suite as v5. |
+| 2 | Wolves flat, ravens capped | DEFER (folds into 1) | lead | With a 4x shorter year the existing 1-year wolf lag becomes a 4-year lag. The raven ceiling stays (rejected twice). |
+| 3 | Evolution plateaus; herding evolves away | DEFER | lead | loneIndividual alone may be screened alongside the calendar work. |
+| 4 | Wolves invisible at distance; selection ring a smudge | FIX | animals builder | Distance-scaled predator readability; crisp ring. |
+| 5 | Deep snow in early summer (still 11) | FIX (lead) | lead | Real bug: the snow ease capped sim ticks at 14 per frame, so at a low frame rate and 100x the melt trailed the season by months. Fix: smooth the worker's tick chunks over real time instead of capping them. |
+| 6 | Herds read as stains in wide, dusk and top views | FIX | animals builder | Species value and tint lift at distance; dusk floor. |
+| 7 | Distant terrain smear, world edge streaks, identical far trees | FIX | renderer builder | Designed world edge, no streaks, varied far trees. |
+| 8 | Herd formations, overlap | DEFER | lead | Sim herd shape changes cost persistence (rounds 4 and 5). |
+| 9 | Charred trunks low, grey dusk sky, faceted rocks, snow puddles | FIX (partly) | renderer builder | Sun glow and clouds at dusk; trunk value at low angles. |
+| 10 | Chronicle order, banner over labels, no ambient mode, UI colors vs coats | FIX (partly) | UI builder | Newest first everywhere with a scroll cue; chapter card drops when its season has passed and stays clear of labels; hide-UI key. UI colors stay a legend (brown on dark panels would be unreadable): REJECT. |
+| G1 | Locomotion slides (0:10 to 0:28) | PARTLY FIX | animals builder | Frame-by-frame check of the reel (30 fps, 18 frames from 0:14): the chase is a 70 to 100 m wide shot where legs are 2 to 3 px, so no gait reads at that size. Fix the distance cue (body bob and slope pitch), not foot IK. |
+| G2 | Close ground reads as carpet or sponge | FIX | renderer builder | Close-range detail. |
+| G3 | Kill reads as a stop and a green lump | FIX | animals builder | Check carcass value next to shrubs. |
+| G4 | Shadow cascade lines scroll during pans | FIX | renderer builder | |
+| G5 | Riverside trees all the same | FIX | renderer builder | Same as 7. |
+| G6 | Cinematic camera moves in straight lines | FIX | lead | Ease the cinematic path. |
+| G7 | Flat river | DEFER | renderer builder | After the above. |

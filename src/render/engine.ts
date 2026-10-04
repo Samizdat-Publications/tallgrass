@@ -146,7 +146,7 @@ export class Engine {
   private firstFrame = true;
   private lastTick = 0;
   private frostSm = 0;
-  private lastTickF = 0;
+  private tickPool = 0;
   private _focus = new THREE.Vector3();
   /** Fade tree canopies and trunks out of the line between the camera and the point it watches (default on). */
   occlusionFade = true;
@@ -466,7 +466,15 @@ export class Engine {
     else if (env.tick === 0) simTicks = dt * 10;
     else {
       const d = env.tick - this.lastTick;
-      simTicks = d > 0 && d < 5000 ? Math.min(d, 14) : d >= 5000 ? 14 : 0;
+      if (d >= 5000) { this.tickPool = 0; simTicks = 1e6; }
+      else if (d < 0) { this.tickPool = 0; simTicks = 0; }
+      else {
+        // the worker delivers ticks in chunks: spread each chunk over about a tenth of a second instead of capping it,
+        // so the weather state never falls behind the valley's calendar at a low frame rate or at 100x
+        this.tickPool += d;
+        simTicks = this.tickPool * (1 - Math.exp(-dt / 0.1));
+        this.tickPool -= simTicks;
+      }
     }
     this.lastTick = env.tick;
     // sim-time easing, but never faster than a floor in real seconds, so 10x or 100x fast-forward still shows snow settling
@@ -491,8 +499,7 @@ export class Engine {
     const winter = smoothstep(2.4, 3.1, u.season.value) * (1 - smoothstep(3.55, 3.95, u.season.value));
     const frostTime = 1 - smoothstep(0.36, 0.5, env.dayFrac) * (1 - smoothstep(0.62, 0.74, env.dayFrac));
     const frostTarget = winter * frostTime * (1 - 0.6 * env.warmth);
-    this.frostSm = this.firstFrame ? frostTarget : this.frostSm + (frostTarget - this.frostSm) * (1 - Math.exp(-(env.tick === 0 ? dt * 10 : Math.min(14, Math.max(0, env.tick - this.lastTickF))) / 90));
-    this.lastTickF = env.tick;
+    this.frostSm = this.firstFrame ? frostTarget : this.frostSm + (frostTarget - this.frostSm) * (1 - Math.exp(-simTicks / 90));
     if (frostTarget === 0 && this.frostSm < 0.01) this.frostSm = 0;
     u.frost.value = this.frostSm;
     u.snow.value = sm.snow;

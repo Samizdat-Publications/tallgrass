@@ -32,6 +32,13 @@ const SETS = {
     { name: '10_ui_graph_fast', eval: "window.__focusHerd(); window.__speed(100); document.dispatchEvent(new KeyboardEvent('keydown', { key: 'g', bubbles: true }))", wait: 9000 },
     { name: '11_overlay_territories', eval: "document.dispatchEvent(new KeyboardEvent('keydown', { key: 'g', bubbles: true })); window.__speed(1); window.__timeOfDay(0.62); window.__cam('wide'); window.__overlay.setMode('territory')", wait: 4500 },
   ],
+  // snow vs calendar: fast-forward through a winter, then drop to 1x and check the ground matches the header's season
+  snow: [
+    { name: 's1_fast', eval: "window.__speed(100); window.__cam('wide')", wait: 14000 },
+    { name: 's2_fast', eval: '', wait: 6000 },
+    { name: 's3_slow', eval: "window.__speed(1); window.__timeOfDay(0.62)", wait: 4500 },
+    { name: 's4_slow_later', eval: '', wait: 8000 },
+  ],
   // herd shape: fast-forward a little, then look down on the biggest herd from two heights
   herd: [
     { name: 'h0_warm', eval: "window.__speed(10)", wait: 20000 },
