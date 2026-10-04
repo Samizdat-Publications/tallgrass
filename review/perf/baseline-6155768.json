@@ -1,0 +1,52 @@
+{
+  "mode": "single",
+  "date": "2026-10-04T18:29:02.989Z",
+  "size": "2560x1440",
+  "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 5070 Ti Laptop GPU (0x00002F58) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+  "dir": "C:\\Users\\stewa\\Documents\\Claude\\ecosystem-sim\\scratch\\bench_head",
+  "extra": "",
+  "git": {
+    "head": "6155768",
+    "dirtyFiles": []
+  },
+  "warmupFrames": 6,
+  "timedFrames": 40,
+  "views": {
+    "wide_golden": {
+      "median": 10.566,
+      "p90": 11.049,
+      "n": 40,
+      "disjoint": false
+    },
+    "low_golden": {
+      "median": 15.978,
+      "p90": 16.784,
+      "n": 40,
+      "disjoint": false
+    },
+    "herd": {
+      "median": 11.018,
+      "p90": 11.264,
+      "n": 40,
+      "disjoint": false
+    },
+    "top": {
+      "median": 9.82,
+      "p90": 10.048,
+      "n": 40,
+      "disjoint": false
+    },
+    "winter": {
+      "median": 10.076,
+      "p90": 10.312,
+      "n": 40,
+      "disjoint": false
+    },
+    "night": {
+      "median": 12.788,
+      "p90": 13.088,
+      "n": 40,
+      "disjoint": false
+    }
+  }
+}

@@ -19,3 +19,4 @@ review/round-0*-video/*.mp4
 # v2: per-session Stop hook deadline; review reels stay out of git
 .claude/hooks/run_until.local.txt
 review/**/*.mp4
+.claude/worktrees/
