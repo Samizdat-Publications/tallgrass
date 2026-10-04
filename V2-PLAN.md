@@ -463,7 +463,7 @@ Make the code safe for many new species and for changes that stay identical whil
 - Track R, after merging: the game runs 5 minutes at 10x with no console errors.
 
 ### R0. Render baseline and quick wins [Track R, GPU, M]
-- [ ] **1. Bench tool `tools/gpubench.mjs`.**
+- [x] **1. Bench tool `tools/gpubench.mjs`.**
   - Promote `scratch/b1/gpubench.mjs`. Fix it so it passes `autoscale=0` and drops the nonexistent `setAdaptiveScale`.
   - Views: wide-golden, low-golden, herd, top, winter, night (R4 adds storm).
   - Measurement: `EXT_disjoint_timer_query_webgl2`, median of 40 frames.
@@ -481,18 +481,18 @@ Make the code safe for many new species and for changes that stay identical whil
   - A species with no model is not drawn.
   - A species never present has no graph row.
   - Check with `?p=rabbit.initial:20`: rabbits draw with the rabbit model and get a graph row, with no errors.
-- [ ] **3. Tone mapping.**
+- [x] **3. Tone mapping.**
   - Make a side-by-side sheet of ACES (the current default, engine.ts:177), AgX and neutral against the concept image, in the same views.
   - Adopt the closest, judged by the lead's eye plus the item 5 concept score. Retune GradePass (post.ts:186-276) if needed.
   - Log the choice in DECISIONS.md.
-- [ ] **4. Hill shadows on animals.** Animals get the terrain horizon shadow (`injectTerrainShadow` on the animal material and its depth material). Budget ≤ +0.2 ms.
-- [ ] **5. Concept tool `tools/concept_compare.py`.**
+- [x] **4. Hill shadows on animals.** Animals get the terrain horizon shadow (`injectTerrainShadow` on the animal material and its depth material). Budget ≤ +0.2 ms.
+- [x] **5. Concept tool `tools/concept_compare.py`.**
   - Sends the concept image plus a build still to Gemini (vision model picked from the live list).
   - Asks for a 1-10 match each on light, palette, haze, water, trees, grass and composition, an overall score, and the top 5 differences.
   - Writes the result to `<still>.concept.md`.
   - Window hook `__concept()` frames the concept's view: the creek bend with groves, a high oblique angle, low sun from the left, late summer, dayFrac about 0.28.
   - Record the baseline score in MORNING.md.
-- [ ] **6. JPEG stills.** `tools/stills.mjs` and `tools/video.mjs` stills default to JPEG q90.
+- [x] **6. JPEG stills.** `tools/stills.mjs` and `tools/video.mjs` stills default to JPEG q90.
 
 **Gates:**
 - The baseline is committed and the registry check passes.
@@ -724,7 +724,7 @@ For every item:
 
 Budget for the whole WP: ≤ +1.0 ms at 1440p in every view.
 
-- [ ] **0. One source for the season curves.** Move `CURE_KEYS`, `keyCurve` and the winter and riparian curves into one shared module (today they are duplicated across grass.ts:126, engine.ts:58 and terrain.ts:952).
+- [x] **0. One source for the season curves.** Move `CURE_KEYS`, `keyCurve` and the winter and riparian curves into one shared module (today they are duplicated across grass.ts:126, engine.ts:58 and terrain.ts:952).
 - [ ] **1. Water.**
   - The creek and ponds read silver from the drone.
   - Reflect the real sky radiance in the reflected direction (the sky dome function in sky.ts) with Fresnel.

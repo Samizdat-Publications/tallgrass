@@ -40,6 +40,8 @@
 | 10-04 11:24 | Gemini `gemini-3.1-pro-preview` | blind video critique of reel.mp4 (64178 KB) | 1 call | ~$0.05 |
 | 10-04 14:34 | Gemini `gemini-3.1-pro-preview` | concept compare of concept_baseline.jpg vs 00_prairie_golden_hour.jpg (2 images, JSON) | 1 call | ~$0.01 |
 | 10-04 14:37 | Gemini `gemini-3.1-pro-preview` | concept compare of concept_baseline.jpg vs 00_prairie_golden_hour.jpg (2 images, JSON) | 1 call | ~$0.01 |
+| 10-04 14:40 | Gemini `gemini-3.1-pro-preview` | concept compare of tm_aces.jpg vs 00_prairie_golden_hour.jpg (2 images, JSON) | 1 call | ~$0.01 |
+| 10-04 14:40 | Gemini `gemini-3.1-pro-preview` | concept compare of tm_neutral.jpg vs 00_prairie_golden_hour.jpg (2 images, JSON) | 1 call | ~$0.01 |
 
 ## Downloaded third-party assets
 | Asset | Source | License | Used in |
