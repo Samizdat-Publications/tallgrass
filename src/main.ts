@@ -368,6 +368,42 @@ w.__speed = (s: number) => { speed = s; send({ type: 'speed', speed: s }); };
 w.__step = (ticks: number) => send({ type: 'step', ticks });
 w.__ui = ui;
 w.__focusHerd = () => { if (pending) focusHerd(pending.agents, pending.count, true); };
+/**
+ * Frame the concept art's view (art/concept/00_prairie_golden_hour.jpg): the sharpest creek bend that has cottonwoods beside it, a high
+ * oblique angle, low sun from the left, late summer. Pauses the sim and holds the env so a capture is repeatable. Returns the values used.
+ */
+let conceptHoldOn = false;
+let conceptEnv: Partial<typeof engine.env> = {};
+w.__concept = (o: { dist?: number; pitch?: number; sunOff?: number; shift?: number; side?: number; day?: number; season?: number } = {}) => {
+  const cr = world.creek, tr = world.trees, S = world.size;
+  let best = -1, bx = S / 2, bz = S / 2, bdx = 1, bdz = 0;
+  for (let k = 5; k < cr.length / 2 - 5; k++) {
+    const x = cr[2 * k], z = cr[2 * k + 1];
+    if (x < 70 || z < 70 || x > S - 70 || z > S - 70) continue;
+    const ax = x - cr[2 * k - 10], az = z - cr[2 * k - 9], cx = cr[2 * k + 10] - x, cz = cr[2 * k + 11] - z;
+    const turn = Math.abs(Math.atan2(ax * cz - az * cx, ax * cx + az * cz));
+    let n = 0;
+    for (let i = 0; i < tr.length; i += 4) if (Math.hypot(tr[i] - x, tr[i + 1] - z) < 70) n++;
+    const score = turn * n;
+    if (score > best) { best = score; bx = x; bz = z; bdx = ax + cx; bdz = az + cz; }
+  }
+  const day = o.day ?? 0.28, season = o.season ?? 1.8;
+  const hold: Partial<typeof engine.env> = { dayFrac: day, season, weather: 0, rain: 0, warmth: 0.7 };
+  speed = 0; send({ type: 'speed', speed: 0 });
+  following = null; lastCamInput = performance.now();
+  const e = engine;
+  if (!conceptHoldOn) { conceptHoldOn = true; e.onFrame(() => e.setEnv(conceptEnv)); }
+  conceptEnv = hold;
+  e.setEnv(hold); e.applyEnvNow();
+  // sun to the left of the view direction (same convention as the 'wide' preset): camera sits behind the target, looking along fwd
+  const sunAz = Math.atan2(e.uniforms.lightDir.value.x, e.uniforms.lightDir.value.z);
+  const fwd = sunAz - (o.sunOff ?? 35) * Math.PI / 180;
+  const dist = o.dist ?? 200, pitch = o.pitch ?? 19;
+  const sh = (o.shift ?? 0) * dist; // slide the target along the view direction (negative = toward the camera)
+  const sd = o.side ?? -40; // sideways slide of the target (m): negative puts the bend mid-left of the frame, positive mid-right
+  e.cam.setView({ x: bx + Math.sin(fwd) * sh + Math.cos(fwd) * sd, y: bz + Math.cos(fwd) * sh - Math.sin(fwd) * sd, yawDeg: (fwd + Math.PI) * 180 / Math.PI, pitchDeg: pitch, distance: dist }, true);
+  return { bend: [Math.round(bx), Math.round(bz)], creekDir: [Math.round(bdx), Math.round(bdz)], day, season, sunAzDeg: Math.round(sunAz * 180 / Math.PI), yawDeg: e.cam.yawDeg, pitch, dist };
+};
 w.__select = select;
 w.__animals = animals;
 w.__grass = grass;
