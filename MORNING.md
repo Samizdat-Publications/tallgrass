@@ -9,6 +9,7 @@ Last deploy: 21:00 Saturday (commit e958d19: v5 ecology, round 4 and 5 animals, 
 
 Locally: `npm run dev`, then http://localhost:5199/.
 - `?seed=anything` picks a world, `?scenario=yellowstone` picks a scenario, `?challenge=herd` starts a challenge. The menu (top right) does all three.
+- The game holds 60 fps by lowering its render resolution a little on big or high-DPI screens if it has to (measured on this machine's RTX 5070 Ti Laptop GPU: 11 to 13 ms per frame at 1080p, 16 to 17.5 ms at 1440p before scaling).
 - Keys: Space pause, 1/2/3 speed, **N next event** (the camera flies to it), **C cinematic documentary mode**, **P photo** (saves a clean PNG of the frame), G big graph, E evolution chart, L log scale, F follow the selected animal, H hide UI, M mute, Esc back out. Click an animal to inspect it and read its life story. Left-drag orbits, right-drag pans, wheel zooms.
 
 ## What it is
@@ -41,8 +42,8 @@ New since 09:00:
   - **Camera:** it drifts slowly during fast-forward.
 
 ## What to look at first
-1. Open the link and leave it at 1x for a minute: the camera opens on the biggest herd.
-2. Press **C** and let the documentary director run for a few minutes.
+1. Open the link and leave it alone: the camera opens on the biggest herd, and after 25 seconds without input the **documentary camera** takes over and films hunts, kills, herds and vistas (a small chip says so; any mouse or key input, or Take over, gives you the camera back).
+2. Press **C** for the full cinematic version (interface hidden, letterbox).
 3. Menu, Challenges, **The wolves come home**: bring wolves back to a valley that lost them. It's the gentle one.
 4. Overlays, **Wolf territories**, then 10x: watch packs form, bud and fall apart.
 5. Press **G**, then 100x: decades of booms and crashes. **E** for the evolution arms race.
