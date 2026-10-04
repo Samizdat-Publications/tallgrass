@@ -394,7 +394,7 @@ Make the code safe for many new species and for changes that stay identical whil
 - `SPECIES_COUNT` stays 6 in S0.
 
 **Steps:**
-- [ ] **1. Golden hash first.** Do this before any refactor, then commit.
+- [x] **1. Golden hash first.** Do this before any refactor, then commit.
   - Write `src/headless/hash.ts` (below).
   - Record seeds 3, 7 and 11 at 24,000 ticks with default params in `tools/golden.json`.
   ```ts
@@ -413,13 +413,13 @@ Make the code safe for many new species and for changes that stay identical whil
   for (let c = 0; c < sim.veg.grass.length; c += 7) mixF(sim.veg.grass[c]);
   console.log(`seed=${seed} ticks=${ticks} hash=${h.toString(16).padStart(8, '0')}`);
   ```
-- [ ] **2. Test runner.** `tools/run-tests.ts` runs, in order:
+- [x] **2. Test runner.** `tools/run-tests.ts` runs, in order:
   - every `src/**/*.test.ts` through tsx
   - `src/headless/metrics.ts --selftest`
   - the golden check
 
   It exits non-zero on any failure. `"test": "tsx tools/run-tests.ts"`.
-- [ ] **3. Species registry.** `src/sim/species.ts`:
+- [x] **3. Species registry.** `src/sim/species.ts`:
   ```ts
   export interface SpeciesDef {
     id: number; key: string; name: string; plural: string;
@@ -436,7 +436,7 @@ Make the code safe for many new species and for changes that stay identical whil
   - Size the worker's `TRAIT_SERIES` and trait grid by `SPECIES_COUNT`.
   - Python tools read species from the CSV header (`pop_*` columns).
   - The golden hash must not move.
-- [ ] **4. Event serial.**
+- [x] **4. Event serial.**
   ```ts
   eventSerial = 0; // sim.ts: total events ever emitted; events[0] has serial eventSerial - events.length
   // in event(): push, then this.eventSerial++
@@ -444,11 +444,11 @@ Make the code safe for many new species and for changes that stay identical whil
   //   const fresh = sim.events.slice(Math.max(0, lastSerial - base)); lastSerial = sim.eventSerial;
   // skip loop (237-244): remember the start serial, not the array index
   ```
-- [ ] **5. Contract additions** (unused until later WPs, so the hash doesn't move).
+- [x] **5. Contract additions** (unused until later WPs, so the hash doesn't move).
   - The new agent fields must be copied when the agent pool grows.
   - `describe.ts` must ignore unknown event kinds without crashing.
-- [ ] **6. Elder text.** In `describe.ts`, "elder" fires at the animal's death (sim.ts:878-880), so its text must say it died at a great age, not that it "still roams".
-- [ ] **7. Smoke tool.** `tools/smoke.mjs`:
+- [x] **6. Elder text.** In `describe.ts`, "elder" fires at the animal's death (sim.ts:878-880), so its text must say it died at a great age, not that it "still roams".
+- [x] **7. Smoke tool.** `tools/smoke.mjs`:
   - starts Vite and headless Chromium (any GL)
   - loads `index.html?grass=0&q=medium&autocam=0`
   - waits for `__ready`
