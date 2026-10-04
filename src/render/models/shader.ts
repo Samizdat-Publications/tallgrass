@@ -185,7 +185,7 @@ void tgBodyFwd(inout vec3 p, inout vec3 n) {
   // holding the prey: braced back 8 degrees on the planted hind feet, rocking a little with each haul
   if (tgHold > 0.001) tgRotZ(p, n, vec3(HIND_FOOT.x, 0.0, 0.0), tgHold * (0.14 + 0.02 * sin(uTime * 8.0)));
   // feeding: the forequarters haul back with the neck (the forefeet stay planted, the leg IK takes this motion out)
-  if (tgFeedB > 0.001) p.x -= tgFeedB * 0.08 * BODY_LEN * smoothstep(-0.1, 0.5, p.x);
+  if (tgFeedB > 0.001) p.x -= tgFeedB * 0.11 * BODY_LEN * smoothstep(-0.1, 0.5, p.x);
 }
 #endif
 
@@ -576,16 +576,17 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
     p.xz *= mix(1.0, mix(0.8, 1.0, r), f3);
 #if KIND == 0
     if (aFx.x > 0.001) {
-      // the flank dents with each pull of a feeding predator: the hide is drawn toward it and pressed in round the contact point
+      // the flank gives with each pull of a feeding predator: the hide is drawn out toward it and tents up round the contact point
+      // (a carcass lies flush with the ground, so pressing it down would only sink it out of sight)
       // (a carcass carries the pull strength in aFx.x and the contact point in the body frame in aFx.y and aGait.w, which a body
       // that is down does not otherwise use)
-      float dR = 0.3 * BODY_LEN;
+      float dR = 0.36 * BODY_LEN;
       vec2 dcp = vec2(aFx.y, aGait.w);
       vec2 dc = p.xz - dcp;
       float dg = exp(-dot(dc, dc) / (dR * dR)) * aFx.x;
-      p.xz += (dcp / max(length(dcp), 1e-3)) * dg * 0.05 * BODY_LEN;
-      p.y -= dg * 0.09 * BODY_LEN;
-      n.xz -= dc * (2.0 * dg * 0.09 * BODY_LEN / (dR * dR));
+      p.xz += (dcp / max(length(dcp), 1e-3)) * dg * 0.12 * BODY_LEN;
+      p.y += dg * 0.05 * BODY_LEN;
+      n.xz += dc * (2.0 * dg * 0.05 * BODY_LEN / (dR * dR));
       n = normalize(n);
     }
 #endif
