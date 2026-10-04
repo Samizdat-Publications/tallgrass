@@ -1,5 +1,6 @@
 // Web Worker host for the simulation. The main thread only renders and sends commands.
 import { NG, GENE_NAMES, G_COAT, G_SIZE, G_SPEED } from './agents';
+import type { DynastyEntry, LineageTree } from './lineage';
 import type { LoggedIntervention } from './sharecode';
 import { Sim, SimEvent, StoryEntry } from './sim';
 import { SPECIES as REGISTRY } from './species';
@@ -17,7 +18,11 @@ export type ToWorker =
   | { type: 'skip' }
   | { type: 'step'; ticks: number }
   /** Ask for the intervention log, to build a share code; answered with a 'log' message. */
-  | { type: 'getLog' };
+  | { type: 'getLog' }
+  /** Family tree of one animal (3 generations up, 2 down); answered with a 'lineage' message. */
+  | { type: 'lineage'; id: number }
+  /** Alpha pairs of one pack serial over time; answered with a 'dynasty' message. */
+  | { type: 'dynasty'; pack: number };
 
 export interface AnimalDetail {
   id: number;
@@ -67,6 +72,10 @@ export type FromWorker =
   | { type: 'ready'; seed: number }
   /** Every player intervention so far (replayed ones included), with its tick. */
   | { type: 'log'; tick: number; log: LoggedIntervention[] }
+  /** Answer to 'lineage': the tree, or null when the animal is neither alive nor recorded. */
+  | { type: 'lineage'; id: number; tree: LineageTree | null }
+  /** Answer to 'dynasty': alpha pairs of the pack, oldest first (empty when unknown). */
+  | { type: 'dynasty'; pack: number; list: DynastyEntry[] }
   | {
       type: 'snap';
       tick: number;
@@ -329,6 +338,12 @@ ctx.onmessage = (e: MessageEvent<ToWorker>) => {
       break;
     case 'getLog':
       ctx.postMessage({ type: 'log', tick: sim?.tick ?? 0, log: ivLog.map((e) => ({ tick: e.tick, iv: e.iv })) } satisfies FromWorker);
+      break;
+    case 'lineage':
+      ctx.postMessage({ type: 'lineage', id: m.id, tree: sim ? sim.lineage.query(m.id) : null } satisfies FromWorker);
+      break;
+    case 'dynasty':
+      ctx.postMessage({ type: 'dynasty', pack: m.pack, list: sim ? sim.lineage.dynasty(m.pack) : [] } satisfies FromWorker);
       break;
   }
 };

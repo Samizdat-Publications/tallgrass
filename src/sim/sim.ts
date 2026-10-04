@@ -2,6 +2,7 @@
 import { Agents, G_BOLD, G_COAT, G_HERD, G_LITTER, G_SIGHT, G_SIZE, G_SPEED, NG, GENE_NAMES } from './agents';
 import { Disease, IS_CANID } from './disease';
 import { Environment } from './env';
+import { DEATH_CAUSES, Lineage } from './lineage';
 import { BucketGrid } from './grid';
 import { applyOverrides, defaultParams, Params, SpeciesParams } from './params';
 import { Rng } from './rng';
@@ -124,6 +125,8 @@ export class Sim implements SimLike {
   eventSerial = 0;
   /** Life story of one followed animal (set trackedId to start a fresh story). */
   trackedId = 0;
+  /** Records of dead parents and followed animals, and pack alpha dynasties (S15). */
+  readonly lineage: Lineage;
   story: StoryEntry[] = [];
   private storyLast: Record<string, number> = {};
   /** Counters since the last sample() call. */
@@ -168,6 +171,7 @@ export class Sim implements SimLike {
     this.env.climateAmp = this.p.climateAmp;
     this.veg = new Vegetation(this.world, this.p, this.env, this.rng.fork(12));
     this.a = new Agents(4096);
+    this.lineage = new Lineage(this.a, { alive: this.packAlive, serial: this.packSerial, alphaF: this.packAlphaF, alphaM: this.packAlphaM });
     this.dis = new Disease(this.a, this.p, this.env, this.seed, {
       get tick() { return self.tick; },
       event: (kind, sp, x, y, a, b) => this.event(kind, sp, x, y, a, b),
@@ -498,6 +502,7 @@ export class Sim implements SimLike {
         else if (this.packAlphaM[pk] < 0) this.fillVacancy(pk, 1);
       }
     }
+    this.lineage.syncAlphas(this.tick);
     // wolves breed once a year, at the start of spring
     if (this.env.yearTick(this.tick) === 0) {
       const P = this.p.species[Sp.Wolf];
@@ -724,6 +729,7 @@ export class Sim implements SimLike {
 
   setTracked(id: number): void {
     this.trackedId = id;
+    this.lineage.follow(id);
     this.story = [];
     this.storyLast = {};
   }
@@ -778,6 +784,7 @@ export class Sim implements SimLike {
       const meat = P.meat * a.genes[i * NG + G_SIZE] * juvenileF * (cause === 'starve' ? 0.6 : 1) * (cause === 'culled' ? 0.5 : 1);
       if (meat > 0.05) this.addCarcass(a.x[i], a.y[i], meat * (cause === 'old' ? 0.6 : 1), s, cause === 'killed' ? 1 : 0);
     }
+    this.lineage.onDeath(i, DEATH_CAUSES.indexOf(cause), this.tick);
     a.kill(i);
   }
 
@@ -992,6 +999,7 @@ export class Sim implements SimLike {
     if (mate >= 0 && this.inMatingSeason(P)) {
       a.pregnant[i] = P.gestation;
       a.mateId[i] = a.id[mate];
+      this.lineage.onMate(mate);
       for (let k = 0; k < NG; k++) a.mateGenes[o + k] = a.genes[mate * NG + k];
     }
 
@@ -1793,6 +1801,7 @@ export class Sim implements SimLike {
       if (mate >= 0) {
         a.pregnant[i] = P.gestation;
         a.mateId[i] = a.id[mate];
+        this.lineage.onMate(mate);
         for (let g = 0; g < NG; g++) a.mateGenes[i * NG + g] = a.genes[mate * NG + g];
       }
     }
