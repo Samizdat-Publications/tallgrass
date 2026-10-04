@@ -522,23 +522,23 @@ Animals can leave and enter the valley through corridors. All params ship off; S
 
 The existing `wolfImmigration` and `cougarImmigration` stay as they are.
 
-- [ ] **1. Corridors.** World generation computes 8 border entry points:
+- [x] **1. Corridors.** World generation computes 8 border entry points:
   - the creek inlet and outlet
   - the lowest border cell in each eighth of the rim
 
   This adds new arrays only, so existing ones are untouched.
-- [ ] **2. Regional pool (`region.ts`).**
+- [x] **2. Regional pool (`region.ts`).**
   - Per species, a running mean and variance per gene, starting from the founders.
   - `absorb(sp, genes)`: an emigrant pulls the pool toward its genes by 2%.
   - `draw(sp, rng, out)`: genes for an immigrant come from the pool. This is gene flow.
-- [ ] **3. Migrate state.**
+- [x] **3. Migrate state.**
   - The animal heads to the nearest corridor at 0.5× its run speed.
   - Within 4 m of the border it is removed, with death cause `emigrated`: no carcass, counted in `cEmig[sp]`, and `region.absorb`.
   - Immigrants spawn at a corridor with `F_MIGRANT` set until they are 30 m inside.
-- [ ] **4. Wolves.**
+- [x] **4. Wolves.**
   - **Leaving:** a pack-less adult that has wandered longer than `wolfOutAfter` leaves.
   - **Arriving:** every 100 ticks, roll `rng < wolfInRate * 100 / BASE_YEAR_TICKS`. On success, if `findDenSite()` returns a site, an adult pair (genes from the pool, `origin = 1`) enters at the nearest corridor. On arrival the pair founds a pack and emits `immigrated` (sp Wolf, a = 2).
-- [ ] **5. Pronghorn.**
+- [x] **5. Pronghorn.**
   - **Autumn exodus (season 2.6, once per valley year):**
     - B = browse per pronghorn.
     - f = clamp(deerOutK × (1 − B/Bref), 0, 0.5).
@@ -549,7 +549,7 @@ The existing `wolfImmigration` and `cougarImmigration` stay as they are.
     - If pop < 20, n = max(n, deerRescue).
     - They arrive as one group and emit `immigrated`.
   - **Calibrating Bref and Kb:** measure them from a 32-seed default run (mean autumn browse per capita, and the equilibrium population). Write the values as param defaults.
-- [ ] **6. Vagrant ravens.**
+- [x] **6. Vagrant ravens.**
   ```ts
   // every 50 ticks when ravenVagrants > 0
   const carrion = sumRemainingMeat();                                  // same units as cMeat
@@ -559,8 +559,8 @@ The existing `wolfImmigration` and `cougarImmigration` stay as they are.
   else if (carrion < 0.2 * target / p.ravenVagrantK) sendHome(Math.ceil(vagrants * 0.05));  // fly to the nearest edge, removed there
   ```
   - Vagrants have `origin = 2` and never breed (check it in `thinkRaven` at sim.ts:1803).
-- [ ] **7. Recolonization.** When a species with `everPresent = 0` gains animals through immigration, emit `recolonized`.
-- [ ] **8. Metrics** (`metrics.ts` and `dynamics.py`):
+- [x] **7. Recolonization.** When a species with `everPresent = 0` gains animals through immigration, emit `recolonized`.
+- [x] **8. Metrics** (`metrics.ts` and `dynamics.py`):
   - presence fraction (share of samples with pop > 0)
   - local extinctions per 1,000 years
   - years absent
