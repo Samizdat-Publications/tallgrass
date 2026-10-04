@@ -26,7 +26,7 @@ Plain predator-prey models (Lotka-Volterra) oscillate until something hits zero.
 15. **Small game is lean.** Voles and ground squirrels keep a wolf alive, but only at half the old rate, so wolf numbers can't coast through a prey crash for years.
 
 ## Evolution
-Every animal carries speed, size, sight, boldness, herding, coat and litter genes, passed on with mutation. Trait costs are physical: big bodies hold more reserves but need more grass and run slower, and speed costs energy mainly while sprinting. Over centuries you see a real arms race: bison get faster and bigger, and wolves get faster in response (`review/stability/v2-9762475/baseline/traits.png`). Coat darkness is kept within each species' believable range, so bison stay dark and wolves stay pale.
+Every animal carries speed, size, sight, boldness, herding, coat and litter genes, passed on with mutation. Trait costs are physical but mild: big bodies hold more reserves and resist wolves but need more grass and run a little slower, and a fast build adds a small metabolic cost that grows with activity. In the first century bison get faster and bigger under wolf pressure; then both traits sit near their limits (0.6 to 1.6 of the founders) and herding fades, because the costs are too weak to hold them back. Wolf traits mostly drift. A real arms race that keeps running needs steeper costs (see DECISIONS.md, 04:55 Sunday). Coat darkness is kept within each species' believable range, so bison stay dark and wolves stay pale.
 
 ## Evidence (checkpoint v5 is the default; v4 numbers kept for comparison)
 - v5: 20 worlds past 1,000 bison generations (720 to 750 years): bison, wolves and ravens 20/20, pronghorn 18/20. `review/stability/v5P-4875c69/`.
