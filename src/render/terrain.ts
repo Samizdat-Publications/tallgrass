@@ -1086,6 +1086,17 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
     grassCol = mix(grassCol, grassCol * vec3(0.92, 0.88, 0.8) + uSoil * 0.04, (1.0 - tuss) * 0.22 * closeK * (0.4 + 0.6 * stubA));
     // fine combed blade lines inside the clumps (the blade layer carries them nearer; this keeps the ground from going flat between)
     grassCol *= 1.0 + (s1 - 0.5) * 0.22 * closeK * (1.0 - topK * 0.5);
+    // blade-scale structure for a low camera: dark gaps between standing blades and pale blade bodies, stretched along the wind and
+    // tilted with the view, so the ground under and between the blades is a detailed sward, not a soft smear
+    float lowK = (1.0 - smoothstep(0.35, 0.8, -rayDir.y)) * (1.0 - smoothstep(10.0, 70.0, dist));
+    if (lowK > 0.01) {
+      vec2 wq2 = vec2(dot(xz, wv), dot(xz, vec2(-wv.y, wv.x)));
+      float bl1 = tgDet(vec2(wq2.x * 0.16, wq2.y * 2.1), 1.0, 1, vec2(0.37));
+      float bl2 = tgDet(vec2(wq2.x * 0.3, wq2.y * 4.6), 1.0, 0, vec2(0.81));
+      float blade = bl1 * 0.6 + bl2 * 0.4;
+      grassCol *= 1.0 + (blade - 0.5) * 0.7 * lowK;
+      grassCol = mix(grassCol, grassCol * vec3(1.1, 1.06, 0.88), smoothstep(0.66, 0.9, bl2) * 0.45 * lowK);
+    }
     gTgH += (clLow - 0.5) * 0.1 * closeK;   // metres: a few centimetres of relief over a metre, so the normal tilts a few degrees, not 45
   }
 
@@ -1189,9 +1200,14 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
     // reaches exactly zero) cannot show as isolated white patches on the flattest, wettest spots: nothing settles until there is real snow.
     float sn1 = clamp(uSnow, 0.0, 1.0);
     float Tsn = 1.78 - 1.74 * pow(sn1, 0.66);
-    float snowAmt = smoothstep(Tsn - 0.16, Tsn + 0.1, pot) * smoothstep(0.05, 0.16, uSnow);
-    float tipsPoke = (0.22 * gTgGrass * smoothstep(0.52, 0.8, s2)) * (1.0 - smoothstep(0.4, 0.9, uSnow));
-    snowCover = clamp(snowAmt * (0.94 - tipsPoke), 0.0, 1.0);
+    // The edge of a patch is jittered by two scales of noise (about 1.5 m and 40 cm) and ramps over a wide band of the potential, so a
+    // patch fades out through grass-flecked snow instead of ending on a cut line; a thin pack is also never fully opaque.
+    float edgeN = (tgDet(xz, 1.5, 2, vec2(0.7)) - 0.5) * 0.5 + (tgDet(xz, 0.4, 3, vec2(0.2)) - 0.5) * 0.36;
+    float edgeW2 = mix(0.19, 0.12, smoothstep(0.2, 0.8, uSnow));
+    float snowAmt = smoothstep(Tsn - 0.2 - edgeW2, Tsn + 0.06 + edgeW2, pot + edgeN * (1.0 - 0.5 * smoothstep(60.0, 400.0, dist))) * smoothstep(0.05, 0.16, uSnow);
+    float tipsPoke = (0.3 * gTgGrass * smoothstep(0.45, 0.8, s2 + 0.2 * edgeN)) * (1.0 - smoothstep(0.4, 0.9, uSnow));
+    float packCap = mix(0.86, 0.96, smoothstep(0.1, 0.7, uSnow));
+    snowCover = clamp(snowAmt * (packCap - tipsPoke), 0.0, 1.0);
     // Snow stays white and takes the sky in its shade, even under warm sun: the albedo is rebalanced against the key light's
     // colour (a golden sun then lights it cream, not sand), and shadowed or sheltered snow turns cool blue.
     vec3 lc = max(uLightColor, vec3(1e-3));
@@ -1201,7 +1217,7 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
     float cool = clamp((1.0 - ts) * 0.7 + hollowK * 0.15 + (1.0 - nrm.y) * 0.25, 0.0, 1.0);
     vec3 snowC = snowAlb * mix(vec3(1.0), vec3(0.95, 0.98, 1.03), cool);
     // fine mottling and wind ripples so it is a surface, not a flat white fill
-    snowC *= (0.94 + 0.08 * nC + 0.05 * (nA - 0.5) + streakTone * 0.12) * (1.0 - 0.38 * uNight);   // moonlit snow is grey-blue, not a floodlit white
+    snowC *= (0.94 + 0.08 * nC + 0.05 * (nA - 0.5) + streakTone * 0.12) * (1.0 - 0.45 * uNight);   // moonlit snow is grey-blue, not a floodlit white
     snowC = mix(snowC, col * 2.0 + vec3(0.05), 0.07 * (1.0 - snowCover * 0.5));
     col = mix(col, snowC, snowCover);
     col = mix(col, col * vec3(0.76, 0.76, 0.78), trodK * snowCover * 0.55);
@@ -1247,7 +1263,7 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
   gTgEmis += vec3(3.4, 0.95, 0.15) * ember + vec3(1.1, 0.22, 0.03) * emberHalo * 0.4 + vec3(1.6, 0.34, 0.05) * smolder;
   gTgEmis += uLightColor * (spark * 2.2);
   // snow scatters the sky light into its own shade: a faint cool glow so shadowed snow stays white-blue and never goes grey or beige
-  gTgEmis += col * vec3(0.036, 0.038, 0.042) * snowCover * (1.0 - 0.6 * uNight);
+  gTgEmis += col * vec3(0.036, 0.038, 0.042) * snowCover * (1.0 - 0.9 * uNight);
 
   if (uFear > 0.001) {
     col = mix(col, vec3(0.85, 0.05, 0.04), fear * uFear * 0.7);

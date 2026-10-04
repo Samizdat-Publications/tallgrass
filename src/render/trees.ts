@@ -3,6 +3,7 @@
 // shading. Foliage uses a procedural leaf cut-out so winter leaves thin out to the branch skeleton.
 import * as THREE from 'three';
 import type { World } from '../sim/world';
+import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 import { NOISE_GLSL, OCCLUDE_GLSL, SharedUniforms, clamp, fbm2, hash2, injectSafeOutput, injectTerrainShadow, smoothstep, vnoise2 } from './common';
 
 const R0 = 6; // nominal crown radius in meters the unit crown is designed for
@@ -877,25 +878,31 @@ export class Trees {
   }
 
   private buildOutcrops(world: World, shared: SharedUniforms, heightAt: (x: number, z: number) => number): void {
-    // geometry: a faceted lump with flat normals, three variants
+    // geometry: a rounded boulder with smooth shading (a gentle noise on a subdivided sphere), three variants; the grass and ground
+    // are painterly, so the stones read as weathered lumps and not as cut gems
     const geos: THREE.BufferGeometry[] = [];
     for (let v = 0; v < 3; v++) {
-      const ico = new THREE.IcosahedronGeometry(1, 1);
+      const ico = new THREE.IcosahedronGeometry(1, 3);
       const pa = ico.getAttribute('position');
       for (let i = 0; i < pa.count; i++) {
         const x = pa.getX(i), y = pa.getY(i), z = pa.getZ(i);
-        const n = vnoise2(x * 2.2 + v * 7, y * 2.4 + z * 1.7, 31 + v);
-        const k = 0.78 + 0.5 * n;
-        pa.setXYZ(i, x * k * (1.0 + 0.25 * (v - 1)), y * k * 0.62, z * k);
+        const n = vnoise2(x * 1.5 + v * 7, y * 1.7 + z * 1.2, 31 + v) * 0.7 + vnoise2(x * 3.6 + v * 3, y * 3.9 + z * 3.1, 47 + v) * 0.3;
+        const k = 0.82 + 0.36 * n;
+        pa.setXYZ(i, x * k * (1.0 + 0.25 * (v - 1)), y * k * 0.66, z * k);
       }
-      // the icosahedron is non-indexed already, so computed normals are per face: a faceted, chipped stone
-      ico.computeVertexNormals();
-      geos.push(ico);
-      this.disposables.push(ico);
+      // weld the duplicate corners and average the normals across them: one smooth surface
+      ico.deleteAttribute('normal');
+      ico.deleteAttribute('uv');
+      const smooth = mergeVertices(ico, 1e-4);
+      smooth.computeVertexNormals();
+      ico.dispose();
+      geos.push(smooth);
+      this.disposables.push(smooth);
     }
     const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.93, metalness: 0 });
     mat.onBeforeCompile = (shader) => {
       injectTerrainShadow(shader, shared);
+      shader.uniforms.uSoil = shared.soil; shader.uniforms.uGrassDry = shared.grassDry; shader.uniforms.uGrassGreen = shared.grassGreen; shader.uniforms.uSnow = shared.snow;
       shader.vertexShader = shader.vertexShader
         .replace('void main() {', `varying vec3 vRockLocal;
 void main() {`)
@@ -903,6 +910,10 @@ void main() {`)
 vRockLocal = position;`);
       shader.fragmentShader = shader.fragmentShader
         .replace('void main() {', `varying vec3 vRockLocal;
+uniform vec3 uSoil;
+uniform vec3 uGrassDry;
+uniform vec3 uGrassGreen;
+uniform float uSnow;
 ${NOISE_GLSL}
 ${WORLDPOS_GLSL}
 void main() {`)
@@ -913,18 +924,25 @@ void main() {`)
             vec3 wpr = tgFragWorld();
             float strata = tgNoise3( vec3( wpr.x * 1.3, wpr.y * 7.0, wpr.z * 1.3 ) );
             float grit = tgNoise3( wpr * 9.0 );
-            diffuseColor.rgb *= 0.7 + 0.3 * strata + 0.18 * grit;
+            diffuseColor.rgb *= 0.78 + 0.2 * strata + 0.1 * grit;
+            // tint toward the ground it sits on: a share of soil and cured grass, most at the base where grass and dust climb the stone
+            vec3 gtone = mix( uSoil * 1.5, mix( uGrassGreen, uGrassDry, 0.6 ), 0.5 );
+            float baseK = 1.0 - smoothstep( -0.3, 0.45, vRockLocal.y );
+            diffuseColor.rgb = mix( diffuseColor.rgb, diffuseColor.rgb * 0.45 + gtone * 0.62, 0.3 + 0.35 * baseK );
             // lichen: yellow-green and orange crusts on the upward faces
             float lich = smoothstep( 0.62, 0.8, tgNoise3( wpr * 3.1 + 7.0 ) ) * smoothstep( 0.2, 0.8, normalize( vNormal ).y );
             float lich2 = smoothstep( 0.66, 0.82, tgNoise3( wpr * 4.7 + 21.0 ) );
-            diffuseColor.rgb = mix( diffuseColor.rgb, vec3( 0.32, 0.34, 0.1 ), lich * 0.55 );
-            diffuseColor.rgb = mix( diffuseColor.rgb, vec3( 0.55, 0.26, 0.05 ), lich2 * 0.4 );
+            diffuseColor.rgb = mix( diffuseColor.rgb, vec3( 0.32, 0.34, 0.12 ), lich * 0.26 );
+            diffuseColor.rgb = mix( diffuseColor.rgb, vec3( 0.5, 0.3, 0.1 ), lich2 * 0.14 );
+            // snow settles on the upward faces
+            float rsn = smoothstep( 0.04, 0.5, uSnow ) * smoothstep( 0.15, 0.75, normalize( vNormal ).y + 0.25 * ( grit - 0.5 ) );
+            diffuseColor.rgb = mix( diffuseColor.rgb, vec3( 0.88, 0.9, 0.94 ), clamp( rsn * 0.62, 0.0, 0.9 ) );
             gTgShadow = tgSampleTerrainShadow();
           }`,
         );
       shader.fragmentShader = injectSafeOutput(shader.fragmentShader);
     };
-    mat.customProgramCacheKey = () => 'tg-rock-v1';
+    mat.customProgramCacheKey = () => 'tg-rock-v3';
     this.disposables.push(mat);
 
     interface R { x: number; z: number; s: number; sq: number; rot: number; c: number }
