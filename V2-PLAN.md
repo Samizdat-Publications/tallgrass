@@ -681,7 +681,7 @@ Fix the complaint every Gemini round repeats: sliding feet, stiff animals, wolve
   - During stance, each leg reads the ground height at its foot's world position from the height texture.
   - A two-bone analytic IK (hip, knee, foot) reaches it within ±25% of the leg length.
   - Body height = mean stance-foot height + rest leg height.
-- [ ] **4. Takedown v2.**
+- [x] **4. Takedown v2.**
   - Code to change:
     - animals.ts:98-101, 530-575 and 711-732
     - shader.ts:127-130, 177-191 and 390-409
@@ -693,10 +693,10 @@ Fix the complaint every Gemini round repeats: sliding feet, stiff animals, wolve
     - Each one that arrives within 9 m during the struggle gets its own lunge to a different contact point (flank, hindquarter, throat, by arrival order).
     - After the fall, feeders take radial slots around the carcass by arrival order. The display offset from the sim position is ≤ 2.5 m.
     - The alpha eats first. One subordinate lies 4 to 6 m out for 5 to 15 s (chosen by an id hash) before joining.
-- [ ] **5. Feeding loop.**
+- [x] **5. Feeding loop.**
   - Bite, pull back with the neck and forequarters, shake, swallow with the head up; repeat every 2.5 to 4 s.
   - The carcass flank dents with each pull.
-- [ ] **6. Ravens at kills.**
+- [x] **6. Ravens at kills.**
   - Two-footed hops with a wing flick, walking between pecks.
   - When a wolf lunges or feeds within 2 m, the raven flutters back 1 to 2 m.
   - Takeoff starts with a deep downstroke flare.
