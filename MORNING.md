@@ -124,6 +124,7 @@ The default sim is now **checkpoint v5 on a 2x valley calendar** (since about 06
 | 7 (07:51) | Gemini, video | 5 | 7 | 2 | 4 | 8 | 3 |
 | 8 (09:05) | blind critic, stills + 2x-calendar charts | 7 | 5 | 6 | 4 | 6 | 5 |
 | 8 (09:10) | Gemini, video | 5 | 6 | 2 | 4 | 8 | 3 |
+| 9 (10:19) | blind critic, stills of the final build | 7 | 5 | 6 | 5 | 7 | 6 |
 
 Every issue and its triage is in `REVIEWS.md`.
 - Round 4's verdict: animals were illegible and looked motionless at drone distance. In the drone shots a wolf is about 20 px tall, so planted feet can't read. The animal work since then targets exactly that, with whole-body motion scaled to camera distance, larger minimum sizes and a kill lunge.
@@ -131,6 +132,7 @@ Every issue and its triage is in `REVIEWS.md`.
 - Round 6 also found a real bug: deep snow in early summer after fast-forward at a low frame rate. Fixed (e82a67b).
 - Round 7 (after the calendar, narrator, Field notes, renderer, water and dust rounds): readability up to 6. Praised: golden-hour and dusk lighting ("wallpaper-grade"), wolves that pop, the follow panel, the territory overlay, and shock tests that "tell a real trophic story". Its top complaint is still the predators: wolves and ravens sit on near-flat lines (the research is under Next 5 things). Fixed since: winter snowpack and leafless winter trees, visible rain, night that reads as land, distant water that reads as water, a richer chronicle, readable species from above.
 - Round 8 (on the 09:01 build): scores held (stills 7, 5, 6, 4, 6, 5; Gemini 5, 6, 2, 4, 8, 3). Both critics still lead with the same two things this build can't fix tonight: predators that don't move (the stills critic) and close-up animation that reads as sliding (Gemini, even after the motion smoothing). A last quick round from it is now live: natural grey wolves, species proportions from above, softer snow edges, smooth rocks, no glare discs on ponds, clearer territories, and side panels that dim when you're not touching them.
+- Round 9 (on the 09:51 build with the final quick round): ecosystem, UI and keep-watching each up a point (7, 5, 6, 5, 7, 6). Its top two are unchanged (flat wolves and ravens, evolution that stops by year 300); new complaints are muddy winter and drought colour, herds as one carpet, and rain streaks in the map view (fixed at 10:23). Its four charts were stale copies from round 8, my mistake, so its chart-legend complaints were already fixed.
 
 ## Decisions you might want to overrule
 - **Stack:** TypeScript + Three.js instead of Godot (ADR-001 in `DECISIONS.md`): one language for sim, harness and renderer, headless GPU capture, and the URL build.
