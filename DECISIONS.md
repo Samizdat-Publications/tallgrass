@@ -152,3 +152,4 @@ One line each: decision | why | alternative rejected.
 - 2026-10-04 [Track S, merged with S1/S2/S18] Story death codes: 6 emigrated, 7 disease | both builders took 6 | -
 - 2026-10-04 [Track S, merged with S1/S2/S18] Vagrant send-home rule is `ravenVagrantK * carrion < 0.2 * vagrants` | the plan's condition can never be true (target is proportional to carrion) | dropping send-home.
 - 2026-10-04 [Track S, merged with S1/S2/S18] Pronghorn exodus fraction and spring return are not divided by calendarScale | they respond to browse and to the gap to Kb, not to a once-a-year litter | dividing.
+- 2026-10-04 [Track S, merged with S4/S6/S15] Lineage records more than "died with offspring or followed": also males that sired young and anyone who was ever alpha | herbivore and cougar births never count the father's children, so every father line would be empty; alphas let dynasties resolve | the literal rule.
