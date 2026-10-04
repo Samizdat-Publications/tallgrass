@@ -2,7 +2,7 @@
 // sky palette, ambient, exposure, haze. The same palette drives the dome, the water reflections and the
 // aerial-perspective haze so everything meets cleanly at the horizon.
 import * as THREE from 'three';
-import { NOISE_GLSL, SKY_GLSL, SharedUniforms, clamp, lerp, smoothstep } from './common';
+import { CLOUD_GLSL, NOISE_GLSL, SKY_GLSL, SharedUniforms, clamp, lerp, smoothstep } from './common';
 
 const C = (hex: string) => new THREE.Color(hex);
 
@@ -279,6 +279,7 @@ uniform float uCloud;
 uniform float uOvercast;
 uniform vec3 uWind;
 ${NOISE_GLSL}
+${CLOUD_GLSL}
 ${SKY_GLSL}
 void main() {
   vec3 d = normalize(vDir);
@@ -317,14 +318,14 @@ void main() {
 
   // clouds: projected layer, lit from the sun side, golden edges at dusk and dawn
   if (up > 0.0) {
-    vec2 cp = d.xz / (up * 0.9 + 0.22);
-    vec2 drift = uWind.xy * uTime * 0.006;
+    vec2 cp = tgCloudCp(d);
+    vec2 drift = tgCloudDrift(uWind, uTime);
     // twilight: the sun is low or just set, so the cloud deck is lit from below
     float tw = smoothstep(0.42, 0.04, uSunDir.y) * smoothstep(-0.26, -0.03, uSunDir.y);
-    vec2 q = cp * vec2(0.5, 0.8) + drift;
+    vec2 q = tgCloudQ(cp, drift);
     float cn = tgFbm2(q);
     float cn2 = tgFbm2(q + uSunDir.xz * 0.12);
-    float th = mix(0.64, 0.30, clamp(uCloud, 0.0, 1.0)) - 0.1 * tw;
+    float th = tgCloudThresh(uCloud, tw);
     float dens = smoothstep(th, th + 0.2, cn) * smoothstep(0.0, 0.16, up);
     float lit = clamp(0.55 + (cn - cn2) * 5.0, 0.0, 1.0);
     vec3 shade = uSkyMid * 0.75 + uSkyHorizon * 0.15;

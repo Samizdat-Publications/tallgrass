@@ -53,7 +53,7 @@ const engine = new Engine(host, world, {
 });
 // grass and animals sit on the terrain as rendered (the creek banks are reshaped for drawing)
 const renderWorld = { ...world, height: engine.terrain.heightTex.image.data as Float32Array };
-const grass = new GrassField(renderWorld, engine.vegTexture, { quality: qualityTier(startPreset) });
+const grass = new GrassField(renderWorld, engine.vegTexture, { quality: qualityTier(startPreset), cloudShadow: engine.uniforms });
 engine.scene.add(grass.object3D);
 engine.excludeFromAO(grass.object3D);
 if (q.get('grass') === '0') grass.object3D.visible = false;
