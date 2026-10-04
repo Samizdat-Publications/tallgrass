@@ -9,7 +9,7 @@ Last deploy: 01:50 Sunday (commit b679901: everything through renderer, animal a
 
 Locally: `npm run dev`, then http://localhost:5199/.
 - `?seed=anything` picks a world, `?scenario=yellowstone` picks a scenario, `?challenge=herd` starts a challenge. The menu (top right) does all three.
-- The game holds 60 fps by lowering its render resolution a little on big or high-DPI screens if it has to (measured on this machine's RTX 5070 Ti Laptop GPU: 11 to 13 ms per frame at 1080p, 16 to 17.5 ms at 1440p before scaling).
+- Performance, measured on this machine's RTX 5070 Ti Laptop GPU (01:55 Sunday, forced renders with a GPU sync): **1080p 7.7 to 11.5 ms per frame, 1440p 10 to 15.4 ms**, so 60 fps with headroom at both. On bigger or high-DPI screens the game lowers its render resolution a little if it has to, to hold 60 fps.
 - Keys: Space pause, 1/2/3 speed, **N next event** (the camera flies to it), **C cinematic documentary mode**, **P photo** (saves a clean PNG of the frame), G big graph, E evolution chart, L log scale, F follow the selected animal, H hide UI, M mute, Esc back out. Click an animal to inspect it and read its life story. Left-drag orbits, right-drag pans, wheel zooms.
 
 ## What it is
