@@ -393,6 +393,43 @@ def draw_overlay(ax, sc: Scenario, key: str, t: np.ndarray, m: np.ndarray, log: 
     ax.set_xlim(0, t[-1])
 
 
+def chart_cycles(sc: Scenario, saved: list[Path]):
+    """A closer look: 60 years in four worlds, annual means, each species relative to its own average there.
+    On a 700-year axis a 5-year cycle is texture; here the booms, crashes and any predator lag are readable."""
+    if sc.n == 0:
+        return
+    span = min(sc.ticks[s][-1] for s in sc.seeds) / YEAR
+    w0 = 100.0 if span > 180 else max(5.0, span * 0.25)
+    w1 = min(span, w0 + 60)
+    if w1 - w0 < 15:
+        return
+    seeds = [s for s in sc.seeds if all(sc.cols[s][f"pop_{k}"][-1] > 0 for k in sc.species)][:4] or sc.seeds[:4]
+    fig, axes = plt.subplots(len(seeds), 1, figsize=(13, 2.5 * len(seeds) + 1.4), sharex=True, squeeze=False)
+    for ax, s in zip(axes[:, 0], seeds):
+        t = sc.ticks[s] / YEAR
+        yrs = np.arange(int(w0), int(w1))
+        for k in sc.species:
+            v = sc.cols[s][f"pop_{k}"]
+            ann = np.array([v[(t >= y) & (t < y + 1)].mean() if np.any((t >= y) & (t < y + 1)) else np.nan for y in yrs])
+            m = np.nanmean(ann)
+            if not np.isfinite(m) or m <= 0:
+                continue
+            ax.plot(yrs + 0.5, 100 * ann / m, color=COLOR[k], lw=2.0 if k != "raven" else 1.2, label=k, zorder=3)
+        ax.axhline(100, color=MUTED, lw=0.8, ls=":")
+        ax.set_ylabel("% of own average")
+        ax.set_title(f"seed {s}", fontsize=10, loc="left")
+        ax.set_xlim(w0, w1)
+    axes[-1][0].set_xlabel("time (years; annual means)")
+    top = header(
+        fig,
+        f"{sc.name}: a closer look, {w1 - w0:.0f} years in {len(seeds)} worlds",
+        "Each line is one species' annual mean relative to its own average over this window, so booms, crashes and lags line up.",
+        legend_handles(sc, grass=False, shock=False),
+    )
+    fig.tight_layout(rect=(0, 0, 1, top))
+    save(fig, sc.folder / "cycles.png", saved)
+
+
 def chart_species_overlay(sc: Scenario, log: bool, saved: list[Path]):
     keys = sc.species
     t = sc.grid_ticks() / YEAR
@@ -731,6 +768,7 @@ def main() -> int:
             print(f"skipping {sc.name}: no data", file=sys.stderr)
             continue
         chart_seeds_grid(sc, args.log, saved)
+        chart_cycles(sc, saved)
         chart_species_overlay(sc, args.log, saved)
         chart_phase(sc, args.log, saved)
         chart_traits(sc, saved)
