@@ -15,10 +15,12 @@ Watch (drone camera, follow-cam, graphs) -> notice (chronicle event, swing in a 
 | Unit | Ticks | At 1x (10 ticks/s) |
 |---|---|---|
 | Sim tick | 1 | 0.1 s |
-| Day/night cycle | 400 | 40 s |
+| Day/night cycle | 800 | 80 s |
 | Season | 600 | 1 min |
 | Year | 2,400 | 4 min |
-| Bison generation (mean parent age at birth) | ~1,000 | ~1.7 min |
+| Bison generation (v5: 1,000 generations took 720 to 750 years) | ~1,750 | ~3 min |
+
+Season and year lengths scale with `calendarScale` (src/sim/params.ts, default 1 as in this table): at 2 a season is 300 ticks and a year 1,200 ticks (2 min at 1x) while lives stay the same length in ticks, so a bison lives about twice as many valley-years. See DECISIONS.md (02:45 Sunday).
 
 Why: the brief wants 1,000+ herbivore generations headless in minutes. At a target of under 0.6 ms per tick, 1,000 bison generations is ~1M ticks, about 10 minutes per seed, and 16 threads run 20 seeds in about 20 minutes. Individual lives (2 to 5 minutes at 1x) are still long enough to follow in documentary mode.
 
