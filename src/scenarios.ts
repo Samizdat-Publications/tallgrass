@@ -48,6 +48,13 @@ export const SCENARIOS: Scenario[] = [
     params: { 'cougar.initial': 6, cougarKillChance: 0.9, cougarAmbushRadius: 26, 'cougar.metabolism': 0.0007, cougarImmigration: 0.5 }, schedule: [],
   },
   {
+    id: 'hungrywolves', name: 'Hungry wolves',
+    blurb: 'Wolf packs grow when prey is plentiful and shrink when it is scarce, so the wolf line chases the herd a couple of years behind. The pronghorn have a harder time here.',
+    // the best predator-response screen of Sunday morning (scratch/L1, 32 worlds x 200 valley-years): bison, wolves and
+    // ravens 32/32, wolves follow bison at correlation 0.77, pronghorn 25/32; not yet run to 1,000 generations
+    params: { wolfPreyRef: 1000, wolfRareHalf: 400, leanLitter: 0.8 }, schedule: [],
+  },
+  {
     id: 'collapse', name: 'Collapse',
     blurb: 'An overstocked valley with only one small pack. Can it recover on its own?',
     params: { 'bison.initial': 1500, 'deer.initial': 400, 'wolf.initial': 6 }, schedule: [],

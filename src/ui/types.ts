@@ -62,7 +62,8 @@ export interface UIFrame {
  * Scenario ids passed to UIActions.newWorld, with the names and blurbs the menu shows. They come straight from
  * src/scenarios.ts so the menu and the game can never drift apart (scenarioById also accepts the old aliases).
  */
-export const SCENARIOS: { id: string; name: string; blurb: string }[] = GAME_SCENARIOS.map((x) => ({ id: x.id, name: x.name, blurb: x.blurb }));
+// blurbs are read at use time: some quote lengths in the valley's own calendar, which the game sets after this module loads
+export const SCENARIOS: { id: string; name: string; blurb: string }[] = GAME_SCENARIOS.map((x) => ({ id: x.id, name: x.name, get blurb() { return x.blurb; } }));
 
 /** Positional tools stay armed until the player clicks the ground; the rest apply instantly. */
 export const POSITIONAL_TOOLS: ReadonlySet<ToolId> = new Set<ToolId>(['fire', 'addWolves', 'addBison']);
