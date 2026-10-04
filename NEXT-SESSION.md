@@ -14,6 +14,7 @@
 - Builders in worktrees: R1 items 7-9 + upright-wolf fix; R3 (prairie dogs, jackrabbits, small-prey UI, audio incl. thunder, narrator); R4 storm visuals; round-13 fixes (mid-range water, early-winter snow, grazed stubble); grass copper fade in winter.
 - Next: R3 items 1, 4, 5, 9, 10 after S5 coyotes merge (mange needs animals.ts free); round-13 leftovers (snow buries grass, moonlight on animals at night, potato rocks); M1 once R3/R4 land (Gemini video round with hunt and storm segments, deploy, MORNING).
 - S3: 32-seed screens A-D and D re-run at 3bb97a5 done (review/stability/v6-screens/). D: wolf CV 0.26, corr 0.72, 32/32, fails only pronghorn starve share (50%). Waiting for Track S to post the next screen; run it locally at 32 seeds from a frozen worktree.
+- Owner request (via the v1 session): keep the making-of artifact https://claude.ai/artifact/7jPHUFvbzTv6AUz5UCA3Mu updated from journey/ (tools/journey.py, then tools/journey_page.py --artifact --out scratch/artifact_journey/making-of.html, publish with files = only new images {basename: journey/basename}; read the url first). v2 images are archived in journey/; publish at M1. Landing draft https://claude.ai/artifact/JHgLkaPPUGvWmeZU5FJ3YM can be refreshed with v2 stills.
 - Builders' reports sometimes name the wrong branch: use `git branch --contains <commit>`.
 - Do not `git worktree remove` builder worktrees: each has a node_modules junction to the main node_modules.
 - Quota at ~18:30: weekly 67%.
