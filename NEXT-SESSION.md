@@ -1,11 +1,13 @@
 # NEXT SESSION: pick up here
 
-**Updated:** 2026-10-04 03:30 (deadline in .claude/hooks/run_until.txt: 2026-10-04 12:00)
+**Updated:** 2026-10-04 04:25 (deadline in .claude/hooks/run_until.txt: 2026-10-04 12:00)
 
 ## State
 - Live: https://tallgrass.stewartgregerson.workers.dev, deployed about 01:40 from b679901.
 - Committed since the deploy: snow ease fix (e82a67b), documentary camera cuts (94182a0), calendarScale param off by default (2a5caf9), challenges and scenario blurbs follow the calendar (c34836e, 88b5ae3), animal layer round 6 (ac1a420), challenge tools --params (5aea7d7).
 - Uncommitted in the tree: UI builder round (done, not yet checked in the real game: src/ui/*, dev/ui.ts, DESIGN-UI.md) and renderer builder round (in progress: src/render/terrain.ts and maybe more). The real game crashed at one point in Terrain.bakeMacro (renderer WIP); probe with `node scratch/probe.mjs` before committing UI work.
+- UI round 6 committed (948ffb6). Narrator voice lines committed (71e5aaa, public/audio/narration, tools/narration.py); the UI builder a1f8911043eb89066 is wiring them in (brief sent 04:00: event-to-line map, documentary/cinematic only, 1x/10x, 40 s spacing, ducking, menu toggle, caption in cinematic).
+- Wolf-tracking screens queued to start when acceptance ends (scratch/wA, wB: calendarScale 2 + wolfPreyRef 1000 + wolfRareHalf 400 / 800, 32 seeds x 240,000 ticks). Compare with the cal2 screen (30/31/30/31; wolves CV 0.10, corr 0.16) and v6X100 (wolfPreyRef alone on v5: wolves track bison at corr 0.68 but pronghorn 20/32). Evidence for the morning report only; no time for its own acceptance before noon.
 - Calendar re-scale candidate cal2 = `calendarScale: 2` (a valley year of 1,200 ticks). 100-year screen: persistence within noise of v5; bison recover in 8 years instead of 5.5; births 0.42 per bison per year. Running from frozen 2a5caf9 (started 02:45):
   - acceptance: `review/stability/cal2-2a5caf9`, log `scratch/accept_cal2.log` (seed 11 collapses completely at about year 115; that is 1 of 20 so far)
   - 300-year shocks: `review/stability/cal2-2a5caf9-shocks300`, log `scratch/shocks_cal2.log`
