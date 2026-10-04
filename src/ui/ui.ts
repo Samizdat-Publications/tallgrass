@@ -16,7 +16,7 @@ import { ChallengeRun } from './challenge';
 import { GoalCard } from './goal';
 import { ResultCard } from './result';
 import { Chronicle, type ChronicleEntry } from './chronicle';
-import { cardRank, describeEvent, yearOfTick } from './describe';
+import { cardRank, describeEvent, eventWeight, yearOfTick } from './describe';
 import { FeedFilter } from './feed';
 import { h, unitPx } from './dom';
 import { Inspector } from './inspector';
@@ -337,7 +337,7 @@ export class GameUI {
       if (!this.feed.accept(e)) continue;
       const d = describeEvent(e);
       const major = !!d.card;
-      entries.push({ tick: e.tick, year: yearOfTick(e.tick), sentence: d.sentence, x: e.x, y: e.y, sp: e.sp, major });
+      entries.push({ tick: e.tick, year: yearOfTick(e.tick), sentence: d.sentence, x: e.x, y: e.y, sp: e.sp, major, weight: eventWeight(e) });
       if (MARK_KINDS.has(e.kind)) markers.push({ tick: e.tick, sentence: d.sentence, major });
       if (d.card && tick - e.tick <= STALE_TICKS) {
         const rank = cardRank(e.kind);

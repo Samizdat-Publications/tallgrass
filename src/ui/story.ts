@@ -122,6 +122,26 @@ export function buildStory(entries: StoryEntry[], who: StorySubject): StoryLine[
   return group(entries).map((g) => ({ tick: g.first, when: whenShort(g.first), text: lineText(g, who) }));
 }
 
+/**
+ * A one-line backstory for an animal that was there at the start (or was brought in by hand), so a founder's story
+ * never opens on "Nothing to tell yet". Null for animals born in the valley later.
+ */
+export function backstory(who: StorySubject & { gen: number; bornTick: number; pack: number }): StoryLine | null {
+  if (who.gen > 0) return null;
+  const introduced = who.bornTick > 100;
+  let text: string;
+  switch (who.sp) {
+    case 0: text = introduced ? 'Was brought into the valley to join the herds.' : 'Came into the valley with the first herds.'; break;
+    case 1: text = introduced ? 'Was brought into the valley to found a new pack.' : 'One of the founding pack.'; break;
+    case 2: text = 'One of the first ravens to settle the valley.'; break;
+    case 3: text = introduced ? 'Was brought into the valley to join the pronghorn.' : 'Came into the valley with the first pronghorn bands.'; break;
+    case 4: text = 'One of the first rabbits of the valley.'; break;
+    case 5: text = 'One of the first cougars to take the groves along the creek.'; break;
+    default: text = 'One of the first animals in the valley.';
+  }
+  return { tick: introduced ? who.bornTick : 0, when: introduced ? whenShort(who.bornTick) : 'At the start', text };
+}
+
 export function diedEntry(entries: StoryEntry[]): StoryEntry | null {
   for (let i = entries.length - 1; i >= 0; i--) if (entries[i].kind === 'died') return entries[i];
   return null;

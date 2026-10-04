@@ -235,6 +235,38 @@ function pick<T>(e: SimEvent, variants: T[], salt = 0): T {
 }
 
 /**
+ * How big the news is, 1 (small) to 5 (big). A busy year in the chronicle keeps its biggest events and folds the
+ * rest into a count line.
+ */
+export function eventWeight(e: SimEvent): number {
+  switch (e.kind) {
+    case 'extinct':
+    case 'introduced':
+      return 5;
+    case 'drought':
+    case 'fire':
+    case 'firstKill':
+    case 'removed':
+    case 'culled':
+    case 'plague':
+      return 4;
+    case 'outbreak':
+    case 'packLost':
+      return 3;
+    case 'stampede':
+      return e.a >= 60 ? 3 : 1;
+    case 'packFounded':
+      return e.tick > 100 && e.a % 3 === 0 ? 3 : 2;
+    case 'droughtEnd':
+    case 'rain':
+    case 'record':
+      return 2;
+    default:
+      return 1; // elder and anything unknown
+  }
+}
+
+/**
  * One plain sentence for the chronicle, plus a chapter card for the events that earn one.
  * Pure: depends only on the event.
  */

@@ -4,7 +4,7 @@ import type { AnimalDetail } from '../sim/worker';
 import { button, h, setText } from './dom';
 import { activityPhrase, animalCaption, fmtInt, lineageText, packName, plural } from './describe';
 import { icon } from './icons';
-import { buildStory, diedEntry, memorialText } from './story';
+import { backstory, buildStory, diedEntry, memorialText } from './story';
 import { traitIndex } from './traits';
 import type { UIActions } from './types';
 
@@ -233,6 +233,9 @@ export class Inspector {
     if (sig === this.storySig) return;
     this.storySig = sig;
     const lines = buildStory(entries, { sp: d.sp, male: d.male });
+    // a founder's story opens with where it came from, so it never starts on "nothing to tell"
+    const back = backstory({ sp: d.sp, male: d.male, gen: d.gen, bornTick: d.born, pack: d.pack });
+    if (back) lines.unshift(back);
     const atBottom = this.storyList.scrollHeight - this.storyList.scrollTop - this.storyList.clientHeight < 12;
     if (!lines.length) {
       this.storyList.replaceChildren(h('li', { class: 'tg-story-empty', text: this.memorial ? 'Nothing was recorded.' : 'Nothing to tell yet. Give it time.' }));

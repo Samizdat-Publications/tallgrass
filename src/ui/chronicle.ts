@@ -1,4 +1,5 @@
-// Right column: the chronicle. One plain sentence per event, newest on top, click to fly the camera there.
+// Right column: the chronicle. One plain sentence per event, grouped under a heading for each valley year, newest on
+// top. A busy year keeps only its significant events and folds the rest into "and 3 smaller events" (click to open).
 import { button, h, setText } from './dom';
 import { icon } from './icons';
 
@@ -12,10 +13,15 @@ export interface ChronicleEntry {
   sp: number;
   /** True for events that earned a chapter card. */
   major: boolean;
+  /** How much the event matters (higher is bigger news); decides what a busy year keeps. */
+  weight: number;
 }
 
-const MAX_ENTRIES = 400;
-const MAX_VISIBLE = 80;
+const MAX_ENTRIES = 600;
+/** DOM nodes shown at most; older years scroll off the end. */
+const MAX_NODES = 170;
+/** A year with more entries than this folds its smaller events away. */
+export const FOLD_OVER = 4;
 
 export class Chronicle {
   readonly el: HTMLElement;
@@ -23,7 +29,8 @@ export class Chronicle {
   private toggle: HTMLButtonElement;
   private badge: HTMLElement;
   private entries: ChronicleEntry[] = [];
-  private nodes: HTMLElement[] = [];
+  private fresh = new Set<ChronicleEntry>();
+  private opened = new Set<number>();
   private collapsed = false;
   private unread = 0;
   private empty: HTMLElement;
@@ -70,28 +77,26 @@ export class Chronicle {
 
   clear(): void {
     this.entries = [];
-    for (const n of this.nodes) n.remove();
-    this.nodes = [];
+    this.fresh.clear();
+    this.opened.clear();
     this.unread = 0;
     this.renderBadge();
     this.quietNext = true;
-    this.empty.style.display = '';
+    this.render();
   }
 
   /** Add entries oldest-first. `animate` is false for a bulk fill. */
   add(items: ChronicleEntry[], animate = true): void {
     if (!items.length) return;
-    this.empty.style.display = 'none';
     for (const it of items) {
       this.entries.push(it);
-      const node = this.build(it, animate);
-      this.nodes.push(node);
-      this.list.insertBefore(node, this.list.firstChild);
+      if (animate) this.fresh.add(it);
     }
-    // keep memory and DOM bounded
-    while (this.entries.length > MAX_ENTRIES) this.entries.shift();
-    while (this.nodes.length > MAX_VISIBLE) this.nodes.shift()?.remove();
-    this.refreshYears();
+    while (this.entries.length > MAX_ENTRIES) {
+      const old = this.entries.shift();
+      if (old) this.fresh.delete(old);
+    }
+    this.render();
     if (this.collapsed && !this.quietNext) {
       this.unread += items.length;
       this.renderBadge();
@@ -104,29 +109,74 @@ export class Chronicle {
     setText(this.badge, this.unread > 9 ? '9+' : String(this.unread));
   }
 
-  /** Show the year only on the first (newest) entry of each year, like a timeline. */
-  private refreshYears(): void {
-    let prev = -1;
-    for (let i = this.nodes.length - 1; i >= 0; i--) {
-      const n = this.nodes[i];
-      const y = Number(n.dataset.year);
-      const show = y !== prev;
-      prev = y;
-      const label = n.querySelector('.tg-ent-y');
-      if (label) setText(label, show ? String(y) : '');
-      n.classList.toggle('has-year', show);
+  /** Rebuild the list: a heading per year, the entries that matter, and a fold line for the rest. */
+  private render(): void {
+    const scroll = this.list.scrollTop;
+    const frag = document.createDocumentFragment();
+    if (!this.entries.length) {
+      this.list.replaceChildren(this.empty);
+      return;
     }
+    const byYear = new Map<number, ChronicleEntry[]>();
+    for (const e of this.entries) {
+      const g = byYear.get(e.year);
+      if (g) g.push(e);
+      else byYear.set(e.year, [e]);
+    }
+    const years = [...byYear.keys()].sort((a, b) => b - a);
+    let nodes = 0;
+    for (const year of years) {
+      if (nodes > MAX_NODES) break;
+      const all = byYear.get(year) as ChronicleEntry[]; // oldest first
+      const open = this.opened.has(year);
+      let shown = all;
+      let hidden = 0;
+      const foldable = all.length > FOLD_OVER + 1;
+      if (foldable && !open) {
+        const keep = new Set([...all].sort((a, b) => b.weight - a.weight || b.tick - a.tick).slice(0, FOLD_OVER));
+        shown = all.filter((e) => keep.has(e));
+        hidden = all.length - shown.length;
+      }
+      const group = h('div', { class: 'tg-year', role: 'group', 'aria-label': `Year ${year}` });
+      group.append(h('div', { class: 'tg-year-head', text: `Year ${year}` }));
+      const ordered = [...shown].reverse(); // newest first
+      ordered.forEach((e, i) => {
+        group.append(this.build(e, i === 0, i === ordered.length - 1 && hidden === 0 && !(open && foldable)));
+        nodes++;
+      });
+      if (hidden > 0) {
+        group.append(
+          button(
+            { class: 'tg-more', title: 'Show every event of this year', onclick: () => this.toggleYear(year) },
+            `and ${hidden} smaller ${hidden === 1 ? 'event' : 'events'}`,
+          ),
+        );
+        nodes++;
+      } else if (open && foldable) {
+        group.append(button({ class: 'tg-more', onclick: () => this.toggleYear(year), text: 'show fewer' }));
+        nodes++;
+      }
+      frag.append(group);
+    }
+    this.fresh.clear();
+    this.list.replaceChildren(frag);
+    this.list.scrollTop = scroll;
   }
 
-  private build(it: ChronicleEntry, animate: boolean): HTMLElement {
+  private toggleYear(year: number): void {
+    if (this.opened.has(year)) this.opened.delete(year);
+    else this.opened.add(year);
+    this.render();
+  }
+
+  private build(it: ChronicleEntry, first: boolean, last: boolean): HTMLElement {
     const flyable = it.x !== 0 || it.y !== 0;
     const spColor = it.sp >= 0 && it.sp < 6 ? `var(--sp-${it.sp})` : 'var(--paper-dim)';
     const inner = [
-      h('span', { class: 'tg-ent-y', 'aria-hidden': 'true' }),
       h('span', { class: 'tg-ent-node', 'aria-hidden': 'true' }),
       h('span', { class: 'tg-ent-t' }, h('span', { class: 'tg-sr', text: `Year ${it.year}: ` }), it.sentence),
     ];
-    const cls = `tg-ent${flyable ? ' is-flyable' : ''}${it.major ? ' is-major' : ''}${animate ? ' is-new' : ''}`;
+    const cls = `tg-ent${flyable ? ' is-flyable' : ''}${it.major ? ' is-major' : ''}${this.fresh.has(it) ? ' is-new' : ''}${first ? ' is-first' : ''}${last ? ' is-last' : ''}`;
     const body = flyable
       ? button({ class: 'tg-ent-b', title: 'Fly the camera there', onclick: () => this.flyTo(it.x, it.y) }, ...inner)
       : h('div', { class: 'tg-ent-b' }, ...inner);

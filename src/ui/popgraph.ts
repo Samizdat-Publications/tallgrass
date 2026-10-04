@@ -2,10 +2,11 @@
 import { SPECIES_COUNT, SPECIES_NAMES, YEAR_TICKS } from '../sim/types';
 import type { HistoryRow } from '../sim/worker';
 import { button, h, setText, unitPx } from './dom';
-import { fmtInt, seasonPhrase, seasonOfTick, yearOfTick, yearStartTick } from './describe';
+import { fmtInt, seasonPhrase, seasonOfTick, yearOfTick } from './describe';
 import { icon } from './icons';
-import { GOLD, GRASS_COLOR, PAPER_DIM, SANS, SPECIES_COLORS } from './palette';
-import { hexA, niceStep, niceStepInt } from './chartutil';
+import { PAPER_DIM, SANS, SPECIES_COLORS } from './palette';
+import { hexA } from './chartutil';
+import { drawRows, rowsPlot } from './rows';
 import { HERO, drawEvolution, evoTipRows, fmtPct, latest, type EvoData } from './evo';
 import { TRAIT_COUNT } from './traits';
 
@@ -43,7 +44,7 @@ export class PopGraph {
 
   // view state
   private expanded = false;
-  /** Linear by default (L flips to log, which lifts the small species off the axis). */
+  /** Linear by default; L puts each row on a log scale. */
   private log = false;
   private on: boolean[] = Array.from({ length: SPECIES_COUNT }, () => true);
   private visible: number[] = [];
@@ -279,6 +280,7 @@ export class PopGraph {
     // 1 to 3 species sit in one row of three, 4 make a tidy 2 x 2, 5 and 6 make two rows of three
     const cols = vis.length === 4 ? 2 : 3;
     this.el.dataset.cols = String(cols);
+    this.el.dataset.count = String(vis.length);
     this.el.dataset.rows = String(Math.max(1, Math.ceil(vis.length / cols)));
 
     // species chips for the expanded chart
@@ -287,6 +289,7 @@ export class PopGraph {
       const b = button(
         {
           class: 'tg-chip tg-chip-btn',
+          title: SPECIES_NAMES[sp],
           'aria-pressed': String(this.on[sp]),
           style: `--c:var(--sp-${sp})`,
           onclick: () => {
@@ -424,8 +427,7 @@ export class PopGraph {
   }
 
   private plotRect(w: number, ht: number) {
-    const u = this.unit;
-    return { l: 40 * u, r: w - 40 * u, t: 20 * u, b: ht - 22 * u };
+    return rowsPlot(w, ht, this.unit);
   }
 
   private drawExpanded(): void {
@@ -467,214 +469,30 @@ export class PopGraph {
     if (!f) return;
     const { g, w, h: ht } = f;
     const u = this.unit;
-    const P = this.plotRect(w, ht);
-    const pw = P.r - P.l, ph = P.b - P.t;
     const n = this.ticks.length;
-
-    g.font = `500 ${12 * u}px ${SANS}`;
-    g.textBaseline = 'middle';
-
     if (n < 2) {
+      g.font = `500 ${12 * u}px ${SANS}`;
+      g.textBaseline = 'middle';
       g.fillStyle = PAPER_DIM;
       g.textAlign = 'center';
       g.fillText('The graph fills in as time passes.', w / 2, ht / 2);
+      this.tip.classList.remove('is-on');
       return;
     }
-
-    const t0 = this.ticks[0];
-    let t1 = this.ticks[n - 1];
-    if (t1 - t0 < YEAR_TICKS * 0.5) t1 = t0 + YEAR_TICKS * 0.5;
-    const X = (t: number) => P.l + ((t - t0) / (t1 - t0)) * pw;
-
-    // y domain from the visible, enabled species
-    let max = 1;
-    for (const sp of this.visible) if (this.on[sp]) for (let i = 0; i < n; i++) if (this.pops[sp][i] > max) max = this.pops[sp][i];
-    let Y: (v: number) => number;
-    const yTicks: { v: number; label: string; minor?: boolean }[] = [];
-    if (this.log) {
-      // the top of the axis hugs the data instead of jumping to the next power of ten
-      const hi = Math.max(1.3, Math.log10(max * 1.15));
-      const lo = -0.3;
-      Y = (v) => P.b - ((Math.log10(Math.max(v, 0.5)) - lo) / (hi - lo)) * ph;
-      for (let k = 0; k <= Math.floor(hi); k++) {
-        yTicks.push({ v: Math.pow(10, k), label: fmtInt(Math.pow(10, k)) });
-        for (const m of [2, 5]) if (m * Math.pow(10, k) <= Math.pow(10, hi)) yTicks.push({ v: m * Math.pow(10, k), label: '', minor: true });
-      }
-    } else {
-      const step = niceStep(max, 4);
-      const top = Math.ceil((max * 1.04) / step) * step;
-      Y = (v) => P.b - (v / top) * ph;
-      for (let v = 0; v <= top + 1e-9; v += step) yTicks.push({ v, label: fmtInt(v) });
-    }
-
-    // grid and left axis
-    g.lineWidth = 1;
-    g.textAlign = 'right';
-    for (const t of yTicks) {
-      const y = Math.round(Y(t.v)) + 0.5;
-      g.strokeStyle = t.minor ? 'rgba(239,230,208,0.04)' : 'rgba(239,230,208,0.09)';
-      g.beginPath();
-      g.moveTo(P.l, y);
-      g.lineTo(P.r, y);
-      g.stroke();
-      if (!t.minor) {
-        g.fillStyle = PAPER_DIM;
-        g.fillText(t.label, P.l - 8 * u, y);
-      }
-    }
-    if (this.log) {
-      g.fillStyle = PAPER_DIM;
-      g.fillText('0', P.l - 8 * u, P.b);
-    }
-    // baseline
-    g.strokeStyle = 'rgba(239,230,208,0.22)';
-    g.beginPath();
-    g.moveTo(P.l, Math.round(P.b) + 0.5);
-    g.lineTo(P.r, Math.round(P.b) + 0.5);
-    g.stroke();
-
-    // x axis: years
-    const spanYears = (t1 - t0) / YEAR_TICKS;
-    const ystep = niceStepInt(spanYears, 7);
-    const y0 = yearOfTick(t0), y1 = yearOfTick(t1);
-    g.textAlign = 'center';
-    g.fillStyle = PAPER_DIM;
-    for (let yr = Math.ceil(y0 / ystep) * ystep; yr <= y1; yr += ystep) {
-      const x = X(yearStartTick(yr));
-      if (x < P.l + 2 || x > P.r - 6 * u) continue;
-      g.strokeStyle = 'rgba(239,230,208,0.22)';
-      g.beginPath();
-      g.moveTo(Math.round(x) + 0.5, P.b);
-      g.lineTo(Math.round(x) + 0.5, P.b + 4 * u);
-      g.stroke();
-      g.fillText(String(yr), x, P.b + 13 * u);
-    }
-    g.textAlign = 'left';
-    g.font = `italic 400 ${13 * u}px 'Alegreya', Georgia, serif`;
-    g.fillText('year', 2, P.b + 13 * u);
-    g.font = `500 ${12 * u}px ${SANS}`;
-
-    // downsample for drawing
-    const step = Math.max(1, Math.floor(n / (pw * 1.2)));
-
-    // grass: faint area on a secondary axis (0 to 100 percent)
-    const gTop = this.grassMax > 1.0001 ? this.grassMax : 1;
-    const GY = (v: number) => P.b - (Math.min(v, gTop) / gTop) * ph;
-    g.beginPath();
-    g.moveTo(X(this.ticks[0]), P.b);
-    for (let i = 0; i < n; i += step) g.lineTo(X(this.ticks[i]), GY(this.grass[i]));
-    g.lineTo(X(this.ticks[n - 1]), GY(this.grass[n - 1]));
-    g.lineTo(X(this.ticks[n - 1]), P.b);
-    g.closePath();
-    g.fillStyle = hexA(GRASS_COLOR, 0.07);
-    g.fill();
-    g.beginPath();
-    for (let i = 0; i < n; i += step) {
-      const x = X(this.ticks[i]), y = GY(this.grass[i]);
-      if (i === 0) g.moveTo(x, y); else g.lineTo(x, y);
-    }
-    g.lineTo(X(this.ticks[n - 1]), GY(this.grass[n - 1]));
-    g.lineWidth = 1;
-    g.strokeStyle = hexA(GRASS_COLOR, 0.32);
-    g.stroke();
-    g.textAlign = 'left';
-    g.fillStyle = hexA(GRASS_COLOR, 0.8);
-    // secondary axis: grass cover as a fraction of full, labelled so the faint green line is never a mystery
-    const gFmt = (v: number) => (gTop === 1 ? String(v) : String(Math.round(v * gTop * 100) / 100));
-    g.fillText(gFmt(0), P.r + 7 * u, P.b);
-    g.fillText(gFmt(0.5), P.r + 7 * u, P.b - 0.5 * ph);
-    g.fillText(gFmt(1), P.r + 7 * u, P.t);
-    g.textAlign = 'right';
-    g.font = `italic 400 ${13 * u}px 'Alegreya', Georgia, serif`;
-    g.fillText(gTop === 1 ? 'Grass, 0 to 1' : `Grass, 0 to ${Math.round(gTop * 100) / 100}`, w - 4 * u, 8 * u);
-    g.font = `500 ${12 * u}px ${SANS}`;
-
-    // event markers
-    for (const m of this.markers) {
-      if (m.tick < t0 || m.tick > t1) continue;
-      const x = Math.round(X(m.tick)) + 0.5;
-      g.strokeStyle = m.major ? hexA(GOLD, 0.28) : 'rgba(239,230,208,0.12)';
-      g.beginPath();
-      g.moveTo(x, P.t);
-      g.lineTo(x, P.b);
-      g.stroke();
-    }
-
-    // species lines
-    g.lineJoin = 'round';
-    g.lineCap = 'round';
-    for (const sp of this.visible) {
-      if (!this.on[sp]) continue;
-      const s = this.pops[sp];
-      g.beginPath();
-      for (let i = 0; i < n; i += step) {
-        const x = X(this.ticks[i]), y = Y(s[i]);
-        if (i === 0) g.moveTo(x, y); else g.lineTo(x, y);
-      }
-      g.lineTo(X(this.ticks[n - 1]), Y(s[n - 1]));
-      g.lineWidth = 1.75 * u;
-      g.strokeStyle = SPECIES_COLORS[sp];
-      g.stroke();
-      g.beginPath();
-      g.arc(X(this.ticks[n - 1]), Y(s[n - 1]), 2.8 * u, 0, Math.PI * 2);
-      g.fillStyle = SPECIES_COLORS[sp];
-      g.fill();
-    }
-
-    // marker glyphs on the axis, drawn last so lines never cover them
-    for (const m of this.markers) {
-      if (m.tick < t0 || m.tick > t1) continue;
-      const x = X(m.tick);
-      if (m.major) {
-        const r = 3.6 * u;
-        g.beginPath();
-        g.moveTo(x, P.b - r);
-        g.lineTo(x + r, P.b);
-        g.lineTo(x, P.b + r);
-        g.lineTo(x - r, P.b);
-        g.closePath();
-        g.fillStyle = GOLD;
-        g.fill();
-      } else {
-        g.beginPath();
-        g.arc(x, P.b, 2 * u, 0, Math.PI * 2);
-        g.fillStyle = 'rgba(239,230,208,0.55)';
-        g.fill();
-      }
-    }
-
-    // hover crosshair
-    if (hoverX >= P.l && hoverX <= P.r) {
-      const tick = t0 + ((hoverX - P.l) / pw) * (t1 - t0);
-      const idx = Math.min(n - 1, Math.max(0, this.nearest(tick)));
-      const x = Math.round(X(this.ticks[idx])) + 0.5;
-      g.strokeStyle = 'rgba(239,230,208,0.45)';
-      g.lineWidth = 1;
-      g.beginPath();
-      g.moveTo(x, P.t);
-      g.lineTo(x, P.b);
-      g.stroke();
-      for (const sp of this.visible) {
-        if (!this.on[sp]) continue;
-        g.beginPath();
-        g.arc(x, Y(this.pops[sp][idx]), 3.2 * u, 0, Math.PI * 2);
-        g.fillStyle = SPECIES_COLORS[sp];
-        g.fill();
-        g.strokeStyle = 'rgba(20,16,10,0.8)';
-        g.lineWidth = 1.2;
-        g.stroke();
-      }
-      this.showTip(idx, x, w);
+    const species = this.visible.filter((sp) => this.on[sp]);
+    const idx = drawRows(
+      g, w, ht, u,
+      { ticks: this.ticks, pops: this.pops, species, grass: this.grass, grassMax: this.grassMax, markers: this.markers, log: this.log },
+      hoverX,
+    );
+    if (idx >= 0) {
+      const P = this.plotRect(w, ht);
+      const t0 = this.ticks[0];
+      const t1 = Math.max(this.ticks[n - 1], t0 + YEAR_TICKS * 0.5);
+      this.showTip(idx, P.l + ((this.ticks[idx] - t0) / (t1 - t0)) * (P.r - P.l), w);
     } else {
       this.tip.classList.remove('is-on');
     }
-  }
-
-  private nearest(tick: number): number {
-    const i = this.lowerBound(tick);
-    if (i <= 0) return 0;
-    if (i >= this.ticks.length) return this.ticks.length - 1;
-    return tick - this.ticks[i - 1] < this.ticks[i] - tick ? i - 1 : i;
   }
 
   private showTip(idx: number, x: number, w: number): void {

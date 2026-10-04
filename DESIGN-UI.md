@@ -24,10 +24,12 @@ Species (lines, chips, and dots; four clearly separate hues so no two lines in a
 | Species | Hex | Name |
 |---|---|---|
 | Bison | `#CF8B4E` | hide amber-brown |
-| Wolf | `#7FA8D6` | slate blue |
-| Raven | `#A892DA` | violet ink |
-| Pronghorn | `#86C3A4` | mint sage |
-| Rabbit | `#D7C29A` | sand |
+| Wolf | `#6FA4EA` | blue |
+| Raven | `#B48CE6` | violet |
+| Pronghorn | `#4FC4BC` | teal, clear of the grass sage |
+| Rabbit | `#E9E4D4` | bone |
+
+Checked in CIE Lab: every pair of species colours, plus the grass sage and the gold accent, is at least 30 apart (bison against the gold accent is the closest at about 23, and the accent is never used for a species).
 | Cougar | `#D27A8C` | rose |
 | Grass | `#93B36B` | sage (faint secondary axis only) |
 
@@ -69,15 +71,17 @@ Species (lines, chips, and dots; four clearly separate hues so no two lines in a
 ```
 - **Top left, location slate:** place and year in Alegreya 20 px, then season, time of day, and weather in 14 px `--paper-dim`. No panel, just text with a soft shadow, like a documentary slate.
 - **Top right:** seed chip (click to copy the shareable seed code) and a menu button (scenarios, named seeds, new world, help, settings).
-- **Left rail, god tools:** a vertical column of 36 px round icon buttons that open into pills (icon plus a short word: Rain, Drought, Fire, Plague, Cull, Add wolves, Add bison, Remove wolves) when the pointer or keyboard focus reaches the rail, and for nine seconds at the start so the labels are seen once. Icon-only the rest of the time, so the left edge of the scene stays clear. Animal tools take their species color so wolves and bison are told apart at a glance. A longer hint slides out on hover or focus. Below 900 px wide the pills shrink to round icon buttons. Danger tools use `--ember` icons. Picking a tool arms it: the cursor becomes a ground reticle sized to its radius, and clicking the terrain applies it. Global tools (drought, rain) apply instantly. `Esc` disarms.
+- **Left rail, god tools:** a vertical column of 36 px round icon buttons that open into pills (icon plus a short word: Rain, Drought, Fire, Plague, Cull, Add wolves, Add bison, Remove wolves) when the pointer or keyboard focus reaches the rail, and for the first two minutes of a session so the labels are learnt once. A small "Tools" heading sits above it, always visible. Icon-only the rest of the time, so the left edge of the scene stays clear. Animal tools take their species color so wolves and bison are told apart at a glance. A longer hint slides out on hover or focus. Below 900 px wide the pills shrink to round icon buttons. Danger tools use `--ember` icons. Picking a tool arms it: the cursor becomes a ground reticle sized to its radius, and clicking the terrain applies it. Global tools (drought, rain) apply instantly. `Esc` disarms.
 - **Right, chronicle:** a narrow column (280 px) of chronicle entries, newest on top, each one line of Alegreya with the year in `--paper-dim`. Click an entry to fly the camera to it. Collapses to a single "chronicle" tab.
-- **Bottom left, population:** a strip panel (440 x 92 px) with one sparkline per species plus the current count. Click `[^]` (or `G`) to expand it to 640 x 300 px: a full chart over the whole history with species toggles, a log-scale toggle (linear by default; `L` flips it to lift the small species off the axis), and grass on a faint secondary axis labelled "Grass, 0 to 1". A vertical marker shows each chronicle event.
+- **Bottom left, population:** a strip panel (440 x 92 px) with one sparkline per species plus the current count. Click `[^]` (or `G`) to expand it to 640 x 300 px (336 with four or more species): small multiples, one row per species on a shared time axis, each scaled to its own range with its real numbers on the axis, plus a slim grass row, so every species shows its swings whatever its size. Species toggles, a log-scale toggle (linear by default; `L` puts each row on a log scale) and the grass row labelled "Grass, 0 to 1". Five or six species shrink the toggles to colour dots. A vertical marker shows each chronicle event.
 - **Bottom center, time:** pause, 1x, 10x, 100x, and next event. The active speed button fills with `--gold`. Show the pace of the calendar in plain words in small text ("1 year every 24 s"), never ticks. When the machine cannot keep up it says so honestly ("100x asked, running at 13x").
 - **Bottom right, inspector (appears on selection):** the animal is named like a documentary caption: species, sex, and age ("Bison cow, 6 years"), plus its lineage ("generation 212, daughter of #18233"). Bars for energy, water, and stamina; current activity in plain words ("grazing", "fleeing a wolf"); traits as read-only meters with the number beside each (the bar is this animal, a grey tick marks where the founders started, a bright tick the species now; no knob, nothing to drag); kills and offspring; buttons to follow (`F`) and to watch its life story (documentary mode). Close with `Esc`.
 - **Overlays menu (bottom right of the time bar):** vegetation, fear, territories, trait heatmap. Only one is active at a time.
 - **Hint:** after a minute with no input a quiet pill above the time bar says "H hides the interface, C documentary mode", once per browser; any input dismisses it. The menu lists every key.
 - **Territory labels:** paper text on a dark backing with the pack's colour as a border accent; they fade out toward the top and bottom edges so they never slide under the slate or the time bar.
-- **Chronicle:** capped to about seven entries visible; older ones scroll and fade.
+- **Chronicle:** capped to about seven entries visible; older ones scroll and fade. Entries sit under a heading for each valley year; a year with more than five events keeps its four biggest and folds the rest into a line like "and 3 smaller events" that opens on a click.
+- **Chapter cards** sit in the lower third, just above the population strip and time bar, so they never cover the action at the centre of the frame.
+- **Life story:** a founder (an animal there at the start or brought in by hand) opens on a one-line backstory ("Came into the valley with the first herds", "One of the founding pack"); "Nothing to tell yet" is only for animals born later who have no events yet.
 - **Cinematic mode (`C`):** hides all UI, slowly drifts the camera, adds thin letterbox bars, and still shows chapter cards.
 
 ## Challenges

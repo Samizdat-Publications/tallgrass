@@ -32,6 +32,12 @@ const SETS = {
     { name: '10_ui_graph_fast', eval: "window.__focusHerd(); window.__speed(100); document.dispatchEvent(new KeyboardEvent('keydown', { key: 'g', bubbles: true }))", wait: 9000 },
     { name: '11_overlay_territories', eval: "document.dispatchEvent(new KeyboardEvent('keydown', { key: 'g', bubbles: true })); window.__speed(1); window.__timeOfDay(0.62); window.__cam('wide'); window.__overlay.setMode('territory')", wait: 4500 },
   ],
+  // herd shape: fast-forward a little, then look down on the biggest herd from two heights
+  herd: [
+    { name: 'h0_warm', eval: "window.__speed(10)", wait: 20000 },
+    { name: 'h1_herd_140', eval: "window.__speed(1); window.__timeOfDay(0.42); window.__focusHerd(); window.__engine.cam.setView({ distance: 140, pitchDeg: 42 })", wait: 4000 },
+    { name: 'h2_herd_280', eval: "window.__engine.cam.setView({ distance: 280, pitchDeg: 50 })", wait: 3500 },
+  ],
   // map overlays (window.__overlay from src/main.ts), after a fast-forward so packs and grazing patterns exist
   overlays: [
     { name: 'ov_00_warm', eval: "window.__speed(10)", wait: 15000 },
