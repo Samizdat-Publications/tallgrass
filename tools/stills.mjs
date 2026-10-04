@@ -33,6 +33,13 @@ const SETS = {
     { name: '11_overlay_territories', eval: "document.dispatchEvent(new KeyboardEvent('keydown', { key: 'g', bubbles: true })); window.__speed(1); window.__timeOfDay(0.62); window.__cam('wide'); window.__overlay.setMode('territory')", wait: 4500 },
   ],
   // snow vs calendar: fast-forward through a winter, then drop to 1x and check the ground matches the header's season
+  // herd shape: run a few valley-years, then look at the herds from the drone, mid range and above (compare ?p=herdNearest:6)
+  herds: [
+    { name: 'h0_run', eval: "window.__speed(100); window.__cam('wide')", wait: 20000 },
+    { name: 'h1_wide', eval: "window.__speed(1); window.__timeOfDay(0.64); window.__focusHerd(); window.__cam('wide')", wait: 4500 },
+    { name: 'h2_herd', eval: "window.__focusHerd(); window.__engine.cam.setView({ distance: 160, pitchDeg: 32 })", wait: 4000 },
+    { name: 'h3_top', eval: "window.__cam('top')", wait: 4000 },
+  ],
   snow: [
     { name: 's1_fast', eval: "window.__speed(100); window.__cam('wide')", wait: 14000 },
     { name: 's2_fast', eval: '', wait: 6000 },
