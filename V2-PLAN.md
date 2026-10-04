@@ -746,15 +746,15 @@ Budget for the whole WP: ≤ +1.0 ms at 1440p in every view.
   - A ground mask from the same fbm as the sky's cloud layer (sky.ts:271-349), projected along the sun and moved by the wind.
   - It multiplies direct sun on terrain, grass, trees and animals.
   - Coverage follows the weather: clear days get scattered cumulus; overcast turns it off.
-- [ ] **6. God rays.**
+- [x] **6. God rays.**
   - Active when the sun is within 45° of the view centre.
   - An occlusion mask from depth (sky = 1), with a radial blur toward the sun's screen position: 64 taps, half resolution.
   - Added before bloom and scaled by haze and dust.
   - ≤ 0.3 ms.
-- [ ] **7. Falling snow.**
+- [x] **7. Falling snow.**
   - A camera-local, instanced volume of flakes, driven by the wind, with density from env snow.
   - Blizzard look when snow combines with wind > 0.6: dense, near-horizontal flakes and heavier fog.
-- [ ] **8. Dawn fog.** After a clear, calm night (no rain, wind < 0.35), mist pools in low ground from dayFrac 0.2 and burns off by 0.35, using the FogPass height mist with slow noise drift.
+- [x] **8. Dawn fog.** After a clear, calm night (no rain, wind < 0.35), mist pools in low ground from dayFrac 0.2 and burns off by 0.35, using the FogPass height mist with slow noise drift.
 - [ ] **9. Grass up close,** on LOD 0:
   - seed heads: bluestem's three-pronged tips, switchgrass sprays
   - a warm glow when backlit
