@@ -107,8 +107,9 @@ export interface Snapshot {
    * (1.275 x capacity); see SMALL_SCALE in smallprey.ts.
    */
   small?: Uint8Array;
-  /** Storm cells and lightning strikes (later work packages). */
+  /** Storm cells (params.stormCells), up to 4, STORM_STRIDE (6) floats each: x, y, radius m, intensity 0..1, kind (0 thunderstorm, 1 blizzard), age ticks. */
   storms?: Float32Array;
+  /** Lightning strikes since the last snapshot, STRIKE_STRIDE (4) floats each: x, y, tick, ignited (0 or 1). */
   strikes?: Float32Array;
 }
 
