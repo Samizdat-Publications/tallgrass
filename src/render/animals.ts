@@ -18,6 +18,8 @@ import { plantedStride } from './models/types';
 import { makeAnimalMaterials } from './models/shader';
 import type { AnimalShared } from './models/shader';
 import { Dust, KillSites, Markers, SceneLit } from './models/fx';
+import { injectTerrainShadow } from './common';
+import type { SharedUniforms } from './common';
 
 const INITIAL_CAPACITY = [2048, 512, 512, 1024, 1024, 128]; // by species id
 
@@ -293,6 +295,7 @@ export class AnimalLayer {
     uAmb: { value: new THREE.Vector3(0.6, 0.55, 0.45) },
     probe: (scene, exposure) => {
       this.lit.probe(scene);
+      this.bindTerrainShadow(scene);
       const v = this.lit.value;
       this.shared.uAmb.value.copy(v);
       // dark scene: little light reaches the animals, or the camera has opened up (exposure rises at dusk and night, which is
@@ -301,6 +304,10 @@ export class AnimalLayer {
     },
   };
   private lit = new SceneLit();
+  /** The engine's shared uniforms (scene.userData.tgUniforms), found on the first main-view draw; feeds the hill-shadow lookup. */
+  private tg: SharedUniforms | null = null;
+  /** A species material compiled before `tg` was known (it has no hill shadow until it is rebuilt). */
+  private tgMissed = false;
   private dust: Dust;
   private kills: KillSites;
   private markers: Markers;
@@ -332,12 +339,27 @@ export class AnimalLayer {
   private ringMat: THREE.ShaderMaterial;
   private selInfo = { found: false, x: 0, y: 0, z: 0, r: 1 };
 
+  private bindTerrainShadow(scene: THREE.Object3D): void {
+    if (this.tg) return;
+    const tu = scene.userData?.tgUniforms as SharedUniforms | undefined;
+    if (!tu) return;
+    this.tg = tu;
+    if (this.tgMissed) for (const b of this.batches) b.material.needsUpdate = true;
+  }
+
   constructor(world: World) {
     this.world = world;
     this.object3D.name = 'AnimalLayer';
     for (let sp = 0; sp < SPECIES_COUNT; sp++) {
       const def = getModel(sp);
       const { material, depth } = makeAnimalMaterials(sp, def, this.shared);
+      // animals sit in hill shadow like the terrain and trees do (the depth material casts only, so it needs nothing)
+      const baseCompile = material.onBeforeCompile;
+      material.onBeforeCompile = (shader, renderer) => {
+        baseCompile.call(material, shader, renderer);
+        if (this.tg) injectTerrainShadow(shader, this.tg);
+        else this.tgMissed = true;
+      };
       this.batches.push(new Batch(sp, def, material, depth, this.object3D, INITIAL_CAPACITY[sp], this.shared));
     }
     this.kills = new KillSites(world, this.lit);

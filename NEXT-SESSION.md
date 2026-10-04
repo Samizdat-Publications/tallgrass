@@ -9,6 +9,11 @@
 - Unmerged: `wip/drink-spots` (pond-ring fix; param drinkSpots, off by default; 0.7 is roughly level with main over 16 worlds). It is WP S10.
 - Nothing is running in the background.
 
+## In flight (Track R session started 2026-10-04 ~16:30 local, deadline 2026-10-08 12:00)
+- Mode: two tracks. This is Track R on main; Track S runs in the cloud on v2-sim (no Track S commits yet at start).
+- R0 items 1+6 (tools/gpubench.mjs, JPEG stills), 4 (hill shadows on animals), 5 (tools/concept_compare.py + __concept hook) are with builders. Item 3 (tone map) is the lead's, after items 1 and 5 land. Item 2 waits for S0 on main.
+- Quota at start: weekly 64%, 5-hour 6%.
+
 ## Start here
 1. Read CLAUDE.md, then V2-PLAN.md sections 0 to 6. Your kickoff prompt gives your mode (single or two tracks) and your deadline: write the deadline to `.claude/hooks/run_until.local.txt` first.
 2. S0 (species registry, golden hash and `npm test`, event serial fix) comes first. In two-track mode the cloud session does S0, and the local session starts with R0 items 1, 3, 4, 5 and 6 (item 2 waits for S0 on main).
