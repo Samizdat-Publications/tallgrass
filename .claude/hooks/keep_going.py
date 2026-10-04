@@ -9,7 +9,8 @@ owner can see in the morning how often it fired.
 
 Owner controls:
   - Create a file named STOP in the project folder to let the agent stop.
-  - Edit run_until.txt to change the deadline.
+  - Edit run_until.txt to change the deadline, or put a per-session deadline in
+    run_until.local.txt (gitignored, read first when it exists).
   - Interrupting the session in the app always works regardless of this hook.
 """
 import datetime
@@ -57,7 +58,11 @@ def main():
         return 0
 
     try:
-        txt = (HERE / "run_until.txt").read_text(encoding="utf-8").strip()
+        # A per-session deadline (gitignored, set from the owner's kickoff prompt) wins over the shared file,
+        # so a local session and a cloud session can each have their own without git conflicts.
+        local = HERE / "run_until.local.txt"
+        src = local if local.exists() else HERE / "run_until.txt"
+        txt = src.read_text(encoding="utf-8").strip()
         deadline = datetime.datetime.strptime(txt, "%Y-%m-%d %H:%M")
     except Exception:
         log("run_until.txt missing or unreadable: allowing stop")

@@ -1,29 +1,32 @@
 # NEXT SESSION: pick up here
 
-**Updated:** 2026-10-04 11:06 (deadline in .claude/hooks/run_until.txt: 2026-10-04 12:00)
+**Updated:** 2026-10-04 afternoon, at the end of the v2 planning session. v1 is finished and live; v2 starts now. The plan is `V2-PLAN.md`.
 
 ## State
-- **Updated 11:42.** Live: 11:19 deploy from 86eb206 (everything, including the riparian ribbon, all round 9 fixes and a 1.2 s takedown struggle). Working tree clean. Every doc current; MORNING.md audited (run steps verified from a clean clone at 10:34; challenge suite re-run 10:57, all five pass).
-- Reviews: stills critic 7, 5, 6, 5, 7, 6 in both round 9 and round 12 (plateau); Gemini video 7, 6, 3, 8, 9, 5 (round 10) then 6, 7, 2, 5, 8, 3 (round 11) on nearly the same build (Gemini swings 2 to 3 points between runs). All triaged in REVIEWS.md. Charts: population medians now end where fewer than 5 worlds remain (11:38).
-- Frame cost tonight: final quick round about +0.5 ms, riparian about +0.35 ms (+0.8 low view) at 1440p, paired A/B.
-- Nothing running in the background. scratch/wt is at 359f512; scratch/wt2 is a second worktree for paired GPU A/B.
+- `main`: v1 ends at 0873cd1. The handoff commit after it adds V2-PLAN.md, these notes, TRACK-S.md, REQUESTS-R.md and a per-session Stop hook deadline. No v2 code yet.
+- Branch `v2-sim` (same commit) is for a cloud Track S session (V2-PLAN.md sections 0 and 4). The owner's credit dialog says the $250 applies automatically to cloud sessions; the owner checks the meters on the first cloud run.
+- Live game: https://tallgrass.stewartgregerson.workers.dev (v1, deploy of 86eb206).
+- Unmerged: `wip/drink-spots` (pond-ring fix; param drinkSpots, off by default; 0.7 is roughly level with main over 16 worlds). It is WP S10.
+- Nothing is running in the background.
 
-## Next 3 steps (for the next session)
-1. Close-range animation, the one complaint every Gemini round repeats: the prey now struggles for 1.2 s but the wolves beside it stand still (Gemini round 11): give them lunges, bites and tugs during the takedown (diagnosed 11:45: at a kill every wolf within POUNCE_R 7 m lunges once, POUNCE_TIME 1.15 s, holding only from about 0.3 to 0.7 s, see animals.ts around lines 530 and 710; the prey now struggles for 1.2 s of a 2.4 s fall, so the wolves let go mid-struggle and stand. Fix: POUNCE_TIME about 1.8 s with the hold until the struggle ends, head shakes (tugShake) during the hold, and a fresh lunge for pack mates that arrive while fi.t < 1.2); check foot planting on the hunt close-ups frame by frame; vary raven flapping.
-2. The research items in MORNING.md Next 5: pronghorn under prey-scaled wolves (a fawning brake), per-species evolution costs plus a bison single-calf cap, personal space while grazing (herd shape). The rings around ponds have a concrete cause (sim.ts around line 1039): a grazer with hydration under 0.3 follows the water gradient and drinks at the first cell within 3 m of any shore, so a herd arriving from all sides settles into an even 3 m ring, held by separation. Fix in progress on branch wip/drink-spots (pushed, not merged): param drinkSpots, off by default and bit-identical when off. At 0.35 (seed 3, 20 years) bison crashed 800 to 13 with few thirst deaths, so spots that sparse concentrate herds where they lose to predation or grazing. Smoke at 11:50 (seeds 3 and 5, bison at year 20): 0.6 gives 453 and 485 (main 401 and 868), 0.8 gives 236 and 679. Over 8 worlds at 0.6 (11:52) the bison end year 20 at a mean of about 415 against main's 550, none extinct, two low (144, 181): it costs about a quarter of the herd as built. The drift back off the bank after drinking is now on the branch too (11:54): mean about 463, lowest 293 at 0.6; at 0.7 (11:56) mean about 587, lowest 286, above main's 550; at 0.8 mean about 487 (all within 8-seed noise). Over 16 worlds at 0.7 (11:59): mean about 522 against main 535, roughly level; seed 11 keeps 444 bison where main collapses to 31. Next: a 32-seed screen at 0.6, 0.7 and 0.8, print death causes, look at the herd shape in game (?p=drinkSpots:0.6), and add the push back toward grazing after drinking; re-run the 2x acceptance before merging.
-3. Drought ground that goes pale straw instead of mauve, and the bare apron on the shaded side of ponds (terrain.ts). Also: round 12 still 10 (100x) shows green, snowless ground with bare trees under a 'late winter, year 8' header (the header itself is right: the valley year runs spring to winter, and it updates every frame). The snow is by design (PACK_KEYS in engine.ts melts the pack from 0.3 at season 3.7 to 0 at 4.0); the grass greening before spring is also by design but early: the cure curve (CURE_KEYS, identical copies in grass.ts and engine.ts) goes from fully cured at season 3.5 to half green at 3.8, matching the sim's growth window (env.ts growthFactor is positive from season 3.7 and peaks at 0.7). Real tallgrass greens in mid-spring. Shifting both by about half a season is a sim change: re-run the 2x acceptance after it.
+## Start here
+1. Read CLAUDE.md, then V2-PLAN.md sections 0 to 6. Your kickoff prompt gives your mode (single or two tracks) and your deadline: write the deadline to `.claude/hooks/run_until.local.txt` first.
+2. S0 (species registry, golden hash and `npm test`, event serial fix) comes first. In two-track mode the cloud session does S0, and the local session starts with R0 items 1, 3, 4, 5 and 6 (item 2 waits for S0 on main).
+3. Local sessions: run the quota guard at every checkpoint (V2-PLAN.md section 4.4): no new work package at 85% weekly, stop at 90%.
 
 ## Gotchas
-- Three review reels (185 MB) and hundreds of review PNGs are committed; local .git is about 700 MB of mostly loose objects. Ask the owner before committing more reels.
-- **GPU A/B: one run is not a result.** An A/A run (same code both sides) showed up to 1 ms of side bias. Run each comparison twice with the builds swapped between BASE_DIR and the cwd tree (two worktrees: scratch/wt and scratch/wt2, both with node_modules junctions) and halve the difference.
-- **Before committing a shared file (src/main.ts, ui.ts, engine.ts), look at its diff: builders edit them too.** At 05:50 a commit swept in half-finished Field notes wiring; fixed by rebuilding the index entry from the previous blob.
-- **Size a batch's `timeout` to at least 2.5x its expected wall time under load.** The cal2 shock suite was cut at 3 h with 42/60 seeds done; seeds 15 to 20 re-run into `review/stability/cal2-2a5caf9-shocks300-b`, merged with `npx tsx scratch/merge_shocks.ts <first> <rerun> 2`.
-- **Never `sed -i` source files from Git Bash: it turns CRLF files into LF and the whole file shows as changed.** Use the Edit tool or Python with byte-level CRLF handling.
+- `Rng.fork()` draws from the main stream (rng.ts:68-70): never fork in new sim code. Seed new subsystems with their own generator, for example `new Rng(hashSeed(seed + ':storms'))`.
+- The worker's event cursor drops events after the sim trims its event array (worker.ts:214-215, sim.ts:1855); S0 fixes it with an event serial.
+- The engine ships ACES tone mapping although DESIGN.md says AgX (engine.ts:177); R0 decides.
+- GPU A/B: one run is not a result. An A/A run showed up to 1 ms of side bias. Run A, B, B, A (two worktrees: scratch/wt and scratch/wt2, both with node_modules junctions) and average the paired differences.
+- Before committing a shared file (src/main.ts, ui.ts, engine.ts, sim.ts), look at its diff: builders edit them too.
+- Size a batch's timeout to at least 2.5x its expected wall time under load. Run long batches from a frozen worktree (scratch/frozen/<hash>); never edit sim files while a non-frozen batch is running.
+- Never `sed -i` source files from Git Bash: it turns CRLF files into LF and the whole file shows as changed. Use the Edit tool or Python with byte-level CRLF handling.
 - 16-seed comparisons have about +/-10% noise; use 32 seeds for decisions.
-- Never edit sim files while a non-frozen batch is running (the cal2 runs use scratch/frozen/2a5caf9, so live src is safe).
-- With 20 batch threads running, everything else (tsc, vite, Playwright) is slow: probes take minutes.
-- TaskStop on npx jobs leaves orphan node processes; kill by command line.
-- Bash heredocs here collapse double backslashes to one: write files containing backslashes with the Write tool.
-- Background Bash commands are cut off at 2 hours (node children keep running). Check the log/outputs directly.
+- With 20 batch threads running, everything else (tsc, vite, Playwright) is slow.
+- TaskStop on npx jobs leaves orphan node processes; kill them by command line.
+- Bash heredocs collapse double backslashes to one: write files containing backslashes with the Write tool.
+- Background Bash commands are cut off at 2 hours (node children keep running). Check the log and outputs directly.
 - In batch CSVs a collapsed seed has a short CSV ending in zeros; "seeds done" includes completed ones.
-- scratch/wt and scratch/wt2 have node_modules junctions to the project's. Since 673802a the dev server allows the junction's real path, so worktree captures get the real fonts (before that, some weights fell back to system fonts; `vite build` always bundled them).
+- Since 673802a the dev server allows the node_modules junction's real path, so worktree captures get the real fonts.
+- Review reels are no longer committed (review/**/*.mp4 is gitignored); the three committed v1 reels stay in history. Review stills go in as JPEG q90.

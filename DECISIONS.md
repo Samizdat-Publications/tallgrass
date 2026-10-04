@@ -121,3 +121,17 @@ One line each: decision | why | alternative rejected.
 - 11:56 wip/drink-spots at 0.7 with the drift, same 8 worlds: bison 481, 489, 1041, 286, 481, 410, 1083, 427 at year 20 (mean about 587; main 550; lowest 286). The best setting so far and the starting point for the 32-seed screen.
 - 11:57 wip/drink-spots at 0.8 with the drift: bison 424, 318, 660, 316, 754, 292, 580, 550 (mean about 487). With 0.6, 0.7 and 0.8 giving means of about 463, 587 and 487, the differences are within 8-world, 20-year noise; the 32-seed screen picks the value.
 - 11:59 wip/drink-spots 0.7 on seeds 9 to 16 (20 years): bison mean about 457 against main 520; over all 16 worlds about 522 against main 535, so roughly level, and seed 11 (main's collapse world, 31 bison) keeps 444. Worth the 32-seed screen.
+
+## v2 (from 2026-10-04)
+
+### Owner rulings (2026-10-04, v2 planning session; the plan is V2-PLAN.md)
+- Species for v2, all four groups: coyotes, jackrabbits and prairie dogs; golden eagles and red-tailed hawks; mule deer with cougars that can make a living; beavers and changing water.
+- Open prairie by default: animals can leave the valley and arrive from the wider prairie, so a species can die out locally and return. The sealed valley stays as a setting and is pinned for challenges.
+- First focus before the 2026-10-08 quota reset: a bit of everything (close-range motion and takedowns, the concept look, the first new species, storms).
+- Quota guard: local sessions start no new work package at 85% of the weekly limit, stop at 90%, and never run into paid extra usage. To end a run, the lead writes the current local time to `.claude/hooks/run_until.local.txt`. That is the owner's sanctioned way to end a run, not a way around the Stop hook.
+- Each session's deadline goes in `.claude/hooks/run_until.local.txt` (gitignored, per machine; the Stop hook reads it before `run_until.txt`), as the owner's kickoff prompt says.
+- Team: Opus 5.5 at medium effort as lead, Sonnet 5.5 builders, Gemini for video critiques, the blind critic once per milestone.
+- Cloud: the owner's $250 cloud credit applies automatically to cloud sessions (credit dialog, 2026-10-04). Two tracks: Track S (simulation and ecology) runs in a cloud session on branch `v2-sim`; Track R (render, audio, UI, reviews, merges, deploys) runs locally on `main` (V2-PLAN.md section 4). If the cloud is unavailable, one local session does everything.
+- Review videos are no longer committed (`review/**/*.mp4` is gitignored); review stills go in as JPEG q90.
+
+### Log

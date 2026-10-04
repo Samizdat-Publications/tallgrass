@@ -1,5 +1,12 @@
 # Operating Contract (read every session, survives compaction)
 
+> **v2 phase (since 2026-10-04): after this file, read `V2-PLAN.md` (sections 0 to 6), then `NEXT-SESSION.md`.** The game exists (Tallgrass v1 is live). Phase 0 below is done: don't repeat it. Work through the v2 work packages in V2-PLAN.md section 6.
+> - Modes: one local session, or two tracks. In two-track mode, Track S (sim and ecology) runs in a cloud session on branch `v2-sim`, and Track R (render, audio, UI, reviews, merges, deploys) runs locally on `main`. File ownership is in V2-PLAN.md section 4.3.
+> - Quota guard (owner ruling 2026-10-04), local sessions: start no new work package at 85% of the weekly limit and stop at 90%, never in paid extra usage. To stop, write the current local time to `.claude/hooks/run_until.local.txt`.
+> - Each session's deadline lives in `.claude/hooks/run_until.local.txt` (gitignored). The Stop hook reads it before `run_until.txt`.
+> - Cloud sessions have no GPU and no `.env` keys, so they run no captures, reviews, Gemini, ElevenLabs or deploys (V2-PLAN.md section 4.5).
+> - Sim rule: every new mechanism is a param, off by default, and off must reproduce the golden hash (`npm test`). Never call `this.rng.fork()` in new code.
+
 You are building a new game from scratch, unattended, overnight. The creative brief is in `BRIEF.md`. This file is the set of rules for how you work. The owner (Stewart) is asleep.
 
 ## 1. Autonomy: never stall

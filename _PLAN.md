@@ -1,8 +1,18 @@
 # Tallgrass plan
 
+## v2 (current, from 2026-10-04): the plan is V2-PLAN.md
+| Phase | Work packages | Status |
+|---|---|---|
+| 1 alpha (target: before the 2026-10-08 quota reset) | S0, R0, S1, S2, S3, R1, R2, S4, S5, R3, S6, R4, M1 | not started |
+| 2 beta | S7 + R5, S8 + R6, R7, R8, S9, S10, S11 + R9, S15 + S16 + R12, S17 + R13, S12 + R10, S13 + R11, R14, R15, M2 | not started |
+| 3 v2.0 | S14 + R16, S18, R17, M3 | not started |
+
+The order, the two-track split and every spec are in V2-PLAN.md (section 6 has the order). The v1 backlog at the bottom of this file is folded in: item 1 is R1, item 2 is S1, S3 and S5, item 3 is S9, item 4 is S10, item 5 is R2 (drought ground, pond aprons, creek width) and S11 (spring green-up), item 6 is M3.
+
+## v1: the overnight run (2026-10-03 01:00 to 2026-10-04 12:00), finished and live
 Deadline: `.claude/hooks/run_until.txt` (2026-10-04 12:00). Owner rulings live in DECISIONS.md.
 
-## Milestones
+### Milestones
 | # | Milestone | Status |
 |---|---|---|
 | M0 | Phase 0 permission sweep, repo, env, API smoke | DONE 01:20 |
@@ -23,7 +33,7 @@ Deadline: `.claude/hooks/run_until.txt` (2026-10-04 12:00). Owner rulings live i
 | M16 | Riparian green ribbon and lighter pond rims (renderer builder) | DONE, deployed 10:59 (b4ff936) |
 | M14 | Loop: capture, critique, fix top 3, re-verify | ongoing |
 
-## Ordered backlog (top = next)
+### Ordered backlog (top = next)
 1. Close-range animation (every Gemini round): check the 1.2 s takedown (11:19) on video, foot planting on hunt close-ups, varied raven flapping.
 2. Pronghorn under prey-scaled wolves: a fawning brake, so 'Hungry wolves' can keep its pronghorn over 1,000 generations.
 3. Evolution costs per species plus a bison single-calf cap; re-run the acceptance.
