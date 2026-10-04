@@ -1,17 +1,18 @@
 # NEXT SESSION: pick up here
 
-**Updated:** 2026-10-03 18:00
+**Updated:** 2026-10-04 00:00
 
 ## State
-- Live: https://tallgrass.stewartgregerson.workers.dev, deployed 17:55 from 7f09fdd (v5 sim, retuned challenges, all round-3 visual fixes). Verified no errors, 60 fps.
-- Default sim = checkpoint v5 (src/sim/params.ts). v5 acceptance: bison/wolves/ravens 20/20 past 1,000 generations, pronghorn 18/20. v5 shocks: persistence 90-100%; strict bison recovery fails because herds overshoot (evolution still climbing during the first century). 300-year shock rerun is still to do.
-- All builders done and committed (animals, world renderer, UI, journey page). journey/index.html is the making-of draft (regenerate with tools/journey_page.py after archiving new images).
-- v6 research: v6X = v5 + wolfPreyRef 1000 makes wolves track prey (corr 0.63, CV 0.29) at near-equal persistence. Litter genes evolve fast (pronghorn 1.0 -> 1.42 in 40 yr), so maxLitter caps (bison 1, deer 2) are being screened over 100 years: scratch/v6X100, v6AD (+ loneIndividual + caps), v6AE (+ caps).
+- Live: https://tallgrass.stewartgregerson.workers.dev, deployed 21:00 from e958d19. Since then (not yet deployed): documentary camera by default when idle, clear-sight director shots, director follow easing, adaptive render scale, snow-lag fix, cougar country retune, 300-year shock evidence.
+- Default sim = checkpoint v5. v5 acceptance: bison/wolves/ravens 20/20 past 1,000 generations, pronghorn 18/20. v5 300-year shocks: all species recover (cull 100%, drought 80 to 85%, wolf wipeout 90 to 100%). v6 research (prey-scaled wolves, litter caps, herding) NOT adopted: loses pronghorn over centuries. Spring birth pulse, climate cycles, near-equilibrium start, nearest-neighbour herding: all rejected with data in DECISIONS.md.
+- Owner rulings: images inline in chat (SendUserFile render) as they're made; historical images in the making-of artifact https://claude.ai/artifact/7jPHUFvbzTv6AUz5UCA3Mu (republish scratch/artifact_journey/making-of.html after `tools/journey_page.py --artifact --out scratch/artifact_journey/making-of.html`, with files mapped to journey/*).
+- Builders working round 5: animals (a524942be7b6fd979: pronghorn glow, sick tint, wolf contrast, gallop slide, kill stagger), renderer (af57fcb936ce73c50: snow as sand, burnt trees, moonlit grass, lawn green, far land, shadow flicker), UI (a1f8911043eb89066: graph labels, sparklines, chronicle cut-off, documentary chip, cards at 100x).
+- Running: raven screens rv1/rv2 (carrion-limited ravens, 100 years).
 
 ## Next 3 steps
-1. Read the 100-year screens; pick v6 (likely v6X plus caps); run its 1,000-generation acceptance (about 1.5 to 2 h at 20 threads) and a 300-year shock suite (shock at about year 120, after evolution settles).
-2. Review round 4 on the deployed build: `node tools/stills.mjs --out review/round-04 --set review --timeout 400000`, copy v5 charts in, fresh blind critic; reel via `node tools/video.mjs --out review/round-04-video/reel.mp4`, then `.venv/Scripts/python tools/gemini_video_review.py review/round-04-video/reel.mp4`. Do captures while the CPU is quiet.
-3. If v6 is adopted: re-run tools/challenge_suite.py and tools/mine_seeds.py, update MORNING.md and ECOLOGY.md, redeploy.
+1. As builders report: check their evidence, commit, show images inline, archive to journey/ and republish the artifact.
+2. When all three land: deploy (worktree, vite build, wrangler, `node scratch/live_check2.mjs`), then review round 6.
+3. Ravens: if rv1/rv2 keep persistence at v5 level and break the ceiling, adopt (then acceptance + challenge suite + seed mining again).
 
 ## Gotchas
 - 16-seed comparisons have about +/-10% noise; use 32 seeds for decisions.
