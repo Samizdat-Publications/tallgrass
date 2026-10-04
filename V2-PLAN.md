@@ -657,12 +657,12 @@ Fix the complaint every Gemini round repeats: sliding feet, stiff animals, wolve
 
 **Files:** `src/render/animals.ts`, `src/render/models/shader.ts`, `src/render/models/builder.ts`, `dev/animals.ts`.
 
-- [ ] **1. Foot-slip rig** in `dev/animals.html`.
+- [x] **1. Foot-slip rig** in `dev/animals.html`.
   - A CPU mirror of the leg math.
   - Cases: each species, walk, trot and gallop, 1x and 10x, flat ground and a 20° slope.
   - Prints the stance slip (mean foot motion during stance ÷ body motion) and the foot-to-ground error.
   - Saves image strips.
-- [ ] **2. Exact foot lock.**
+- [x] **2. Exact foot lock.**
   - Today the phase already advances by distance drawn ÷ stride (animals.ts:737), but a sinusoidal hip swing can't hold a planted foot still.
   - Replace it with a linear foot path during stance:
   ```glsl
@@ -677,7 +677,7 @@ Fix the complaint every Gemini round repeats: sliding feet, stiff animals, wolve
   - S must include the drawn model scale, including the distance size boost.
   - Blend gait parameters across walk, trot and gallop, and never reset the phase.
   - Raise `MAX_CADENCE` so it never binds below a real gallop cadence.
-- [ ] **3. Slope contact,** within 45 m of the camera.
+- [x] **3. Slope contact,** within 45 m of the camera.
   - During stance, each leg reads the ground height at its foot's world position from the height texture.
   - A two-bone analytic IK (hip, knee, foot) reaches it within ±25% of the leg length.
   - Body height = mean stance-foot height + rest leg height.
