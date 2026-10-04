@@ -279,6 +279,7 @@ const sun = { dir: engine.uniforms.lightDir.value, color: engine.uniforms.lightC
 let fpsAcc = 0, fpsN = 0;
 let audioFrame = 0;
 let nearbyCache = { bison: 0, wolf: 0, raven: 0, pronghorn: 0 };
+const heardDeaths = new Map<number, number>();
 const w = window as unknown as Record<string, unknown>;
 w.__overlay = overlay;
 engine.onFrame((dt, t) => {
@@ -310,6 +311,20 @@ engine.onFrame((dt, t) => {
     if ((audioFrame & 3) === 0) nearbyCache = countNearby(pending.agents, pending.count, cp.x, cp.z, 250);
     audio.update(dt, { env: pending.env, camX: cp.x, camY: cp.z, camHeight, speed: pending.speed, nearby: nearbyCache, nearWater: nearWater01(world, cp.x, cp.z) });
     if (!skipping) for (const ev of pendingEvents) if (ev.x !== 0 || ev.y !== 0) audio.onEvent(ev, Math.hypot(ev.x - cp.x, ev.y - cp.z, camHeight));
+    // a fresh carcass near the camera: someone just died here
+    if (!skipping && pending.speed > 0 && pending.speed <= 10) {
+      const C = pending.carcasses;
+      for (let k = 0; k < pending.carcassCount; k++) {
+        const o = k * 4;
+        if (C[o + 2] < 0.985) continue;
+        const key = Math.round(C[o]) * 1024 + Math.round(C[o + 1]);
+        if (heardDeaths.has(key)) continue;
+        heardDeaths.set(key, performance.now());
+        const dist = Math.hypot(C[o] - cp.x, C[o + 1] - cp.z, camHeight);
+        if (dist < 160) audio.onDeath(C[o + 3], dist);
+      }
+      if (heardDeaths.size > 400) for (const [key, t0] of heardDeaths) if (performance.now() - t0 > 60000) heardDeaths.delete(key);
+    }
     pendingEvents = [];
     pendingHistory = [];
   }

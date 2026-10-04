@@ -218,6 +218,26 @@ export class AudioDirector {
     if (played > 0) this.lastEvent.set(kind, now);
   }
 
+  private lastDeath = -1e9;
+
+  /**
+   * An animal just fell `distance` metres from the camera (a fresh carcass): a short distressed call, so a kill
+   * on screen is heard, not just seen. At most one every four seconds.
+   */
+  onDeath(sp: number, distance: number): void {
+    const ctx = this.ctx;
+    if (!ctx || ctx.state !== 'running' || !this.bedsStarted || this._muted) return;
+    if (this.clock - this.lastDeath < 4) return;
+    const d = Number.isFinite(distance) ? Math.max(0, distance) : 300;
+    const atten = eventAttenuation(d);
+    if (atten < 0.08) return;
+    const o = { gain: 0.55 * atten, distance: Math.min(eventDistance01(d), 0.85), pan: (Math.random() * 2 - 1) * 0.5 };
+    if (sp === 0) this.playCalls('bison', 2, { ...o, rate: rand(0.78, 0.86) }); // a low bellow
+    else if (sp === 3) this.playCalls('bison', 1, { ...o, gain: o.gain * 0.7, rate: rand(1.45, 1.6) }); // a thin, high bleat
+    else return;
+    this.lastDeath = this.clock;
+  }
+
   /** Release the context and listeners (hot reload, tests). */
   dispose(): void {
     this.stopListening();
