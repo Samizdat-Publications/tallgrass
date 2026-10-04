@@ -3,8 +3,8 @@
 **Updated:** 2026-10-04 11:06 (deadline in .claude/hooks/run_until.txt: 2026-10-04 12:00)
 
 ## State
-- **Updated 11:20.** Live: 11:19 deploy from 86eb206 (everything, including the riparian ribbon, all round 9 fixes and a 1.2 s takedown struggle). Working tree clean. Every doc current; MORNING.md audited (run steps verified from a clean clone at 10:34; challenge suite re-run 10:57, all five pass).
-- Reviews: round 9 blind critic 7, 5, 6, 5, 7, 6; round 10 Gemini video 7, 6, 3, 8, 9, 5 (its best yet). Both triaged in REVIEWS.md.
+- **Updated 11:42.** Live: 11:19 deploy from 86eb206 (everything, including the riparian ribbon, all round 9 fixes and a 1.2 s takedown struggle). Working tree clean. Every doc current; MORNING.md audited (run steps verified from a clean clone at 10:34; challenge suite re-run 10:57, all five pass).
+- Reviews: stills critic 7, 5, 6, 5, 7, 6 in both round 9 and round 12 (plateau); Gemini video 7, 6, 3, 8, 9, 5 (round 10) then 6, 7, 2, 5, 8, 3 (round 11) on nearly the same build (Gemini swings 2 to 3 points between runs). All triaged in REVIEWS.md. Charts: population medians now end where fewer than 5 worlds remain (11:38).
 - Frame cost tonight: final quick round about +0.5 ms, riparian about +0.35 ms (+0.8 low view) at 1440p, paired A/B.
 - Nothing running in the background. scratch/wt is at 359f512; scratch/wt2 is a second worktree for paired GPU A/B.
 
