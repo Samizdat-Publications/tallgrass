@@ -117,6 +117,9 @@ export class AudioDirector {
   private bedBus: GainNode | null = null;
   private spotBus: GainNode | null = null;
   private voiceBus: GainNode | null = null;
+  private ambTrim: GainNode | null = null;
+  private voiceTrim: GainNode | null = null;
+  private _busVol = { ambience: 1, music: 1, voice: 1 };
   private voiceBuffers = new Map<string, AudioBuffer>();
   private voiceLoading: Promise<void> | null = null;
   private voiceSrc: AudioBufferSourceNode | null = null;
@@ -214,6 +217,15 @@ export class AudioDirector {
   setMuted(m: boolean): void {
     this._muted = m;
     this.applyMaster();
+  }
+
+  /** Player volume for one bus (0..1): 'ambience' (beds and spot sounds), 'music' or 'voice' (narrator). Kept across a context restart. */
+  setBusVolume(bus: 'ambience' | 'music' | 'voice', v: number): void {
+    const g = clamp01(v);
+    this._busVol[bus] = g;
+    if (bus === 'music') { this.music.setLevel(g); return; }
+    const node = bus === 'ambience' ? this.ambTrim : this.voiceTrim;
+    if (node && this.ctx) node.gain.setTargetAtTime(g, this.ctx.currentTime, 0.05);
   }
 
   setVolume(v: number): void {
@@ -502,9 +514,18 @@ export class AudioDirector {
     const spotBus = ctx.createGain();
     // the narrator rides beside the beds and spot sounds, straight into the master (so M and the volume still rule it)
     const voiceBus = ctx.createGain();
-    bedBus.connect(master);
-    spotBus.connect(master);
-    voiceBus.connect(master);
+    // player volume trims (settings): beds and spot sounds share the ambience trim; the duck stays on the buses
+    const ambTrim = ctx.createGain();
+    ambTrim.gain.value = this._busVol.ambience;
+    const voiceTrim = ctx.createGain();
+    voiceTrim.gain.value = this._busVol.voice;
+    ambTrim.connect(master);
+    voiceTrim.connect(master);
+    bedBus.connect(ambTrim);
+    spotBus.connect(ambTrim);
+    voiceBus.connect(voiceTrim);
+    this.ambTrim = ambTrim;
+    this.voiceTrim = voiceTrim;
     // music: its own director-controlled bus, then a duck node (the narrator ducks it like the beds), then the master
     const musicDuck = ctx.createGain();
     musicDuck.connect(master);
