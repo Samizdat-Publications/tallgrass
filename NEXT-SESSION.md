@@ -8,6 +8,7 @@
 - Review round 7 done (review/round-07, critique.md, REVIEWS.md triage). Video reel + Gemini running (background; review/round-07-video). Add Gemini scores to REVIEWS.md and MORNING.md when it lands.
 - Builders briefed 07:45, report by 10:15: renderer af57fcb936ce73c50 (winter snowpack, foliage season bug, rain visible, night readability, far blur, lawn edge), water a7556909cc4d45a61 (distant river reads as pavement, rain pond blotches, dusk lavender), UI a1f8911043eb89066 (season lines in the chronicle from population history, pack break-up phrasing, founder panel, label overlap), animals a524942be7b6fd979 (near-camera wolf glitch in still 03, species-readable top view).
 - Research screens (all logged in DECISIONS.md): wA, pA, pB, evo2, rf0/rf7, L2, L3 done. L1 (prey-scaled wolves + leanLitter 0.8) finishing; L4 (bison maxLitter 1 + leanLitter 0.8) and L5 (herdEyes 1.5 + sprintCost 0.1, 16 seeds) start after L1. Landing page draft published 08:05 (https://claude.ai/artifact/JHgLkaPPUGvWmeZU5FJ3YM, source landing/). Gemini round 7 triaged; addenda sent to the animals and UI builders.
+- Running: 'Hungry wolves' acceptance (review/stability/hungrywolves-44a2bfe, scratch/accept_hw.log, ETA about 12:00 to 12:40). At 11:30 report what has finished (per-seed CSVs; tools/cycle_stats.py works on partial folders) in MORNING.md, labelled partial.
 
 ## Next 3 steps
 1. Gemini round 7 result -> REVIEWS.md, MORNING.md table. L1/L3 results -> DECISIONS.md, MORNING.md Next 5 things.
