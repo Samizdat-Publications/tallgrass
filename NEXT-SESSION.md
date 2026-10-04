@@ -3,20 +3,16 @@
 **Updated:** 2026-10-04 04:25 (deadline in .claude/hooks/run_until.txt: 2026-10-04 12:00)
 
 ## State
-- Live: https://tallgrass.stewartgregerson.workers.dev, deployed about 01:40 from b679901.
-- Committed since the deploy: snow ease fix (e82a67b), documentary camera cuts (94182a0), calendarScale param off by default (2a5caf9), challenges and scenario blurbs follow the calendar (c34836e, 88b5ae3), animal layer round 6 (ac1a420), challenge tools --params (5aea7d7).
-- Uncommitted in the tree: the renderer builder round (in progress: src/render/terrain.ts and maybe more). The real game runs with it as of 03:45 (scratch/probe.png); probe again with `node scratch/probe.mjs` before committing its work.
-- UI round 6 committed (948ffb6). Narrator voice lines committed (71e5aaa, public/audio/narration, tools/narration.py); the UI builder a1f8911043eb89066 is wiring them in (brief sent 04:00: event-to-line map, documentary/cinematic only, 1x/10x, 40 s spacing, ducking, menu toggle, caption in cinematic).
-- Wolf-tracking screens queued to start when acceptance ends (scratch/wA, wB: calendarScale 2 + wolfPreyRef 1000 + wolfRareHalf 400 / 800, 32 seeds x 240,000 ticks). Compare with the cal2 screen (30/31/30/31; wolves CV 0.10, corr 0.16) and v6X100 (wolfPreyRef alone on v5: wolves track bison at corr 0.68 but pronghorn 20/32). Evidence for the morning report only; no time for its own acceptance before noon.
-- Calendar re-scale candidate cal2 = `calendarScale: 2` (a valley year of 1,200 ticks). 100-year screen: persistence within noise of v5; bison recover in 8 years instead of 5.5; births 0.42 per bison per year. Running from frozen 2a5caf9 (started 02:45):
-  - acceptance: `review/stability/cal2-2a5caf9`, log `scratch/accept_cal2.log` (seed 11 collapses completely at about year 115; that is 1 of 20 so far)
-  - 300-year shocks: `review/stability/cal2-2a5caf9-shocks300`, log `scratch/shocks_cal2.log`
-  - Compare with v5: acceptance bison/wolves/ravens 20/20, pronghorn 18/20; shocks recover (cull 100%, drought 80 to 85%, wolf wipeout 90 to 100%).
+- **Updated 06:40.** Live: https://tallgrass.stewartgregerson.workers.dev, deployed 06:30 from 02b5744 (verified: no errors, default pace "1 year every 2 min", challenges "4 min").
+- **Default sim = checkpoint v5 on the 2x calendar (calendarScale 2), adopted 06:25 (8568594).** Acceptance 19/20 per species (review/stability/cal2-2a5caf9). Shock suite: first run cut at 3 h (my timeout) with 42/60 done; seeds 15 to 20 re-running into review/stability/cal2-2a5caf9-shocks300-b; a background job merges with scratch/merge_shocks.ts when it ends (writes metrics_merged.md, summary_merged.json, copies the CSVs). Then: fill SHOCKS_PENDING in MORNING.md, run tools/charts.py on the merged folder, commit. If the merged shocks are clearly worse than v5 (cull 100/100/100/95, drought 85/80/90/85, wolfwipe 100/100/100/95 persistence), revert calendarScale to 1 in params.ts and redeploy.
+- Challenges pin calendarScale 1 (validated again 06:20: all fail hands-off, all won by the scripted player).
+- Off-by-default options with evidence: droughtRefuge (modest drought gains, no visual), wolfPreyRef + wolfRareHalf (wolves track prey, pronghorn 24/31).
+- Builders: renderer af57fcb936ce73c50 (asked at 06:30 to wrap up within 30 min: world edge, shadows, trees, sky, close ground, wet sheen), water a7556909cc4d45a61 (src/render/water.ts only), UI a1f8911043eb89066 (Field notes, brief in scratch/briefs/fieldnotes.md; its WIP is uncommitted in src/main.ts, src/ui/*).
 
 ## Next 3 steps
-1. When acceptance and shocks finish: if both hold at v5's level, adopt cal2 as the default (`calendarScale: 2` in params.ts), then re-run `tools/challenge_suite.py` (hands-off fails, scripted player wins), re-mine named seeds (`tools/mine_seeds.py`, check it passes params) and rewrite seeds.ts blurbs, update MORNING.md (time scale line, stability section), DESIGN.md/ECOLOGY.md, charts for the morning report (`tools/charts.py` reads yearTicks from each scenario's summary.json).
-2. When the renderer builder reports: check stills and bench, commit. When the UI builder reports the narrator: check its Playwright evidence, commit.
-3. Deploy from a clean worktree (`git worktree add --detach scratch/wt HEAD` exists; update it with `git -C scratch/wt checkout --detach <hash>`), vite build, `npx wrangler deploy --name tallgrass --assets ./dist --compatibility-date 2026-10-01`, `node scratch/live_check2.mjs`; then review round 7 (stills + video), republish the journey artifact.
+1. Merge the shocks (automatic), finish MORNING.md stability, charts, commit, push.
+2. Land renderer, water and Field notes (check evidence, look at the real game with scratch/probe.mjs, commit only their files), deploy from scratch/wt (git -C scratch/wt checkout --detach <hash>; vite build; wrangler deploy; node scratch/live_check2.mjs).
+3. Review round 7: tools/stills.mjs --set review to review/round-07, charts from cal2 acceptance and shocks, reel with tools/video.mjs, fresh blind critic + Gemini; triage; fix the top 3; final MORNING.md audit before 12:00.
 
 ## Gotchas
 - **Before committing a shared file (src/main.ts, ui.ts, engine.ts), look at its diff: builders edit them too.** At 05:50 a commit swept in half-finished Field notes wiring; fixed by rebuilding the index entry from the previous blob.
