@@ -56,6 +56,44 @@ const SETS = {
     { name: 'ov_05_traits', eval: "window.__overlay.setMode('traits')", wait: 3000 },
     { name: 'ov_06_traits_wide', eval: "window.__cam('wide')", wait: 3000 },
   ],
+  // water close-ups: the creek and a pond at golden hour, midday from above, dusk, night and in winter.
+  // __wv(target, distance, pitchDeg, yawFromLightDeg): orbit a creek point (fraction 0..1 along it) or a pond ('p0'..'p2'), with
+  // yaw measured from looking straight into the key light (0 = facing the sun or moon).
+  // __env({ dayFrac, season, weather, warmth }): hold the rendered time of day and season (the sim keeps running underneath), so
+  // every shot is lit as asked instead of drifting through the valley's short year.
+  water: [
+    { name: 'wa_00_setup', eval: `(() => {
+      const e = window.__engine, w = e.world;
+      window.__wv = (t, dist, pitch, rel) => {
+        let x, y;
+        if (typeof t === 'string') { const q = Number(t.slice(1)) * 4; x = w.ponds[q]; y = w.ponds[q + 1]; }
+        else { const n = w.creek.length / 2, k = Math.min(n - 2, Math.max(0, Math.floor(n * t))); x = w.creek[2 * k]; y = w.creek[2 * k + 1]; }
+        const L = e.uniforms.lightDir.value;
+        const az = Math.atan2(L.x, L.z) * 180 / Math.PI;
+        e.cam.setView({ x, y, distance: dist, pitchDeg: pitch, yawDeg: az + 180 + rel }, true);
+      };
+      window.__env = (o) => {
+        window.__envO = Object.assign({ season: 1.8, weather: 0, warmth: 0.7, rain: 0 }, o);
+        if (!window.__envHook) window.__envHook = e.onFrame(() => e.setEnv(window.__envO));
+        e.setEnv(window.__envO); e.applyEnvNow();
+      };
+      window.__speed(1); window.__followId(null); window.__env({ dayFrac: 0.71 });
+    })()`, wait: 2500 },
+    { name: 'wa_01_golden_creek', eval: 'window.__wv(0.32, 95, 26, 20)', wait: 3000 },
+    { name: 'wa_02_golden_creek_low', eval: 'window.__wv(0.62, 45, 13, 30)', wait: 3000 },
+    { name: 'wa_03_golden_creek_close', eval: 'window.__wv(0.5, 24, 34, 70)', wait: 3000 },
+    { name: 'wa_04_golden_pond', eval: "window.__wv('p0', 60, 24, 30)", wait: 3000 },
+    { name: 'wa_05_golden_pond_away', eval: "window.__wv('p1', 55, 32, 160)", wait: 3000 },
+    { name: 'wa_06_noon_creek_above', eval: "window.__env({ dayFrac: 0.5 }); window.__wv(0.6, 42, 64, 90)", wait: 3000 },
+    { name: 'wa_07_noon_pond_above', eval: "window.__wv('p0', 52, 62, 90)", wait: 3000 },
+    { name: 'wa_08_dusk_creek', eval: "window.__env({ dayFrac: 0.772 }); window.__wv(0.32, 80, 16, 15)", wait: 3000 },
+    { name: 'wa_09_night_creek', eval: "window.__env({ dayFrac: 0.95 }); window.__wv(0.32, 70, 20, 8)", wait: 3000 },
+    { name: 'wa_10_night_pond', eval: "window.__wv('p0', 55, 22, 5)", wait: 3000 },
+    { name: 'wa_11_winter_creek', eval: "window.__env({ dayFrac: 0.42, season: 3.05, weather: 0, warmth: 0.1 }); window.__wv(0.5, 50, 30, 40)", wait: 3000 },
+    { name: 'wa_12_winter_pond', eval: "window.__wv('p0', 55, 34, 40)", wait: 3000 },
+    { name: 'wa_13_winter_snow_creek', eval: "window.__env({ dayFrac: 0.42, season: 3.05, weather: 4, warmth: 0.1 }); window.__wv(0.62, 50, 30, 40)", wait: 3000 },
+    { name: 'wa_14_winter_snow_pond', eval: "window.__wv('p1', 55, 34, 40)", wait: 3000 },
+  ],
 };
 
 const steps = SETS[set];
