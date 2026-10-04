@@ -26,4 +26,4 @@
 - Bash heredocs here collapse double backslashes to one: write files containing backslashes with the Write tool.
 - Background Bash commands are cut off at 2 hours (node children keep running). Check the log/outputs directly.
 - In batch CSVs a collapsed seed has a short CSV ending in zeros; "seeds done" includes completed ones.
-- scratch/wt has a node_modules junction to the project's. Its dev server still warns that fontsource files are outside the allow list (probes fall back to system fonts), but `vite build` there bundles all the fonts (84 woff/woff2 in dist/assets), so deploys are fine.
+- scratch/wt and scratch/wt2 have node_modules junctions to the project's. Since 673802a the dev server allows the junction's real path, so worktree captures get the real fonts (before that, some weights fell back to system fonts; `vite build` always bundled them).
