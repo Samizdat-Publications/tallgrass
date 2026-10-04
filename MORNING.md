@@ -21,7 +21,7 @@ New since Saturday evening (overnight into Sunday):
 - **Fast-forward is faster:** 100x had been running at about a quarter of that; the sim now gets more of each frame.
 - **Animals you can read from the drone:** wolves keep a cool slate coat and a faint glint at distance, bison stay warm brown at dusk instead of turning into black stains, pronghorn read tan, and the species separate from straight above. Bodies bound and pitch with the slope more strongly at distance, so movement reads as effort even when legs are a few pixels tall. The selection ring is a crisp thin ring. Carcasses show a pale belly and a fresh-kill stain.
 - **Documentary camera:** it now cuts to a subject across the valley instead of flying the camera through the trees, and near moves ease in and out.
-- **UI:** the chronicle is newest first everywhere, with a season tag on each entry and an "N earlier entries" pager. Chapter cards never contradict the header. **H** (or the eye button by the menu) gives an ambient view with no interface for a second monitor.
+- **UI:** the chronicle is newest first everywhere, with a season tag on each entry and an "N earlier entries" pager. Chapter cards drop or trim their season once it has passed (with 30-second seasons a card can still straddle a change while on screen; a fix is in progress). **H** (or the eye button by the menu) gives an ambient view with no interface for a second monitor.
 - **Snow bug fixed:** after a fast-forward on a slow frame rate, snow could linger into early summer. Weather now tracks the calendar at any frame rate.
 
 Earlier, Saturday (since 09:00):
@@ -115,7 +115,7 @@ The default sim is now **checkpoint v5 on a 2x valley calendar** (since about 06
 
 Every issue and its triage is in `REVIEWS.md`.
 - Round 4's verdict: animals were illegible and looked motionless at drone distance. In the drone shots a wolf is about 20 px tall, so planted feet can't read. The animal work since then targets exactly that, with whole-body motion scaled to camera distance, larger minimum sizes and a kill lunge.
-- Rounds 5 and 6: the stills critic's visual, life and keep-watching scores rose (visual 6 to 7, life 5 to 7). Its top complaint, three rounds running, is that population swings are too fast for "years": a bison lives about 3.3 valley-years, so a crash heals in about 5 years. That is the calendar trade-off described under "Decisions you might want to overrule", and I'm screening a fix for it (below). Gemini's top complaint is gait and weight in wide shots. A frame-by-frame check of its clip found a 70 to 100 m wide shot where legs are 2 to 3 px tall, so the fix is distance cues (body bob, slope pitch), not foot IK.
+- Rounds 5 and 6: the stills critic's visual, life and keep-watching scores rose (visual 6 to 7, life 5 to 7). Its top complaint, three rounds running, is that population swings are too fast for "years": a bison lives about 3.3 valley-years, so a crash heals in about 5 years. That was the calendar trade-off; the 2x calendar adopted at 06:25 is the fix (see Stability). Gemini's top complaint is gait and weight in wide shots. A frame-by-frame check of its clip found a 70 to 100 m wide shot where legs are 2 to 3 px tall, so the fix is distance cues (body bob, slope pitch), not foot IK.
 - Round 6 also found a real bug: deep snow in early summer after fast-forward at a low frame rate. Fixed (e82a67b).
 
 ## Decisions you might want to overrule
@@ -131,10 +131,10 @@ Every issue and its triage is in `REVIEWS.md`.
 - **seked `.env`:** doesn't exist; keys came from Noclip's `.env` plus your `ELEVENLABS_API_KEY` environment variable.
 - **Custom subagent types and the Stop hook:** `SETUP.cmd` hadn't been run, so I installed `.claude/` at 01:00; the custom agent types weren't registered mid-session, so I use general-purpose agents with the same prompts.
 - **Gemini 2.5 Pro** is closed to new users; I used `gemini-3.1-pro-preview`.
-- **Not built:** narrator voice, family tree view, river diversion and forest planting tools.
+- **Not built:** family tree view, river diversion and forest planting tools.
 
 ## API spend
-Gemini: 3 concept images, about 40 short text and audio checks, 3 video critiques. ElevenLabs: 16 sound generations. Meshy, Sketchfab: none. Every call is in `ASSETS.md`.
+Gemini: 3 concept images, 5 video critiques, about 60 short text and audio listen-checks (under $1.50 in all). ElevenLabs (pay-as-you-go): 17 sound-effect generations and 24 narrator takes (1,911 characters, roughly $0.40 to $0.60). Meshy, Sketchfab: balance and search checks only. Every call is in `ASSETS.md`.
 
 ## Next 5 things I'd do
 1. **Wolves that follow their prey.** Even on the slower calendar, wolf numbers stay nearly flat (annual CV about 0.1): the packs are limited by territory, and pronghorn and small game carry them through a bison crash, so in a few worlds they grind the herd down (seed 11). Tonight's screen of prey-scaled pack sizes plus a stronger refuge for rare prey makes wolves truly follow the bison (correlation 0.76, two years behind, CV 0.31) with bison and wolves in 31 of 31 worlds, but pronghorn drop to 24 of 31. Next: make healthy adult pronghorn genuinely hard for wolves to catch, as in life, and re-screen.
