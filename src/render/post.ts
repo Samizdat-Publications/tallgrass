@@ -8,7 +8,7 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { FXAAPass } from 'three/addons/postprocessing/FXAAPass.js';
 import { CopyShader } from 'three/addons/shaders/CopyShader.js';
-import { SKY_GLSL, SharedUniforms } from './common';
+import { SKY_GLSL, SharedUniforms, smoothstep } from './common';
 import type { Lighting } from './sky';
 
 export type Quality = 'high' | 'medium';
@@ -92,6 +92,14 @@ class FogPass extends Pass {
         uMistFalloff: { value: 0.045 },
         uMistBase: { value: 0.0 },
         uFogMax: { value: 0.94 },
+        // aerial perspective (R2.2): extinction per metre, in-scatter strength, sun tint, horizon glow, and the dust / summer / night weights
+        uAerial: { value: 0.0005 },
+        uAerialLum: { value: 1.0 },
+        uSunTint: { value: new THREE.Color(1, 0.8, 0.55) },
+        uHorGlow: { value: 0.0 },
+        uDust: { value: 0.0 },
+        uAerialWarm: { value: 0.0 },
+        uAerialNight: { value: 0.0 },
         uSunDir: shared.sunDir,
         uSkyZenith: shared.skyZenith,
         uSkyMid: shared.skyMid,
@@ -113,7 +121,20 @@ class FogPass extends Pass {
         uniform float uMistFalloff;
         uniform float uMistBase;
         uniform float uFogMax;
+        uniform float uAerial;
+        uniform float uAerialLum;
+        uniform vec3 uSunTint;
+        uniform float uHorGlow;
+        uniform float uDust;
+        uniform float uAerialWarm;
+        uniform float uAerialNight;
         ${SKY_GLSL}
+        // Henyey-Greenstein phase, divided by its forward peak so the value is 1 straight at the sun and falls off with angle
+        float tgHGn(float cosT, float g) {
+          float g2 = g * g;
+          float peak = (1.0 - g2) / pow(max(1.0 + g2 - 2.0 * g, 1e-4), 1.5);
+          return ((1.0 - g2) / pow(1.0 + g2 - 2.0 * g * cosT, 1.5)) / peak;
+        }
         void main() {
           vec4 c = texture2D(tDiffuse, vUv);
           float d = texture2D(tDepth, vUv).x;
@@ -155,12 +176,33 @@ class FogPass extends Pass {
             mistOd = uMist * e0 * dist;
           }
           mistOd = min(max(mistOd, 0.0), 0.9);
-          float fog = min(1.0 - exp(-(od + mistOd)), uFogMax);
+          // Aerial perspective: Beer-Lambert extinction over the whole view ray (thinning with altitude like the near term), so the
+          // mid and far hills visibly lose contrast and take on the colour of the light scattered into the ray.
+          float aerOd = max(dist - 90.0, 0.0) * uAerial * alt * (1.0 + 0.9 * uDust);
+          float cosS = dot(dir, uSunDir);
+          float aerFog = 1.0 - exp(-aerOd);
+          float fog0 = min(1.0 - exp(-(od + mistOd)), uFogMax);
+          float fog = min(1.0 - (1.0 - fog0) * (1.0 - aerFog), uFogMax);
 
           vec3 fdir = normalize(vec3(dir.x, max(dir.y, 0.0) * 0.5 + 0.015, dir.z));
           vec3 fc = tgSkyBase(fdir);
           float mf = mistOd / (od + mistOd + 1e-5);
           fc = mix(fc, fc * vec3(0.92, 0.97, 1.04) + vec3(0.02, 0.03, 0.04), mf * 0.6);
+          // forward-scattering lobe toward the sun (HG g 0.75) plus a broad warm floor, tinted by the sun colour, applied in
+          // proportion to how much of the fog is aerial haze. Dust (drought) swaps the cool-away-from-sun side for a tan.
+          float aerShare = aerFog / (aerFog + fog0 + 1e-4);
+          float lobe = 0.8 * tgHGn(cosS, 0.75) + 0.2 * tgHGn(cosS, 0.3);
+          float sunUp = smoothstep(-0.05, 0.12, uSunDir.y);
+          float inScat = (0.16 + lobe) * uAerialLum * sunUp * (1.0 - uAerialNight);
+          fc += uSunTint * inScat * aerShare * (1.0 - fog0 * 0.5);
+          // golden light turns the haze itself gold (saturated, not grey): push the fog colour toward amber in proportion to the aerial share
+          fc = mix(fc, fc * vec3(1.22, 1.0, 0.68) + uSunTint * 0.02, uAerialWarm * aerShare * (0.4 + 0.6 * lobe));
+          fc = mix(fc, fc * vec3(1.18, 0.98, 0.7) + uSunTint * 0.04, uDust * aerShare * 0.6);
+          // horizon glow: the far terrain that meets the sky catches a warm band, strongest on the sun's side
+          float horBand = exp(-abs(dir.y) * 26.0) * smoothstep(500.0, 3000.0, dist);
+          vec2 shd = normalize(uSunDir.xz + vec2(1e-4)), dhd = normalize(dir.xz + vec2(1e-4));
+          float az = 0.5 + 0.5 * dot(shd, dhd);
+          fc += uSunTint * uHorGlow * horBand * (0.25 + 0.75 * pow(az, 4.0)) * sunUp * (1.0 - uAerialNight);
           gl_FragColor = vec4(mix(c.rgb, fc, fog), c.a);
         }`,
       depthTest: false, depthWrite: false,
@@ -390,6 +432,7 @@ export class PostFX {
     const f = this.fog.material.uniforms;
     f.uHaze.value = L.hazeDensity;
     f.uMist.value = L.mistDensity;
+    this.applyAerial(f);
     const g = this.grade.material.uniforms;
     (g.uShadowTint.value as THREE.Color).copy(L.gradeShadow);
     (g.uHighTint.value as THREE.Color).copy(L.gradeHighlight);
@@ -408,7 +451,44 @@ export class PostFX {
       this.grade.material.needsUpdate = true;
     }
     g.uTime.value = this.shared.time.value;
-    this.bloom.strength = (this.quality === 'high' ? 1 : 0.85) * L.bloom;
+    this.bloom.strength = (this.quality === 'high' ? 1 : 0.85) * L.bloom * this.hazeBloom;
+  }
+
+  /**
+   * Drought dust 0..1 for the aerial haze. The renderer's shared uniforms do not carry the weather, so the engine pushes the
+   * eased value here (it stays 0 until something calls this).
+   */
+  dust = 0;
+  /** Bloom multiplier from the aerial pass (a little extra glow at low sun, 1 otherwise). */
+  private hazeBloom = 1;
+
+  /** Aerial perspective weights from the shared sky state: strongest in summer, in dust and at golden hour, weak at night and under overcast. */
+  private applyAerial(f: FogPass['material']['uniforms']): void {
+    const sh = this.shared;
+    const season = ((sh.season.value % 4) + 4) % 4;
+    // summer bell (peaks about 1.3, still 0.78 at 1.8, 0.05 in deep winter)
+    const sd = (season - 1.3) / 1.0;
+    const summer = Math.exp(-sd * sd);
+    const over = sh.overcast.value;
+    const night = sh.night.value;
+    const el = Math.max(sh.sunDir.value.y, 0);
+    // thicker when the sun is low (long path through the haze), thinner at high noon so midday stays crisp
+    const low = 1 - smoothstep(0.1, 0.65, el);
+    const dust = this.dust;
+    // deep winter: thinner, cleaner air
+    const winter = smoothstep(2.4, 3.1, season) * (1 - smoothstep(3.55, 3.95, season));
+    const clean = 1 - 0.4 * winter;
+    f.uAerial.value = 0.00014 * (0.55 + 0.7 * summer + 0.35 * low) * (1 + 0.5 * over) * clean;
+    f.uAerialLum.value = (0.8 + 0.6 * summer + 0.5 * dust) * (1 - 0.85 * over) * (0.7 + 0.5 * low) * clean;
+    f.uHorGlow.value = (0.35 + 0.35 * summer + 0.3 * dust) * (0.4 + 0.6 * low) * (1 - 0.8 * over);
+    f.uDust.value = dust;
+    f.uAerialWarm.value = (0.35 + 0.65 * low) * (1 - over) * (1 - 0.5 * winter);
+    this.hazeBloom = 1 + 0.3 * low * (1 - over) * (1 - night);
+    f.uAerialNight.value = Math.min(1, night * 1.15);
+    // tint: the key-light colour normalised to unit peak, nudged warm
+    const lc = sh.lightColor.value;
+    const m = Math.max(lc.r, lc.g, lc.b, 1e-3);
+    (f.uSunTint.value as THREE.Color).setRGB(lc.r / m, lc.g / m * 0.97, lc.b / m * 0.9);
   }
 
   setMistBase(y: number): void { this.fog.material.uniforms.uMistBase.value = y; }

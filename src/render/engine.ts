@@ -134,6 +134,7 @@ export class Engine {
   private lastTick = 0;
   private frostSm = 0;
   private rainSm = 0;
+  private dustSm = 0;
   private readonly rainDir = new THREE.Vector3();
   private tickPool = 0;
   private _focus = new THREE.Vector3();
@@ -485,6 +486,10 @@ export class Engine {
     sm.overcast = ease(sm.overcast, overTarget, overTarget > sm.overcast ? 60 : 160);
     this.rainSm = ease(this.rainSm, rainTarget, rainTarget > this.rainSm ? 25 : 70);
     if (rainTarget === 0 && this.rainSm < 0.02) this.rainSm = 0;
+    // drought dust for the aerial haze (weather 2), eased slowly so the valley hazes over and clears with the dry spell
+    this.dustSm = ease(this.dustSm, w === 2 ? 1 : 0, 120);
+    if (w !== 2 && this.dustSm < 0.02) this.dustSm = 0;
+    this.post.dust = this.dustSm;
     sm.snow = ease(sm.snow, snowTarget, snowTarget > sm.snow ? 320 : 220, snowTarget > sm.snow ? 7 : 9);
     sm.wet = ease(sm.wet, wetTarget, wetTarget > sm.wet ? 90 : 200);
     // the eased values only approach their targets asymptotically: snap the last trace to zero so no ghost snow or frost lingers
