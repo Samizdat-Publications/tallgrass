@@ -110,6 +110,9 @@ interface FallInfo {
   ph: number;
   /** Pace of the stumble, decaying from `v` as the animal loses its footing. */
   pace: number;
+  /** Where the body was drawn when it fell, relative to where the sim puts the carcass (the drawn path lags the sim a little). */
+  ox: number;
+  oz: number;
   /** Snapshot generation that last saw this carcass (so stale entries can be dropped). */
   g: number;
 }
@@ -203,9 +206,11 @@ class Slots {
   spd = new Float32Array(this.cap);
   /** Smoothed on-screen ground speed (m per real second), from the distance actually drawn each frame. */
   vis = new Float32Array(this.cap);
-  /** Where the animal was drawn last frame (the foot-lock measures the distance covered from this). */
+  /** Where the animal was drawn last frame (the foot-lock measures the distance covered from this) and the velocity of the drawn path. */
   px = new Float32Array(this.cap);
   pz = new Float32Array(this.cap);
+  svx = new Float32Array(this.cap);
+  svz = new Float32Array(this.cap);
   /** Feeding tug and hunting weights, eased. */
   tug = new Float32Array(this.cap);
   hunt = new Float32Array(this.cap);
@@ -248,6 +253,8 @@ class Slots {
     this.vis = g(this.vis, Float32Array);
     this.px = g(this.px, Float32Array);
     this.pz = g(this.pz, Float32Array);
+    this.svx = g(this.svx, Float32Array);
+    this.svz = g(this.svz, Float32Array);
     this.tug = g(this.tug, Float32Array);
     this.hunt = g(this.hunt, Float32Array);
     this.hs = g(this.hs, Float32Array);
@@ -464,7 +471,7 @@ export class AnimalLayer {
       let fi = this.falls.get(key);
       if (!fi) {
         const sp = Math.round(snap.carcasses[o + 3]);
-        fi = { t: 1e3, h: hash01((Math.floor(cx * 13) * 73856093) ^ (Math.floor(cz * 13) * 19349663)) * Math.PI * 2, v: 0, vs: 1, ph: 0, pace: 0, g: gen };
+        fi = { t: 1e3, h: hash01((Math.floor(cx * 13) * 73856093) ^ (Math.floor(cz * 13) * 19349663)) * Math.PI * 2, v: 0, vs: 1, ph: 0, pace: 0, ox: 0, oz: 0, g: gen };
         this.falls.set(key, fi);
         if (!fast && P) {
           let bj = -1, bd = 36;
@@ -480,7 +487,11 @@ export class AnimalLayer {
             fi.h = P[q + 3]; fi.v = P[q + 4] * VIS_PER_SIM; fi.pace = fi.v;
             fi.vs = P[q + 5] * this.speciesScale[sp];
             const gs = this.goneSlot.get(this.prev!.ids[bj]);
-            if (gs !== undefined) fi.ph = this.slots.phase[gs];
+            if (gs !== undefined) {
+              fi.ph = this.slots.phase[gs];
+              const ox = this.slots.px[gs] - cx, oz = this.slots.pz[gs] - cz;
+              if (ox * ox + oz * oz < 25) { fi.ox = ox; fi.oz = oz; }
+            }
           }
           fi.t = 0;
           if (budget-- > 0) this.killBurst(snap, cx, cz, sp, fi);
@@ -627,6 +638,23 @@ export class AnimalLayer {
         sc = P[q + 5] + (sc1 - P[q + 5]) * alpha;
       }
 
+      // The drawn path is a critically damped follower of the interpolated one (about 70 ms behind). Snapshots arrive in uneven
+      // bursts, so the raw path surges and stalls from frame to frame (the displayed speed of a sprinting wolf varied by
+      // 40% frame to frame); the legs, locked to the distance drawn, then lurch with it and read as sliding. Smoothed, the
+      // body travels at a steady pace and the stride follows it.
+      if (!S.fresh[slot]) {
+        const om = 22 * Math.min(12, Math.max(1, this.timeScale));
+        const ax = S.px[slot] - x, az = S.pz[slot] - z;
+        if (ax * ax + az * az < 900) {
+          const bx = S.svx[slot] + om * ax, bz = S.svz[slot] + om * az;
+          const e = Math.exp(-om * dt);
+          S.svx[slot] = (S.svx[slot] - om * bx * dt) * e;
+          S.svz[slot] = (S.svz[slot] - om * bz * dt) * e;
+          x += (ax + bx * dt) * e;
+          z += (az + bz * dt) * e;
+        } else { S.svx[slot] = 0; S.svz[slot] = 0; }
+      }
+
       // animation state targets
       // gait style follows the animal's own pace (walk, trot, gallop), not the time-lapse factor
       const spdT = this.timeScale > 0 ? spd1 * VIS_PER_SIM : 0;
@@ -667,7 +695,9 @@ export class AnimalLayer {
       const feeding = state === St.Eat && (sp === Sp.Wolf || sp === Sp.Cougar || (sp === Sp.Raven && hdT > 0)) && this.timeScale > 0;
       const hunting = (sp === Sp.Wolf || sp === Sp.Cougar) && this.timeScale > 0 ? (state === St.Chase || state === St.Stalk ? 1 : state === St.Eat ? 0.6 : 0) : 0;
       S.tug[slot] += ((feeding ? 1 : 0) - S.tug[slot]) * kHead;
-      S.hunt[slot] += (hunting - S.hunt[slot]) * kHead;
+      // predators: how hard it is hunting; ravens: how hard they are climbing (they flap steadily then, glide otherwise)
+      const huntT = sp === Sp.Raven ? (alt > 0.3 ? clamp(climb / 1.2, 0, 1) : 0) : hunting;
+      S.hunt[slot] += (huntT - S.hunt[slot]) * kHead;
       S.spd[slot] += (spdT - S.spd[slot]) * k8;
       S.vis[slot] += (visT - S.vis[slot]) * k8;
       S.hdn[slot] += (hdT - S.hdn[slot]) * kHead;
@@ -740,6 +770,12 @@ export class AnimalLayer {
         if (alt <= 0.3) {
           pitch = 0;
           roll = 0;
+        } else if (alt > 2) {
+          // a bird aloft never holds a line: it rides thermals, rocks and trims, each at its own slow rhythm
+          const wv = hash01(id) * 40, aloft = Math.min(1, alt / 6);
+          y += Math.sin(this.timeSec * 0.31 + wv) * Math.min(1.2, alt * 0.15);
+          roll += 0.07 * aloft * Math.sin(this.timeSec * 0.53 + wv * 1.7);
+          pitch += 0.05 * aloft * Math.sin(this.timeSec * 0.41 + wv * 2.3);
         }
       } else {
         const hl = pr.length * 0.3 * vs, hw = 0.12 * Math.max(pr.length, 1) * vs + 0.05;
@@ -868,18 +904,26 @@ export class AnimalLayer {
       const ch = Math.cos(h), sh = Math.sin(h);
       // the animal skids on a little in the direction it was running as it goes down
       const slide = fi && fi.t < 1e2 ? Math.min(fi.v * 0.1, 1.4) * (1 - Math.exp(-fi.t * 3.2)) : 0;
-      const cx = x + ch * slide, cz = z + sh * slide;
+      // it falls where it was drawn, and settles onto the sim's position as it goes down
+      const off = fi && fi.t < 1e2 ? Math.exp(-fi.t * 4) : 0;
+      const cx = x + ch * slide + (fi ? fi.ox * off : 0), cz = z + sh * slide + (fi ? fi.oz * off : 0);
       const ground = sampleHeight(H, hn, cell, cx, cz);
-      const hl = b.def.params.length * 0.3;
+      // lies on the ground, not over it: pitch from the slope along the body, roll from the slope across it, and the body rests
+      // at the mean height of its footprint. A small per-body lean makes it look settled, like dead weight, not placed.
+      const hl = b.def.params.length * 0.4, hw = Math.max(0.3, b.def.params.height * 0.4);
       const hF = sampleHeight(H, hn, cell, cx + ch * hl, cz + sh * hl);
       const hB = sampleHeight(H, hn, cell, cx - ch * hl, cz - sh * hl);
-      const pitch = Math.atan2(hF - hB, 2 * hl);
-      let cy = ground + 0.22;
+      const hR = sampleHeight(H, hn, cell, cx - sh * hw, cz + ch * hw);
+      const hL = sampleHeight(H, hn, cell, cx + sh * hw, cz - ch * hw);
+      const settle = fall >= 1 ? 1 : fall;
+      const pitch = Math.atan2(hF - hB, 2 * hl) + (hash01(Math.floor(seed * 4096) + 11) - 0.5) * 0.14 * settle;
+      const roll = -Math.atan2(hR - hL, 2 * hw) + (hash01(Math.floor(seed * 4096) + 29) - 0.5) * 0.16 * settle;
+      let cy = (hF + hB + hR + hL) * 0.25 * 0.6 + ground * 0.4 + 0.22;
       const wc = Math.min(world.n - 1, Math.max(0, Math.floor(cz / cell))) * world.n + Math.min(world.n - 1, Math.max(0, Math.floor(cx / cell)));
       if (world.water[wc]) cy = Math.max(cy, world.waterHeight[wc] - 0.3); // a carcass in a pond floats at the surface
       // while it is still going down the body is the full-size living animal, so no ground lift
-      if (fall < 1) cy = ground + 0.22 * fall;
-      this.writeInstance(b, cx, cy, cz, ch, sh, pitch, 0, fall < 1 && fi ? fi.vs * (1 - fall) + fall : 1);
+      if (fall < 1) cy = (cy - 0.22) + 0.22 * fall;
+      this.writeInstance(b, cx, cy, cz, ch, sh, pitch, roll, fall < 1 && fi ? fi.vs * (1 - fall) + fall : 1);
       const k = b.count - 1;
       const gp = k * 4;
       const gait = b.gait.array as Float32Array;
@@ -1010,6 +1054,9 @@ export class AnimalLayer {
       alt = P[q + 9] + (alt - P[q + 9]) * this.lastAlpha;
     }
     const w = this.world;
+    // the drawn position (smoothed), so a camera following the animal does not fight its own smoothing
+    const slot = this.slots.map.get(id);
+    if (slot !== undefined && !this.slots.fresh[slot]) { x = this.slots.px[slot]; z = this.slots.pz[slot]; }
     out.set(x, sampleHeight(w.height, w.hn, w.cell, x, z) + alt, z);
     return true;
   }

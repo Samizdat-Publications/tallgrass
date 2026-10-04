@@ -36,6 +36,8 @@ function defines(p: AnimParams, far?: ModelDef['far']): string {
     `#define DUTY_GF ${f(p.dutyGF ?? p.dutyG)}`, `#define FAST0 ${f(p.fast0 ?? p.gal1)}`, `#define FAST1 ${f(p.fast1 ?? p.gal1 * 2.2)}`,
     `#define REACH_W ${f(footReach(p.ampW))}`, `#define REACH_T ${f(footReach(p.ampT))}`, `#define REACH_G ${f(footReach(p.ampG))}`,
     `#define STRETCH_CAP ${f(STRETCH_CAP)}`, `#define STRETCH_Y ${f(Math.sqrt(STRETCH_CAP * STRETCH_CAP - 1))}`,
+    `#define CURL ${f(p.curl ?? 0)}`, `#define CURL_ANG ${f(p.curlAng ?? 1.3)}`, `#define CURL_X0 ${f(p.curlX ?? 0.1)}`, `#define CURL_LEN ${f(p.curlLen ?? 1.1)}`,
+    `#define LEG_CALM ${f(far?.calm ?? 0)}`, `#define WIDEN ${f(far?.widen ?? 0)}`,
     `#define FLAP_HZ ${f(p.flapHz)}`,
     `#define MIN_PX ${f(p.minPx)}`,
     `#define FAR_NEAR ${f(far?.d0 ?? 140)}`, `#define FAR_FAR ${f(far?.d1 ?? 400)}`,
@@ -99,6 +101,21 @@ vec2 tgLegWave(float u, float beta) {
   return vec2(-1.0 + 2.0 * h + k * (t1 - t0), sin(3.14159265 * s));
 }
 
+#if KIND == 2
+// A bird's flapping weight 0..1 and wing phase. Each bird has its own rhythm: a burst of beats, then a glide on still wings
+// (4 to 9 s per cycle, 22 to 44% of it flapping, its own beat rate), and it flaps steadily while climbing (effort) or near the
+// ground (low). So a flock is never in step and no bird beats at a constant rate.
+float tgBirdBeat(float t, float seed, float low, float effort, out float fph) {
+  float per = 4.0 + 5.0 * fract(seed * 5.13);
+  float cph = fract(t / per + seed * 3.0);
+  float blen = 0.22 + 0.22 * fract(seed * 7.7);
+  float burstW = smoothstep(0.0, 0.04, cph) * (1.0 - smoothstep(blen - 0.07, blen, cph));
+  float hz = FLAP_HZ * (0.75 + 0.55 * fract(seed * 3.7) + 0.35 * effort);
+  fph = TG_TAU * (t * hz + seed * 10.0);
+  return clamp(max(low, max(burstW * 0.95, effort)), 0.0, 1.0);
+}
+#endif
+
 void tgAnimate(inout vec3 p, inout vec3 n) {
   int part = int(aPart.x + 0.5);
   float spd = aGait.y;
@@ -122,7 +139,10 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
   float t = uTime * (1.0 - 0.5 * sick);
   // Distance cue strength: 0 up close (the animation stays subtle and anatomical), 1 from the drone view, where legs are
   // invisible and only whole-body motion (bounding, spine flex, head pumping, sway) tells walking from running.
-  float farK = smoothstep(ANIM_NEAR, ANIM_FAR, distance(uCamPos, vec3(instanceMatrix[3])));
+  float camD = distance(uCamPos, vec3(instanceMatrix[3]));
+  float farK = smoothstep(ANIM_NEAR, ANIM_FAR, camD);
+  // at drone and map range the legs swing less: their splay makes a ragged outline that reads as crumpled paper
+  float calmK = 1.0 - LEG_CALM * smoothstep(150.0, 380.0, camD);
   float pounce = dead ? 0.0 : aFx.w;
 
   // gait weights from speed
@@ -192,6 +212,8 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
     hip = wWalk * AMP_W * sin(aw) + wTrot * AMP_T * sin(at) + wGal * AMP_G * sin(ag);
     lift = wWalk * KNEE_W * max(cos(aw), 0.0) + wTrot * KNEE_T * max(cos(at), 0.0) + wGal * KNEE_G * max(cos(ag), 0.0);
 #endif
+    hip *= calmK;
+    lift *= calmK;
     float knee = front ? -lift : lift * HOCK_K;
     // pounce: forelegs reach out ahead, hindlegs drive
     hip += pounce * (front ? 0.85 : -0.55);
@@ -214,8 +236,11 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
       float fh = front ? mix(DEAD_HIP_F, LIE_HIP_F, 0.7) : mix(DEAD_HIP_H, LIE_HIP_H, 0.7);
       float fk = (front ? LIE_KNEE_F : LIE_KNEE_H) * 0.7;
       float f2 = smoothstep(front ? 0.2 : 0.4, 1.0, fallen);
-      hip = mix(hip, fh, f2) + flopH * (1.0 - f2);
-      knee = mix(knee, fk, f2) + flopK * (1.0 - f2);
+      // every leg settles at its own angle (a dead weight, not a posed statue)
+      float lj = fract(sin(float(part) * 12.9898 + seed * 78.233) * 43758.5453) - 0.5;
+      float lk = fract(lj * 7.31 + 0.37) - 0.5;
+      hip = mix(hip, fh, f2) + flopH * (1.0 - f2) + lj * 0.9 * f2;
+      knee = mix(knee, fk, f2) + flopK * (1.0 - f2) + lk * 0.7 * f2;
     }
     tgRotZ(p, n, aPivot2, knee * aPart.y);
     tgRotZ(p, n, aPivot, hip);
@@ -242,11 +267,20 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
     ang += pump;
     ang -= pounce * 0.55; // the head drives forward and down onto the prey
     ang = mix(ang, 0.15, lie * 0.7);
+#if KIND == 0
+    if (CURL > 0.0) {
+      // curled rest: the head turns back toward the tail side and drops onto the paws
+      float cside = fract(seed * 3.7) > 0.5 ? 1.0 : -1.0;
+      float ck = lie * CURL * (dead ? 0.0 : 1.0);
+      ang = mix(ang, -0.5 - 0.15 * sin(t * 0.4 + seed * 9.0), ck);
+      yaw = mix(yaw, -cside * 0.95, ck);
+    }
+#endif
     if (dead) {
       // the head drops as the animal goes, then lies slack
       ang = mix(ang, -0.8, smoothstep(0.0, 0.3, fallen));
-      ang = mix(ang, -0.55, smoothstep(0.5, 1.0, fallen));
-      yaw = 0.25 * fallen;
+      ang = mix(ang, -0.35 - 0.5 * fract(seed * 6.7), smoothstep(0.5, 1.0, fallen));
+      yaw = (fract(seed * 9.1) - 0.5) * 1.2 * fallen;
     }
     tgRotY(p, n, aPivot, yaw);
     tgRotZ(p, n, aPivot, ang);
@@ -259,13 +293,18 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
   } else if (part == 7 || part == 8) {
     float right = part == 8 ? 1.0 : -1.0;
     float fold = aLook.z;
-    float flap = aGait.z * (1.0 - fold);
-    float burst = smoothstep(0.55, 0.85, sin(t * 0.6 + seed * 50.0));
-    float fl = clamp(flap + burst * 0.75, 0.0, 1.0);
-    float fph = TG_TAU * (t * FLAP_HZ * (0.85 + 0.3 * fract(seed * 3.7)) + seed * 10.0);
+    float fph = 0.0;
+    float fl = 0.0;
+#if KIND == 2
+    fl = tgBirdBeat(t, seed, aGait.z * (1.0 - fold), clamp(aFx.z, 0.0, 1.0), fph);
+#endif
     float wAmp = 1.0 + 0.6 * farK; // a deeper beat from the drone view, where a raven is a few pixels across
-    float inner = 0.17 + 0.05 * sin(t * 1.7 + seed * 9.0) + fl * 0.75 * wAmp * sin(fph);
-    float outer = 0.1 + fl * 0.6 * wAmp * sin(fph - 1.1);
+    // gliding and soaring: with the wings still they are held out with a dihedral that drifts between a flat glide and a
+    // raised soar, and the two wings tweak independently
+    float glide = 1.0 - fl;
+    float soar = 0.5 + 0.5 * sin(t * 0.23 + seed * 17.0);
+    float inner = 0.17 + glide * (0.05 + 0.1 * soar) + 0.03 * glide * sin(t * 1.9 + seed * 9.0 + right * 1.3) + fl * 0.75 * wAmp * sin(fph);
+    float outer = 0.1 + glide * (0.06 + 0.1 * soar) + 0.04 * glide * sin(t * 2.7 + seed * 5.0 + right) + fl * 0.6 * wAmp * sin(fph - 1.1);
     inner = mix(inner, 0.0, fold);
     float w1 = aPart.y;
     if (fold > 0.001) {
@@ -277,6 +316,17 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
     tgRotX(p, n, aPivot, -right * inner);
     if (dead) { /* carcass wings stay as modelled */ }
   }
+
+#if KIND == 0
+  if (CURL > 0.0 && !dead && lie > 0.001) {
+    // curled rest: bend the body behind its middle round to one side, a smooth yaw that grows with the distance behind the
+    // pivot, so the rump, hind legs and tail wrap alongside the chest (the head is handled with the head part)
+    float cside = fract(seed * 3.7) > 0.5 ? 1.0 : -1.0;
+    float cd = max(CURL_X0 - p.x, 0.0);
+    float ca = lie * CURL * CURL_ANG * smoothstep(0.0, CURL_LEN, cd) * cside;
+    tgRotY(p, n, vec3(CURL_X0, 0.0, 0.0), ca);
+  }
+#endif
 
   p.y += bob + breathe - lie * LIE_DROP - crouchBody * CROUCH_DROP - sick * 0.035 * COM_Y; // a sick animal sags a little
   tgRotZ(p, n, vec3(0.0, COM_Y, 0.0), pitch);
@@ -299,10 +349,11 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
   }
 #endif
 #if KIND == 2
-  if (!dead && farK > 0.001 && aGait.z > 0.3 && aLook.z < 0.5) {
-    // wing beats lift and drop the whole bird a little
-    float fph2 = TG_TAU * (t * FLAP_HZ * (0.85 + 0.3 * fract(seed * 3.7)) + seed * 10.0);
-    p.y += BODY_LEN * farK * 0.06 * sin(fph2 - 0.4);
+  if (!dead && farK > 0.001 && aLook.z < 0.5) {
+    // wing beats lift and drop the whole bird a little (only while it is actually beating)
+    float fph2;
+    float fl2 = tgBirdBeat(t, seed, aGait.z * (1.0 - aLook.z), clamp(aFx.z, 0.0, 1.0), fph2);
+    p.y += BODY_LEN * farK * 0.06 * fl2 * sin(fph2 - 0.4);
   }
 #endif
 
@@ -322,10 +373,14 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
     tgRotX(p, n, vec3(0.0, COM_Y, 0.0), roll);
     p.y -= DEAD_DROP * smoothstep(0.3, 1.0, fallen);
     float f3 = smoothstep(0.3, 1.0, fallen);
-    float k = mix(1.0, mix(0.4, 1.0, r), f3);
+    float k = mix(1.0, mix(0.4, 0.9, r), f3);
     p.y = p.y * k;
     p.xz *= mix(1.0, mix(0.8, 1.0, r), f3);
   }
+
+#if KIND == 0
+  if (WIDEN > 0.0 && !dead) p.z *= 1.0 + WIDEN * smoothstep(110.0, 380.0, camD);
+#endif
 
   // distance readability: keep every animal at least MIN_PX pixels long (on a 900 px tall viewport), growing gently
   vec3 ip = vec3(instanceMatrix[3]);
@@ -343,8 +398,10 @@ varying vec3 vTgColor;
 varying float vTgSel;
 varying float vTgFar;
 varying float vTgHunt;
+varying float vTgUp;
+uniform float uLegTone;
 
-void tgShade() {
+void tgShade(vec3 on) {
   bool dead = aGait.y < -0.5;
   vec3 coat = mix(uCoatPale, uCoatDark, aLook.x);
   float c = aPart.z;
@@ -374,6 +431,10 @@ void tgShade() {
   // distance readability: 0 close up, 1 from the wide view (see ModelDef.far)
   vTgFar = smoothstep(FAR_NEAR, FAR_FAR, distance(uCamPos, vec3(instanceMatrix[3])));
   vTgHunt = dead ? 0.0 : aFx.z;
+  // how much this surface faces the sky (world space): the back of the animal, as the drone and map views see it
+  vTgUp = clamp(normalize(mat3(instanceMatrix) * on).y, 0.0, 1.0);
+  int tgPart = int(aPart.x + 0.5);
+  if (tgPart >= 1 && tgPart <= 4 && !dead) vTgColor *= mix(1.0, uLegTone, vTgFar);
 }
 `;
 
@@ -423,21 +484,31 @@ export function makeAnimalMaterials(sp: number, def: ModelDef, shared: AnimalSha
     shader.uniforms.uFarMix = { value: far.tint ? far.mix ?? 0.5 : 0 };
     shader.uniforms.uFloor = { value: far.floor ?? 0 };
     shader.uniforms.uLowFill = { value: far.lowFill ?? 0 };
+    shader.uniforms.uLegTone = { value: far.legs ?? 1 };
+    shader.uniforms.uTopCol = { value: new THREE.Vector3(...(far.top ?? [1, 1, 1])) };
+    shader.uniforms.uTopMix = { value: far.top ? far.topMix ?? 0.4 : 0 };
+    shader.uniforms.uSideDark = { value: far.side ?? 0 };
     material.userData.shader = shader; // exposed for live tuning from the console
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', `#include <common>\n${defs}\n${COMMON_DECL}\n${VERT_SHADE_DECL}`)
       .replace(
         '#include <beginnormal_vertex>',
-        `#include <beginnormal_vertex>\n vec3 tgP = position;\n tgAnimate(tgP, objectNormal);\n tgShade();`,
+        `#include <beginnormal_vertex>\n vec3 tgP = position;\n tgAnimate(tgP, objectNormal);\n tgShade(objectNormal);`,
       )
       .replace('#include <begin_vertex>', 'vec3 transformed = tgP;');
     shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', `#include <common>\nvarying vec3 vTgColor;\nvarying float vTgSel;\nvarying float vTgFar;\nvarying float vTgHunt;\nuniform float uFill;\nuniform vec3 uWarm;\nuniform float uNeutral;\nuniform float uFarGain;\nuniform vec3 uRimCol;\nuniform float uRimK;\nuniform float uHuntK;\nuniform float uLow;\nuniform vec3 uAmb;\nuniform vec3 uFarTint;\nuniform float uFarMix;\nuniform float uFloor;\nuniform float uLowFill;`)
+      .replace('#include <common>', `#include <common>\nvarying vec3 vTgColor;\nvarying float vTgSel;\nvarying float vTgFar;\nvarying float vTgHunt;\nuniform float uFill;\nuniform vec3 uWarm;\nuniform float uNeutral;\nuniform float uFarGain;\nuniform vec3 uRimCol;\nuniform float uRimK;\nuniform float uHuntK;\nuniform float uLow;\nuniform vec3 uAmb;\nuniform vec3 uFarTint;\nuniform float uFarMix;\nuniform float uFloor;\nuniform float uLowFill;\nvarying float vTgUp;\nuniform vec3 uTopCol;\nuniform float uTopMix;\nuniform float uSideDark;`)
       // Bright parts of the coat (the white bands and rump) are pulled toward a mid value as the light drops, so they
       // darken with the scene instead of glowing against the dark herds at dusk and night.
       .replace('#include <color_fragment>', `vec3 tgC = vTgColor * mix(1.0, uFarGain, vTgFar);
         // at range the coat is pulled toward its species colour (see ModelDef.far), keeping part of its own shading
         tgC = mix(tgC, uFarTint * (0.75 + 0.5 * clamp(dot(vTgColor, vec3(0.2126, 0.7152, 0.0722)) * 6.0, 0.0, 1.0)), uFarMix * vTgFar);
+        // silhouette at range: a pale back on an oval, darker flanks (see ModelDef.far)
+        float tgTop = smoothstep(0.62, 0.96, vTgUp);
+        float tgLum0 = dot(vTgColor, vec3(0.2126, 0.7152, 0.0722));
+        float tgKeep = 1.0 - smoothstep(0.2, 0.42, tgLum0); // bright markings (a white rump) stay as they are
+        tgC = mix(tgC, uTopCol * (0.75 + 0.5 * clamp(tgLum0 * 6.0, 0.0, 1.0)), uTopMix * tgTop * vTgFar * tgKeep);
+        tgC *= 1.0 - uSideDark * vTgFar * (1.0 - smoothstep(0.1, 0.6, vTgUp));
         float tgL = dot(tgC, vec3(0.2126, 0.7152, 0.0722));
         tgC *= 1.0 - 0.8 * uLow * max(tgL - 0.16, 0.0) / max(tgL, 1e-3);
         diffuseColor.rgb *= tgC;`)

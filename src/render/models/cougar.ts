@@ -105,7 +105,8 @@ export function buildCougar(): ModelDef {
     fill: 1.5,
     warm: [1.15, 1.0, 0.8],
     neutral: 0.7,
-    far: { gain: 0.85, rim: 0.06, hunt: 0.4, rimCol: [1.0, 0.86, 0.62], d0: 80, d1: 300, tint: [0.2, 0.12, 0.06], mix: 0.4, floor: 0.1 },
+    far: { gain: 0.85, rim: 0.06, hunt: 0.4, rimCol: [1.0, 0.86, 0.62], d0: 80, d1: 300, tint: [0.2, 0.12, 0.06], mix: 0.4, floor: 0.1,
+      top: [0.3, 0.2, 0.11], topMix: 0.35, side: 0.15, legs: 0.85, calm: 0.5, widen: 0.3 },
     params: {
       ...DEFAULT_PARAMS,
       kind: 0,
@@ -122,6 +123,7 @@ export function buildCougar(): ModelDef {
       tailRest: 0.0, tailRun: -0.3, tailSway: 0.35,
       lieDrop: 0.4, lieHipF: 1.25, lieKneeF: -2.3, lieHipH: -0.8, lieKneeH: 1.6,
       crouchDrop: 0.26,
+      curl: 0.7, curlAng: 1.2, curlX: 0.05, curlLen: 1.1,
       deadDrop: 0.36, deadHipF: 0.9, deadHipH: -0.6,
       length: 1.3, height: 0.8, ring: 1.3, minPx: 13, boostLen: 1.8,
     },

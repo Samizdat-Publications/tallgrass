@@ -47,6 +47,16 @@ export interface AnimParams {
   lieKneeH: number;
   /** Stalking crouch body drop (m). */
   crouchDrop: number;
+  /**
+   * Curled rest (canids): while lying, the hindquarters and tail swing round to one side (up to `curlAng` rad, ramping in
+   * over `curlLen` m behind the pivot at x = `curlX`) and the head turns back and rests on the paws. A resting wolf then
+   * reads as a compact rounded form from any side; stretched out it is a long pale shape that looks like a fish standing
+   * on its tail when seen end on. 0 or unset: lies straight.
+   */
+  curl?: number;
+  curlAng?: number;
+  curlX?: number;
+  curlLen?: number;
   /** Carcass pose: roll, drop, stiff leg angles. */
   deadDrop: number;
   deadHipF: number;
@@ -163,6 +173,19 @@ export interface ModelDef {
     floor?: number;
     /** Share of the sky fill removed in low light (stops pale coats glowing against a dark scene). Default 0. */
     lowFill?: number;
+    /**
+     * Silhouette at range, so each animal reads as its own shape from the drone and map views: the surfaces that face up are
+     * pulled toward `top` by `topMix` (a pale back stripe on an oval), surfaces facing sideways and down darken by `side`
+     * (a dark edge), the legs are toned by `legs` (pale legs read as bones from above) and swing `calm` less (a ragged
+     * outline of splayed legs reads as crumpled paper). All fade in with distance like the rest of `far`.
+     */
+    top?: [number, number, number];
+    topMix?: number;
+    side?: number;
+    legs?: number;
+    calm?: number;
+    /** Extra body width at range (fraction, full by about 380 m): a slender body is a stick from above, an oval reads as an animal. */
+    widen?: number;
   };
   triangles: number;
 }

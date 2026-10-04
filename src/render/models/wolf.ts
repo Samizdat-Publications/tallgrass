@@ -118,7 +118,9 @@ export function buildWolf(): ModelDef {
     // from the wide view a wolf is a little darker (value contrast with gold grass) and one that stalks, chases or feeds
     // gets a cool rim of light
     // from 70 m out a wolf deepens to a cool slate (a hue the gold grass and brown herds do not have) and gets a cool rim
-    far: { gain: 0.8, rim: 0.08, hunt: 0.3, rimCol: [0.8, 0.88, 1.0], d0: 70, d1: 280, tint: [0.095, 0.1, 0.125], mix: 0.55, floor: 0.12 },
+    far: { gain: 0.8, rim: 0.08, hunt: 0.3, rimCol: [0.8, 0.88, 1.0], d0: 70, d1: 280, tint: [0.095, 0.1, 0.125], mix: 0.7, floor: 0.12,
+      // a slim cool-grey form with a paler back; the legs swing less so the outline is not a crumpled scrap
+      top: [0.27, 0.29, 0.34], topMix: 0.6, side: 0.22, legs: 0.85, calm: 0.6, widen: 0.3 },
     params: {
       ...DEFAULT_PARAMS,
       kind: 0,
@@ -135,6 +137,7 @@ export function buildWolf(): ModelDef {
       tailRest: 0, tailRun: -0.3, tailSway: 0.22,
       lieDrop: 0.4, lieHipF: 1.25, lieKneeF: -2.3, lieHipH: -0.8, lieKneeH: 1.6,
       crouchDrop: 0.18,
+      curl: 1, curlAng: 1.6, curlX: 0.14, curlLen: 0.95,
       deadDrop: 0.36, deadHipF: 0.9, deadHipH: -0.6,
       length: 1.5, height: 0.85, ring: 1.1, minPx: 15, boostLen: 1.5,
     },

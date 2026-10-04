@@ -422,7 +422,7 @@ export class KillSites {
  */
 const MARKER: Array<[number, number, number, number, number, boolean] | null> = [
   null, // bison
-  [0.7, 0.8, 0.98, 18, 0.1, true], // wolf: a cool pale glint under the dark slate body
+  [0.7, 0.8, 0.98, 13, 0.08, true], // wolf: a cool pale glint under the dark slate body
   null, // raven
   null, // pronghorn
   null, // rabbit
