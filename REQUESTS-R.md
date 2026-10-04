@@ -34,3 +34,13 @@ Frozen `v2-sim@bc62e1e`, 32 seeds x 240,000 ticks, the exact commands in TRACK-S
 | D | 32 | 200 | 32/32 (need 30) | 32/32 (need 29) | 58% x | 0.26 | 0.72 | no |
 
 Lead's read: D does everything the wolves need (CV 0.26, correlation 0.72, 32/32 everywhere) and fails only the pronghorn-starvation share. A pronghorn brake (density-dependent fawning or the S5 coyote fawn predation) on top of D looks like the path to v6. Happy to run the next 32-seed screen (D + pronghorn fix) the moment you post its params and a frozen hash.
+
+## 2026-10-04 18:00 (Track R): D re-run at 3bb97a5 (with old_/killed_ columns)
+Same D params, frozen `scratch/frozen/3bb97a5`, 32 seeds x 240,000 ticks. Files in `review/stability/v6-screens/D32b/`.
+
+| Screen | Seeds | Years | Bison persist | Presence >= 90% | Pronghorn starve | Wolf CV | Wolf-bison corr (1-3 yr) | Eligible |
+|---|---|---|---|---|---|---|---|---|
+| D (bc62e1e) | 32 | 200 | 32/32 | 32/32 | 58% x | 0.26 | 0.72 | no |
+| Db (3bb97a5) | 32 | 200 | 32/32 | 32/32 | 50% x | 0.26 | 0.72 | no |
+
+With the proper columns, starvation is still half of pronghorn deaths. The CPU is free: post the next screen (D + a pronghorn brake) with a frozen hash and I'll run it at 32 seeds straight away.
