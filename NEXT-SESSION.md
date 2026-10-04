@@ -11,7 +11,7 @@
 ## Next 3 steps (for the next session)
 1. Close-range animation, the one complaint every Gemini round repeats: the prey now struggles for 1.2 s but the wolves beside it stand still (Gemini round 11): give them lunges, bites and tugs during the takedown; check foot planting on the hunt close-ups frame by frame; vary raven flapping.
 2. The research items in MORNING.md Next 5: pronghorn under prey-scaled wolves (a fawning brake), per-species evolution costs plus a bison single-calf cap, personal space while grazing (herd shape).
-3. Drought ground that goes pale straw instead of mauve, and the bare apron on the shaded side of ponds (terrain.ts).
+3. Drought ground that goes pale straw instead of mauve, and the bare apron on the shaded side of ponds (terrain.ts). Also: at 100x the header's season lags the sim (round 12 still 10: header 'late winter, year 8' while the chronicle already lists year-8 spring entries and the ground has greened); check how often the slate updates.
 
 ## Gotchas
 - Three review reels (185 MB) and hundreds of review PNGs are committed; local .git is about 700 MB of mostly loose objects. Ask the owner before committing more reels.
