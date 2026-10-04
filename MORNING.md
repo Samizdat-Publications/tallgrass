@@ -2,6 +2,35 @@
 
 *(Updated 11:57 Sunday. I keep working until the deadline in `.claude/hooks/run_until.txt` (Sunday 12:00); this file is refreshed at every milestone.)*
 
+## v2 progress (Track R, local; updated 2026-10-04 ~18:00)
+Everything below this section is the v1 report. v2 work is on `main` and not deployed yet (M1 deploys). Run it locally with `npm run dev`.
+
+**Done and merged:**
+- R0, the render baseline: GPU bench `tools/gpubench.mjs` (1440p baseline: wide 10.6, low 16.0, herd 11.0, top 9.8, winter 10.1, night 12.8 ms), animals in hill shadow, registry-safe render and UI for new species, JPEG stills.
+- Concept bookmark `__concept()` plus the Gemini judge `tools/concept_compare.py`. The baseline scored 4/10.
+- Tone mapping stays ACES. Neutral tied it on the score and pushed the sky orange; AgX washed everything grey (`review/wip/R0/tonemap_sheet.jpg`).
+- R2 items 0 to 4, the concept look:
+  - a warm sun-side haze and horizon glow
+  - creek and ponds that mirror the sky and read silver from the drone
+  - golden cured uplands with sun-facing bands, with green kept to the creek ribbon
+  - drought ground that goes pale straw
+  - Compare `review/wip/R2/merged_concept.jpg` with `review/wip/R0/concept_baseline.jpg`. The Gemini judge still says 4/10 for every build, so read that score as noise; its remaining complaints are tree groves, shadow contrast and the camera pitch.
+- R1 items 1 to 3, close-range motion: stance feet now lock and legs reach the ground on slopes. Stance slip went from 4 to 31% to under 5% (`npx tsx dev/footslip.ts`; strips in `review/wip/R1/`).
+- R14, music and new sounds: 5 ElevenLabs music cues (dawn, day, tension, night, storm), crossfaded by a tension index from chases, kills and storms. Also new: a bison rut bellow, crane flyover calls, blizzard wind and grasshoppers. **Needs your ear**: I can only check loudness and loop seams, not how it sounds.
+- Track S, merged from the cloud: species registry, golden hash and `npm test`, the lost-events fix, share codes, decade lines, open prairie, and canid disease. The last two are off by default.
+
+**In progress:**
+- Wolf kills, feeding and ravens at carcasses (R1 items 4 to 6).
+- God rays, falling snow and dawn fog (R2 items 6 to 8).
+- The play UI: title card, settings, valley setup, field guide and share button (R12).
+- The four 32-world screens for the v6 ecology adoption (S3), on this machine's CPU.
+
+**Watch:** midday autumn now looks very ochre and hazy. It goes into the next review round.
+
+**v2 API spend so far:**
+- Gemini: about 12 concept-judge calls, about $0.12.
+- ElevenLabs: 6 music and 4 sound-effect generations, about 3.8k credits. About 22k credits remain on the pay-as-you-go account.
+
 ## How to run it (one step)
 Open **https://tallgrass.stewartgregerson.workers.dev** in Chrome or Edge. Click once anywhere to turn on sound. (The live build is redeployed after each verified milestone; the time of the last deploy is in the line below.)
 
