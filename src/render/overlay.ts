@@ -11,7 +11,7 @@ const LIFT = 1.1;
 const MAX_PACKS = 16;
 const FADE_S = 0.35;
 /** Pack colors: muted and earthy, so a range reads as a tint on the land, not as an interface drawn over it. Still eight distinct hues. */
-const PACK_HEX = ['#d4a85c', '#8aa8c8', '#c98f82', '#a0bb84', '#b2a2cc', '#7fb5a8', '#dcc88e', '#c4925f'];
+const PACK_HEX = ['#d4a85c', '#8aa8c8', '#dd7f63', '#a0bb84', '#b2a2cc', '#7fb5a8', '#dcc88e', '#c4925f'];
 const MODE_ID: Record<OverlayMode, number> = { none: 0, vegetation: 1, fear: 2, territory: 3, traits: 4 };
 
 const LEGENDS: Record<OverlayMode, { title: string; lo: string; hi: string; ramp: string } | null> = {
