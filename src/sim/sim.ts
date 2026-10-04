@@ -7,6 +7,7 @@ import { BucketGrid } from './grid';
 import { applyOverrides, defaultParams, Params, SpeciesParams } from './params';
 import { Rng } from './rng';
 import { RegionalPool } from './region';
+import { SmallPrey } from './smallprey';
 import { AGENT_STRIDE, CARCASS_STRIDE, F_ALPHA, F_INFECTED, F_JUVENILE, F_MALE, F_MANGE, F_MIGRANT, F_PREGNANT, Intervention, SimLike, Snapshot, SPECIES_COUNT, SPECIES_KEYS, Sp, St, YEAR_TICKS, SEASON_TICKS, BASE_YEAR_TICKS, setCalendarScale } from './types';
 import { COAT_BASE, COAT_RANGE, DIET, IS_PREY, isGrazer, SPECIES, THREAT } from './species';
 import { STRIDE, Vegetation } from './vegetation';
@@ -146,6 +147,8 @@ export class Sim implements SimLike {
   private pop = new Int32Array(SPECIES_COUNT);
   /** Open prairie (S1): the regional gene pool, null unless openPrairie or ravenVagrants is on. */
   region: RegionalPool | null = null;
+  /** Small-prey web (S4): jackrabbit and prairie dog fields, plague. Null unless smallPrey is on (then rabbits are not agents). */
+  small: SmallPrey | null = null;
   /** Immigrants and emigrants per species since the last sample() call. */
   private cImm = new Int32Array(SPECIES_COUNT);
   private cEmig = new Int32Array(SPECIES_COUNT);
@@ -199,6 +202,12 @@ export class Sim implements SimLike {
     if (this.p.openPrairie > 0 || this.p.ravenVagrants > 0) {
       this.region = new RegionalPool(this.seed, COAT_BASE);
       this.region.seedFrom(this.a.sp, this.a.alive, this.a.genes, this.a.hi);
+    }
+    if (this.p.smallPrey > 0) {
+      this.refreshCoarse(); // the fields start from the opening grass and browse
+      this.small = new SmallPrey(this.seed, this.p, this.world, this.env, this.coarseGrass, this.coarseBrowse, this.veg, {
+        event: (kind, sp, x, y, a, b) => this.event(kind, sp, x, y, a, b),
+      });
     }
   }
 
@@ -274,6 +283,23 @@ export class Sim implements SimLike {
       const i = this.spawnAdult(Sp.Raven, x, y);
       this.a.alt[i] = 25 + this.rng.next() * 15;
       this.a.state[i] = St.Fly;
+    }
+    // every other agent species with a starting population (`<key>.initial`, e.g. ?p=coyote.initial:12), registry-driven. The five
+    // above keep their own layouts and draws. Species that live as density fields (prairie dogs, and the jackrabbit when smallPrey
+    // is on) are seeded by SmallPrey instead; the jackrabbit is the one field species that still has an agent form (smallPrey off).
+    for (const d of SPECIES) {
+      if (d.id === Sp.Bison || d.id === Sp.Deer || d.id === Sp.Wolf || d.id === Sp.Cougar || d.id === Sp.Raven) continue;
+      if (d.repr === 'field' && (this.p.smallPrey > 0 || d.id !== Sp.Rabbit)) continue;
+      let left = P[d.id].initial;
+      while (left > 0) {
+        const group = Math.min(left, 12);
+        const [hx, hy] = this.goodSpot(0.4);
+        for (let k = 0; k < group; k++) {
+          const i = this.spawnAdult(d.id, hx + this.rng.range(-12, 12), hy + this.rng.range(-12, 12));
+          if (d.flies) { this.a.alt[i] = 25 + this.rng.next() * 15; this.a.state[i] = St.Fly; }
+        }
+        left -= group;
+      }
     }
   }
 
@@ -435,7 +461,10 @@ export class Sim implements SimLike {
         }
       }
     }
-    if (t % 50 === 0) this.refreshCoarse();
+    if (t % 50 === 0) {
+      this.refreshCoarse();
+      if (this.small !== null) this.small.step(t); // the web reads the map just refreshed, so it is never stale
+    }
     this.prey.build(this.preyList, this.preyN, a.x, a.y);
     this.pred.build(this.predList, this.predN, a.x, a.y);
     this.updatePacks();
@@ -1094,6 +1123,8 @@ export class Sim implements SimLike {
       const followMom = juvenile && a.same(mother, a.motherId[i]);
       const hiding = P.hideAge > 0 && a.age[i] < P.hideAge && followMom && Math.hypot(a.x[mother] - x, a.y[mother] - y) < 35;
       const browser = P.diet > 0;
+      // dogGrazeBonus (S4): grazers favour the edges of prairie dog towns, where the grass regrows short and sweet
+      const gb = !browser && this.small !== null && this.p.dogGrazeBonus > 0 ? this.small.grazeBonus : null;
       const gHere = browser ? (this.veg.browse[c] > 0.03 ? this.veg.browse[c] * 1.6 + this.veg.grass[c] * 0.3 : 0) : this.veg.grass[c];
       if (hiding) {
         // a young fawn lies still in the grass while its mother grazes nearby
@@ -1135,7 +1166,8 @@ export class Sim implements SimLike {
             const sc = this.veg.cellAt(sx, sy);
             if (this.world.water[sc]) continue;
             const food = browser ? this.veg.browse[sc] * 1.6 + this.veg.grass[sc] * 0.35 : this.veg.grass[sc];
-            const score = food - p.fearWeight * this.veg.fear[sc] - 0.004 * this.prey.counts[this.prey.bucketOf(sx, sy)] + (k === 0 ? 0.03 : 0) + rng.next() * 0.02;
+            let score = food - p.fearWeight * this.veg.fear[sc] - 0.004 * this.prey.counts[this.prey.bucketOf(sx, sy)] + (k === 0 ? 0.03 : 0) + rng.next() * 0.02;
+            if (gb !== null) score += gb[this.small!.cellOf(sx, sy)];
             if (score > bestS) { bestS = score; bdx = ux; bdy = uy; }
           }
         }
@@ -1166,7 +1198,8 @@ export class Sim implements SimLike {
                 const k = yy * B + xx;
                 const cx2 = (xx + 0.5) * cs, cy2 = (yy + 0.5) * cs;
                 const food = browser ? this.coarseBrowse[k] * 1.6 + this.coarseGrass[k] * 0.35 : this.coarseGrass[k];
-                const v = food - 0.0012 * Math.hypot(cx2 - x, cy2 - y) - 0.004 * this.prey.counts[this.prey.bucketOf(cx2, cy2)];
+                let v = food - 0.0012 * Math.hypot(cx2 - x, cy2 - y) - 0.004 * this.prey.counts[this.prey.bucketOf(cx2, cy2)];
+                if (gb !== null) v += gb[k];
                 if (v > bv) { bv = v; tx = cx2; ty = cy2; }
               }
             }
@@ -1498,7 +1531,11 @@ export class Sim implements SimLike {
       a.dvx[i] = 0; a.dvy[i] = 0;
     } else if (st === St.Stalk && a.target[i] < 0) {
       // mousing: voles and ground squirrels keep a wolf going but don't feed pups
-      a.energy[i] = Math.min(0.7, a.energy[i] + P.metabolism * p.wolfSmallGame);
+      if (this.small !== null && p.smallGameField > 0) {
+        // the catch comes from the local hares and prairie dogs (Holling type II), and takes one from the field
+        const g = this.small.take(a.x[i], a.y[i], 'wolf', 1, this.small.rng);
+        if (g > 0) a.energy[i] = Math.min(0.7, a.energy[i] + g);
+      } else a.energy[i] = Math.min(0.7, a.energy[i] + P.metabolism * p.wolfSmallGame);
     } else if (st === St.Chase || st === St.Stalk) {
       const t = a.target[i];
       if (a.same(t, a.targetId[i])) {
@@ -1936,6 +1973,16 @@ export class Sim implements SimLike {
   // ------------------------------------------------------------------ interventions
 
   introduce(sp: number, count: number, x?: number, y?: number): void {
+    if (this.isFieldSpecies(sp)) {
+      // jackrabbits and prairie dogs live in the fields: the animals go into the cells around the point
+      this.event('introduced', sp, x ?? 0, y ?? 0, this.small!.introduce(sp, count, x, y), 0);
+      return;
+    }
+    if (sp === Sp.PrairieDog) {
+      // no agent form: with smallPrey off there is nothing to place
+      this.event('introduced', sp, x ?? 0, y ?? 0, 0, 0);
+      return;
+    }
     if (sp === Sp.Wolf) {
       let left = count;
       while (left > 0) {
@@ -1963,10 +2010,19 @@ export class Sim implements SimLike {
     this.event('introduced', sp, x ?? 0, y ?? 0, count, 0);
   }
 
+  /** Jackrabbits and prairie dogs are density fields (not agents) while smallPrey is on. */
+  private isFieldSpecies(sp: number): boolean {
+    return this.small !== null && (sp === Sp.Rabbit || sp === Sp.PrairieDog);
+  }
+
   apply(iv: Intervention): void {
     const a = this.a;
     switch (iv.kind) {
       case 'cull': {
+        if (this.isFieldSpecies(iv.species)) {
+          this.event('culled', iv.species, 0, 0, Math.round(this.small!.cull(iv.species, iv.fraction)), iv.fraction);
+          break;
+        }
         let n = 0;
         for (let i = 0; i < a.hi; i++) {
           if (a.alive[i] && a.sp[i] === iv.species && this.rng.next() < iv.fraction) { this.die(i, 'culled'); n++; }
@@ -1975,6 +2031,10 @@ export class Sim implements SimLike {
         break;
       }
       case 'remove': {
+        if (this.isFieldSpecies(iv.species)) {
+          this.event('removed', iv.species, 0, 0, Math.round(this.small!.remove(iv.species)), 0);
+          break;
+        }
         let n = 0;
         for (let i = 0; i < a.hi; i++) if (a.alive[i] && a.sp[i] === iv.species) { this.die(i, 'removed'); n++; }
         if (iv.species === Sp.Wolf) for (let pk = 0; pk < MAX_PACKS; pk++) this.packAlive[pk] = 0;
@@ -1999,6 +2059,11 @@ export class Sim implements SimLike {
         this.event('fire', -1, iv.x, iv.y, 0, 0);
         break;
       case 'plague': {
+        if (iv.species === Sp.PrairieDog && this.small !== null) {
+          // sylvatic plague: seeds the outbreak in a share of the colony cells (the fields have no per-animal infection)
+          this.event('plague', iv.species, 0, 0, this.small.seedPlague(this.tick, iv.fraction), 0);
+          break;
+        }
         let n = 0;
         for (let i = 0; i < a.hi; i++) {
           if (a.alive[i] && a.sp[i] === iv.species && this.rng.next() < iv.fraction) { a.infected[i] = this.p.diseaseTicks; n++; }
@@ -2323,6 +2388,11 @@ export class Sim implements SimLike {
     const out = new Array(SPECIES_COUNT).fill(0);
     const a = this.a;
     for (let i = 0; i < a.hi; i++) if (a.alive[i]) out[a.sp[i]]++;
+    if (this.small !== null) {
+      // field species report their totals, rounded
+      out[Sp.Rabbit] = Math.round(this.small.hareTotal());
+      out[Sp.PrairieDog] = Math.round(this.small.dogTotal());
+    }
     return out;
   }
 
@@ -2402,6 +2472,24 @@ export class Sim implements SimLike {
     row.vagrant_out = this.cVagOut;
     row.carrion = this.sumRemainingMeat();
     row.browse_pp = pops[Sp.Deer] > 0 ? this.sumBrowse() / pops[Sp.Deer] : NaN;
+    // small-prey web (S4): unrounded field totals, towns and plague now, and the counts since the last sample (all 0 with smallPrey off)
+    const sm = this.small;
+    const sd = sm ? sm.drainSample() : null;
+    row.hare_total = sm ? sm.hareTotal() : 0;
+    row.dog_total = sm ? sm.dogTotal() : 0;
+    row.towns = sm ? sm.townCount : 0;
+    row.plague_cells = sm ? sm.plagueCells : 0;
+    row.plague_events = sd ? sd.plagues : 0;
+    row.town_founded = sd ? sd.townsFounded : 0;
+    row.town_lost = sd ? sd.townsLost : 0;
+    row.hare_boom = sd ? sd.booms : 0;
+    row.hare_crash = sd ? sd.crashes : 0;
+    row.hare_takes = sd ? sd.hareTakes : 0;
+    row.dog_takes = sd ? sd.dogTakes : 0;
+    if (sd) {
+      row.imm_rabbit += sd.hareArrivals;
+      row.imm_prairiedog += sd.dogArrivals;
+    }
     this.cKills = 0;
     this.cKillsDeer = 0;
     this.cStrife = 0;
@@ -2469,8 +2557,13 @@ export class Sim implements SimLike {
       veg = vegOut ?? new Uint8Array(this.world.n * this.world.n * 4);
       this.veg.fillTexture(veg);
     }
+    let small: Uint8Array | undefined;
+    if (withVeg && this.small !== null) {
+      small = new Uint8Array(32 * 32 * 4);
+      this.small.fillTexture(small);
+    }
     return {
-      tick: this.tick, env: { ...this.env.state }, count: k, ids, agents: out, carcassCount: this.cN, carcasses: car, veg,
+      tick: this.tick, env: { ...this.env.state }, count: k, ids, agents: out, carcassCount: this.cN, carcasses: car, veg, small,
       pop: Int32Array.from(this.populations()),
     };
   }

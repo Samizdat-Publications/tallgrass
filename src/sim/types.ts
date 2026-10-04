@@ -8,6 +8,8 @@ export const Sp = {
   Deer: 3,
   Rabbit: 4,
   Cougar: 5,
+  Coyote: 6,
+  PrairieDog: 7,
 } as const;
 export type Sp = (typeof Sp)[keyof typeof Sp];
 // Derived from the registry in species.ts. Keep the `Sp` ids above in step with SPECIES[].id.
@@ -98,7 +100,12 @@ export interface Snapshot {
   veg?: Uint8Array;
   /** Population counts by species. */
   pop: Int32Array;
-  /** Small-prey density, 32 x 32 cells x 4 channels (later work packages). */
+  /**
+   * Small-prey fields (S4), 32 x 32 coarse cells (16 m), RGBA bytes row-major by y then x. Present only when the smallPrey
+   * param is on and the snapshot carries the vegetation texture. R = jackrabbits (hare / hareK * 200), G = prairie dogs
+   * (dog / dogK * 200), B = town (burrow infrastructure 0..1 * 255), A = sylvatic plague (0..1 * 255). R and G saturate at 255
+   * (1.275 x capacity); see SMALL_SCALE in smallprey.ts.
+   */
   small?: Uint8Array;
   /** Storm cells and lightning strikes (later work packages). */
   storms?: Float32Array;

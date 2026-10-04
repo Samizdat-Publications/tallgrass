@@ -42,7 +42,13 @@ export interface World {
   /** Border entry points for the open prairie (V2-PLAN.md S1), stride 4: x, y on the border, inward unit normal (nx, ny).
    *  Eight of them: the creek inlet and outlet, and the lowest rim cell in each remaining eighth of the rim. */
   corridors: Float32Array;
+  /** Prairie dog suitability per coarse cell (S4), COARSE_N x COARSE_N (16 m cells), 0..1: flat, dry, open ground. 0 where a town cannot sit
+   *  (water, steep, wooded or wet). Computed from the finished terrain with no random draws. */
+  dogCap: Float32Array;
 }
+
+/** Cells per side of the coarse grid shared by the herd map and the small-prey fields (V2-PLAN.md S4). */
+export const COARSE_N = 32;
 
 export const WORLD_SIZE = 512;
 export const GRID_N = 256;
@@ -301,7 +307,40 @@ export function generateWorld(seed: number, size = WORLD_SIZE, n = GRID_N): Worl
     seed, size, n, cell, hn, height, water, waterHeight, waterDist, moisture, soilBase, cover, slope, capacity,
     trees: new Float32Array(trees), shrubs: new Float32Array(shrubs), creek, ponds: new Float32Array(ponds),
     corridors: findCorridors(height, hn, size, cell, creek),
+    dogCap: findDogCap(n, water, slope, cover, waterDist, moisture),
   };
+}
+
+/** Coarse cells below this mean suitability hold no prairie dog town at all. */
+const DOG_CAP_MIN = 0.35;
+
+/**
+ * Prairie dog suitability on the coarse grid: each land cell scores flat x open x dry (slope under 0.12 is fully flat and over 0.30
+ * not at all; no cover is fully open and 0.25 cover not at all; dry means 38 m or more from water, nothing at 8 m or less, and a
+ * moisture under 0.53 counts fully, over 0.78 not at all), a coarse cell takes the mean over its fine cells, and anything under DOG_CAP_MIN, or with more than 5% water,
+ * is 0. Roughly a quarter of the valley qualifies. No random draws.
+ */
+function findDogCap(n: number, water: Uint8Array, slope: Float32Array, cover: Float32Array, waterDist: Float32Array, moisture: Float32Array): Float32Array {
+  const B = COARSE_N, r = n / B;
+  const cap = new Float32Array(B * B);
+  const wet = new Float32Array(B * B);
+  for (let j = 0; j < n; j++) {
+    const bj = Math.floor(j / r) * B;
+    for (let i = 0; i < n; i++) {
+      const c = j * n + i, k = bj + Math.floor(i / r);
+      if (water[c]) { wet[k] += 1; continue; }
+      const flat = clamp01((0.3 - slope[c]) / 0.18);
+      const open = clamp01(1 - cover[c] / 0.25);
+      const dry = clamp01((waterDist[c] - 8) / 30) * clamp01((0.78 - moisture[c]) / 0.25);
+      cap[k] += flat * open * dry;
+    }
+  }
+  const inv = 1 / (r * r);
+  for (let k = 0; k < B * B; k++) {
+    const v = cap[k] * inv;
+    cap[k] = wet[k] * inv > 0.05 || v < DOG_CAP_MIN ? 0 : Math.min(1, v);
+  }
+  return cap;
 }
 
 /**

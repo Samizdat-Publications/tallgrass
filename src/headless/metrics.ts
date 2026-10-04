@@ -371,6 +371,19 @@ export interface SpeciesMetrics {
   emigPerCentury: number | null;
 }
 
+/** The small-prey web (S4) over one run, from the plague_events, town_*, hare_* and towns columns. Null when the run had the web off. */
+export interface WebMetrics {
+  /** sylvatic plague outbreaks over the whole run, and per 100 valley years */
+  plagues: number;
+  plaguesPer100y: number | null;
+  townsFounded: number;
+  townsLost: number;
+  hareBooms: number;
+  hareCrashes: number;
+  /** mean number of towns after burn-in */
+  meanTowns: number | null;
+}
+
 export interface SeedMetrics {
   seed: number;
   samples: number;
@@ -381,6 +394,8 @@ export interface SeedMetrics {
   species: Record<string, SpeciesMetrics>;
   maxGen: number | null;
   shock: ShockInfo | null;
+  /** small-prey web counts (null when the run had smallPrey off or an older CSV without the columns) */
+  web?: WebMetrics | null;
 }
 
 export interface AnalyzeInput {
@@ -526,6 +541,32 @@ export function analyzeSeed(input: AnalyzeInput): SeedMetrics {
     species,
     maxGen,
     shock,
+    web: analyzeWeb(ticks, cols, totalTicks, lastTick),
+  };
+}
+
+/** Plague, town and hare-swing counts from the S4 columns; null unless the run had a hare field. */
+export function analyzeWeb(ticks: readonly number[], cols: Record<string, readonly number[]>, totalTicks: number, lastTick: number): WebMetrics | null {
+  const hare = cols['hare_total'];
+  if (!hare || !hare.some((v) => v > 0) || !cols['plague_events']) return null;
+  const sum = (name: string): number => {
+    let s = 0;
+    for (const v of cols[name] ?? []) if (Number.isFinite(v)) s += v;
+    return s;
+  };
+  const years = lastTick / YEAR_TICKS;
+  const towns = cols['towns'] ?? [];
+  const post: number[] = [];
+  for (let i = 0; i < ticks.length; i++) if (ticks[i] >= BURN_IN_FRAC * totalTicks && Number.isFinite(towns[i])) post.push(towns[i]);
+  const plagues = sum('plague_events');
+  return {
+    plagues,
+    plaguesPer100y: years > 0 ? (plagues / years) * 100 : null,
+    townsFounded: sum('town_founded'),
+    townsLost: sum('town_lost'),
+    hareBooms: sum('hare_boom'),
+    hareCrashes: sum('hare_crash'),
+    meanTowns: post.length ? mean(post) : null,
   };
 }
 
@@ -705,6 +746,21 @@ export function renderMarkdown(meta: MarkdownMeta, seeds: readonly SeedMetrics[]
   }
   out.push('');
 
+  if (seeds.some((s) => s.web)) {
+    out.push('## Small-prey web', '');
+    out.push('Plague outbreaks are sylvaticPlague events (an outbreak that has faded) per 100 valley years. Jackrabbit and prairie dog presence and CV are in the species tables above (rabbit, prairiedog).', '');
+    const wh = ['seed', 'plagues', 'plagues / 100 yr', 'towns founded', 'towns lost', 'hare booms', 'hare crashes', 'mean towns'];
+    out.push(`| ${wh.join(' | ')} |`, `| ${wh.map((_, i) => (i === 0 ? '---' : '---:')).join(' | ')} |`);
+    const per: number[] = [];
+    for (const sd of seeds) {
+      const w = sd.web;
+      if (!w) continue;
+      if (w.plaguesPer100y !== null) per.push(w.plaguesPer100y);
+      out.push(`| ${[String(sd.seed), String(w.plagues), num(w.plaguesPer100y, 1), String(w.townsFounded), String(w.townsLost), String(w.hareBooms), String(w.hareCrashes), num(w.meanTowns, 1)].join(' | ')} |`);
+    }
+    out.push('', `Median plagues per 100 years across seeds: ${num(medianOf(per), 1)} (target 1 or more).`, '');
+  }
+
   out.push('## Proposed acceptance (thresholds live in metrics.ts ACCEPT)', '');
   const ah = ['species', `persist >= ${ACCEPT.persistencePct}%`, `near-zero <= ${ACCEPT.nearZeroFracMax * 100}%`, `stretch <= ${ACCEPT.longestNearZeroYearsMax} yr`, `max/mean <= ${ACCEPT.maxOverMeanMax}`, `CV >= ${ACCEPT.cvMin}`];
   if (meta.hasShock) ah.push(`recovered >= ${ACCEPT.recoveredPct}%`);
@@ -846,6 +902,18 @@ function selfTest(): boolean {
   check('aggregate persistence 2/3', near(agg.species.bison.persistencePct, 66.666, 0.1) && agg.maxGen !== null && near(agg.maxGen, total / 8000, 1e-9));
   const md = renderMarkdown({ title: 'selftest', lines: ['a'], hasShock: false }, seedsM, agg);
   check('markdown renders', md.includes('## Per species') && md.includes('bison') && !md.includes(String.fromCharCode(0x2014)));
+
+  // 10. small-prey web: plague count per 100 years, towns, and null when the web was off
+  const webCols = {
+    hare_total: ticks.map(() => 1500), plague_events: ticks.map((_, i) => (i === 100 || i === 500 ? 1 : 0)), town_founded: ticks.map((_, i) => (i === 50 ? 3 : 0)),
+    town_lost: ticks.map((_, i) => (i === 120 ? 1 : 0)), hare_boom: ticks.map((_, i) => (i === 300 ? 1 : 0)), hare_crash: ticks.map(() => 0), towns: ticks.map(() => 2),
+  };
+  const wm = analyzeSeed({ seed: 1, ticks, cols: { pop_bison: sine, ...webCols }, totalTicks: total }).web;
+  check('web: plagues counted per 100 years', wm !== null && wm !== undefined && wm.plagues === 2 && near(wm.plaguesPer100y, 2 / (total / YEAR_TICKS) * 100, 1e-6), `got ${wm?.plaguesPer100y}`);
+  check('web: towns and booms', wm !== null && wm !== undefined && wm.townsFounded === 3 && wm.townsLost === 1 && wm.hareBooms === 1 && wm.hareCrashes === 0 && near(wm.meanTowns, 2, 1e-9));
+  check('web: off -> null', analyzeSeed({ seed: 1, ticks, cols: { pop_bison: sine, hare_total: ticks.map(() => 0), plague_events: ticks.map(() => 0) }, totalTicks: total }).web === null);
+  const mdw = renderMarkdown({ title: 'selftest', lines: ['a'], hasShock: false }, [analyzeSeed({ seed: 1, ticks, cols: { pop_bison: sine, ...webCols }, totalTicks: total })], aggregate([analyzeSeed({ seed: 1, ticks, cols: { pop_bison: sine }, totalTicks: total })]));
+  check('web: markdown section', mdw.includes('## Small-prey web') && !mdw.includes(String.fromCharCode(0x2014)));
 
   console.log(failed ? `\n${failed} self-test check(s) FAILED` : '\nall self-tests passed');
   return failed === 0;
