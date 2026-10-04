@@ -1,6 +1,6 @@
 # Good morning: Tallgrass overnight report
 
-*(Updated 11:27 Sunday. I keep working until the deadline in `.claude/hooks/run_until.txt` (Sunday 12:00); this file is refreshed at every milestone.)*
+*(Updated 11:41 Sunday. I keep working until the deadline in `.claude/hooks/run_until.txt` (Sunday 12:00); this file is refreshed at every milestone.)*
 
 ## How to run it (one step)
 Open **https://tallgrass.stewartgregerson.workers.dev** in Chrome or Edge. Click once anywhere to turn on sound. (The live build is redeployed after each verified milestone; the time of the last deploy is in the line below.)
@@ -129,6 +129,7 @@ The default sim is now **checkpoint v5 on a 2x valley calendar** (since about 06
 | 9 (10:19) | blind critic, stills of the 09:51 build | 7 | 5 | 6 | 5 | 7 | 6 |
 | 10 (10:57) | Gemini, video before the ribbon and takedown | 7 | 6 | 3 | 8 | 9 | 5 |
 | 11 (11:24) | Gemini, video of the live 11:19 build | 6 | 7 | 2 | 5 | 8 | 3 |
+| 12 (11:35) | blind critic, stills of the live 11:19 build | 7 | 5 | 6 | 5 | 7 | 6 |
 
 Every issue and its triage is in `REVIEWS.md`.
 - Round 4's verdict: animals were illegible and looked motionless at drone distance. In the drone shots a wolf is about 20 px tall, so planted feet can't read. The animal work since then targets exactly that, with whole-body motion scaled to camera distance, larger minimum sizes and a kill lunge.
@@ -139,6 +140,7 @@ Every issue and its triage is in `REVIEWS.md`.
 - Round 9 (on the 09:51 build with the final quick round): ecosystem, UI and keep-watching each up a point (7, 5, 6, 5, 7, 6). Its top two are unchanged (flat wolves and ravens, evolution that stops by year 300); new complaints are muddy winter and drought colour, herds as one carpet, and rain streaks in the map view (fixed at 10:23). Its four charts were stale copies from round 8, my mistake, so its chart-legend complaints were already fixed.
 - Round 10 (Gemini, video of the final build before the riparian ribbon): its best scores yet (7, 6, 3, 8, 9, 5 against round 8's 5, 6, 2, 4, 8, 3); it calls the fast-forward view "genuinely mesmerizing" and the UI and territory overlay excellent. Close-up animation is still its top complaint (sliding, a kill without struggle, metronomic ravens), even after tonight's motion rounds, so the 0.25 s struggle and the gliding ravens didn't read on video. The struggle is now about 1.2 s (deployed 11:19, checked in a kill rig, not yet on video).
 - Round 11 (Gemini, the live 11:19 build, 27 minutes later): 6, 7, 2, 5, 8, 3. The build differs only by the riparian ribbon and the longer takedown, and Gemini called the same territory overlay "brilliant" in round 10 and "visually abrasive" in round 11, so single Gemini rounds swing by 2 to 3 points on their own. Its consistent message across all rounds: close-range animation (sliding feet, and now wolves that stand still beside the struggling prey) is the weakest part. That is the first item for the next session.
+- Round 12 (stills critic, the live 11:19 build): the same scores as round 9, so the stills scores have plateaued here; the next gains are in the predator dynamics and close-range animation it keeps naming. It also read the 1,400-year chart's medians dropping at the very end as a late collapse: that was a chart artifact (one dead world's zeros dominating the median once the others finished), fixed at 11:38 and the charts regenerated.
 
 ## Decisions you might want to overrule
 - **Stack:** TypeScript + Three.js instead of Godot (ADR-001 in `DECISIONS.md`): one language for sim, harness and renderer, headless GPU capture, and the URL build.

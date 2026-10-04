@@ -204,3 +204,6 @@ Gemini: Visual 6, Readability 7, Life 2, Ecosystem 5, UI 8, Keep watching 3 (rou
 | G3 | Territory overlay too opaque | REJECT for now | UI | Round 10 Gemini praised the same overlay; round 8 and 9 stills critics asked for it stronger. |
 | G4 | Stampede feels weightless | DEFER | lead | Flight speed is sim; slower acceleration would be render-side. |
 | G5 | Carcasses stiff, no tearing | DEFER | animals | Carcasses settle on the slope since round 7; feeding tugs exist but read only up close. |
+
+## Round 12 (11:35, blind critic, stills of the live 11:19 build and the current charts) -> `review/round-12/critique.md`
+Stills critic: 7, 5, 6, 5, 7, 6, the same as round 9: the stills scores have plateaued at this level. New and fixed: the chart's late "collapse" was an artifact (a dead world's zeros dominating the median as the other worlds finished); population medians now end where fewer than 5 worlds remain, like the trait medians (tools/charts.py, 11:38), and the table title no longer overlaps the persistence axis. Everything else repeats rounds 8 and 9 and is triaged there.

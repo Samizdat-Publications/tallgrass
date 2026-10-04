@@ -388,6 +388,10 @@ def draw_overlay(ax, sc: Scenario, key: str, t: np.ndarray, m: np.ndarray, log: 
     for row in m:
         ax.plot(t, row, color=col, lw=0.6, alpha=seed_alpha, zorder=2)
     med, q1, q3 = stats(m)
+    # same rule as the trait charts: where fewer than 5 worlds (or a quarter) are still running, the median is mostly the
+    # zeros of a world that died long before, so it would fake a late collapse; end the median and band there
+    thin = np.sum(np.isfinite(m), axis=0) < max(5, 0.25 * m.shape[0])
+    med, q1, q3 = (np.where(thin, np.nan, a) for a in (med, q1, q3))
     ax.fill_between(t, q1, q3, color=col, alpha=0.22, lw=0, zorder=3)
     ax.plot(t, med, color=col, lw=lw_med, zorder=4)
     pop_scale(ax, log)
@@ -649,7 +653,7 @@ def chart_overview(sc: Scenario, meta: dict, log: bool, saved: list[Path]):
 
     axt = fig.add_subplot(gs[n_top:, 1])
     axt.axis("off")
-    axt.set_title("Stability metrics (median across seeds)", loc="left", pad=30)
+    axt.set_title("Stability metrics (median across seeds)", loc="left", pad=2)
     has_shock = bool(sc.events())
     head = ["species", "CV", "near-zero", "longest\nnear-zero", "peaks"]
     if has_shock:
