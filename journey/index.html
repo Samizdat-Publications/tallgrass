@@ -48,7 +48,7 @@ button{font:inherit;color:inherit}
 .ambient::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(16,14,10,.36),rgba(16,14,10,.74) 60%,rgba(16,14,10,.88))}
 
 /* Top bar */
-.bar{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:clamp(12px,2.4vw,32px);padding:10px max(var(--gutter),calc((100% - var(--maxw)) / 2 + var(--gutter)));min-height:56px;transition:background .3s ease,border-color .3s ease;border-bottom:1px solid transparent}
+.bar{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;display:flex;align-items:center;gap:clamp(12px,2.4vw,32px);padding:10px max(var(--gutter),calc((100% - var(--maxw)) / 2 + var(--gutter)));min-height:56px;transition:background .3s ease,border-color .3s ease;border-bottom:1px solid transparent}
 .bar.stuck{background:var(--smoke);-webkit-backdrop-filter:var(--glass);backdrop-filter:var(--glass);border-bottom-color:var(--edge)}
 .bar::after{content:"";position:absolute;left:0;bottom:-1px;height:2px;width:var(--p,0%);background:var(--gold);opacity:.85}
 .brand{margin-right:auto;font:italic 500 25px/1 var(--serif);text-decoration:none;text-shadow:0 1px 12px rgba(0,0,0,.55)}

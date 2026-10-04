@@ -56,7 +56,7 @@ New since 09:00:
 - `6_ui_evolution.png`: the evolution chart.
 - `7_stability_20_worlds_v5.png`: the v5 acceptance run below, one panel per world.
 - `8_trophic_cascade.png`: the trophic cascade evidence.
-- Every image made tonight, in order, is in `journey/` (see `journey/INDEX.md`), as you asked.
+- Every image made tonight, in order, is in `journey/` (see `journey/INDEX.md`), as you asked. **Browse them as a page with a slideshow: https://claude.ai/artifact/7jPHUFvbzTv6AUz5UCA3Mu** (private to you; republished as new images are added). Locally: open `journey/index.html`.
 
 ## Stability: what is proven and what isn't (honest)
 The default sim is now **checkpoint v5** (since 16:45 Saturday). v4 results are kept below for comparison.

@@ -83,3 +83,4 @@ One line each: decision | why | alternative rejected.
 
 ### Owner ruling 4 (Saturday 21:50)
 "Also please show all images you generate while working inline in the chat so I dont have to hunt for .ng or .jpg and expand it, this way I can scroll through and see progress at a glance." From now on every generated or captured image is sent inline in the chat (SendUserFile, render) as it is produced, plus a catch-up batch of the day's recent progress shots.
+- 22:10 Owner follow-up: historical images go in an artifact page (https://claude.ai/artifact/7jPHUFvbzTv6AUz5UCA3Mu, the making-of page with every journey image), new images inline in chat as they are made. Owner asked whether to hand off to a new session: answered keep going here (Stop hook is project-level until run_until.txt; the cron heartbeat is session-only; never run two sessions in this folder at once).

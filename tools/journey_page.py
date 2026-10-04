@@ -238,11 +238,25 @@ def font_assets():
     return "", link
 
 
+def to_fragment(html: str) -> str:
+    """Claude Artifact pages are wrapped in their own document skeleton: keep only the title, links, styles and body."""
+    html = re.sub(r"<!doctype html>\s*<html[^>]*>\s*<head>", "", html, count=1, flags=re.I)
+    html = re.sub(r'<meta charset="utf-8">\s*', "", html, count=1)
+    html = re.sub(r'<meta name="viewport"[^>]*>\s*', "", html, count=1)
+    html = re.sub(r'<link rel="icon"[^>]*>\s*', "", html, count=1)
+    html = html.replace("<title>Tallgrass, the making of</title>", "<title>The Making of Tallgrass</title>", 1)
+    html = re.sub(r"</head>\s*<body[^>]*>", "", html, count=1, flags=re.I)
+    html = re.sub(r"</body>\s*</html>\s*$", "", html, flags=re.I)
+    # a single dark look: say so to the browser and paint the ground explicitly
+    html = html.replace("<style>", "<style>\n:root{color-scheme:dark}\nbody{background:var(--night);color:var(--paper)}", 1)
+    return html.strip() + "\n"
+
+
 def js_literal(obj) -> str:
     return json.dumps(obj, ensure_ascii=True, separators=(",", ":")).replace("</", "<\\/")
 
 
-def build(out: pathlib.Path):
+def build(out: pathlib.Path, artifact: bool = False):
     entries = read_entries()
     if not entries:
         raise SystemExit("No entries found in journey/INDEX.md")
@@ -256,12 +270,21 @@ def build(out: pathlib.Path):
             "w": e["w"], "h": e["h"], "ch": e["ch"],
         })
     faces, link = font_assets()
+    if artifact:
+        # a hosted page loads the fonts from Google Fonts instead of embedding 200 KB of font data
+        faces = ""
+        link = ('<link rel="preconnect" href="https://fonts.googleapis.com">'
+                '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>'
+                '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alegreya:ital,wght@0,400;0,500;1,400;1,500'
+                '&family=Alegreya+Sans:wght@400;500&display=swap">')
     html = TEMPLATE
     html = html.replace("__FONT_FACES__", faces).replace("__FONT_LINK__", link)
     html = html.replace("__ENTRIES__", js_literal(payload))
     html = html.replace("__CHAPTERS__", js_literal(chapters))
     html = html.replace("__HERO__", js_literal(hero))
     assert EM_DASH not in html and EM_ENTITY not in html, "em dash slipped into the page"
+    if artifact:
+        html = to_fragment(html)
     out.write_text(html, encoding="utf-8", newline="\n")
     print(f"wrote {out} ({out.stat().st_size / 1024:.0f} KB)")
     print(f"  {len(payload)} images, {len(chapters)} chapters, fonts {'embedded' if faces else 'from Google Fonts'}")
@@ -317,7 +340,7 @@ button{font:inherit;color:inherit}
 .ambient::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(16,14,10,.36),rgba(16,14,10,.74) 60%,rgba(16,14,10,.88))}
 
 /* Top bar */
-.bar{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:clamp(12px,2.4vw,32px);padding:10px max(var(--gutter),calc((100% - var(--maxw)) / 2 + var(--gutter)));min-height:56px;transition:background .3s ease,border-color .3s ease;border-bottom:1px solid transparent}
+.bar{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;display:flex;align-items:center;gap:clamp(12px,2.4vw,32px);padding:10px max(var(--gutter),calc((100% - var(--maxw)) / 2 + var(--gutter)));min-height:56px;transition:background .3s ease,border-color .3s ease;border-bottom:1px solid transparent}
 .bar.stuck{background:var(--smoke);-webkit-backdrop-filter:var(--glass);backdrop-filter:var(--glass);border-bottom-color:var(--edge)}
 .bar::after{content:"";position:absolute;left:0;bottom:-1px;height:2px;width:var(--p,0%);background:var(--gold);opacity:.85}
 .brand{margin-right:auto;font:italic 500 25px/1 var(--serif);text-decoration:none;text-shadow:0 1px 12px rgba(0,0,0,.55)}
@@ -980,5 +1003,6 @@ window.__journey = {ENTRIES, CHAPTERS, HERO, open: openViewer, close: closeViewe
 if __name__ == "__main__":
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--out", default=str(OUT), help="output html path (default journey/index.html)")
+    ap.add_argument("--artifact", action="store_true", help="write a fragment for a hosted Claude Artifact (Google Fonts, no document wrapper)")
     a = ap.parse_args()
-    build(pathlib.Path(a.out))
+    build(pathlib.Path(a.out), artifact=a.artifact)
