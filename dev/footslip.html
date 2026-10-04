@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Tallgrass: foot-slip rig</title>
+  <style>
+    html, body { margin: 0; background: #1b1b1b; color: #e8e2d4; font: 13px/1.4 system-ui, sans-serif; }
+    main { max-width: 1280px; margin: 0 auto; padding: 16px; }
+    h1 { font-size: 18px; margin: 0 0 4px; }
+    p.note { margin: 2px 0 10px; color: #b9b19c; max-width: 90ch; }
+    .bar { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; margin: 10px 0; }
+    label { display: inline-flex; gap: 6px; align-items: center; }
+    select, input, button { background: #2b2b2b; color: #e8e2d4; border: 1px solid #555; padding: 3px 6px; font: inherit; }
+    table { border-collapse: collapse; font: 12px/1.3 ui-monospace, Consolas, monospace; margin: 8px 0 20px; }
+    th, td { padding: 2px 8px; text-align: right; border-bottom: 1px solid #333; }
+    th:first-child, td:first-child, td:nth-child(2) { text-align: left; }
+    tr.fail td { color: #ff9a8a; }
+    tr.lapse td { color: #8f8a7c; }
+    #summary { font-weight: 600; margin: 6px 0; }
+    .strip { display: block; margin: 4px 0 14px; background: #f1ead8; max-width: none; }
+    h2 { font-size: 14px; margin: 16px 0 2px; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Foot-slip rig</h1>
+    <p class="note">A CPU mirror of the quadruped leg math (src/render/models/legmath.ts, which the vertex shader is ported from) is driven along a path the way AnimalLayer drives the shader. Slip = planted-foot motion in the world during stance / body motion over the same frames. Before = the pre-R1 leg math, after = the exact foot lock with ground-reading IK. The same numbers print from <code>npx tsx dev/footslip.ts</code>.</p>
+    <div class="bar">
+      <label>terrain <select id="terrain"><option value="plane">flat + 20 degree plane</option><option value="bumps">plane + bumps</option></select></label>
+      <label>camera m <input id="cams" value="20,44" size="8" /></label>
+      <button id="run">run</button>
+      <span id="summary"></span>
+    </div>
+    <div id="strips"></div>
+    <div id="out"></div>
+  </main>
+  <script type="module" src="./footslip-ui.ts"></script>
+</body>
+</html>

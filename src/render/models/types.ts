@@ -63,7 +63,11 @@ export interface AnimParams {
   deadHipH: number;
   /** Hind-leg hock flexion scale (flexion for hind legs goes forward). */
   hockK: number;
-  /** Gait offsets (cycle fractions) in order FL, FR, HL, HR. */
+  /**
+   * Gait offsets (cycle fractions) in order FL, FR, HL, HR. A leg's phase is u = fract(phase + offset) and its foot is on the
+   * ground for u < stance share, so the offset of a leg is minus the moment (in cycles) it touches down. Quadrupeds blend the
+   * three tables by speed (models/legmath.ts gaitMix), so the three should stay roughly aligned.
+   */
   offW: [number, number, number, number];
   offT: [number, number, number, number];
   offG: [number, number, number, number];
@@ -102,15 +106,26 @@ export interface AnimParams {
   boostLen: number;
 }
 
-/** A planted leg may lengthen at most this much (the shader's 1 / cos(hip) stretch that keeps the foot on the ground). */
-export const STRETCH_CAP = 1.15;
+/**
+ * Longest a leg may need to be (as a multiple of its rest length) for the planted foot of a level-ground gait to reach the
+ * ground at the end of its sweep. It sets the furthest the foot travels ahead of the hip (see footReach), so a flat-ground
+ * stride never asks the leg for more than this.
+ */
+export const STRETCH_CAP = 1.18;
 
 /**
- * Foot offset ahead of the hip (in leg lengths) at hip angle `amp`, for a planted leg: tan(amp) while the leg can stay
- * on the ground by lengthening, sin(amp) * STRETCH_CAP once it hits the cap.
+ * Hard limit of the two-bone leg solver (models/legmath.ts): to put the foot on uneven ground the leg may lengthen to this
+ * multiple of its rest length (a +25% stretch of the whole leg after the knee has fully straightened). The gap between
+ * STRETCH_CAP and this is the slack kept for slopes and bumps.
+ */
+export const IK_CAP = 1.25;
+
+/**
+ * Furthest a planted foot travels ahead of (or behind) the hip, in leg lengths, for a gait whose hip swing is `amp`: tan(amp)
+ * (a straight leg swung through that angle) but never more than the leg can reach on level ground within STRETCH_CAP.
  */
 export function footReach(amp: number): number {
-  return amp <= Math.acos(1 / STRETCH_CAP) ? Math.tan(amp) : Math.sin(amp) * STRETCH_CAP;
+  return Math.min(Math.tan(amp), Math.sqrt(STRETCH_CAP * STRETCH_CAP - 1));
 }
 
 /**
@@ -225,8 +240,11 @@ export const DEFAULT_PARAMS: AnimParams = {
   deadHipF: 0.9,
   deadHipH: -0.5,
   hockK: 0.8,
-  offW: [0.25, 0.75, 0.0, 0.5],
-  offT: [0.0, 0.5, 0.5, 0.0],
+  // walk: four-beat lateral sequence, touchdowns hind left (0), front left (.25), hind right (.5), front right (.75)
+  offW: [0.75, 0.25, 0.0, 0.5],
+  // trot: diagonal pairs (FL with HR, FR with HL) half a cycle apart
+  offT: [0.75, 0.25, 0.25, 0.75],
+  // gallop: transverse, touchdowns hind right (-.08), hind left (0), front right (.42), front left (.5), two suspensions per cycle
   offG: [0.5, 0.58, 0.0, 0.08],
   dutyW: 0.62,
   dutyT: 0.5,

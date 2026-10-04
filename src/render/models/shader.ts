@@ -4,16 +4,22 @@
 // Per-instance inputs (InstancedBufferAttribute, vec4):
 //   aGait = (gait phase 0..1, speed m/s [-1 marks a carcass], head-down weight | flap amount | carcass remaining, lie weight)
 //   aLook = (coat 0..1, per-animal seed 0..1, crouch | wing fold, selected + sick: floor() = selected 0/1, fract() = sickness 0..0.98)
-//   aFx   = (feeding tug weight 0..1, altitude above ground in m (birds), hunting weight 0..1, pounce envelope 0..1 |
+//   aFx   = (feeding tug weight 0..1, altitude above ground in m (birds) | body-height offset in model metres (quadrupeds: the
+//            mean height of the ground under the stance feet above the body's ground plane), hunting weight 0..1, pounce envelope 0..1 |
 //            for a carcass: how far it has fallen over, 0 standing .. 1 down)
 import * as THREE from 'three';
-import { STRETCH_CAP, footReach } from './types';
+import { IK_CAP, footReach, plantedStride } from './types';
 import type { AnimParams, ModelDef } from './types';
+import { HEIGHT_GLSL } from '../common';
+import { IK_FAR, IK_NEAR, LEG_FLEX, LIFT_K, legLength, legRigOf } from './legmath';
 
-const f = (x: number): string => (Number.isInteger(x) ? x.toFixed(1) : String(+x.toFixed(5)));
+const f = (x: number): string => (Number.isInteger(x) ? x.toFixed(1) : String(+x.toFixed(6)));
 const v4 = (a: number[]): string => `vec4(${a.map(f).join(',')})`;
+const v2 = (a: number[]): string => `vec2(${f(a[0])},${f(a[1])})`;
 
-function defines(p: AnimParams, far?: ModelDef['far']): string {
+function defines(p: AnimParams, far: ModelDef['far'] | undefined, geometry: ModelDef['geometry']): string {
+  // rest-pose bones of the front and hind leg (read from the mesh): the leg solver in tgSolveLeg aims the foot point
+  const rig = p.kind === 0 ? legRigOf(geometry) : { front: { hip: [0, 0], knee: [0, 0], foot: [0, 0] }, hind: { hip: [0, 0], knee: [0, 0], foot: [0, 0] } };
   return [
     `#define KIND ${p.kind}`,
     `#define COM_Y ${f(p.comY)}`,
@@ -34,8 +40,12 @@ function defines(p: AnimParams, far?: ModelDef['far']): string {
     `#define OFF_W ${v4(p.offW)}`, `#define OFF_T ${v4(p.offT)}`, `#define OFF_G ${v4(p.offG)}`,
     `#define DUTY_W ${f(p.dutyW)}`, `#define DUTY_T ${f(p.dutyT)}`, `#define DUTY_G ${f(p.dutyG)}`,
     `#define DUTY_GF ${f(p.dutyGF ?? p.dutyG)}`, `#define FAST0 ${f(p.fast0 ?? p.gal1)}`, `#define FAST1 ${f(p.fast1 ?? p.gal1 * 2.2)}`,
-    `#define REACH_W ${f(footReach(p.ampW))}`, `#define REACH_T ${f(footReach(p.ampT))}`, `#define REACH_G ${f(footReach(p.ampG))}`,
-    `#define STRETCH_CAP ${f(STRETCH_CAP)}`, `#define STRETCH_Y ${f(Math.sqrt(STRETCH_CAP * STRETCH_CAP - 1))}`,
+    // leg length, the stride (m per leg cycle) of walk and trot, and the reach of the gallop stride (it also depends on speed)
+    `#define LEGL ${f(legLength(p))}`, `#define LIFT_K ${f(LIFT_K)}`, `#define FLEX ${v4([LEG_FLEX[0], LEG_FLEX[1], LEG_FLEX[2], 0])}`,
+    `#define STRIDE_W ${f(p.kind === 0 ? plantedStride(p, 0) : 1)}`, `#define STRIDE_T ${f(p.kind === 0 ? plantedStride(p, 1) : 1)}`, `#define REACH_G ${f(footReach(p.ampG))}`,
+    `#define IK_CAP ${f(IK_CAP)}`, `#define IK_NEAR ${f(IK_NEAR)}`, `#define IK_FAR ${f(IK_FAR)}`,
+    `#define FRONT_HIP ${v2(rig.front.hip)}`, `#define FRONT_KNEE ${v2(rig.front.knee)}`, `#define FRONT_FOOT ${v2(rig.front.foot)}`,
+    `#define HIND_HIP ${v2(rig.hind.hip)}`, `#define HIND_KNEE ${v2(rig.hind.knee)}`, `#define HIND_FOOT ${v2(rig.hind.foot)}`,
     `#define CURL ${f(p.curl ?? 0)}`, `#define CURL_ANG ${f(p.curlAng ?? 1.3)}`, `#define CURL_X0 ${f(p.curlX ?? 0.1)}`, `#define CURL_LEN ${f(p.curlLen ?? 1.1)}`,
     `#define LEG_CALM ${f(far?.calm ?? 0)}`, `#define WIDEN ${f(far?.widen ?? 0)}`,
     `#define FLAP_HZ ${f(p.flapHz)}`,
@@ -48,6 +58,7 @@ function defines(p: AnimParams, far?: ModelDef['far']): string {
 
 const COMMON_DECL = /* glsl */ `
 #define TG_TAU 6.28318530718
+${HEIGHT_GLSL}
 attribute vec4 aPart;
 attribute vec3 aColor;
 attribute vec3 aPivot;
@@ -78,20 +89,15 @@ void tgRotY(inout vec3 p, inout vec3 n, vec3 c, float a) {
   n = vec3(cs * n.x + sn * n.z, n.y, -sn * n.x + cs * n.z);
 }
 
-// Planted-foot leg cycle for quadrupeds. u = leg phase in cycles. The foot is on the ground for beta of the cycle,
-// starting a quarter cycle in, and sweeps back at a constant rate (so it stays put on the ground while the body moves
-// over it); the rest of the cycle is a swing forward with a small reach and retraction around touchdown, so the foot
-// lands already moving back. Returns (W, arc): W is the foot position along the stride (+1 front .. -1 back), arc is
-// the 0..1 height profile of the lifted foot.
-// Hip angle that puts a planted foot y leg-lengths ahead of the hip, with the leg lengthening by 1 / cos up to STRETCH_CAP.
-float tgHipFor(float y) {
-  float a = abs(y);
-  float h = a <= STRETCH_Y ? atan(a) : asin(min(a / STRETCH_CAP, 1.0));
-  return y < 0.0 ? -h : h;
-}
-
+// ---- Quadruped legs. Everything in this block is a line-for-line port of src/render/models/legmath.ts (the names are given
+// in the comments), which the foot-slip rig runs on the CPU. Model space, x forward, y up.
+#if KIND == 0
+// legmath.ts legWave. u = leg phase in cycles (0..1), beta = stance share. Stance: the foot slides back LINEARLY from +1 to -1
+// over u in [0, beta], exactly at body speed, so with the cycle run at speed / stride it stands still on the ground. The rest of
+// the cycle is an eased swing with a small retraction before touchdown. Returns (W, arc): W is the foot position along the
+// stride (+1 front end .. -1 back end), arc the 0..1 height profile of the lifted foot.
 vec2 tgLegWave(float u, float beta) {
-  float v = fract(u - 0.25);
+  float v = fract(u);
   if (v < beta) return vec2(1.0 - 2.0 * v / beta, 0.0);
   float s = (v - beta) / (1.0 - beta);
   float k = 1.2 * (1.0 - beta) / beta;
@@ -100,6 +106,73 @@ vec2 tgLegWave(float u, float beta) {
   float t0 = s * (1.0 - s) * (1.0 - s) * (1.0 - s);
   return vec2(-1.0 + 2.0 * h + k * (t1 - t0), sin(3.14159265 * s));
 }
+
+// legmath.ts solveLeg: two-bone analytic IK. Returns (hip angle, knee angle, stretch) that put the foot point of a leg whose
+// rest bones are hipP, kneeP, footP at the point tgt. s = -1 folds the foot backward (forelegs), +1 forward (hind legs).
+vec3 tgSolveLeg(vec2 hipP, vec2 kneeP, vec2 footP, float s, vec2 tgt) {
+  vec2 u1 = kneeP - hipP;
+  vec2 u2 = footP - kneeP;
+  float l1 = length(u1);
+  float l2 = length(u2);
+  float a1 = atan(u1.x, -u1.y);
+  float a2 = atan(u2.x, -u2.y);
+  vec2 T = tgt - hipP;
+  float d = length(T);
+  float dmax = l1 + l2;
+  float dc = clamp(d, abs(l1 - l2) + 0.002, dmax);
+  float cg = clamp((l1 * l1 + l2 * l2 - dc * dc) / (2.0 * l1 * l2), -1.0, 1.0);
+  float bend = 3.14159265 - acos(cg);
+  float alpha = atan(l2 * sin(bend), l1 + l2 * cos(bend));
+  float phi = atan(T.x, -T.y);
+  float A1 = phi - s * alpha;
+  return vec3(A1 - a1, s * bend - (a2 - a1), clamp(d / dmax, 1.0, IK_CAP));
+}
+
+// Height of the ground under a foot at model position (tx, ty, zf), in the model frame (relative to the model's own ground plane).
+// The foot's world xz comes from the instance matrix, the ground from the height texture, and the point goes back through the
+// inverse of the (rotation x uniform scale) matrix.
+float tgGroundModelY(float tx, float ty, float zf) {
+  vec3 wp = (instanceMatrix * vec4(tx, ty, zf, 1.0)).xyz;
+  float gw = tgHeightAt(wp.xz);
+  mat3 R3 = mat3(instanceMatrix);
+  vec3 d = vec3(wp.x, gw, wp.z) - vec3(instanceMatrix[3]);
+  return dot(R3[1], d) / dot(R3[1], R3[1]);
+}
+
+// The body's own motion on top of the legs (legmath.ts bodyFwd): bob and terrain offset, pitch, the distance cues, the pounce
+// leap. Set once per vertex in tgAnimate; the legs aim through it (the IK takes this motion back out of its target).
+float tgYoff;
+float tgPitchB;
+float tgFarK;
+float tgCyc;
+float tgPounce;
+vec3 tgGW;
+void tgBodyFwd(inout vec3 p, inout vec3 n) {
+  p.y += tgYoff;
+  tgRotZ(p, n, vec3(0.0, COM_Y, 0.0), tgPitchB);
+  if (tgFarK > 0.001) {
+    // Whole-body gait cues sized as a fraction of the body length, so they stay readable at 15 to 40 px: a bound (the body
+    // rises and falls once per stride in a gallop), the spine arching and stretching, a lateral snake, and the body pitching.
+    float bl = BODY_LEN;
+    float c = tgCyc;
+    // (sized so that a wolf only 20 px long still visibly bounds: the gallop lifts the whole body about 16% of its length)
+    float hop = tgGW.x * 0.03 * cos(2.0 * c) + tgGW.y * 0.08 * cos(2.0 * c) + tgGW.z * 0.16 * cos(c - 0.5);
+    float xn = clamp(p.x / (bl * 0.55), -1.3, 1.3);
+    float arch = (tgGW.y * 0.04 + tgGW.z * 0.08) * cos(c + 1.0) * (xn * xn - 0.35);
+    float snake = (tgGW.x * 0.02 + tgGW.y * 0.036 + tgGW.z * 0.04) * sin(c + 0.3) * xn;
+    p.y += bl * tgFarK * (hop + arch);
+    p.z += bl * tgFarK * snake;
+    tgRotZ(p, n, vec3(0.0, COM_Y, 0.0), tgFarK * (tgGW.x * 0.03 * sin(2.0 * c + 0.5) + tgGW.y * 0.09 * sin(2.0 * c + 0.5) + tgGW.z * 0.2 * sin(c + 1.0)));
+    // rolling from side to side with the stride (a walk sways, a trot rolls, a gallop rocks), and a little weight settling in the stance
+    tgRotX(p, n, vec3(0.0, COM_Y, 0.0), tgFarK * (tgGW.x * 0.03 + tgGW.y * 0.055 + tgGW.z * 0.06) * sin(c + 0.9));
+  }
+  // the leap of a pounce: the forequarters rise about the hind end and the whole animal lifts
+  if (tgPounce > 0.001) {
+    p.y += tgPounce * COM_Y * 0.25;
+    tgRotZ(p, n, vec3(-0.3 * BODY_LEN, COM_Y * 0.6, 0.0), tgPounce * 0.42);
+  }
+}
+#endif
 
 #if KIND == 2
 // A bird's flapping weight 0..1 and wing phase. Each bird has its own rhythm: a burst of beats, then a glide on still wings
@@ -154,6 +227,10 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
   float wGal = smoothstep(GAL0, GAL1, spdG);
   float wTrot = s1 * (1.0 - wGal);
   float wWalk = smoothstep(0.08, 0.4, spdG) * (1.0 - s1);
+  // the same weights normalised (pure walk at a standstill): quadrupeds blend the gait PARAMETERS by them (legmath.ts gaitMix)
+  float gSum = wWalk + wTrot + wGal;
+  vec3 gN = gSum < 1e-3 ? vec3(1.0, 0.0, 0.0) : vec3(wWalk, wTrot, wGal) / gSum;
+  float gAmt = min(gSum, 1.0);
   float moveK = dead ? stag : (1.0 - lie);
   wWalk *= moveK; wTrot *= moveK; wGal *= moveK;
 
@@ -191,38 +268,75 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
 #endif
   }
 
+#if KIND == 0
+  // the body's motion state, read by tgBodyFwd (the legs aim through it, then every vertex is moved by it). aFx.y of a living
+  // quadruped is the body-height offset the animal layer works out from the ground under the stance feet (m, model units).
+  // (legmath.ts bodyMotion) the body also sinks a little while it moves, so the knees stay bent (flex)
+  float flex = LEGL * dot(gN, FLEX.xyz) * gAmt * moveK;
+  tgYoff = bob - flex + breathe - lie * LIE_DROP - crouchBody * CROUCH_DROP - sick * 0.035 * COM_Y + (dead ? 0.0 : aFx.y); // a sick animal sags a little
+  tgPitchB = pitch;
+  tgFarK = dead ? 0.0 : farK;
+  tgCyc = cyc;
+  tgPounce = pounce;
+  tgGW = vec3(wWalk, wTrot, wGal);
+#endif
   if (part >= 1 && part <= 4) {
+    bool front = part <= 2;
+    float hip, knee;
+    float stretch = 1.0;
+#if KIND == 0
+    {
+      // legmath.ts gaitMix: the gait parameters are blended by speed and ONE foot path is evaluated, so a change of gait never
+      // splits or resets the phase. u = fract(phase + leg offset), stance while u < beta.
+      float dutyGal = mix(DUTY_G, DUTY_GF, smoothstep(FAST0, FAST1, spdG));
+      float gBeta = gN.x * DUTY_W + gN.y * DUTY_T + gN.z * dutyGal;
+      float gStride = gN.x * STRIDE_W + gN.y * STRIDE_T + gN.z * (2.0 * LEGL * REACH_G / dutyGal);
+      float gLift = LIFT_K * LEGL * (gN.x * KNEE_W + gN.y * KNEE_T + gN.z * KNEE_G);
+      vec4 oB = gN.x * OFF_W + gN.y * OFF_T + gN.z * OFF_G;
+      float ofs = part == 1 ? oB.x : (part == 2 ? oB.y : (part == 3 ? oB.z : oB.w));
+      // legmath.ts footPath: the foot's offset along the body from its rest position, and its swing lift
+      vec2 lw = tgLegWave(ph + ofs, gBeta);
+      float gk = gAmt * moveK * calmK;
+      float footX = 0.5 * gBeta * gStride * lw.x * gk;
+      float footLift = gLift * lw.y * gk;
+      vec2 hipP = front ? FRONT_HIP : HIND_HIP;
+      vec2 kneeP = front ? FRONT_KNEE : HIND_KNEE;
+      vec2 footP = front ? FRONT_FOOT : HIND_FOOT;
+      float tx = footP.x + footX;
+      float zf = aPivot.z;
+      // legmath.ts aimLeg: within 45 m the foot aims at the real ground under it (faded out 40 to 45 m, beyond it the ground is flat)
+      float ikK = dead ? 0.0 : 1.0 - smoothstep(IK_NEAR, IK_FAR, camD);
+      float gy = 0.0;
+      if (ikK > 0.001) gy = ikK * tgGroundModelY(tx, footP.y, zf);
+      vec3 tg = vec3(tx, footP.y + gy + footLift, zf);
+      // the body's own motion (bob, pitch, cues) moves the foot after the leg is posed: take it back out of the target
+      vec3 tq = tg;
+      vec3 tqn = vec3(0.0, 1.0, 0.0);
+      tgBodyFwd(tq, tqn);
+      vec3 sol = tgSolveLeg(hipP, kneeP, footP, front ? -1.0 : 1.0, 2.0 * tg.xy - tq.xy);
+      hip = sol.x;
+      knee = sol.y;
+      stretch = mix(1.0, sol.z, moveK);
+    }
+#else
     vec4 oW = OFF_W; vec4 oT = OFF_T; vec4 oG = OFF_G;
     float ow = part == 1 ? oW.x : (part == 2 ? oW.y : (part == 3 ? oW.z : oW.w));
     float ot = part == 1 ? oT.x : (part == 2 ? oT.y : (part == 3 ? oT.z : oT.w));
     float og = part == 1 ? oG.x : (part == 2 ? oG.y : (part == 3 ? oG.z : oG.w));
-    bool front = part <= 2;
-    float hip, lift;
-    float stc = 0.0;
-    float hipGait = 0.0; // the gait's hip angle in the world frame (before the body pitch is cancelled)
-#if KIND == 0
-    vec2 lw = tgLegWave(ph + ow, DUTY_W);
-    vec2 lt = tgLegWave(ph + ot, DUTY_T);
-    vec2 lg = tgLegWave(ph + og, mix(DUTY_G, DUTY_GF, smoothstep(FAST0, FAST1, spdG)));
-    hip = wWalk * tgHipFor(lw.x * REACH_W) + wTrot * tgHipFor(lt.x * REACH_T) + wGal * tgHipFor(lg.x * REACH_G);
-    lift = wWalk * KNEE_W * lw.y + wTrot * KNEE_T * lt.y + wGal * KNEE_G * lg.y;
-    // how planted this foot is (1 on the ground, 0 mid swing), used to keep it from riding up with the body
-    float liftPeak = wWalk * KNEE_W + wTrot * KNEE_T + wGal * KNEE_G;
-    stc = (1.0 - smoothstep(0.0, 0.3, lift / max(liftPeak, 0.001))) * moveK;
-    hipGait = hip;
-    hip -= pitch * stc; // the body's pitch is cancelled in the planted leg (applied later to everything)
-#else
+    float lift;
     float aw = TG_TAU * (ph + ow), at = TG_TAU * (ph + ot), ag = TG_TAU * (ph + og);
     hip = wWalk * AMP_W * sin(aw) + wTrot * AMP_T * sin(at) + wGal * AMP_G * sin(ag);
     lift = wWalk * KNEE_W * max(cos(aw), 0.0) + wTrot * KNEE_T * max(cos(at), 0.0) + wGal * KNEE_G * max(cos(ag), 0.0);
-#endif
     hip *= calmK;
     lift *= calmK;
-    float knee = front ? -lift : lift * HOCK_K;
+    knee = front ? -lift : lift * HOCK_K;
+#endif
     // pounce: forelegs reach out ahead, hindlegs drive
     hip += pounce * (front ? 0.85 : -0.55);
-    // stalking: bent legs
+#if KIND != 0
+    // stalking: bent legs (a quadruped's legs bend through the IK instead, as the body drops by CROUCH_DROP)
     hip += crouchBody * (front ? 0.25 : -0.2);
+#endif
     float lieHip = front ? LIE_HIP_F : LIE_HIP_H;
     float lieKnee = front ? LIE_KNEE_F : LIE_KNEE_H;
     hip = mix(hip, lieHip, lie);
@@ -254,9 +368,8 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
     tgRotZ(p, n, aPivot2, knee * aPart.y);
     tgRotZ(p, n, aPivot, hip);
 #if KIND == 0
-    // a planted foot stays on the ground as the leg leans (the leg lengthens by 1 / cos, a little, never more than 15%)
-    // and as the body bobs, so only its sweep over the ground is left
-    p = aPivot + (p - aPivot) * mix(1.0, min((1.0 + bob / COM_Y) / cos(hipGait), STRETCH_CAP), stc);
+    // a straight leg that still falls short (steep or uneven ground) lengthens a little, at most IK_CAP
+    p = aPivot + (p - aPivot) * stretch;
 #endif
   } else if (part == 5) {
     float graze = dead ? 0.0 : aGait.z;
@@ -352,25 +465,13 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
   }
 #endif
 
+#if KIND == 0
+  // the body's own motion on top of the legs (the same function the legs aimed through): bob and terrain offset, pitch, the
+  // distance cues and the pounce leap
+  tgBodyFwd(p, n);
+#else
   p.y += bob + breathe - lie * LIE_DROP - crouchBody * CROUCH_DROP - sick * 0.035 * COM_Y; // a sick animal sags a little
   tgRotZ(p, n, vec3(0.0, COM_Y, 0.0), pitch);
-
-#if KIND == 0
-  if (!dead && farK > 0.001) {
-    // Whole-body gait cues sized as a fraction of the body length, so they stay readable at 15 to 40 px: a bound (the body
-    // rises and falls once per stride in a gallop), the spine arching and stretching, a lateral snake, and the body pitching.
-    float bl = BODY_LEN;
-    // (sized so that a wolf only 20 px long still visibly bounds: the gallop lifts the whole body about 16% of its length)
-    float hop = wWalk * 0.03 * cos(2.0 * cyc) + wTrot * 0.08 * cos(2.0 * cyc) + wGal * 0.16 * cos(cyc - 0.5);
-    float xn = clamp(p.x / (bl * 0.55), -1.3, 1.3);
-    float arch = (wTrot * 0.04 + wGal * 0.08) * cos(cyc + 1.0) * (xn * xn - 0.35);
-    float snake = (wWalk * 0.02 + wTrot * 0.036 + wGal * 0.04) * sin(cyc + 0.3) * xn;
-    p.y += bl * farK * (hop + arch);
-    p.z += bl * farK * snake;
-    tgRotZ(p, n, vec3(0.0, COM_Y, 0.0), farK * (wWalk * 0.03 * sin(2.0 * cyc + 0.5) + wTrot * 0.09 * sin(2.0 * cyc + 0.5) + wGal * 0.2 * sin(cyc + 1.0)));
-    // rolling from side to side with the stride (a walk sways, a trot rolls, a gallop rocks), and a little weight settling in the stance
-    tgRotX(p, n, vec3(0.0, COM_Y, 0.0), farK * (wWalk * 0.03 + wTrot * 0.055 + wGal * 0.06) * sin(cyc + 0.9));
-  }
 #endif
 #if KIND == 2
   if (!dead && farK > 0.001 && aLook.z < 0.5) {
@@ -380,12 +481,13 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
     p.y += BODY_LEN * farK * 0.06 * fl2 * sin(fph2 - 0.4);
   }
 #endif
-
+#if KIND != 0
   // the leap of a pounce: the forequarters rise about the hind end and the whole animal lifts
   if (pounce > 0.001) {
     p.y += pounce * COM_Y * 0.25;
     tgRotZ(p, n, vec3(-0.3 * BODY_LEN, COM_Y * 0.6, 0.0), pounce * 0.42);
   }
+#endif
 
   if (dead) {
     float r = clamp(aGait.z, 0.0, 1.0);
@@ -468,6 +570,11 @@ void tgShade(vec3 on) {
 }
 `;
 
+/** The animation GLSL (defines for a model, and the shared declarations with tgAnimate), for tools that run it outside three: dev/footslip-gpu.ts checks it against legmath.ts. */
+export function animationShaderParts(def: ModelDef): { defs: string; decl: string } {
+  return { defs: defines(def.params, def.far, def.geometry), decl: COMMON_DECL };
+}
+
 const NO_FAR: NonNullable<ModelDef['far']> = { gain: 1, rim: 0, hunt: 0, rimCol: [1, 1, 1] };
 
 export interface AnimalMaterials {
@@ -482,6 +589,10 @@ export interface AnimalShared {
   uCamPos: { value: THREE.Vector3 };
   /** Pixels per meter at 1 m distance for a 900 px tall viewport. */
   uPxK: { value: number };
+  /** Terrain heights as drawn (R32F, hn x hn, nearest filtered), cell size and vertex count per side: legs read the ground under their feet (HEIGHT_GLSL). */
+  tHeight: { value: THREE.Texture | null };
+  uCell: { value: number };
+  uHN: { value: number };
   /** How dark the scene is, 0 bright day .. 1 night (from the scene's lights); updated by `probe`. */
   uLow: { value: number };
   /** Ambient light of the scene as an rgb (0 night .. about 0.7 day), set by `probe`. */
@@ -491,12 +602,15 @@ export interface AnimalShared {
 }
 
 export function makeAnimalMaterials(sp: number, def: ModelDef, shared: AnimalShared): AnimalMaterials {
-  const defs = defines(def.params, def.far);
+  const defs = defines(def.params, def.far, def.geometry);
   const material = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: def.roughness, metalness: 0 });
   material.onBeforeCompile = (shader) => {
     shader.uniforms.uTime = shared.uTime;
     shader.uniforms.uCamPos = shared.uCamPos;
     shader.uniforms.uPxK = shared.uPxK;
+    shader.uniforms.tHeight = shared.tHeight;
+    shader.uniforms.uCell = shared.uCell;
+    shader.uniforms.uHN = shared.uHN;
     shader.uniforms.uCoatPale = { value: new THREE.Vector3(...def.coatPale) };
     shader.uniforms.uCoatDark = { value: new THREE.Vector3(...def.coatDark) };
     shader.uniforms.uBone = { value: new THREE.Vector3(...def.bone) };
@@ -569,6 +683,9 @@ export function makeAnimalMaterials(sp: number, def: ModelDef, shared: AnimalSha
     shader.uniforms.uTime = shared.uTime;
     shader.uniforms.uCamPos = shared.uCamPos;
     shader.uniforms.uPxK = shared.uPxK;
+    shader.uniforms.tHeight = shared.tHeight;
+    shader.uniforms.uCell = shared.uCell;
+    shader.uniforms.uHN = shared.uHN;
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', `#include <common>\n${defs}\n${COMMON_DECL}`)
       // a bird in flight casts no shadow (collapse it to a point): at the boost the wide view needs, it would sweep a huge
