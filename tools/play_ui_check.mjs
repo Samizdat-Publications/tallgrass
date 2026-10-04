@@ -136,7 +136,7 @@ try {
     await page.locator('.tg-setup .tg-input').fill('r12-check');
     await page.waitForTimeout(300);
     await shot(page, '08_new_valley_edited');
-    check(await page.locator('.tg-setup .tg-switch:has-text("Open valley")').isDisabled(), 'open valley toggle is disabled while the sim has no such param');
+    check(await page.locator('.tg-setup .tg-switch:has-text("Open valley")').isEnabled(), 'open valley toggle is enabled (the sim has openPrairie since S1)');
     await Promise.all([page.waitForURL(/seed=r12-check/, { timeout: 60000 }), page.click('.tg-setup .tg-btn.is-primary')]);
     await page.waitForFunction(() => window.__ready === true, null, { timeout: 120000 });
     const url = new URL(page.url());
