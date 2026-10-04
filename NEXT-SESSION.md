@@ -10,11 +10,12 @@
 - Nothing is running in the background.
 
 ## In flight (Track R session started 2026-10-04 ~16:30 local, deadline 2026-10-08 12:00)
-- Done on main: R0 items 1, 3 (keep ACES), 4, 5 (concept baseline 4/10), 6; R2 item 0. R0 item 2 waits for Track S's S0 (v2-sim had no commits at 14:45).
-- Builders in worktrees (.claude/worktrees/agent-*, branches worktree-agent-*): R1 items 1-3 (foot lock, slope IK, rig), R2 item 1 (water), R2 item 2 (aerial perspective). Merge each after review; gate on concept_compare and GPU budget.
-- Next after those: R1 items 4-9 (takedowns, feeding, ravens, weight, cougar, border fade), R2 items 3-9.
-- GPU A/B is noisy while builders share the GPU: use in-page A,B,B,A blocks keeping fast-clock blocks (scratch/r0/bench.mjs pattern) or bench when idle.
-- Quota at 14:45: weekly 65%.
+- Done on main (as of 257bfcb): R0 all six items (keep ACES; concept baseline 4/10), R1 items 1-3 (foot lock, leg IK, rig: `npx tsx dev/footslip.ts`), R2 items 0-4 (season module, haze, silver water, golden terrain, drought ground), R14 (music + new sounds; needs an ear test), v2-sim merged at 4893296 (S0, S16, S18 pending).
+- Builders in worktrees (.claude/worktrees/agent-*): R1 items 4-6 (takedown, feeding, ravens), R2 items 6-8 (god rays, snow, dawn fog), R12 play UI minus family tree.
+- Next: R1 items 7-9 (weight, cougar kill, border fade), R2 items 5 and 9 (cloud shadows, grass close-up), crane V-formation render (audio.onFlyover hook exists), music/settings UI hooks (audio.music.setLevel/setEnabled), then R3 once S4/S5 merge.
+- Watch: midday autumn looks very ochre and hazy after R2 (scratch/merge_r1/04_pronghorn.jpg); check in the next review round. The concept_compare judge sits at 4/10 regardless (DECISIONS.md); trust the eye and trends.
+- Do not `git worktree remove` builder worktrees: each has a node_modules junction to the main node_modules.
+- Quota at ~17:40: weekly 66%, 5-hour 13%.
 
 ## Start here
 1. Read CLAUDE.md, then V2-PLAN.md sections 0 to 6. Your kickoff prompt gives your mode (single or two tracks) and your deadline: write the deadline to `.claude/hooks/run_until.local.txt` first.
