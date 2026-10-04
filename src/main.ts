@@ -4,6 +4,7 @@ import { Engine } from './render/engine';
 import { GrassField } from './render/grass';
 import { AnimalLayer } from './render/animals';
 import { OverlayLayer } from './render/overlay';
+import { Cranes } from './render/cranes';
 import { GameUI, type OverlayId, type ToolId } from './ui/ui';
 import { loadSettings, type QualityPreset, type Settings } from './ui/settings';
 import { titleWanted } from './ui/title';
@@ -93,6 +94,13 @@ const director = new Director(engine.cam, (id, out) => animals.getPosition(id, o
 // sound starts itself on the first click or key press (browser autoplay rules)
 const audio = new AudioDirector();
 void audio.load();
+// sandhill crane flyovers: the audio schedules the calls, this draws the flock crossing the sky for the same seconds
+const cranes = new Cranes(engine.uniforms, engine.camera, (x, z) => engine.groundHeight(x, z));
+engine.scene.add(cranes.object3D);
+engine.excludeFromAO(cranes.object3D);
+engine.onFrame((dt) => cranes.update(dt));
+audio.onFlyover = (f) => cranes.start({ ...f, delay: f.startAt - audio.now });
+(window as unknown as Record<string, unknown>).__cranes = cranes;
 // the documentary narrator: speaks on big events while the documentary camera or cinematic mode is filming
 const narrator = new Narrator(audio);
 void narrator.load();
