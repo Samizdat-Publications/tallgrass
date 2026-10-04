@@ -10,6 +10,9 @@ import type { World } from '../../sim/world';
 /** Finds the scene's key light and hemisphere light and boils them down to one ambient-ish RGB for unlit sprites. */
 export class SceneLit {
   readonly value = new THREE.Vector3(0.6, 0.55, 0.45);
+  /** The hemisphere (sky and ground bounce) share of the light, and the key light's share at its current height. */
+  readonly ambient = new THREE.Vector3(0.3, 0.3, 0.3);
+  readonly sunE = new THREE.Vector3(0.5, 0.45, 0.35);
   private sun: (THREE.Light & { target?: THREE.Object3D }) | null = null;
   private hemi: THREE.HemisphereLight | null = null;
   private tmp = new THREE.Vector3();
@@ -24,20 +27,27 @@ export class SceneLit {
       }
     }
     const v = this.value.set(0, 0, 0);
+    this.ambient.set(0, 0, 0);
+    this.sunE.set(0, 0, 0);
     if (this.sun) {
       const d = this.tmp.copy(this.sun.position);
       if (this.sun.target) d.sub(this.sun.target.position);
       d.normalize();
-      const k = this.sun.intensity * Math.min(1, Math.max(0.12, d.y * 1.3)) * 0.1;
+      const el = Math.min(1, Math.max(0.12, d.y * 1.3));
+      const k = this.sun.intensity * el * 0.1;
       v.x += this.sun.color.r * k;
       v.y += this.sun.color.g * k;
       v.z += this.sun.color.b * k;
+      const ke = this.sun.intensity * el * 0.5;
+      this.sunE.set(this.sun.color.r * ke, this.sun.color.g * ke, this.sun.color.b * ke);
     }
     if (this.hemi) {
       const k = this.hemi.intensity * 0.7;
-      v.x += (this.hemi.color.r * 0.6 + this.hemi.groundColor.r * 0.4) * k;
-      v.y += (this.hemi.color.g * 0.6 + this.hemi.groundColor.g * 0.4) * k;
-      v.z += (this.hemi.color.b * 0.6 + this.hemi.groundColor.b * 0.4) * k;
+      const hx = (this.hemi.color.r * 0.6 + this.hemi.groundColor.r * 0.4) * k;
+      const hy = (this.hemi.color.g * 0.6 + this.hemi.groundColor.g * 0.4) * k;
+      const hz = (this.hemi.color.b * 0.6 + this.hemi.groundColor.b * 0.4) * k;
+      v.x += hx; v.y += hy; v.z += hz;
+      this.ambient.set(hx, hy, hz);
     }
     v.x = Math.min(1.8, v.x); v.y = Math.min(1.8, v.y); v.z = Math.min(1.8, v.z);
   }
@@ -63,13 +73,33 @@ export class Dust {
   /** Dust clock: real seconds, frozen while the sim is paused. */
   now = 0;
   private uNow = { value: 0 };
-  private uColor = { value: new THREE.Vector3(0.76, 0.66, 0.55) };
-  /** 1 by day; falls toward 0.2 as the camera opens up for dusk and night, so dust stays a dim brown haze instead of glowing. */
-  private uDim = { value: 1 };
+  /**
+   * Dust is the dry ground's own fines: a desaturated khaki taken from the soil and cured-grass tones, lit like the ground
+   * around it (ambient everywhere, plus the sun where the hill-shadow map says the ground is sunlit), so a puff is never
+   * whiter or brighter than the ground it sits over. Wet ground, snow and overcast skies raise no dust at all.
+   */
+  private uAlbedo = { value: new THREE.Vector3(0.24, 0.16, 0.1) };
+  private uAmb = { value: new THREE.Vector3(0.3, 0.3, 0.3) };
+  private uSun = { value: new THREE.Vector3(0.5, 0.45, 0.35) };
+  private uDry = { value: 1 };
+  private uWorld = { value: 512 };
+  private uHasShadow = { value: 0 };
+  private tShadow: { value: THREE.Texture | null } = { value: null };
+  private whiteTex = new THREE.DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1);
+  private tgU: {
+    wet?: { value: number }; snow?: { value: number }; overcast?: { value: number };
+    soil?: { value: THREE.Color }; grassDry?: { value: THREE.Color };
+    terrainShadow?: { value: THREE.Texture | null }; worldSize?: { value: number };
+  } | null = null;
+  private tgTry = 0;
+  /** 0 when the ground is wet, under snow or under a heavy overcast, 1 on dry ground in clear weather. Read by the emitters. */
+  dryness = 1;
   private lit: SceneLit;
 
   constructor(lit: SceneLit) {
     this.lit = lit;
+    this.whiteTex.needsUpdate = true;
+    this.tShadow.value = this.whiteTex;
     const quad = new THREE.PlaneGeometry(1, 1);
     const g = new THREE.InstancedBufferGeometry();
     g.setAttribute('position', quad.getAttribute('position'));
@@ -84,19 +114,22 @@ export class Dust {
     g.instanceCount = DUST_CAP;
     this.geo = g;
     // park every particle in the past so nothing shows until emitted
-    for (let i = 0; i < DUST_CAP; i++) { this.a[i * 4 + 3] = -1e4; this.q[i * 4] = 1; }
+    for (let i = 0; i < DUST_CAP; i++) { this.a[i * 4 + 3] = -1e4; this.q[i * 4] = 1; this.q[i * 4 + 3] = 1; }
 
     const mat = new THREE.ShaderMaterial({
       transparent: true, depthWrite: false, depthTest: true, fog: false,
-      uniforms: { uNow: this.uNow, uColor: this.uColor, uDim: this.uDim, uLit: lit as unknown as { value: THREE.Vector3 } },
+      uniforms: {
+        uNow: this.uNow, uAlbedo: this.uAlbedo, uAmb: this.uAmb, uSun: this.uSun, uDry: this.uDry, uWorld: this.uWorld,
+        uHasShadow: this.uHasShadow, tShadow: this.tShadow,
+      },
       vertexShader: /* glsl */ `
         attribute vec4 aP; attribute vec4 aV; attribute vec4 aQ;
-        uniform float uNow;
-        varying vec2 vUv; varying float vAlpha; varying float vSeed;
+        uniform float uNow; uniform float uDry;
+        varying vec2 vUv; varying float vAlpha; varying float vSeed; varying vec3 vPos;
         void main() {
           float age = uNow - aP.w;
           float u = age / aQ.x;
-          if (u < 0.0 || u > 1.0) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); vAlpha = 0.0; vUv = vec2(0.0); vSeed = 0.0; return; }
+          if (u < 0.0 || u > 1.0) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); vAlpha = 0.0; vUv = vec2(0.0); vSeed = 0.0; vPos = vec3(0.0); return; }
           float drag = 1.0 - 0.45 * u;
           vec3 pos = aP.xyz + aV.xyz * age * drag;
           pos.y += 0.3 * age * (1.0 - 0.6 * u);
@@ -109,12 +142,17 @@ export class Dust {
           gl_Position = projectionMatrix * mv;
           vUv = position.xy * 2.0;
           vSeed = aQ.y;
-          vAlpha = aQ.z * smoothstep(0.0, 0.1, u) * pow(1.0 - u, 1.7);
+          vPos = pos;
+          // fewer, fainter puffs on damp ground (aQ.w, set where the puff was raised) and none as the weather turns wet;
+          // and fainter at drone range, where a herd must not wear a pale halo
+          float far = 1.0 - 0.5 * smoothstep(150.0, 420.0, distance(cameraPosition, pos));
+          vAlpha = aQ.z * aQ.w * uDry * far * smoothstep(0.0, 0.1, u) * pow(1.0 - u, 1.7);
         }`,
       fragmentShader: /* glsl */ `
         precision highp float;
-        uniform vec3 uColor; uniform vec3 uLit; uniform float uDim;
-        varying vec2 vUv; varying float vAlpha; varying float vSeed;
+        uniform vec3 uAlbedo; uniform vec3 uAmb; uniform vec3 uSun; uniform float uWorld; uniform float uHasShadow;
+        uniform sampler2D tShadow;
+        varying vec2 vUv; varying float vAlpha; varying float vSeed; varying vec3 vPos;
         void main() {
           float r = length(vUv);
           float ang = atan(vUv.y, vUv.x);
@@ -122,9 +160,9 @@ export class Dust {
           float a = 1.0 - smoothstep(0.0, 1.0, r);
           a = a * a * (0.6 + 0.4 * a);
           if (a * vAlpha < 0.002) discard;
-          // lit like the ground it sits over: capped, because the camera opens up at dusk and night and an uncapped sun colour
-          // turned the dust into a white smear against the dark terrain
-          vec3 col = uColor * clamp(uLit * 0.8, vec3(0.08), vec3(0.62)) * (0.85 + 0.3 * (1.0 - r)) * uDim * mix(vec3(1.0), vec3(1.12, 0.92, 0.72), 1.0 - uDim);
+          // lit like the ground under it: ambient everywhere, the sun only where the hills leave the ground in the light
+          float vis = uHasShadow > 0.5 ? texture2D(tShadow, clamp(vPos.xz / uWorld, 0.0, 1.0)).r : 1.0;
+          vec3 col = uAlbedo * (uAmb + uSun * vis) * 1.45 * (0.9 + 0.2 * (1.0 - r)); // 1.45: airborne fines catch the light a little better than the ground under them
           gl_FragColor = vec4(col, a * vAlpha);
         }`,
     });
@@ -132,24 +170,48 @@ export class Dust {
     this.mesh.frustumCulled = false;
     this.mesh.renderOrder = 20;
     this.mesh.name = 'dust';
-    this.mesh.onBeforeRender = (r, scene) => {
+    this.mesh.onBeforeRender = (_r, scene) => {
       this.lit.probe(scene);
-      const ex = (r as THREE.WebGLRenderer).toneMappingExposure ?? 1;
-      this.uDim.value = 1 - 0.8 * Math.min(1, Math.max(0, (ex - 1.0) / 0.4));
+      this.sync(scene);
       // the ambient-occlusion G-buffer pass renders the scene with an override material: keep sprites out of it
       if (scene.overrideMaterial) g.instanceCount = 0;
     };
     this.mesh.onAfterRender = () => { g.instanceCount = DUST_CAP; };
   }
 
-  /** Spawn a puff. (x, y, z) world, (vx, vz) drift, size in metres. */
-  emit(x: number, y: number, z: number, vx: number, vy: number, vz: number, size: number, life: number, alpha: number, seed: number): void {
+  /** Pull the weather, ground tones and hill shadows from the engine's shared uniforms (found on the scene) and the light. */
+  private sync(scene: THREE.Object3D): void {
+    if (!this.tgU && (this.tgTry++ & 15) === 0) this.tgU = (scene.userData?.tgUniforms as typeof this.tgU) ?? null;
+    const u = this.tgU;
+    if (u) {
+      const wet = u.wet?.value ?? 0, snow = u.snow?.value ?? 0, over = u.overcast?.value ?? 0;
+      const sm = (a: number, b: number, x: number): number => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+      this.dryness = (1 - 0.95 * sm(0.1, 0.6, wet)) * (1 - sm(0.04, 0.25, snow)) * (1 - 0.45 * over);
+      if (u.soil && u.grassDry) {
+        const s = u.soil.value, g = u.grassDry.value;
+        // 55% soil, 45% cured grass, then half the colour taken out: khaki, not orange
+        const r0 = s.r * 0.55 + g.r * 0.45, g0 = s.g * 0.55 + g.g * 0.45, b0 = s.b * 0.55 + g.b * 0.45;
+        const l = 0.2126 * r0 + 0.7152 * g0 + 0.0722 * b0;
+        this.uAlbedo.value.set(r0 * 0.5 + l * 0.5, g0 * 0.5 + l * 0.5, b0 * 0.5 + l * 0.5);
+      }
+      const tex = u.terrainShadow?.value ?? null;
+      this.tShadow.value = tex ?? this.whiteTex;
+      this.uHasShadow.value = tex ? 1 : 0;
+      if (u.worldSize) this.uWorld.value = u.worldSize.value;
+    }
+    this.uDry.value = this.dryness;
+    this.uAmb.value.copy(this.lit.ambient);
+    this.uSun.value.copy(this.lit.sunE);
+  }
+
+  /** Spawn a puff. (x, y, z) world, (vx, vz) drift, size in metres. `dry` 0..1: how dry the ground it was raised from is. */
+  emit(x: number, y: number, z: number, vx: number, vy: number, vz: number, size: number, life: number, alpha: number, seed: number, dry = 1): void {
     const i = this.head;
     this.head = (this.head + 1) % DUST_CAP;
     const o = i * 4;
     this.a[o] = x; this.a[o + 1] = y; this.a[o + 2] = z; this.a[o + 3] = this.now;
     this.v[o] = vx; this.v[o + 1] = vy; this.v[o + 2] = vz; this.v[o + 3] = size;
-    this.q[o] = life; this.q[o + 1] = seed; this.q[o + 2] = alpha; this.q[o + 3] = 0;
+    this.q[o] = life; this.q[o + 1] = seed; this.q[o + 2] = alpha; this.q[o + 3] = dry;
     this.dirty = true;
   }
 

@@ -491,11 +491,21 @@ export class AnimalLayer {
     for (const [key, fi] of this.falls) if (fi.g !== gen) this.falls.delete(key);
   }
 
+  /** 0..1: how dry the ground at (x, z) is. Damp near water and in the moist hollows, where the soil does not lift. */
+  private groundDry(x: number, z: number): number {
+    const w = this.world;
+    const ci = Math.min(w.n - 1, Math.max(0, Math.floor(x / w.cell))), cj = Math.min(w.n - 1, Math.max(0, Math.floor(z / w.cell)));
+    const c = cj * w.n + ci;
+    return smoothstep(2, 16, w.waterDist[c]) * (1 - 0.7 * smoothstep(0.55, 0.9, w.moisture[c]));
+  }
+
   /** A kill: a puff of dust from the site, and every hunting predator close by pounces. */
   private killBurst(snap: Snapshot, cx: number, cz: number, sp: number, fi: FallInfo): void {
     const w = this.world;
     const big = sp === Sp.Bison ? 1.6 : sp === Sp.Wolf ? 0.9 : 1;
-    const n = sp === Sp.Bison ? 16 : 10;
+    // a kill on wet ground, under snow or in the rain raises little or no dust
+    const dryK = this.dust.dryness * this.groundDry(cx, cz);
+    const n = Math.round((sp === Sp.Bison ? 16 : 10) * dryK);
     for (let i = 0; i < n; i++) {
       const a = Math.random() * Math.PI * 2, r = Math.random() * 1.2 * big;
       const px = cx + Math.cos(a) * r, pz = cz + Math.sin(a) * r;
@@ -503,7 +513,7 @@ export class AnimalLayer {
       this.dust.emit(
         px, sampleHeight(w.height, w.hn, w.cell, px, pz) + 0.2, pz,
         Math.cos(a) * sp2 + Math.cos(fi.h) * fi.v * 0.12, 0.4 + Math.random() * 0.9, Math.sin(a) * sp2 + Math.sin(fi.h) * fi.v * 0.12,
-        (1.2 + Math.random() * 1.0) * big, 0.9 + Math.random() * 0.9, 0.4 + Math.random() * 0.25, Math.random(),
+        (1.2 + Math.random() * 1.0) * big, 0.9 + Math.random() * 0.9, 0.4 + Math.random() * 0.25, Math.random(), dryK,
       );
     }
     const A = snap.agents, S = this.slots;
@@ -779,7 +789,8 @@ export class AnimalLayer {
         const cp = this.shared.uCamPos.value;
         const cd = Math.hypot(x - cp.x, y - cp.y, z - cp.z);
         const dsK = 1 + clamp((cd - 60) / 140, 0, 1) * 1.7;
-        S.dust[slot] += (dt * dp[1] * (spdS - dp[0]) * dustRate) / Math.sqrt(dsK);
+        const gd = this.groundDry(x, z) * this.dust.dryness; // damp ground, rain and snow raise little or no dust
+        S.dust[slot] += (dt * dp[1] * (spdS - dp[0]) * dustRate * (gd > 0.03 ? 0.3 + 0.7 * gd : 0)) / Math.sqrt(dsK);
         let guard = 2;
         while (S.dust[slot] >= 1 && guard-- > 0) {
           S.dust[slot] -= 1;
@@ -791,7 +802,7 @@ export class AnimalLayer {
           this.dust.emit(
             px, sampleHeight(H, hn, cell, px, pz) + 0.15, pz,
             ch * drift * 0.6 + (Math.random() - 0.5) * 0.6, 0.15 + Math.random() * 0.3, sh * drift * 0.6 + (Math.random() - 0.5) * 0.6,
-            dp[2] * vs * (0.8 + 0.4 * Math.random()) * Math.pow(dsK, 0.6), (dp[4] + Math.random() * (dp[5] - dp[4])) * (1 + 0.3 * (dsK - 1)), Math.min(0.34, dp[3] * (0.75 + 0.5 * Math.random()) * (1 + 0.1 * (dsK - 1))), Math.random(),
+            dp[2] * vs * (0.8 + 0.4 * Math.random()) * Math.pow(dsK, 0.6), (dp[4] + Math.random() * (dp[5] - dp[4])) * (1 + 0.3 * (dsK - 1)), Math.min(0.34, dp[3] * (0.75 + 0.5 * Math.random()) * (1 + 0.1 * (dsK - 1))), Math.random(), gd,
           );
         }
         if (S.dust[slot] > 1) S.dust[slot] = 1;
