@@ -52,7 +52,7 @@ export const SCENARIOS: Scenario[] = [
     blurb: 'Wolf packs grow when prey is plentiful and shrink when it is scarce, so the wolf line chases the herd a couple of years behind. The pronghorn rarely last more than a few centuries here.',
     // the best predator-response screen of Sunday morning (scratch/L1, 32 worlds x 200 valley-years): bison, wolves and
     // ravens 32/32, wolves follow bison at correlation 0.77, pronghorn 25/32. Over 1,000 generations (review/stability/hungrywolves-44a2bfe)
-    // the pronghorn die out in every world, between years 112 and 373, while bison, wolves and ravens hold
+    // the pronghorn die out in all 20 worlds, between years 88 and 585, while bison, wolves and ravens hold in 19
     params: { wolfPreyRef: 1000, wolfRareHalf: 400, leanLitter: 0.8 }, schedule: [],
   },
   {
