@@ -52,7 +52,7 @@ Earlier, Saturday (since 09:00):
 2. Press **C** for the full cinematic version (interface hidden, letterbox).
 3. Menu, Challenges, **The wolves come home**: bring wolves back to a valley that lost them. It's the gentle one.
 4. Overlays, **Wolf territories**, then 10x: watch packs form, bud and fall apart.
-5. Press **G**, then 100x: decades of booms and crashes. **E** for the evolution arms race.
+5. Press **G**, then 100x: decades of booms and crashes. **E** for evolution: bison grow faster and bigger under wolf pressure in the first century, then level off (see Next 5 things).
 
 ## Screenshots (all in `review/morning/`; the 09:00 set is in `review/morning/old-0900/`)
 - `1_opening_herd.png`: the opening shot, current build.
