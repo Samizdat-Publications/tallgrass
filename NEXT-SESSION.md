@@ -3,16 +3,16 @@
 **Updated:** 2026-10-04 04:25 (deadline in .claude/hooks/run_until.txt: 2026-10-04 12:00)
 
 ## State
-- **Updated 06:40.** Live: https://tallgrass.stewartgregerson.workers.dev, deployed 06:30 from 02b5744 (verified: no errors, default pace "1 year every 2 min", challenges "4 min").
-- **Default sim = checkpoint v5 on the 2x calendar (calendarScale 2), adopted 06:25 (8568594).** Acceptance 19/20 per species (review/stability/cal2-2a5caf9). Shock suite: first run cut at 3 h (my timeout) with 42/60 done; seeds 15 to 20 re-running into review/stability/cal2-2a5caf9-shocks300-b; a background job merges with scratch/merge_shocks.ts when it ends (writes metrics_merged.md, summary_merged.json, copies the CSVs). Then: fill SHOCKS_PENDING in MORNING.md, run tools/charts.py on the merged folder, commit. If the merged shocks are clearly worse than v5 (cull 100/100/100/95, drought 85/80/90/85, wolfwipe 100/100/100/95 persistence), revert calendarScale to 1 in params.ts and redeploy.
-- Challenges pin calendarScale 1 (validated again 06:20: all fail hands-off, all won by the scripted player).
-- Off-by-default options with evidence: droughtRefuge (modest drought gains, no visual), wolfPreyRef + wolfRareHalf (wolves track prey, pronghorn 24/31).
-- Builders: renderer af57fcb936ce73c50 (asked at 06:30 to wrap up within 30 min: world edge, shadows, trees, sky, close ground, wet sheen), water a7556909cc4d45a61 (src/render/water.ts only), UI a1f8911043eb89066 (Field notes, brief in scratch/briefs/fieldnotes.md; its WIP is uncommitted in src/main.ts, src/ui/*).
+- **Updated 07:50.** Live: deployed 07:22 from eaa58ab (water, dust, renderer round 7, Field notes, narrator, 2x calendar). Working tree clean except builder WIP.
+- Default sim = v5 on the 2x calendar (calendarScale 2): acceptance 19/20 per species, shocks merged (MORNING.md Stability). Challenges pin calendarScale 1.
+- Review round 7 done (review/round-07, critique.md, REVIEWS.md triage). Video reel + Gemini running (background; review/round-07-video). Add Gemini scores to REVIEWS.md and MORNING.md when it lands.
+- Builders briefed 07:45, report by 10:15: renderer af57fcb936ce73c50 (winter snowpack, foliage season bug, rain visible, night readability, far blur, lawn edge), water a7556909cc4d45a61 (distant river reads as pavement, rain pond blotches, dusk lavender), UI a1f8911043eb89066 (season lines in the chronicle from population history, pack break-up phrasing, founder panel, label overlap), animals a524942be7b6fd979 (near-camera wolf glitch in still 03, species-readable top view).
+- Research screens: L1 (prey-scaled wolves + leanLitter 0.8), L3 (spring pulse matingWindow 0.8 with cooldowns 900/800). Done and logged: wA, pA, pB, evo2, rf0/rf7, L2 (spring pulse with the old cooldown collapses: bison extinct by year 28). Off-by-default params available: droughtRefuge, wolfPreyRef, wolfRareHalf, sprintCost, herdEyes, leanLitter.
 
 ## Next 3 steps
-1. Merge the shocks (automatic), finish MORNING.md stability, charts, commit, push.
-2. Land renderer, water and Field notes (check evidence, look at the real game with scratch/probe.mjs, commit only their files), deploy from scratch/wt (git -C scratch/wt checkout --detach <hash>; vite build; wrangler deploy; node scratch/live_check2.mjs).
-3. Review round 7: tools/stills.mjs --set review to review/round-07, charts from cal2 acceptance and shocks, reel with tools/video.mjs, fresh blind critic + Gemini; triage; fix the top 3; final MORNING.md audit before 12:00.
+1. Gemini round 7 result -> REVIEWS.md, MORNING.md table. L1/L3 results -> DECISIONS.md, MORNING.md Next 5 things.
+2. As builders report (by 10:15): check evidence, normalize line endings to HEAD, commit only their files, deploy, live check.
+3. Final 10:30 to 11:45: morning screenshots (`node scratch/morning_shots.mjs review/morning/sunday`), MORNING.md screenshot list and final audit (claims vs evidence, times, numbers), journey + artifact republish, push.
 
 ## Gotchas
 - **Before committing a shared file (src/main.ts, ui.ts, engine.ts), look at its diff: builders edit them too.** At 05:50 a commit swept in half-finished Field notes wiring; fixed by rebuilding the index entry from the previous blob.
