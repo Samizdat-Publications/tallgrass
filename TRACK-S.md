@@ -66,6 +66,9 @@ Only Track S writes this file (V2-PLAN.md section 4.3). Track R reads it with `g
 - Run `npx tsx tools/smoke.ts` on the GPU machine after merging S0. In the cloud the page logs one 404 (a resource that is not served by `vite` dev here; the URL was not reported by Playwright). If it shows up locally as a console error, the smoke tool will fail on it.
 - Confirm one local `npm run batch` still runs on Windows with the boot file.
 
+## Screen results
+- A16 (cloud, default v5 params, 16 seeds x 200 years, frozen 61455f2), `tools/adoption.py`: bison persist 15/16, presence 15/16, pronghorn starvation 70% (gate <= 50%), wolf CV 0.09 (target >= 0.2), wolf-bison corr at 1-3 yr 0.21 (gate >= 0.4). Not eligible, as expected for v5. Summary in `review/stability/v6-screens/A16-cloud/`. The adoption decision waits for Track R's 32-seed A to D.
+
 ## In progress
 - S6 (builder, worktree).
 - Screen A16: default params, 16 seeds x 240,000 ticks, frozen at 61455f2, output scratch/screens/A16 (cloud VM only).
