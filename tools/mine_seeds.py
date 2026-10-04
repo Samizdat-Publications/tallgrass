@@ -1,6 +1,6 @@
 """Find seeds with remarkable histories in a batch run, to pick named worlds (src/seeds.ts).
 
-Usage: .venv/Scripts/python tools/mine_seeds.py <batch-out-dir> [--scenario baseline] [--skip-years 3]
+Usage: .venv/Scripts/python tools/mine_seeds.py <batch-out-dir> [--scenario baseline] [--skip-years 3] [--max-years 80]
 
 For each seed prints min and max of each species after the opening years, how many droughts it had, and
 flags the extremes: lowest bison (knife's edge), highest bison (thunder herd), richest valley, driest world,
@@ -18,11 +18,12 @@ def main():
     ap.add_argument('dir')
     ap.add_argument('--scenario', default='baseline')
     ap.add_argument('--skip-years', type=float, default=3)
+    ap.add_argument('--max-years', type=float, default=1e9, help='only look at the first N valley years (what a player watches)')
     a = ap.parse_args()
     rows_by_seed = {}
     for f in glob.glob(os.path.join(a.dir, a.scenario, 'seed_*.csv')):
         seed = int(os.path.basename(f)[5:-4])
-        rows_by_seed[seed] = list(csv.DictReader(open(f)))
+        rows_by_seed[seed] = [r for r in csv.DictReader(open(f)) if float(r['year']) <= a.max_years]
     stats = {}
     for seed, rows in sorted(rows_by_seed.items()):
         rs = [r for r in rows if float(r['year']) >= a.skip_years]
