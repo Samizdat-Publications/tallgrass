@@ -1,5 +1,8 @@
 // Scenarios: starting conditions plus scheduled interventions. Shared by the game and the harness.
-import { BASE_YEAR_TICKS as Y, Intervention, Sp } from './sim/types';
+import { BASE_YEAR_TICKS as Y, Intervention, Sp, YEAR_TICKS } from './sim/types';
+
+/** Schedules are fixed in ticks (Y = a 2,400-tick year); blurbs give their lengths in the valley's own calendar. */
+const yrs = (base: number) => +((base * Y) / YEAR_TICKS).toFixed(1);
 
 export interface Scenario {
   id: string;
@@ -17,7 +20,7 @@ export const SCENARIOS: Scenario[] = [
   },
   {
     id: 'yellowstone', name: 'Yellowstone return',
-    blurb: 'No wolves for three years, so the herds and the grazing pressure build. Then a few wolves arrive.',
+    get blurb() { return `No wolves for ${yrs(3)} years, so the herds and the grazing pressure build. Then a few wolves arrive.`; },
     params: { 'wolf.initial': 0 },
     schedule: [{ tick: Y * 3, iv: { kind: 'introduce', species: Sp.Wolf, count: 12 } }],
   },
@@ -28,13 +31,13 @@ export const SCENARIOS: Scenario[] = [
   },
   {
     id: 'drought', name: 'The long drought',
-    blurb: 'A dry spell settles in after the first year and lasts two summers.',
+    get blurb() { return yrs(1) === 1 ? 'A dry spell settles in after the first year and lasts two summers.' : `A dry spell settles in after year ${yrs(1)} and lasts ${yrs(2)} summers.`; },
     params: {},
     schedule: [{ tick: Y, iv: { kind: 'drought', ticks: Y * 2, severity: 0.85 } }],
   },
   {
     id: 'dryyears', name: 'The dry years',
-    blurb: 'Drought comes in the second year, then returns every four years and lasts a year and a half.',
+    get blurb() { return `Drought comes in year ${yrs(1) + 1}, then returns every ${yrs(4)} years and lasts ${yrs(1.5)} years.`; },
     params: {},
     schedule: [1, 5, 9, 13, 17, 21, 25, 29].map((y) => ({ tick: Y * y, iv: { kind: 'drought' as const, ticks: Y * 1.5, severity: 0.7 } })),
   },
