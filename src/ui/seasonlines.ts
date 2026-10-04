@@ -3,8 +3,9 @@
 // record herd. This module reads the population history the UI already receives and, as each season closes, writes at
 // most a couple of plain sentences about what changed. Pure (no DOM), so it can run under Node and be unit tested.
 import { SEASON_TICKS } from '../sim/types';
+import type { SimEvent } from '../sim/sim';
 import type { HistoryRow } from '../sim/worker';
-import { fmtInt, seasonOfTick, yearOfTick, yearStartTick } from './describe';
+import { fmtInt, regionWord, seasonName, seasonOfTick, yearOfTick, yearStartTick } from './describe';
 
 export interface SeasonLine {
   /** Tick just before the season ended, so the chronicle tags it with the season it is about. */
@@ -254,3 +255,226 @@ function herdLine(idx: number, sp: number, a: number, b: number, h: number): str
       ? pickOf([`Winter thins the herd: ${A} bison to ${B}.`, `A hard winter for the bison: ${A} down to ${B}.`], h)
       : pickOf([`Winter thins the pronghorn: ${A} to ${B}.`, `A hard winter for the pronghorn: ${A} down to ${B}.`], h);
 }
+
+// ---------------------------------------------------------------------------------------------------------
+// decades and arcs (V2-PLAN.md S18)
+// ---------------------------------------------------------------------------------------------------------
+
+export interface DecadeLine {
+  tick: number;
+  year: number;
+  /** "The Wolf Decade": a chapter title for a decade line, or a short name for an arc. */
+  title: string;
+  sentence: string;
+  /** The species it is about (-1 for none). */
+  sp: number;
+  /** Decade lines are 4 (they summarise a lot), arcs 3. */
+  weight: number;
+  kind: 'decade' | 'arc';
+}
+
+/** Valley years per decade line, and the share of a decade's rows needed to sum it up. */
+const DECADE_YEARS = 10;
+const DECADE_COVERAGE = 0.6;
+const PRAIRIE_DOG = 7;
+
+interface Decade {
+  idx: number;
+  firstTick: number;
+  lastTick: number;
+  rows: number;
+  start: number[];
+  end: number[];
+  sum: number[];
+  zeroRows: number[];
+  max: number[];
+  kinds: Map<string, number>;
+  dogLost: number;
+}
+
+interface Candidate {
+  title: string;
+  score: number;
+  sp: number;
+  fact: string;
+}
+
+/** Whole-number words for the few counts that read better spelled out. */
+const SMALL = ['no', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten'];
+const words = (n: number): string => SMALL[n] ?? fmtInt(n);
+
+/**
+ * Decade lines and multi-event arcs for the chronicle. Feed it the history rows and the sim events the UI already
+ * receives (any order across calls, oldest first within one). Every 10 valley years it writes one line titled from what
+ * dominated: "Years 11 to 20: The Wolf Decade. Wolves rose from 24 to 41, and three new packs took ranges." A drought
+ * is followed as one thread (its fires, its end, the grass coming back) and told once, when the grass has recovered.
+ * Pure (no DOM).
+ */
+export class DecadeLines {
+  private cur: Decade | null = null;
+  private prevMean: number[] | null = null;
+  private pendingEvents: SimEvent[] = [];
+  // the open drought arc
+  private arc: { startTick: number; startYear: number; grass0: number; fires: string[]; endTick: number; endYear: number } | null = null;
+  private grassBefore = 0;
+
+  reset(): void {
+    this.cur = null;
+    this.prevMean = null;
+    this.pendingEvents = [];
+    this.arc = null;
+    this.grassBefore = 0;
+  }
+
+  feed(rows: HistoryRow[], events: SimEvent[] = []): DecadeLine[] {
+    const out: DecadeLine[] = [];
+    for (const e of events) {
+      this.pendingEvents.push(e);
+      const arcLine = this.arcEvent(e);
+      if (arcLine) out.push(arcLine);
+    }
+    for (const r of rows) {
+      const year = yearOfTick(r.tick);
+      const idx = Math.floor((year - 1) / DECADE_YEARS);
+      const c = this.cur;
+      if (c && idx < c.idx) continue;
+      if (!c || idx !== c.idx) {
+        if (c) {
+          const line = this.close(c);
+          if (line) out.push(line);
+        }
+        this.cur = {
+          idx, firstTick: r.tick, lastTick: r.tick, rows: 0, start: r.pop.slice(), end: r.pop.slice(), sum: r.pop.map(() => 0),
+          zeroRows: r.pop.map(() => 0), max: r.pop.slice(), kinds: new Map(), dogLost: 0,
+        };
+      }
+      const d = this.cur!;
+      d.lastTick = r.tick;
+      d.rows++;
+      d.end = r.pop;
+      for (let s = 0; s < r.pop.length; s++) {
+        d.sum[s] = (d.sum[s] ?? 0) + r.pop[s];
+        if (r.pop[s] <= 0) d.zeroRows[s] = (d.zeroRows[s] ?? 0) + 1;
+        if (r.pop[s] > (d.max[s] ?? 0)) d.max[s] = r.pop[s];
+      }
+      // events up to this row belong to this decade
+      this.pendingEvents = this.pendingEvents.filter((e) => {
+        if (e.tick > r.tick) return true;
+        if (Math.floor((yearOfTick(e.tick) - 1) / DECADE_YEARS) === d.idx) {
+          d.kinds.set(e.kind, (d.kinds.get(e.kind) ?? 0) + 1);
+          if (e.kind === 'sylvaticPlague') d.dogLost += Math.max(0, e.a);
+        }
+        return false;
+      });
+      const arcLine = this.arcGrass(r);
+      if (arcLine) out.push(arcLine);
+    }
+    return out;
+  }
+
+  // ---- arcs: drought, fire, rain, green-up -------------------------------------------------------------------
+
+  private arcEvent(e: SimEvent): DecadeLine | null {
+    if (e.kind === 'drought' && !this.arc) {
+      this.arc = { startTick: e.tick, startYear: yearOfTick(e.tick), grass0: this.grassBefore, fires: [], endTick: -1, endYear: -1 };
+    } else if (this.arc && (e.kind === 'fire' || e.kind === 'lightningFire') && this.arc.fires.length < 3) {
+      const where = regionWord(e.x, e.y);
+      this.arc.fires.push(`${e.kind === 'lightningFire' ? 'lightning set' : 'fire took'} the ${where && where !== 'central' ? `${where} ` : ''}prairie in ${seasonName(seasonOfTick(e.tick))} of year ${yearOfTick(e.tick)}`);
+    } else if (this.arc && e.kind === 'droughtEnd' && this.arc.endTick < 0) {
+      this.arc.endTick = e.tick;
+      this.arc.endYear = yearOfTick(e.tick);
+    }
+    return null;
+  }
+
+  private arcGrass(r: HistoryRow): DecadeLine | null {
+    const a = this.arc;
+    if (!a) {
+      // a slow running mean of the grass, so a drought knows what "back" means
+      this.grassBefore = this.grassBefore ? this.grassBefore * 0.98 + r.grass * 0.02 : r.grass;
+      return null;
+    }
+    if (a.endTick < 0) {
+      if (yearOfTick(r.tick) - a.startYear > 8) this.arc = null; // a drought that never ends in the record: drop it
+      return null;
+    }
+    const recovered = r.grass >= 0.9 * a.grass0;
+    const gaveUp = yearOfTick(r.tick) - a.endYear >= 4;
+    if (!recovered && !gaveUp) return null;
+    this.arc = null;
+    const len = Math.max(1, a.endYear - a.startYear);
+    const span = a.endYear === a.startYear ? `a drought in year ${a.startYear}` : `the drought of years ${a.startYear} to ${a.endYear}`;
+    const parts = [`${cap(span)}${a.endYear === a.startYear ? '' : `, ${words(len)} ${len === 1 ? 'year' : 'years'} long`}`];
+    if (a.fires.length) parts.push(a.fires.join(', and '));
+    parts.push(recovered
+      ? (yearOfTick(r.tick) <= a.endYear ? 'the grass came back the same year' : `by year ${yearOfTick(r.tick)} the grass was back`)
+      : `four years on, the grass has still not fully come back`);
+    return {
+      tick: r.tick, year: yearOfTick(r.tick), title: a.fires.length ? 'Drought and fire' : 'The drought years', sp: -1, weight: 3, kind: 'arc',
+      sentence: `${parts.join('; ')}.`,
+    };
+  }
+
+  // ---- decade lines ------------------------------------------------------------------------------------------
+
+  private close(d: Decade): DecadeLine | null {
+    const firstYear = d.idx * DECADE_YEARS + 1, lastYear = firstYear + DECADE_YEARS - 1;
+    const span = yearStartTick(lastYear + 1) - yearStartTick(firstYear);
+    const mean = d.sum.map((s) => s / Math.max(1, d.rows));
+    const prev = this.prevMean;
+    this.prevMean = mean;
+    if (d.lastTick - d.firstTick < DECADE_COVERAGE * span) return null; // a partial decade (the first one, or a load mid-way)
+    const n = (k: string) => d.kinds.get(k) ?? 0;
+    const absent = (s: number) => d.rows > 0 && (d.zeroRows[s] ?? 0) / d.rows > 0.7;
+    const change = (s: number) => ((d.start[s] ?? 0) > 0 ? (d.end[s] ?? 0) / d.start[s] : (d.end[s] ?? 0) > 0 ? 9 : 1);
+    const vsPrev = (s: number) => (prev && (prev[s] ?? 0) > 0 ? mean[s] / prev[s] : 1);
+    const cands: Candidate[] = [];
+    const B = 0, W = 1, R = 2, P = 3;
+
+    const fires = n('fire') + n('lightningFire');
+    const droughts = n('drought');
+    const packs = n('packFounded');
+    const w0 = fmtInt(d.start[W] ?? 0), w1 = fmtInt(d.end[W] ?? 0);
+    const b0 = fmtInt(d.start[B] ?? 0), b1 = fmtInt(d.end[B] ?? 0);
+
+    if (n('mesoRelease')) cands.push({ title: 'The Coyote Decade', score: 9, sp: 6, fact: 'with the wolves few, the coyotes took over the valley' });
+    if (absent(W) && (d.start[W] ?? 0) + (d.max[W] ?? 0) > 0) cands.push({ title: 'The Wolfless Years', score: 8, sp: W, fact: 'the valley went without wolves for most of it' });
+    else if (absent(W) && prev && (prev[W] ?? 0) > 0) cands.push({ title: 'The Wolfless Years', score: 8, sp: W, fact: 'no wolves ranged the valley' });
+    if (n('recolonized')) cands.push({ title: 'The Return', score: 7.5, sp: -1, fact: 'animals the valley had lost found their own way back' });
+    if (n('sylvaticPlague') && (d.end[PRAIRIE_DOG] ?? 0) >= 0.6 * (d.max[PRAIRIE_DOG] ?? 0) && (d.max[PRAIRIE_DOG] ?? 0) > 0) {
+      cands.push({ title: 'The Town That Came Back', score: 7, sp: PRAIRIE_DOG, fact: `plague emptied the prairie dog towns${d.dogLost ? ` (${fmtInt(d.dogLost)} died)` : ''}, and they filled again` });
+    } else if (n('sylvaticPlague')) {
+      cands.push({ title: 'The Plague Years', score: 6, sp: PRAIRIE_DOG, fact: 'plague swept the prairie dog towns' });
+    }
+    if (droughts >= 2 || (droughts >= 1 && fires >= 2)) cands.push({ title: 'The Dust Years', score: 5 + droughts + 0.5 * fires, sp: -1, fact: `${words(droughts)} ${droughts === 1 ? 'drought' : 'droughts'}${fires ? ` and ${words(fires)} ${fires === 1 ? 'fire' : 'fires'}` : ''} dried the valley out` });
+    else if (fires >= 3) cands.push({ title: 'The Burning Years', score: 4 + fires, sp: -1, fact: `fire swept the prairie ${words(fires)} times` });
+    const wc = change(W), wp = vsPrev(W);
+    if (!absent(W) && (wc >= 1.4 || wp >= 1.35) && (d.end[W] ?? 0) >= 8) {
+      cands.push({ title: 'The Wolf Decade', score: 4 + 3 * Math.max(wc, wp) + 0.5 * packs, sp: W, fact: `wolves rose from ${w0} to ${w1}${packs >= 2 ? `, and ${words(packs)} new packs took ranges` : ''}` });
+    } else if (!absent(W) && (wc <= 0.6 || wp <= 0.65) && (d.start[W] ?? 0) >= 8) {
+      cands.push({ title: 'The Lean Years for the Wolves', score: 3 + 3 / Math.max(0.2, Math.min(wc, wp)) * 0.5, sp: W, fact: `the wolves fell from ${w0} to ${w1}` });
+    }
+    if (n('distemper') >= 1 || n('mange') >= 2) cands.push({ title: 'The Sick Years', score: 3.5 + n('distemper') + 0.5 * n('mange'), sp: W, fact: 'disease ran through the wolves' });
+    const bc = change(B);
+    if (bc >= 1.3 && (d.end[B] ?? 0) >= 100) cands.push({ title: 'The Great Herd', score: 2 + 3 * bc, sp: B, fact: `the bison grew from ${b0} to ${b1}` });
+    else if (bc <= 0.65 && (d.start[B] ?? 0) >= 50) cands.push({ title: 'The Lean Years', score: 2 + 3 / Math.max(0.2, bc) * 0.5, sp: B, fact: `the bison fell from ${b0} to ${b1}` });
+    const pc = change(P);
+    if (pc >= 1.6 && (d.end[P] ?? 0) >= 50) cands.push({ title: 'The Pronghorn Years', score: 1.5 + 2 * pc, sp: P, fact: `the pronghorn rose from ${fmtInt(d.start[P] ?? 0)} to ${fmtInt(d.end[P] ?? 0)}` });
+    if (n('hareBoom') >= 1 && n('hareCrash') >= 1) cands.push({ title: 'Boom and Bust', score: 3, sp: 4, fact: 'the jackrabbits boomed and crashed' });
+    const rc = change(R);
+    if (rc >= 1.8 && (d.end[R] ?? 0) >= 40) cands.push({ title: 'The Raven Years', score: 1 + 1.5 * rc, sp: R, fact: `the ravens gathered, ${fmtInt(d.start[R] ?? 0)} to ${fmtInt(d.end[R] ?? 0)}` });
+
+    const tick = yearStartTick(lastYear + 1) - 1;
+    cands.sort((x, y) => y.score - x.score);
+    if (!cands.length) {
+      const fact = `the bison ${bc >= 1 ? 'held at' : 'eased to'} ${b1} and the wolves ${w1 === w0 ? 'held at' : 'settled at'} ${w1}`;
+      return { tick, year: lastYear, title: 'The Quiet Years', sp: -1, weight: 4, kind: 'decade', sentence: `Years ${firstYear} to ${lastYear}: the quiet years; ${fact}.` };
+    }
+    const top = cands[0];
+    const second = cands.find((c) => c !== top && c.sp !== top.sp && c.title !== top.title);
+    const facts = [top.fact, second?.fact].filter(Boolean).join(', and ');
+    return { tick, year: lastYear, title: top.title, sp: top.sp, weight: 4, kind: 'decade', sentence: `Years ${firstYear} to ${lastYear}, ${top.title.replace(/^The /, 'the ')}: ${facts}.` };
+  }
+}
+
+const cap = (s: string): string => (s ? s[0].toUpperCase() + s.slice(1) : s);
