@@ -456,14 +456,15 @@ void main() {
   float seedHW = 0.0;     // and the full width of its quad (m)
 #if LEVEL == 0
   // (the old gate, bio above 0.45, never opened: the vegetation texture's biomass tops out near 0.4 in this sim)
-  seedFlag = step(rB, uSeedFrac * 0.42 * smoothstep(0.1, 0.28, bio)) * (1.0 - burn) * step(fType, 0.5);
+  seedFlag = step(rB, uSeedFrac * 0.17 * smoothstep(0.1, 0.28, bio)) * (1.0 - burn) * step(fType, 0.5);
   if (seedFlag > 0.5) {
     // two kinds of head, in stands: 1 = big bluestem's three-pronged turkey foot, 2 = switchgrass's airy spray
     seedFlag += step(u01(pcg(h6 + 8u)), 0.12 + 0.7 * smoothstep(0.4, 0.62, patch1));
     // the flowering culms stand well above the leaf canopy; the head has a fixed size in metres (a turkey foot is about 9 cm across)
     H *= 1.3 + 0.35 * rA;
-    seedHead = min((seedFlag < 1.5 ? 0.1 : 0.2) / H, 0.45);
-    seedHW = seedFlag < 1.5 ? 0.095 : 0.17;
+    float sz = 0.6 + 0.7 * fract(rF * 13.1 + rB * 5.7);   // heads vary 0.6x to 1.3x
+    seedHead = min((seedFlag < 1.5 ? 0.1 : 0.2) * sz / H, 0.45);
+    seedHW = (seedFlag < 1.5 ? 0.095 : 0.17) * sz;
   }
 #endif
   if (fType > 0.5) H *= 1.08 + 0.22 * rD;
@@ -521,7 +522,10 @@ void main() {
     float aY0 = phi > 0.002 ? sin(s0) / phi : v0;
     vec3 c0 = root + vec3(dir.x * aH0 * H, aY0 * H, dir.y * aH0 * H);
     vec3 t0 = normalize(vec3(dir.x * sin(s0), cos(s0), dir.y * sin(s0)));
-    tang = normalize(mix(t0, vec3(0.0, 1.0, 0.0), 0.65));
+    // mostly the culm's own (wind-bent) direction, a little straighter, and each head leans a different way across the view
+    vec3 crh = normalize(vec3(viewMatrix[0][0], 0.0, viewMatrix[2][0]) + vec3(1e-5));
+    float tl = (fract(rA * 9.7 + rC * 3.3) - 0.5) * 0.9;
+    tang = normalize(mix(t0, vec3(0.0, 1.0, 0.0), 0.2 + 0.25 * rE) + crh * tl);
     centre = c0 + tang * ((v - v0) * H);
   }
 #endif
@@ -557,7 +561,7 @@ void main() {
   if (fType > 0.5) Wr = normalize(mix(Wf, camRight, 0.92 * smoothstep(0.55, 0.8, vg)));
   float noEdge = fType > 0.5 ? 0.0 : 1.0;
 #if LEVEL == 0
-  if (seedFlag > 0.5) { Wr = normalize(mix(Wf, camRight, 0.94 * smoothstep(0.55, 0.8, vg))); noEdge = 0.0; }
+  if (seedFlag > 0.5) { Wr = normalize(mix(Wf, camRight, (0.6 + 0.25 * rC) * smoothstep(0.55, 0.8, vg))); noEdge = 0.0; }
 #endif
 
   vec3 wp3 = centre + Wr * (side * 0.5 * wv) + camRight * (side * 0.5 * wv * 0.9 * edgeOn * noEdge);
@@ -698,13 +702,18 @@ void stroke(vec2 q, vec2 a, vec2 b, float w0, float w1, float ph, inout float be
 float turkeyFoot(vec2 q, float hw, float L, float r, out float along) {
   float best = 1e9;
   along = 0.0;
+  float r1 = fract(r * 7.13 + 0.31), r2 = fract(r * 13.7 + 0.62), r3 = fract(r * 23.1 + 0.17);
   float fork = 0.14 * L;
-  stroke(q, vec2(0.0), vec2(0.0, fork), 0.0028, 0.0028, 0.0, best, along);
-  stroke(q, vec2(0.0, fork), vec2(hw * 0.12 * (r - 0.5), 0.98 * L), 0.0038, 0.0024, 1.0, best, along);
-  stroke(q, vec2(0.0, fork), vec2(-hw * 0.34, 0.56 * L), 0.0036, 0.0038, 2.0, best, along);
-  stroke(q, vec2(-hw * 0.34, 0.56 * L), vec2(-hw * (0.8 + 0.1 * r), 0.95 * L), 0.0038, 0.0024, 3.0, best, along);
-  stroke(q, vec2(0.0, fork), vec2(hw * 0.34, 0.54 * L), 0.0036, 0.0038, 4.0, best, along);
-  stroke(q, vec2(hw * 0.34, 0.54 * L), vec2(hw * (0.8 + 0.1 * (1.0 - r)), 0.93 * L), 0.0038, 0.0024, 5.0, best, along);
+  // the two outer racemes splay by different amounts and reach different heights; the centre one leans a little
+  vec2 el = vec2(-hw * (0.4 + 0.5 * r1), L * (0.74 + 0.22 * r2));
+  vec2 er = vec2(hw * (0.4 + 0.5 * r2), L * (0.74 + 0.22 * r1));
+  vec2 ec = vec2(hw * 0.3 * (r3 - 0.5), L * (0.82 + 0.16 * r3));
+  stroke(q, vec2(0.0), vec2(0.0, fork), 0.0019, 0.0019, 0.0, best, along);
+  stroke(q, vec2(0.0, fork), ec, 0.0026, 0.0015, 1.0, best, along);
+  stroke(q, vec2(0.0, fork), el * vec2(0.4, 1.0) + vec2(0.0, fork * 0.6), 0.0024, 0.0025, 2.0, best, along);
+  stroke(q, el * vec2(0.4, 1.0) + vec2(0.0, fork * 0.6), el, 0.0025, 0.0015, 3.0, best, along);
+  stroke(q, vec2(0.0, fork), er * vec2(0.4, 1.0) + vec2(0.0, fork * 0.6), 0.0024, 0.0025, 4.0, best, along);
+  stroke(q, er * vec2(0.4, 1.0) + vec2(0.0, fork * 0.6), er, 0.0025, 0.0015, 5.0, best, along);
   along = clamp((q.y - fork) / (0.8 * L), 0.0, 1.0);
   return best;
 }
@@ -712,7 +721,7 @@ float turkeyFoot(vec2 q, float hw, float L, float r, out float along) {
 float panicle(vec2 q, float hw, float L, float r, out float along) {
   float best = 1e9;
   along = 0.0;
-  stroke(q, vec2(0.0), vec2(0.0, 0.9 * L), 0.0024, 0.0012, 0.0, best, along);
+  stroke(q, vec2(0.0), vec2(0.0, 0.9 * L), 0.0017, 0.0009, 0.0, best, along);
   for (int k = 0; k < 6; k++) {
     float fk = float(k);
     float sg = (k & 1) == 0 ? -1.0 : 1.0;
@@ -724,9 +733,9 @@ float panicle(vec2 q, float hw, float L, float r, out float along) {
     vec2 p1 = vec2(sg * reach * 0.5, yb + up * 0.45);
     vec2 p2 = vec2(sg * reach, yb + up * (0.62 - 0.2 * rk));
     vec2 p3 = p2 + vec2(sg * hw * 0.1, -0.07 * L);
-    stroke(q, p0, p1, 0.0011, 0.0009, fk, best, along);
-    stroke(q, p1, p2, 0.0009, 0.0016, fk + 3.0, best, along);
-    stroke(q, p2, p3, 0.0016, 0.0022, fk + 6.0, best, along);
+    stroke(q, p0, p1, 0.0007, 0.0006, fk, best, along);
+    stroke(q, p1, p2, 0.0006, 0.0011, fk + 3.0, best, along);
+    stroke(q, p2, p3, 0.0011, 0.0015, fk + 6.0, best, along);
   }
   along = clamp(q.y / L, 0.0, 1.0);
   return best;
@@ -812,17 +821,17 @@ void main() {
       float along;
       float cov = seed < 1.5 ? turkeyFoot(q, vSd.y, vSd.z, bright, along) : panicle(q, vSd.y, vSd.z, bright, along);
       // never thinner than about a pixel, or the heads shimmer
-      aOut = clamp(0.85 - cov / max(fwUv.x * vSd.y, fwUv.y * vSd.z * (1.0 / 0.15)), 0.0, 1.0);
+      aOut = clamp(0.62 - cov / (1.6 * max(fwUv.x * vSd.y, fwUv.y * vSd.z * (1.0 / 0.15))), 0.0, 0.85);
       if (aOut < 0.02) discard;
       float cu = vSd.x * dry;
       vec3 headC;
       if (seed < 1.5) {
         // bronze racemes, pale and yellow at their tips where the anthers hang
-        headC = mix(seedC * mix(0.8, 1.15, along), mix(uCopM, uCopT, along) * 1.3, 0.3 + 0.5 * cu);
+        headC = mix(seedC * mix(0.8, 1.15, along), mix(uCopM, uCopT, along) * 0.95, 0.3 + 0.5 * cu);
       } else {
         headC = mix(seedC * vec3(1.0, 0.84, 0.76), uPanicle, 0.55) * mix(0.8, 1.2, along);
       }
-      albedo = headC * (0.7 + 0.25 * bright);
+      albedo = mix(albedo, headC, 0.5) * (0.6 + 0.2 * bright);   // close to the blades in value, a touch darker than their backlit tips
       headGlow = 1.0;
     }
   }
@@ -902,7 +911,7 @@ void main() {
     float toSun = clamp(dot(-V, L), 0.0, 1.0);
     toSun *= toSun;
     toSun *= toSun;
-    float gl = toSun * (0.3 + 0.7 * lowSun) * uGlow * (0.2 + 0.8 * v * (0.4 + 0.6 * v)) * (1.0 + 0.55 * headGlow);
+    float gl = toSun * (0.3 + 0.7 * lowSun) * uGlow * (0.2 + 0.8 * v * (0.4 + 0.6 * v)) * (1.0 + 0.1 * headGlow);
     vec3 warm = tAlb * vec3(1.45, 1.0, 0.5);
     trans += warm * uSunColor * gl * shadow * RECIPROCAL_PI * mix(1.0, canopyT, 0.5) * (1.0 - 0.9 * uMoon);
   }
