@@ -2,10 +2,15 @@
 // under carcasses. Both are lit from whatever lights the host scene has (found in onBeforeRender), so they
 // follow day, dusk and night without needing the engine's uniforms.
 import * as THREE from 'three';
-import { CARCASS_STRIDE } from '../../sim/types';
+import { CARCASS_STRIDE, SPECIES_COUNT } from '../../sim/types';
+import { SPECIES } from '../../sim/species';
 import type { Snapshot } from '../../sim/types';
 import { sampleHeight } from '../../sim/world';
 import type { World } from '../../sim/world';
+
+/** Radius (m) of the trampled kill-site patch by species id: bison 3.8, pronghorn and cougar 2.0, wolf 1.8, everything else 1.0. */
+const KILL_R_BY_KEY: Record<string, number> = { bison: 3.8, pronghorn: 2.0, cougar: 2.0, wolf: 1.8 };
+const KILL_R: number[] = SPECIES.map((s) => KILL_R_BY_KEY[s.key] ?? 1.0);
 
 /** Finds the scene's key light and hemisphere light and boils them down to one ambient-ish RGB for unlit sprites. */
 export class SceneLit {
@@ -371,7 +376,7 @@ export class KillSites {
       for (let c = 0; c < n; c++) {
         const cx = snap.carcasses[c * CARCASS_STRIDE], cz = snap.carcasses[c * CARCASS_STRIDE + 1];
         const sp = Math.round(snap.carcasses[c * CARCASS_STRIDE + 3]);
-        const R = sp === 0 ? 3.8 : sp === 3 || sp === 5 ? 2.0 : sp === 1 ? 1.8 : 1.0;
+        const R = KILL_R[sp] ?? 1.0;
         const seed = (Math.abs(Math.sin(cx * 12.9898 + cz * 78.233) * 43758.5453) % 1);
         for (let j = 0; j <= G; j++) {
           for (let i = 0; i <= G; i++) {
@@ -420,14 +425,13 @@ export class KillSites {
  * lost in a wide shot). The herds need none: their boosted bodies already read, and the coat is lifted for range in the
  * shader (see ModelDef.far).
  */
-const MARKER: Array<[number, number, number, number, number, boolean] | null> = [
-  null, // bison
-  [0.82, 0.83, 0.85, 12, 0.05, true], // wolf: a faint neutral glint under the grey body
-  null, // raven
-  null, // pronghorn
-  null, // rabbit
-  [0.95, 0.8, 0.55, 18, 0.08, true], // cougar: a warm one
-];
+const MARKER: Array<[number, number, number, number, number, boolean] | null> = SPECIES.map((s) => {
+  switch (s.key) {
+    case 'wolf': return [0.82, 0.83, 0.85, 12, 0.05, true]; // a faint neutral glint under the grey body
+    case 'cougar': return [0.95, 0.8, 0.55, 18, 0.08, true]; // a warm one
+    default: return null; // every other species (including ones with no entry yet) gets no marker
+  }
+});
 
 /** A marker is only drawn when at least this many of the same species share a ~24 m neighbourhood: herds and packs, never loners. */
 const CLUSTER_MIN = 3;
@@ -439,10 +443,13 @@ const FADE_LEN = 130;
 const PING_NEAR = 200;
 const PING_FAR = 330;
 /** Ripple tint per predator species id (linear-ish rgb) and strength: cool slate for wolves, warm umber for cougars. */
-const PING_TINT: Record<number, [number, number, number, number]> = {
-  1: [0.7, 0.71, 0.74, 0.24],
-  5: [0.82, 0.6, 0.36, 0.28],
-};
+const PING_TINT: Record<number, [number, number, number, number]> = Object.fromEntries(
+  SPECIES.flatMap((s): Array<[number, [number, number, number, number]]> =>
+    s.key === 'wolf' ? [[s.id, [0.7, 0.71, 0.74, 0.24]]] : s.key === 'cougar' ? [[s.id, [0.82, 0.6, 0.36, 0.28]]] : [],
+  ),
+);
+/** Ripple tint for a hunter with no tint of its own: the wolf's. */
+const PING_TINT_DEFAULT: [number, number, number, number] = [0.7, 0.71, 0.74, 0.24];
 const PING_CELL = 14;
 const PING_CAP = 256;
 /** An animal this many pixels long (without the minimum-size boost) is already readable: no marker. */
@@ -497,7 +504,7 @@ export class Markers {
 
   constructor(worldSize = 512) {
     this.gridN = Math.ceil(worldSize / CLUSTER_CELL) + 2;
-    this.grid = new Int32Array(6 * this.gridN * this.gridN);
+    this.grid = new Int32Array(SPECIES_COUNT * this.gridN * this.gridN);
     const quad = new THREE.PlaneGeometry(1, 1);
     this.geo = new THREE.InstancedBufferGeometry();
     this.geo.setAttribute('position', quad.getAttribute('position'));
@@ -663,7 +670,8 @@ export class Markers {
       for (let k = 0; k < this.m; k++) {
         const o = k * 8;
         const sp = st[o];
-        const mk = MARKER[sp]!;
+        const mk = MARKER[sp];
+        if (!mk) continue;
         const gi = cellOf(st[o + 1]), gj = cellOf(st[o + 3]);
         // count this cell plus its 4 neighbours so a herd straddling a cell edge still counts as a herd
         let cnt = this.grid[(sp * G + gj) * G + gi];
@@ -690,7 +698,7 @@ export class Markers {
     for (let i = 0; i < this.pingN; i++) {
       const o = i * 4;
       const seed = (Math.abs(Math.sin(this.ping[o] * 12.9898 + this.ping[o + 2] * 78.233) * 43758.5453) % 1);
-      const tint = PING_TINT[this.ping[o + 3]] ?? PING_TINT[1];
+      const tint = PING_TINT[this.ping[o + 3]] ?? PING_TINT_DEFAULT;
       this.pingP[o] = this.ping[o]; this.pingP[o + 1] = this.ping[o + 1]; this.pingP[o + 2] = this.ping[o + 2]; this.pingP[o + 3] = 22;
       this.pingC[o] = tint[0]; this.pingC[o + 1] = tint[1]; this.pingC[o + 2] = tint[2]; this.pingC[o + 3] = tint[3];
       this.pingK[o] = seed; this.pingK[o + 1] = 0; this.pingK[o + 2] = 0; this.pingK[o + 3] = 0;

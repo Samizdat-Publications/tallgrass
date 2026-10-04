@@ -16,6 +16,7 @@ import { Narrator } from './audio/narrator';
 import { countNearby, nearWater01 } from './audio/inputs';
 import { DAY_TICKS, setCalendarScale, Sp, YEAR_TICKS, type Intervention, type Snapshot } from './sim/types';
 import { applyOverrides, defaultParams } from './sim/params';
+import { isPredator } from './sim/species';
 import type { FromWorker, ToWorker } from './sim/worker';
 
 const q = new URLSearchParams(location.search);
@@ -297,7 +298,7 @@ function predatorWithin(x: number, y: number, r: number): boolean {
   const A = pending.agents;
   for (let k = 0; k < pending.count; k++) {
     const o = k * 12;
-    if (A[o] !== Sp.Wolf && A[o] !== Sp.Cougar) continue;
+    if (!isPredator(A[o])) continue; // any registry predator (wolf, cougar, and later coyote and the raptors)
     if (Math.hypot(A[o + 1] - x, A[o + 2] - y) < r) return true;
   }
   return false;

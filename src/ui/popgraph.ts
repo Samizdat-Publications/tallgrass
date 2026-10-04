@@ -1,5 +1,5 @@
 // Bottom left: population. A strip of sparklines with counts that expands to a full chart over the whole history.
-import { SPECIES_COUNT, SPECIES_NAMES, YEAR_TICKS } from '../sim/types';
+import { SPECIES_COUNT, SPECIES_KEYS, SPECIES_NAMES, YEAR_TICKS } from '../sim/types';
 import type { HistoryRow } from '../sim/worker';
 import { button, h, setText, unitPx } from './dom';
 import { fmtInt, seasonPhrase, seasonOfTick, yearOfTick } from './describe';
@@ -26,7 +26,9 @@ interface Cell {
 }
 
 const SPARK_YEARS = 8;
-const ALWAYS_SHOWN = 3; // bison, wolf, raven
+/** Species that always get a graph row (bison, wolf, raven). Every other species, current or future, only gets one once it has been alive. */
+const ALWAYS_SHOWN_KEYS = new Set(['bison', 'wolf', 'raven']);
+const alwaysShown = (sp: number): boolean => ALWAYS_SHOWN_KEYS.has(SPECIES_KEYS[sp] ?? '');
 
 export class PopGraph {
   readonly el: HTMLElement;
@@ -36,7 +38,7 @@ export class PopGraph {
   private pops: number[][] = Array.from({ length: SPECIES_COUNT }, () => []);
   private grass: number[] = [];
   private grassMax = 1;
-  private seen: boolean[] = Array.from({ length: SPECIES_COUNT }, (_, i) => i < ALWAYS_SHOWN);
+  private seen: boolean[] = Array.from({ length: SPECIES_COUNT }, (_, i) => alwaysShown(i));
   private markers: Marker[] = [];
   /** Mean heritable traits per history row, one array per trait (see traits.ts). NaN when absent. */
   private traitSeries: number[][] = Array.from({ length: TRAIT_COUNT }, () => []);
@@ -158,7 +160,7 @@ export class PopGraph {
     this.grassMax = 1;
     this.markers = [];
     this.traitSeries.forEach((t) => (t.length = 0));
-    this.seen = this.seen.map((_, i) => i < ALWAYS_SHOWN);
+    this.seen = this.seen.map((_, i) => alwaysShown(i));
     this.rebuildCells();
     this.dirty = true;
   }
@@ -283,7 +285,7 @@ export class PopGraph {
       this.cells.push({ sp, el, count, canvas, lastText: '' });
       this.cellsEl.append(el);
     }
-    // 1 to 3 species sit in one row of three, 4 make a tidy 2 x 2, 5 and 6 make two rows of three
+    // 1 to 3 species sit in one row of three, 4 make a tidy 2 x 2, 5 and more fill rows of three
     const cols = vis.length === 4 ? 2 : 3;
     this.el.dataset.cols = String(cols);
     this.el.dataset.count = String(vis.length);

@@ -19,12 +19,7 @@
   --ember: #e0763c;
   --sage: #93b36b;
   --ink: #1d1809;
-  --sp-0: #cf8b4e;
-  --sp-1: #6fa4ea;
-  --sp-2: #b48ce6;
-  --sp-3: #4fc4bc;
-  --sp-4: #e9e4d4;
-  --sp-5: #d27a8c;
+  /* --sp-<id> (species colours) are installed from the registry by applySpeciesVars (palette.ts) */
   --serif: 'Alegreya', Georgia, 'Times New Roman', serif;
   --sans: 'Alegreya Sans', system-ui, 'Segoe UI', sans-serif;
   --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
@@ -838,12 +833,21 @@ button.tg-ent-b:hover {
 .tg-pop[data-rows='2'] {
   height: calc(146 * var(--u));
 }
+/* seven or more species (later work packages): a row of three per 54 */
+.tg-pop[data-rows='3'] {
+  height: calc(200 * var(--u));
+}
+.tg-pop[data-rows='4'] {
+  height: calc(254 * var(--u));
+}
 .tg-pop.is-open {
   width: min(calc(640 * var(--u)), calc(100vw - 2 * var(--m)));
   height: calc(300 * var(--u));
 }
 /* four or more species rows need a little more height to keep every row readable */
 .tg-pop.is-open[data-view='pop'][data-rows='2'],
+.tg-pop.is-open[data-view='pop'][data-rows='3'],
+.tg-pop.is-open[data-view='pop'][data-rows='4'],
 .tg-pop.is-open[data-view='pop'][data-cols='2'] {
   height: calc(336 * var(--u));
 }
@@ -851,6 +855,15 @@ button.tg-ent-b:hover {
 .tg-pop.is-open[data-view='pop'][data-count='5'],
 .tg-pop.is-open[data-view='pop'][data-count='6'] {
   height: min(calc(384 * var(--u)), calc(100vh - 210 * var(--u)));
+}
+/* seven to twelve species: as tall as the screen allows */
+.tg-pop.is-open[data-view='pop'][data-count='7'],
+.tg-pop.is-open[data-view='pop'][data-count='8'],
+.tg-pop.is-open[data-view='pop'][data-count='9'],
+.tg-pop.is-open[data-view='pop'][data-count='10'],
+.tg-pop.is-open[data-view='pop'][data-count='11'],
+.tg-pop.is-open[data-view='pop'][data-count='12'] {
+  height: min(calc(440 * var(--u)), calc(100vh - 210 * var(--u)));
 }
 @media (max-height: 940px) {
   /* the rail would collide with the tall chart on short screens, so the chart sits to its right */
@@ -980,7 +993,13 @@ button.tg-ent-b:hover {
 }
 /* five or six species: the chips shrink to colour dots (each row is named in the chart anyway) */
 .tg-pop[data-count='5'] .tg-chip-btn,
-.tg-pop[data-count='6'] .tg-chip-btn {
+.tg-pop[data-count='6'] .tg-chip-btn,
+.tg-pop[data-count='7'] .tg-chip-btn,
+.tg-pop[data-count='8'] .tg-chip-btn,
+.tg-pop[data-count='9'] .tg-chip-btn,
+.tg-pop[data-count='10'] .tg-chip-btn,
+.tg-pop[data-count='11'] .tg-chip-btn,
+.tg-pop[data-count='12'] .tg-chip-btn {
   font-size: 0;
   gap: 0;
   width: calc(26 * var(--u));

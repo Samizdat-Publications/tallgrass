@@ -10,6 +10,7 @@
 import * as THREE from 'three';
 import { AGENT_STRIDE, CARCASS_STRIDE, F_INFECTED, SPECIES_COUNT, Sp, St } from '../sim/types';
 import type { Snapshot } from '../sim/types';
+import { SPECIES } from '../sim/species';
 import { sampleHeight } from '../sim/world';
 import type { World } from '../sim/world';
 import { getModel } from './models';
@@ -21,7 +22,19 @@ import { Dust, KillSites, Markers, SceneLit } from './models/fx';
 import { injectTerrainShadow } from './common';
 import type { SharedUniforms } from './common';
 
-const INITIAL_CAPACITY = [2048, 512, 512, 1024, 1024, 128]; // by species id
+// Per-species render tables are authored by registry key and expanded to arrays indexed by species id, so a species added
+// to SPECIES (src/sim/species.ts) gets a sane default here until it earns its own entry.
+const byId = <T>(authored: Record<string, T>, fallback: (s: (typeof SPECIES)[number]) => T): T[] => SPECIES.map((s) => authored[s.key] ?? fallback(s));
+
+const INITIAL_CAPACITY: number[] = byId({ bison: 2048, wolf: 512, raven: 512, pronghorn: 1024, rabbit: 1024, cougar: 128 }, () => 256);
+
+/** Land hunters: the predators that pounce and are chased by the kill-site reactions (wolf, cougar; later coyote). Fliers hunt differently. */
+const HUNTER: boolean[] = SPECIES.map((s) => (s.guild === 'predator' || s.guild === 'mesopredator') && !s.flies);
+/** Fliers: drawn at their altitude, banked into turns, folded on the ground (raven; later eagle, hawk). */
+const FLIES: boolean[] = SPECIES.map((s) => s.flies);
+/** Prey a lunging hunter goes for: grazers that are neither fliers nor the small ones (rabbit, prairie dog, beaver). */
+const SMALL_KEYS = new Set(['rabbit', 'prairiedog', 'beaver']);
+const LUNGE_TARGET: boolean[] = SPECIES.map((s) => s.prey && !HUNTER[s.id] && !s.flies && !SMALL_KEYS.has(s.key));
 
 const clamp = (x: number, a: number, b: number): number => (x < a ? a : x > b ? b : x);
 const wrapPi = (a: number): number => {
@@ -36,14 +49,17 @@ const hash01 = (n: number): number => (Math.imul(n | 0, 0x9e3779b1) >>> 8) / 167
  * animal's own scale), alpha, min life s, max life s]. Wolves, pronghorn and cougars get a few short-lived round
  * puffs at the feet; only a bison herd makes a real dust cloud.
  */
-const DUST: Array<[number, number, number, number, number, number] | null> = [
-  [4.5, 1.5, 2.6, 0.3, 1.3, 2.1], // bison
-  [5.5, 0.5, 0.75, 0.2, 0.7, 1.1], // wolf
-  null, // raven
-  [6, 0.4, 0.95, 0.2, 0.8, 1.2], // pronghorn
-  null, // rabbit
-  [5.5, 0.4, 0.8, 0.2, 0.7, 1.1], // cougar
-];
+const DUST: Array<[number, number, number, number, number, number] | null> = byId<[number, number, number, number, number, number] | null>(
+  {
+    bison: [4.5, 1.5, 2.6, 0.3, 1.3, 2.1],
+    wolf: [5.5, 0.5, 0.75, 0.2, 0.7, 1.1],
+    raven: null,
+    pronghorn: [6, 0.4, 0.95, 0.2, 0.8, 1.2],
+    rabbit: null,
+    cougar: [5.5, 0.4, 0.8, 0.2, 0.7, 1.1],
+  },
+  () => null, // no dust until a species is given a table
+);
 
 /** On-screen metres per second of sim speed at 1x (DT 0.15 s of motion per tick, 10 ticks per second). */
 const VIS_PER_SIM = 1.5;
@@ -83,16 +99,19 @@ const MAX_CADENCE = 7.5;
  * heading, and the fastest the body may turn (rad/s). The sim re-aims instantly; the body does not, so an animal carries
  * its momentum through a turn and leans into it.
  */
-const TURN: Array<[number, number]> = [
-  [4.2, 2.3], // bison
-  [7, 6], // wolf
-  [3.5, 2.6], // raven (banks through wide circles)
-  [7, 6], // pronghorn
-  [9, 8], // rabbit
-  [7, 6], // cougar
-];
+const TURN: Array<[number, number]> = byId<[number, number]>(
+  {
+    bison: [4.2, 2.3],
+    wolf: [7, 6],
+    raven: [3.5, 2.6], // banks through wide circles
+    pronghorn: [7, 6],
+    rabbit: [9, 8],
+    cougar: [7, 6],
+  },
+  (s) => (s.flies ? [3.5, 2.6] : [7, 6]),
+);
 /** Largest lean (rad) into a turn at speed. */
-const BANK_MAX = [0.2, 0.42, 0.75, 0.42, 0.3, 0.42];
+const BANK_MAX: number[] = byId({ bison: 0.2, wolf: 0.42, raven: 0.75, pronghorn: 0.42, rabbit: 0.3, cougar: 0.42 }, (s) => (s.flies ? 0.75 : 0.42));
 
 /** How the whole fall of a carcass plays out, in seconds. */
 const FALL_TIME = 2.4;
@@ -284,10 +303,13 @@ export class AnimalLayer {
   /** Sim speed multiplier (1 = real time, 0 = paused). Scales gait frequency so legs match visible speed. */
   timeScale = 1;
   /** Per species visual size multiplier by species id (readability boost for small animals: wolf 1.35 (the concept art wolves read at ~0.65 of a bison), raven 1.7 (circling ravens are the "kill here" tell), rabbit 1.2, cougar 1.05). */
-  readonly speciesScale: number[] = [1, 1.35, 1.7, 1, 1.2, 1.05];
+  readonly speciesScale: number[] = byId({ bison: 1, wolf: 1.35, raven: 1.7, pronghorn: 1, rabbit: 1.2, cougar: 1.05 }, () => 1);
 
   private world: World;
-  private batches: Batch[] = [];
+  /** Draw batch by species id; null for a species with no model (it is simply not drawn). */
+  private batches: Array<Batch | null> = [];
+  /** The non-null batches, for loops over every drawn species. */
+  private live: Batch[] = [];
   private uTime = { value: 0 };
   private shared: AnimalShared = {
     uTime: this.uTime, uCamPos: { value: new THREE.Vector3(256, 400, 256) }, uPxK: { value: 900 / (2 * Math.tan((45 * Math.PI) / 360)) },
@@ -344,7 +366,7 @@ export class AnimalLayer {
     const tu = scene.userData?.tgUniforms as SharedUniforms | undefined;
     if (!tu) return;
     this.tg = tu;
-    if (this.tgMissed) for (const b of this.batches) b.material.needsUpdate = true;
+    if (this.tgMissed) for (const b of this.live) b.material.needsUpdate = true;
   }
 
   constructor(world: World) {
@@ -352,6 +374,10 @@ export class AnimalLayer {
     this.object3D.name = 'AnimalLayer';
     for (let sp = 0; sp < SPECIES_COUNT; sp++) {
       const def = getModel(sp);
+      if (!def) {
+        this.batches.push(null);
+        continue;
+      }
       const { material, depth } = makeAnimalMaterials(sp, def, this.shared);
       // animals sit in hill shadow like the terrain and trees do (the depth material casts only, so it needs nothing)
       const baseCompile = material.onBeforeCompile;
@@ -360,7 +386,9 @@ export class AnimalLayer {
         if (this.tg) injectTerrainShadow(shader, this.tg);
         else this.tgMissed = true;
       };
-      this.batches.push(new Batch(sp, def, material, depth, this.object3D, INITIAL_CAPACITY[sp], this.shared));
+      const batch = new Batch(sp, def, material, depth, this.object3D, INITIAL_CAPACITY[sp] ?? 256, this.shared);
+      this.batches.push(batch);
+      this.live.push(batch);
     }
     this.kills = new KillSites(world, this.lit);
     this.dust = new Dust(this.lit);
@@ -470,7 +498,7 @@ export class AnimalLayer {
       const sp = Math.round(snap.carcasses[k * CARCASS_STRIDE + 3]);
       if (sp >= 0 && sp < SPECIES_COUNT) this.carcassCounts[sp]++;
     }
-    for (let sp = 0; sp < SPECIES_COUNT; sp++) this.batches[sp].ensure(this.counts[sp] + this.carcassCounts[sp], this.object3D);
+    for (let sp = 0; sp < SPECIES_COUNT; sp++) this.batches[sp]?.ensure(this.counts[sp] + this.carcassCounts[sp], this.object3D);
     this.kills.setSnapshot(snap);
     this.trackFalls(snap, this.prev === null);
     this.lungeScan(snap);
@@ -553,7 +581,7 @@ export class AnimalLayer {
     for (let i = 0; i < snap.count; i++) {
       const o = i * AGENT_STRIDE;
       const s = A[o] | 0;
-      if (s !== Sp.Wolf && s !== Sp.Cougar) continue;
+      if (!HUNTER[s]) continue;
       const st = A[o + 7] | 0;
       if (st !== St.Chase && st !== St.Stalk && st !== St.Eat) continue;
       const dx = A[o + 1] - cx, dz = A[o + 2] - cz;
@@ -575,14 +603,14 @@ export class AnimalLayer {
     for (let i = 0; i < n; i++) {
       const o = i * AGENT_STRIDE;
       const sp = A[o] | 0;
-      if ((sp !== Sp.Wolf && sp !== Sp.Cougar) || (A[o + 7] | 0) !== St.Chase) continue;
+      if (!HUNTER[sp] || (A[o + 7] | 0) !== St.Chase) continue;
       const slot = this.currSlot[i];
       if (S.pounce[slot] >= 0) continue; // already lunging or cooling down
       const x = A[o + 1], z = A[o + 2], hx = Math.cos(A[o + 3]), hz = Math.sin(A[o + 3]);
       for (let j = 0; j < n; j++) {
         const q = j * AGENT_STRIDE;
         const s2 = A[q] | 0;
-        if (s2 === Sp.Wolf || s2 === Sp.Cougar || s2 === Sp.Raven || s2 === Sp.Rabbit) continue;
+        if (!LUNGE_TARGET[s2]) continue;
         const dx = A[q + 1] - x, dz = A[q + 2] - z;
         const d2 = dx * dx + dz * dz;
         if (d2 > 3.6 * 3.6 || d2 < 0.2) continue;
@@ -625,7 +653,7 @@ export class AnimalLayer {
     this.markers.begin();
     const dustRate = Math.min(this.timeScale, 3);
 
-    for (const b of this.batches) {
+    for (const b of this.live) {
       b.count = 0;
       b.alive = 0;
     }
@@ -636,6 +664,7 @@ export class AnimalLayer {
       const sp = A[o] | 0;
       if (sp < 0 || sp >= SPECIES_COUNT) continue;
       const b = this.batches[sp];
+      if (!b) continue; // no model for this species: not drawn
       const pr = b.def.params;
       const id = snap.ids[i];
       const slot = this.currSlot[i];
@@ -685,7 +714,7 @@ export class AnimalLayer {
       if (state === St.Graze || state === St.Eat || state === St.Drink) hdT = 1;
       if (state === St.Rest) lieT = 1;
       if (state === St.Stalk) crT = 1;
-      if (sp === Sp.Raven) {
+      if (FLIES[sp]) {
         const grounded = alt < 0.3 && state !== St.Fly;
         crT = grounded ? 1 : 0; // wing fold
         hdT = grounded && state === St.Eat ? 1 : 0;
@@ -714,11 +743,11 @@ export class AnimalLayer {
       S.px[slot] = x;
       S.pz[slot] = z;
       const visT = dt > 1e-4 ? ds / dt : 0;
-      const feeding = state === St.Eat && (sp === Sp.Wolf || sp === Sp.Cougar || (sp === Sp.Raven && hdT > 0)) && this.timeScale > 0;
-      const hunting = (sp === Sp.Wolf || sp === Sp.Cougar) && this.timeScale > 0 ? (state === St.Chase || state === St.Stalk ? 1 : state === St.Eat ? 0.6 : 0) : 0;
+      const feeding = state === St.Eat && (HUNTER[sp] || (FLIES[sp] && hdT > 0)) && this.timeScale > 0;
+      const hunting = HUNTER[sp] && this.timeScale > 0 ? (state === St.Chase || state === St.Stalk ? 1 : state === St.Eat ? 0.6 : 0) : 0;
       S.tug[slot] += ((feeding ? 1 : 0) - S.tug[slot]) * kHead;
       // predators: how hard it is hunting; ravens: how hard they are climbing (they flap steadily then, glide otherwise)
-      const huntT = sp === Sp.Raven ? (alt > 0.3 ? clamp(climb / 1.2, 0, 1) : 0) : hunting;
+      const huntT = FLIES[sp] ? (alt > 0.3 ? clamp(climb / 1.2, 0, 1) : 0) : hunting;
       S.hunt[slot] += (huntT - S.hunt[slot]) * kHead;
       S.spd[slot] += (spdT - S.spd[slot]) * k8;
       S.vis[slot] += (visT - S.vis[slot]) * k8;
@@ -780,7 +809,7 @@ export class AnimalLayer {
       const ch = Math.cos(hd), sh = Math.sin(hd);
       const ground = sampleHeight(H, hn, cell, x, z);
       let pitch = 0, roll = 0, y = ground;
-      if (sp === Sp.Raven) {
+      if (FLIES[sp]) {
         y = ground + alt;
         const v = Math.max(spdT, 0.5);
         const bankT = clamp(Math.atan((v * turnRate) / 9.81), -BANK_MAX[sp], BANK_MAX[sp]);
@@ -822,7 +851,7 @@ export class AnimalLayer {
       }
       // wading: in a water cell the animal stands on the bed while the water is shallower than its belly; in deeper
       // water it rides with the belly at the surface (a gentle bob, level pose) instead of looking like it stands on it
-      if (sp !== Sp.Raven || alt <= 0.3) {
+      if (!FLIES[sp] || alt <= 0.3) {
         const wc = Math.min(world.n - 1, Math.max(0, Math.floor(z / cell))) * world.n + Math.min(world.n - 1, Math.max(0, Math.floor(x / cell)));
         if (world.water[wc]) {
           const surf = world.waterHeight[wc];
@@ -836,9 +865,9 @@ export class AnimalLayer {
       }
       this.writeInstance(b, x, y, z, ch, sh, pitch, roll, vs);
 
-      this.markers.add(sp, x, y + (sp === Sp.Raven ? 0.3 : pr.height * 0.6 * vs), z, pr.boostLen, vs);
+      this.markers.add(sp, x, y + (FLIES[sp] ? 0.3 : pr.height * 0.6 * vs), z, pr.boostLen, vs);
       // from the wide view, a faint ripple where a predator is actually chasing
-      if (state === St.Chase && (sp === Sp.Wolf || sp === Sp.Cougar)) this.markers.addPing(sp, x, y + 0.3, z);
+      if (state === St.Chase && HUNTER[sp]) this.markers.addPing(sp, x, y + 0.3, z);
 
       // dust kicked up by fast movers
       const dp = DUST[sp];
@@ -873,12 +902,12 @@ export class AnimalLayer {
       const look = b.look.array as Float32Array;
       gait[gp] = S.phase[slot];
       gait[gp + 1] = gaitSpd;
-      gait[gp + 2] = sp === Sp.Raven ? (S.hdn[slot] > 0.5 ? 1 : S.flap[slot]) : S.hdn[slot];
+      gait[gp + 2] = FLIES[sp] ? (S.hdn[slot] > 0.5 ? 1 : S.flap[slot]) : S.hdn[slot];
       gait[gp + 3] = S.lie[slot];
       // feeding tug (head hauls and shakes, ravens peck), altitude (a bird in flight casts no shadow), hunting weight
       const fx = b.fx.array as Float32Array;
       fx[gp] = S.tug[slot];
-      fx[gp + 1] = sp === Sp.Raven ? alt : 0;
+      fx[gp + 1] = FLIES[sp] ? alt : 0;
       fx[gp + 2] = S.hunt[slot];
       fx[gp + 3] = pounceE;
       look[gp] = clamp(coat, 0, 1);
@@ -887,7 +916,7 @@ export class AnimalLayer {
       look[gp + 3] = (id === sel ? 1 : 0) + sickK;
       // pick sphere
       const c = k * 4;
-      const cy = y + (sp === Sp.Raven ? 0.15 * vs : pr.height * 0.5 * vs);
+      const cy = y + (FLIES[sp] ? 0.15 * vs : pr.height * 0.5 * vs);
       b.centers[c] = x;
       b.centers[c + 1] = cy;
       b.centers[c + 2] = z;
@@ -908,6 +937,7 @@ export class AnimalLayer {
       const sp = Math.round(snap.carcasses[o + 3]);
       if (sp < 0 || sp >= SPECIES_COUNT) continue;
       const b = this.batches[sp];
+      if (!b) continue;
       const x = snap.carcasses[o], z = snap.carcasses[o + 1], rem = snap.carcasses[o + 2];
       const seed = hash01((Math.floor(x * 13) * 73856093) ^ (Math.floor(z * 13) * 19349663));
       const fi = this.falls.get(Math.floor(x * 8) * 65536 + Math.floor(z * 8));
@@ -979,7 +1009,7 @@ export class AnimalLayer {
       b.centers[k * 4 + 3] = 0; // not pickable
     }
 
-    for (const b of this.batches) {
+    for (const b of this.live) {
       const m = b.mesh;
       m.count = b.count;
       m.visible = b.count > 0;
@@ -1045,7 +1075,7 @@ export class AnimalLayer {
     const dx = ray.direction.x, dy = ray.direction.y, dz = ray.direction.z;
     let best = Infinity;
     let bestId: number | null = null;
-    for (const b of this.batches) {
+    for (const b of this.live) {
       const C = b.centers;
       for (let k = 0; k < b.alive; k++) {
         const c = k * 4;
@@ -1107,12 +1137,12 @@ export class AnimalLayer {
   /** Total triangles currently submitted (for stats). */
   get triangleCount(): number {
     let t = 0;
-    for (const b of this.batches) t += b.count * b.def.triangles;
+    for (const b of this.live) t += b.count * b.def.triangles;
     return t;
   }
 
   dispose(): void {
-    for (const b of this.batches) {
+    for (const b of this.live) {
       b.mesh.dispose();
       b.geometry.dispose();
       b.material.dispose();

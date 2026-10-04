@@ -6,6 +6,7 @@ import { activityPhrase, animalCaption, fmtInt, lineageText, packName, plural } 
 import { icon } from './icons';
 import { backstory, buildStory, diedEntry, memorialText } from './story';
 import { traitIndex } from './traits';
+import { COAT_BASE } from '../sim/species';
 import type { UIActions } from './types';
 
 interface TraitDef {
@@ -18,8 +19,7 @@ interface TraitDef {
   title: string;
 }
 
-// Gene ranges follow src/sim/sim.ts clampGene. Founders start near 1 (coat differs per species).
-const COAT_BASE = [0.85, 0.3, 0.97, 0.5, 0.5, 0.5];
+// Gene ranges follow src/sim/sim.ts clampGene. Founders start near 1 (coat differs per species: COAT_BASE in the registry file).
 const TRAITS: TraitDef[] = [
   { key: 'speed', label: 'speed', min: 0.6, max: 1.6, base: () => 1, title: 'Running speed' },
   { key: 'size', label: 'size', min: 0.6, max: 1.6, base: () => 1, title: 'Body size' },

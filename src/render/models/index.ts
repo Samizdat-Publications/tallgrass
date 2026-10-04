@@ -1,4 +1,4 @@
-import { Sp } from '../../sim/types';
+import { SPECIES } from '../../sim/species';
 import { buildBison } from './bison';
 import { buildWolf } from './wolf';
 import { buildRaven } from './raven';
@@ -9,21 +9,26 @@ import type { ModelDef } from './types';
 
 export type { ModelDef, AnimParams } from './types';
 
+/** Model builders by registry key. A species with no entry here has no model and is not drawn (no crash, no placeholder). */
+const BUILDERS: Record<string, () => ModelDef> = {
+  bison: buildBison,
+  wolf: buildWolf,
+  raven: buildRaven,
+  pronghorn: buildPronghorn,
+  rabbit: buildRabbit,
+  cougar: buildCougar,
+};
+
 const cache = new Map<number, ModelDef>();
 
-/** Procedural model for a species id (Sp.*). Built once and cached. */
-export function getModel(sp: number): ModelDef {
+/** Procedural model for a species id, built once and cached, or null when the species has no model yet. */
+export function getModel(sp: number): ModelDef | null {
   let m = cache.get(sp);
   if (!m) {
-    switch (sp) {
-      case Sp.Bison: m = buildBison(); break;
-      case Sp.Wolf: m = buildWolf(); break;
-      case Sp.Raven: m = buildRaven(); break;
-      case Sp.Deer: m = buildPronghorn(); break;
-      case Sp.Rabbit: m = buildRabbit(); break;
-      case Sp.Cougar: m = buildCougar(); break;
-      default: throw new Error('unknown species ' + sp);
-    }
+    const key = SPECIES[sp]?.key;
+    const build = key !== undefined ? BUILDERS[key] : undefined;
+    if (!build) return null;
+    m = build();
     cache.set(sp, m);
   }
   return m;

@@ -1,6 +1,7 @@
 // Right column: the chronicle. One plain sentence per event, grouped under a heading for each valley year, newest on
 // top. A busy year keeps only its significant events and folds the rest into "and 3 smaller events" (click to open).
 import { button, h, setText } from './dom';
+import { SPECIES_COUNT } from '../sim/types';
 import { seasonName, seasonOfTick } from './describe';
 import { icon } from './icons';
 
@@ -269,7 +270,7 @@ export class Chronicle {
 
   private build(it: ChronicleEntry, first: boolean, last: boolean): HTMLElement {
     const flyable = it.x !== 0 || it.y !== 0;
-    const spColor = it.sp >= 0 && it.sp < 6 ? `var(--sp-${it.sp})` : 'var(--paper-dim)';
+    const spColor = it.sp >= 0 && it.sp < SPECIES_COUNT ? `var(--sp-${it.sp})` : 'var(--paper-dim)';
     const inner = [
       h('span', { class: 'tg-ent-node', 'aria-hidden': 'true' }),
       h(

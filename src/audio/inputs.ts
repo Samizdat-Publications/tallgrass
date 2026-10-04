@@ -16,6 +16,7 @@ export function countNearby(agents: Float32Array, count: number, camX: number, c
     const dx = agents[o + 1] - camX;
     const dy = agents[o + 2] - camY;
     if (dx * dx + dy * dy > r2) continue;
+    // only the four species the soundscape mixes are counted; any other species id (registry growth) falls through uncounted
     switch (agents[o]) {
       case Sp.Bison: out.bison++; break;
       case Sp.Wolf: out.wolf++; break;
