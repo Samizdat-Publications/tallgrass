@@ -725,7 +725,7 @@ For every item:
 Budget for the whole WP: ≤ +1.0 ms at 1440p in every view.
 
 - [x] **0. One source for the season curves.** Move `CURE_KEYS`, `keyCurve` and the winter and riparian curves into one shared module (today they are duplicated across grass.ts:126, engine.ts:58 and terrain.ts:952).
-- [ ] **1. Water.**
+- [x] **1. Water.**
   - The creek and ponds read silver from the drone.
   - Reflect the real sky radiance in the reflected direction (the sky dome function in sky.ts) with Fresnel.
   - Beyond 80 m and at incidence above 60°, apply an artistic reflectance floor of 0.35.

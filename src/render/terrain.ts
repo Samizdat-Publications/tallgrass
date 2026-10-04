@@ -6,7 +6,7 @@ import { FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
 import type { World } from '../sim/world';
 import { sampleHeight } from '../sim/world';
 import {
-  HEIGHT_GLSL, NOISE_GLSL, SharedUniforms, clamp, fbm2, injectSafeOutput, injectTerrainShadow, smoothstep, vnoise2,
+  HEIGHT_GLSL, NOISE_GLSL, POND_GLSL, SharedUniforms, clamp, fbm2, injectSafeOutput, injectTerrainShadow, makePondUniform, smoothstep, vnoise2,
 } from './common';
 import { SEASON_GLSL } from './season';
 
@@ -78,8 +78,10 @@ function shapeCreek(world: World): { height: Float32Array; creekDist: Float32Arr
     const sim = world.height[v];
     let h: number;
     const along = arcAt[v];
-    // channel half-width wanders 3.0 to 5.6 m and the bank height varies, so the creek never reads as a straight canal
-    const W = 3.0 + 2.6 * vnoise2(along * 0.028, 3.7, 5);
+    // channel half-width wanders 2.4 to 6.2 m and the bank height varies, so the creek never reads as a straight canal: long reaches
+    // (about 80 m) swing between a narrow run and a broad pool (the water mesh reaches 7.5 m from the centerline, so 6.2 is the cap),
+    // with a shorter wobble on top. water.ts measures the half-width from these heights, so its current and bars follow.
+    const W = 2.4 + 2.8 * smoothstep(0.22, 0.78, vnoise2(along * 0.013, 3.7, 5)) + 1.0 * vnoise2(along * 0.045 + 20.0, 8.1, 11);
     const bankH = 0.28 + 0.42 * vnoise2(along * 0.06 + 9.0, 1.3, 9);
     if (d < W) {
       const u = d / W;
@@ -752,9 +754,11 @@ export class Terrain {
 
     const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.95, metalness: 0 });
     const sh = this.shared;
+    const pondU = makePondUniform(this.world.ponds);
     mat.onBeforeCompile = (shader) => {
       injectTerrainShadow(shader, sh);
       const u = shader.uniforms;
+      u.uPonds = pondU;
       u.tVeg = sh.vegTex;
       u.tStatic = sh.staticTex;
       u.tTrail = sh.trailTex;
@@ -884,6 +888,7 @@ varying vec3 vTgNormal;
 varying float vTgCurv;
 ${NOISE_GLSL}
 ${SEASON_GLSL}
+${POND_GLSL}
 float gTgRough = 0.95;
 float gTgH = 0.0;
 vec3 gTgEmis = vec3(0.0);
@@ -1122,6 +1127,9 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
   // short grass: a little of the soil shows through, darker and earthier, never light sand
   float soilShow = smoothstep(0.1, 0.0, bio + (nC - 0.5) * 0.05) + dirt * 0.25 * edgeW;
   soilShow = clamp(soilShow * (1.0 - 0.45 * riparian), 0.0, 1.0);   // bare shore is partly grassed over where the riparian belt is
+  // the bare apron on the shaded side of a pond (common.ts): trampled, dusty ground between the waterline and the grass
+  float apron = tgPondApron(xz, wd);
+  soilShow = max(soilShow, apron);
   vec3 shortGrass = mix(grassCol, grassCol * vec3(0.9, 0.84, 0.74) + uSoil * 0.12, stubA * 0.5);
   // grazed ground is stubble, not a smooth plane: short blade flecks (dark gaps, pale cut ends) at close and middle range
   if (stubA > 0.05 && dist < 220.0) {
@@ -1131,6 +1139,14 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
     shortGrass = mix(shortGrass, shortGrass * vec3(1.14, 1.06, 0.84), smoothstep(0.62, 0.9, sb) * 0.5 * sbk);
   }
   vec3 col = mix(shortGrass, uSoil * (0.8 + 0.5 * nA), soilShow * 0.85);
+  // the apron is dry, pale, dusty earth (lighter than the damp mud at the waterline, which the wet line below darkens again)
+  if (apron > 0.003) {
+    float ag = tgNoise2(xz * 2.3 + 5.0) * 0.6 + tgNoise2(xz * 7.1 + 1.0) * 0.4;
+    vec3 dust = vec3(0.33, 0.25, 0.15) * (0.72 + 0.5 * nA) * (0.8 + 0.4 * ag);
+    // sparse hoof pits and cracked-mud flecks near the camera
+    dust *= 1.0 - 0.3 * smoothstep(0.6, 0.85, tgNoise2(xz * 3.7 + 11.0)) * (1.0 - smoothstep(30.0, 140.0, dist));
+    col = mix(col, dust, apron * 0.82);
+  }
   gTgGrass = 1.0 - soilShow;
 
   // rock only on truly steep faces, and only partly
@@ -1162,7 +1178,9 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
     lipN = mix(0.5, lipN, 1.0 - smoothstep(120.0, 420.0, dist));
     float lipW = 0.3 + 1.6 * smoothstep(0.38, 0.72, lipN);
     float mud = 1.0 - smoothstep(0.0, lipW, wd + (nC - 0.5) * 0.9);
-    col = mix(col, vec3(0.22, 0.175, 0.125) * (0.8 + 0.4 * nC), mud * 0.62);
+    // from the drone the mud lip reads as a pale dirt bank (dry cut bank and sand), as in the concept, not a dark ring
+    vec3 mudC = mix(vec3(0.22, 0.175, 0.125), vec3(0.46, 0.37, 0.25), smoothstep(70.0, 180.0, dist) * (1.0 - riparian * 0.4));
+    col = mix(col, mudC * (0.8 + 0.4 * nC), mud * 0.62);
   }
 
   // under tree and shrub cover: cooler, darker, leaf litter

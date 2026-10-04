@@ -45,6 +45,9 @@
 | 10-04 14:56 | Gemini `gemini-3.1-pro-preview` | concept compare of haze_after.jpg vs 00_prairie_golden_hour.jpg (2 images, JSON) | 1 call | ~$0.01 |
 | 10-04 14:57 | Gemini `gemini-3.1-pro-preview` | concept compare of haze_after.jpg vs 00_prairie_golden_hour.jpg (2 images, JSON) | 1 call | ~$0.01 |
 | 10-04 14:58 | Gemini `gemini-3.1-pro-preview` | concept compare of haze_after.jpg vs 00_prairie_golden_hour.jpg (2 images, JSON) | 1 call | ~$0.01 |
+| 10-04 15:11 | Gemini `gemini-3.1-pro-preview` | concept compare of water_after.jpg vs 00_prairie_golden_hour.jpg (2 images, JSON) | 1 call | ~$0.01 |
+| 10-04 15:16 | Gemini `gemini-3.1-pro-preview` | concept compare of water_after.jpg vs 00_prairie_golden_hour.jpg (2 images, JSON) | 1 call | ~$0.01 |
+| 10-04 15:24 | Gemini `gemini-3.1-pro-preview` | concept compare of water_after.jpg vs 00_prairie_golden_hour.jpg (2 images, JSON) | 1 call | ~$0.01 |
 
 ## Downloaded third-party assets
 | Asset | Source | License | Used in |
