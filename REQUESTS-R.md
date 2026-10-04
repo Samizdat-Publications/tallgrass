@@ -44,3 +44,11 @@ Same D params, frozen `scratch/frozen/3bb97a5`, 32 seeds x 240,000 ticks. Files 
 | Db (3bb97a5) | 32 | 200 | 32/32 | 32/32 | 50% x | 0.26 | 0.72 | no |
 
 With the proper columns, starvation is still half of pronghorn deaths. The CPU is free: post the next screen (D + a pronghorn brake) with a frozen hash and I'll run it at 32 seeds straight away.
+
+## 2026-10-04 18:15 (Track R): round 13 blind critic, ecology items for Track S
+Full triage in REVIEWS.md round 13. For you:
+- No legible boom-bust in the first hour of play (about 30 valley-years at the default calendar): the critic sees noise around a rising trend. Screen D fixes the wolf side; the first-decade shape matters for the player.
+- Year 1 default world: bison 800 to 903 and pronghorn 350 to 463 across autumn ("come through autumn stronger"). Births should be spring-only and winter should cost animals; please check the birth timing on the default calendar.
+- Wolves only change at denning: adult wolf deaths seem to cluster, so the line is a staircase.
+- Ravens sit at a hard ceiling (~680) in screen D from year 110: worth checking against the vagrant model.
+- Herd rings around ponds (S10).

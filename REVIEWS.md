@@ -207,3 +207,19 @@ Gemini: Visual 6, Readability 7, Life 2, Ecosystem 5, UI 8, Keep watching 3 (rou
 
 ## Round 12 (11:35, blind critic, stills of the live 11:19 build and the current charts) -> `review/round-12/critique.md`
 Stills critic: 7, 5, 6, 5, 7, 6, the same as round 9: the stills scores have plateaued at this level. New and fixed: the chart's late "collapse" was an artifact (a dead world's zeros dominating the median as the other worlds finished); population medians now end where fewer than 5 worlds remain, like the trait medians (tools/charts.py, 11:38), and the table title no longer overlaps the persistence axis. Its season complaint (#7) stands: at 100x the ground is green and snowless under a 'late winter' header (the header is right; the snowpack curve or the grass green-up runs early); logged for the next session. Everything else repeats rounds 8 and 9 and is triaged there.
+
+## Round 13 (stills, v2 alpha in progress, 2026-10-04 ~18:10)
+Folder `review/round-13/` (default-world stills at main 77cfda6, the concept view, dawn mist and snow from R2 work, charts from screen D re-run at 3bb97a5). Fresh blind critic. Scores: visual 7, readability 5, life and motion 6, ecosystem believability 5, UI clarity 7, keep watching 6.
+
+| # | Issue | Triage | Reason / outcome |
+|---|---|---|---|
+| 1 | No visible boom-bust cycles in the first hour; drift instead | Defer to Track S (S3 v6 adoption, S5) | Screen D gets wolf CV 0.26 and corr 0.72 but needs the pronghorn brake before adoption; passed to Track S in REQUESTS-R. |
+| 2 | Ravens flat at a ceiling; predators ratchet up | Defer to Track S | Raven nest-site cap is known (v1 lesson 4); vagrant ravens (S1) in screens B to D; noted for v6. |
+| 3 | Grazers grow through autumn and winter; wolves only step at denning | Pass to Track S | Chronicle "bison come through autumn stronger" in year 1 is a real seasonality question for the sim. |
+| 4 | Herds read as scabs, rings around ponds | Defer (S10 drink spots and grazing spacing) | Known; S10 is queued for Track S. |
+| 5 | River reads as a road at mid range and dusk | Fix (builder) | Silver far mirror works only beyond ~100 m; mid range still flat with hard edges. |
+| 6 | Grazed ground and early-winter snow read as missing textures / purple marble | Fix (builder) | Snow patches need to follow terrain with soft edges; grazed slopes need stubble. |
+| 7 | See-through panels over trees | Fixed | Idle dim was 0.5 opacity on the whole panel incl. glass; now 0.75. |
+| 8 | Potato rocks, hard map edge | Defer | Rocks to R7/R11 asset pass. |
+| 9 | Snow does not bury grass; same bare trees | Fix with 6 (snow) / defer trees to R11 | |
+| 10 | Night too dark on animals | Fix (small) | Moonlight rim on animals. |

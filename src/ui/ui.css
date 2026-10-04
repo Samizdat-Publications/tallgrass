@@ -1697,12 +1697,12 @@ button.tg-ent-b:hover {
   display: none;
 }
 
-/* ---- idle: the side panels settle to about half after a while with no input, and come back on any move or key ----- */
+/* ---- idle: the side panels settle to three quarters (enough backing to stay readable over trees) after a while with no input, and come back on any move or key ----- */
 .tg-ui.is-idle:not(.is-cinematic):not(.is-hidden) .tg-tool,
 .tg-ui.is-idle:not(.is-cinematic):not(.is-hidden) .tg-rail-title,
 .tg-ui.is-idle:not(.is-cinematic):not(.is-hidden) .tg-chron,
 .tg-ui.is-idle:not(.is-cinematic):not(.is-hidden) .tg-pop {
-  opacity: 0.5;
+  opacity: 0.75;
   transition: opacity 1.2s var(--ease);
 }
 
