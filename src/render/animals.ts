@@ -283,9 +283,11 @@ export class AnimalLayer {
   private shared: AnimalShared = {
     uTime: this.uTime, uCamPos: { value: new THREE.Vector3(256, 400, 256) }, uPxK: { value: 900 / (2 * Math.tan((45 * Math.PI) / 360)) },
     uLow: { value: 0 },
+    uAmb: { value: new THREE.Vector3(0.6, 0.55, 0.45) },
     probe: (scene, exposure) => {
       this.lit.probe(scene);
       const v = this.lit.value;
+      this.shared.uAmb.value.copy(v);
       // dark scene: little light reaches the animals, or the camera has opened up (exposure rises at dusk and night, which is
       // what makes bright coat areas glow against the dark ground)
       this.shared.uLow.value = Math.max(1 - clamp((v.x + v.y + v.z) / 3 / 0.7, 0, 1), smoothstep(1.05, 1.5, exposure));
@@ -320,7 +322,7 @@ export class AnimalLayer {
   private ring: THREE.Mesh;
   private ringGeo: THREE.PlaneGeometry;
   private ringBase: Float32Array;
-  private ringMat: THREE.MeshBasicMaterial;
+  private ringMat: THREE.ShaderMaterial;
   private selInfo = { found: false, x: 0, y: 0, z: 0, r: 1 };
 
   constructor(world: World) {
@@ -336,16 +338,39 @@ export class AnimalLayer {
     this.markers = new Markers(world.size);
     this.object3D.add(this.kills.mesh, this.dust.mesh, this.markers.mesh, this.markers.pingMesh);
 
-    // Selection ring: a soft glowing ring that hugs the terrain under the selected animal.
+    // Selection ring: a crisp thin cream ring with a dark edge on both sides (so it reads on gold grass, snow and dusk alike),
+    // hugging the terrain under the selected animal. Its line stays about 2.5 px wide at any camera distance.
     const N = 24;
     this.ringGeo = new THREE.PlaneGeometry(2, 2, N, N);
     this.ringGeo.rotateX(-Math.PI / 2);
     const pos = this.ringGeo.getAttribute('position') as THREE.BufferAttribute;
     this.ringBase = new Float32Array(pos.array as Float32Array);
-    const tex = makeRingTexture();
-    this.ringMat = new THREE.MeshBasicMaterial({
-      map: tex, transparent: true, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending,
-      color: 0xffd98a, fog: false, toneMapped: false,
+    this.ringMat = new THREE.ShaderMaterial({
+      transparent: true, depthWrite: false, depthTest: false, fog: false,
+      uniforms: { uOpacity: { value: 1 } },
+      vertexShader: /* glsl */ `
+        varying vec2 vUv;
+        void main() {
+          vUv = uv * 2.0 - 1.0;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }`,
+      fragmentShader: /* glsl */ `
+        precision highp float;
+        uniform float uOpacity;
+        varying vec2 vUv;
+        void main() {
+          float r = length(vUv);
+          float fw = max(fwidth(r), 1e-4);
+          float hw = max(0.028, 1.25 * fw);                // half width of the bright line (uv units, at least ~2.5 px wide)
+          float edge = hw + max(0.02, 1.1 * fw);           // outer edge of the dark outline
+          float d = abs(r - 0.86);
+          float line = 1.0 - smoothstep(hw - fw, hw + fw, d);
+          float dark = 1.0 - smoothstep(edge - fw, edge + fw, d);
+          float a = max(dark * 0.62, line);
+          if (a < 0.01) discard;
+          vec3 col = mix(vec3(0.04, 0.025, 0.012), vec3(1.5, 1.32, 0.95), line);
+          gl_FragColor = vec4(col, a * uOpacity);
+        }`,
     });
     this.ring = new THREE.Mesh(this.ringGeo, this.ringMat);
     this.ring.frustumCulled = false;
@@ -715,6 +740,12 @@ export class AnimalLayer {
         const hL = sampleHeight(H, hn, cell, x + sh * hw, z - ch * hw);
         roll = -Math.atan2(hR - hL, 2 * hw);
         y = (hF + hB + hR + hL) * 0.25 * 0.5 + ground * 0.5; // sit between the footprint average and the centre
+        // from the drone view the body follows the ground more emphatically (up to +60%), so a herd visibly rides the swells
+        // and dips of the land even when its legs are two pixels tall
+        const cpv = this.shared.uCamPos.value;
+        const fkT = smoothstep(25, 140, Math.hypot(x - cpv.x, ground - cpv.y, z - cpv.z));
+        pitch *= 1 + 0.6 * fkT;
+        roll *= 1 + 0.6 * fkT;
         // lean into the turn like a rider on a bend (tan = v * omega / g), only once it is actually running
         const vv = S.vis[slot];
         const lean = clamp(Math.atan((vv * turnRate) / 9.81) * 0.85, -BANK_MAX[sp], BANK_MAX[sp]) * smoothstep(1.5, 5, vv);
@@ -896,7 +927,10 @@ export class AnimalLayer {
       return;
     }
     const w = this.world;
-    const R = si.r * (1 + 0.04 * Math.sin(this.timeSec * 3));
+    // wide enough that the ring is never smaller than about 10 px across on screen
+    const cp = this.shared.uCamPos.value;
+    const cd = Math.hypot(si.x - cp.x, si.y - cp.y, si.z - cp.z);
+    const R = Math.max(si.r, cd * 0.0085) * (1 + 0.03 * Math.sin(this.timeSec * 3));
     const pos = this.ringGeo.getAttribute('position') as THREE.BufferAttribute;
     const arr = pos.array as Float32Array;
     for (let i = 0; i < arr.length; i += 3) {
@@ -907,7 +941,7 @@ export class AnimalLayer {
     }
     pos.needsUpdate = true;
     this.ringGeo.computeBoundingSphere();
-    this.ringMat.opacity = 0.75 + 0.25 * Math.sin(this.timeSec * 4);
+    this.ringMat.uniforms.uOpacity.value = 0.88 + 0.12 * Math.sin(this.timeSec * 4);
     this.ring.visible = true;
   }
 
@@ -993,28 +1027,6 @@ export class AnimalLayer {
     this.dust.dispose();
     this.kills.dispose();
     this.ringGeo.dispose();
-    this.ringMat.map?.dispose();
     this.ringMat.dispose();
   }
-}
-
-function makeRingTexture(): THREE.CanvasTexture {
-  const S = 256;
-  const c = document.createElement('canvas');
-  c.width = c.height = S;
-  const g = c.getContext('2d')!;
-  const cx = S / 2;
-  const grad = g.createRadialGradient(cx, cx, 0, cx, cx, cx);
-  grad.addColorStop(0.0, 'rgba(255,230,160,0.06)');
-  grad.addColorStop(0.55, 'rgba(255,230,160,0.10)');
-  grad.addColorStop(0.68, 'rgba(255,240,190,0.55)');
-  grad.addColorStop(0.78, 'rgba(255,245,210,1.0)');
-  grad.addColorStop(0.86, 'rgba(255,230,160,0.45)');
-  grad.addColorStop(0.96, 'rgba(255,220,140,0.0)');
-  grad.addColorStop(1.0, 'rgba(255,220,140,0.0)');
-  g.fillStyle = grad;
-  g.fillRect(0, 0, S, S);
-  const t = new THREE.CanvasTexture(c);
-  t.colorSpace = THREE.SRGBColorSpace;
-  return t;
 }

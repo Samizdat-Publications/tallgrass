@@ -13,7 +13,7 @@ import type { AnimParams, ModelDef } from './types';
 const f = (x: number): string => (Number.isInteger(x) ? x.toFixed(1) : String(+x.toFixed(5)));
 const v4 = (a: number[]): string => `vec4(${a.map(f).join(',')})`;
 
-function defines(p: AnimParams): string {
+function defines(p: AnimParams, far?: ModelDef['far']): string {
   return [
     `#define KIND ${p.kind}`,
     `#define COM_Y ${f(p.comY)}`,
@@ -38,8 +38,8 @@ function defines(p: AnimParams): string {
     `#define STRETCH_CAP ${f(STRETCH_CAP)}`, `#define STRETCH_Y ${f(Math.sqrt(STRETCH_CAP * STRETCH_CAP - 1))}`,
     `#define FLAP_HZ ${f(p.flapHz)}`,
     `#define MIN_PX ${f(p.minPx)}`,
-    `#define FAR_NEAR 140.0`, `#define FAR_FAR 400.0`,
-    `#define ANIM_NEAR 25.0`, `#define ANIM_FAR 150.0`,
+    `#define FAR_NEAR ${f(far?.d0 ?? 140)}`, `#define FAR_FAR ${f(far?.d1 ?? 400)}`,
+    `#define ANIM_NEAR 20.0`, `#define ANIM_FAR 110.0`,
     `#define BODY_LEN ${f(p.boostLen)}`,
   ].join('\n');
 }
@@ -286,13 +286,16 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
     // Whole-body gait cues sized as a fraction of the body length, so they stay readable at 15 to 40 px: a bound (the body
     // rises and falls once per stride in a gallop), the spine arching and stretching, a lateral snake, and the body pitching.
     float bl = BODY_LEN;
-    float hop = wWalk * 0.02 * cos(2.0 * cyc) + wTrot * 0.05 * cos(2.0 * cyc) + wGal * 0.1 * cos(cyc - 0.5);
+    // (sized so that a wolf only 20 px long still visibly bounds: the gallop lifts the whole body about 16% of its length)
+    float hop = wWalk * 0.03 * cos(2.0 * cyc) + wTrot * 0.08 * cos(2.0 * cyc) + wGal * 0.16 * cos(cyc - 0.5);
     float xn = clamp(p.x / (bl * 0.55), -1.3, 1.3);
-    float arch = (wTrot * 0.03 + wGal * 0.055) * cos(cyc + 1.0) * (xn * xn - 0.35);
-    float snake = (wWalk * 0.018 + wTrot * 0.032 + wGal * 0.036) * sin(cyc + 0.3) * xn;
+    float arch = (wTrot * 0.04 + wGal * 0.08) * cos(cyc + 1.0) * (xn * xn - 0.35);
+    float snake = (wWalk * 0.02 + wTrot * 0.036 + wGal * 0.04) * sin(cyc + 0.3) * xn;
     p.y += bl * farK * (hop + arch);
     p.z += bl * farK * snake;
-    tgRotZ(p, n, vec3(0.0, COM_Y, 0.0), farK * (wTrot * 0.05 * sin(2.0 * cyc + 0.5) + wGal * 0.13 * sin(cyc + 1.0)));
+    tgRotZ(p, n, vec3(0.0, COM_Y, 0.0), farK * (wWalk * 0.03 * sin(2.0 * cyc + 0.5) + wTrot * 0.09 * sin(2.0 * cyc + 0.5) + wGal * 0.2 * sin(cyc + 1.0)));
+    // rolling from side to side with the stride (a walk sways, a trot rolls, a gallop rocks), and a little weight settling in the stance
+    tgRotX(p, n, vec3(0.0, COM_Y, 0.0), farK * (wWalk * 0.03 + wTrot * 0.055 + wGal * 0.06) * sin(cyc + 0.9));
   }
 #endif
 #if KIND == 2
@@ -358,6 +361,9 @@ void tgShade() {
     float fleshW = (1.0 - smoothstep(0.35, 0.7, r + (hh - 0.5) * 0.55)) * 0.8;
     float boneW = (1.0 - smoothstep(0.04, 0.22, r));
     col = mix(mix(col, flesh, fleshW), uBone * 0.85, boneW);
+    // a downed animal shows its pale belly where the hide is still on (the underside lies toward the side once it has rolled over)
+    float bel = smoothstep(-0.1, -0.65, normal.y) * smoothstep(0.3, 0.75, r) * (1.0 - fleshW);
+    col = mix(col, vec3(0.3, 0.24, 0.18) * (0.7 + 0.5 * col.r * 4.0), 0.6 * bel);
   }
   // Sickness: a duller, greyer, slightly darker coat (the head droop and the slower gait are in tgAnimate). Never a tint.
   float sick = dead ? 0.0 : fract(aLook.w);
@@ -371,7 +377,7 @@ void tgShade() {
 }
 `;
 
-const NO_FAR = { gain: 1, rim: 0, hunt: 0, rimCol: [1, 1, 1] as [number, number, number] };
+const NO_FAR: NonNullable<ModelDef['far']> = { gain: 1, rim: 0, hunt: 0, rimCol: [1, 1, 1] };
 
 export interface AnimalMaterials {
   material: THREE.MeshStandardMaterial;
@@ -387,12 +393,14 @@ export interface AnimalShared {
   uPxK: { value: number };
   /** How dark the scene is, 0 bright day .. 1 night (from the scene's lights); updated by `probe`. */
   uLow: { value: number };
+  /** Ambient light of the scene as an rgb (0 night .. about 0.7 day), set by `probe`. */
+  uAmb: { value: THREE.Vector3 };
   /** Reads the lights of the scene being rendered into `uLow` (called once per draw of the main view). */
   probe?: (scene: THREE.Object3D, exposure: number) => void;
 }
 
 export function makeAnimalMaterials(sp: number, def: ModelDef, shared: AnimalShared): AnimalMaterials {
-  const defs = defines(def.params);
+  const defs = defines(def.params, def.far);
   const material = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: def.roughness, metalness: 0 });
   material.onBeforeCompile = (shader) => {
     shader.uniforms.uTime = shared.uTime;
@@ -410,6 +418,11 @@ export function makeAnimalMaterials(sp: number, def: ModelDef, shared: AnimalSha
     shader.uniforms.uRimK = { value: far.rim };
     shader.uniforms.uHuntK = { value: far.hunt };
     shader.uniforms.uLow = shared.uLow;
+    shader.uniforms.uAmb = shared.uAmb;
+    shader.uniforms.uFarTint = { value: new THREE.Vector3(...(far.tint ?? [1, 1, 1])) };
+    shader.uniforms.uFarMix = { value: far.tint ? far.mix ?? 0.5 : 0 };
+    shader.uniforms.uFloor = { value: far.floor ?? 0 };
+    shader.uniforms.uLowFill = { value: far.lowFill ?? 0 };
     material.userData.shader = shader; // exposed for live tuning from the console
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', `#include <common>\n${defs}\n${COMMON_DECL}\n${VERT_SHADE_DECL}`)
@@ -419,17 +432,19 @@ export function makeAnimalMaterials(sp: number, def: ModelDef, shared: AnimalSha
       )
       .replace('#include <begin_vertex>', 'vec3 transformed = tgP;');
     shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', `#include <common>\nvarying vec3 vTgColor;\nvarying float vTgSel;\nvarying float vTgFar;\nvarying float vTgHunt;\nuniform float uFill;\nuniform vec3 uWarm;\nuniform float uNeutral;\nuniform float uFarGain;\nuniform vec3 uRimCol;\nuniform float uRimK;\nuniform float uHuntK;\nuniform float uLow;`)
+      .replace('#include <common>', `#include <common>\nvarying vec3 vTgColor;\nvarying float vTgSel;\nvarying float vTgFar;\nvarying float vTgHunt;\nuniform float uFill;\nuniform vec3 uWarm;\nuniform float uNeutral;\nuniform float uFarGain;\nuniform vec3 uRimCol;\nuniform float uRimK;\nuniform float uHuntK;\nuniform float uLow;\nuniform vec3 uAmb;\nuniform vec3 uFarTint;\nuniform float uFarMix;\nuniform float uFloor;\nuniform float uLowFill;`)
       // Bright parts of the coat (the white bands and rump) are pulled toward a mid value as the light drops, so they
       // darken with the scene instead of glowing against the dark herds at dusk and night.
       .replace('#include <color_fragment>', `vec3 tgC = vTgColor * mix(1.0, uFarGain, vTgFar);
+        // at range the coat is pulled toward its species colour (see ModelDef.far), keeping part of its own shading
+        tgC = mix(tgC, uFarTint * (0.75 + 0.5 * clamp(dot(vTgColor, vec3(0.2126, 0.7152, 0.0722)) * 6.0, 0.0, 1.0)), uFarMix * vTgFar);
         float tgL = dot(tgC, vec3(0.2126, 0.7152, 0.0722));
         tgC *= 1.0 - 0.8 * uLow * max(tgL - 0.16, 0.0) / max(tgL, 1e-3);
         diffuseColor.rgb *= tgC;`)
       // sky fill: pull toward a warm neutral (so brown coats stay brown in blue shade), then boost it so the shaded side keeps form
       .replace(
         '#include <lights_fragment_end>',
-        `irradiance = mix(irradiance, vec3(dot(irradiance, vec3(0.2126, 0.7152, 0.0722))) * uWarm, uNeutral) * uFill * (1.0 - 0.3 * uLow);\n#include <lights_fragment_end>`,
+        `irradiance = mix(irradiance, vec3(dot(irradiance, vec3(0.2126, 0.7152, 0.0722))) * uWarm, uNeutral) * uFill * (1.0 - uLowFill * uLow);\n#include <lights_fragment_end>`,
       )
       .replace(
         '#include <emissivemap_fragment>',
@@ -437,7 +452,10 @@ export function makeAnimalMaterials(sp: number, def: ModelDef, shared: AnimalSha
         float tgRim = pow(1.0 - clamp(dot(normalize(vViewPosition), normal), 0.0, 1.0), 3.0);
         totalEmissiveRadiance += vec3(1.0, 0.8, 0.35) * vTgSel * (0.015 + 0.45 * tgRim);
         float tgEdge = pow(1.0 - clamp(dot(normalize(vViewPosition), normal), 0.0, 1.0), 1.6);
-        totalEmissiveRadiance += uRimCol * vTgFar * (uRimK + vTgHunt * uHuntK) * tgEdge * (1.0 - 0.9 * uLow);`,
+        totalEmissiveRadiance += uRimCol * vTgFar * (uRimK + vTgHunt * uHuntK) * tgEdge * (1.0 - 0.9 * uLow);
+        // ambient floor: a share of the scene's own ambient light reaches the coat unshadowed, so a herd in shade or at dusk
+        // keeps its value above the shadows; it scales with the light, so it dims with the scene and never glows
+        totalEmissiveRadiance += diffuseColor.rgb * uAmb * uFloor * vTgFar;`,
       );
   };
   material.customProgramCacheKey = () => `tg-animal-${sp}`;

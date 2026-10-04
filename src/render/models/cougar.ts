@@ -105,7 +105,7 @@ export function buildCougar(): ModelDef {
     fill: 1.5,
     warm: [1.15, 1.0, 0.8],
     neutral: 0.7,
-    far: { gain: 0.85, rim: 0.04, hunt: 0.4, rimCol: [1.0, 0.86, 0.62] },
+    far: { gain: 0.85, rim: 0.06, hunt: 0.4, rimCol: [1.0, 0.86, 0.62], d0: 80, d1: 300, tint: [0.2, 0.12, 0.06], mix: 0.4, floor: 0.1 },
     params: {
       ...DEFAULT_PARAMS,
       kind: 0,

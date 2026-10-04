@@ -142,7 +142,28 @@ export interface ModelDef {
    * contrast against the grass), edges glow `rimCol` at `rim` strength, and by another `hunt` while the animal stalks,
    * chases or feeds.
    */
-  far?: { gain: number; rim: number; hunt: number; rimCol: [number, number, number] };
+  far?: {
+    gain: number;
+    rim: number;
+    hunt: number;
+    rimCol: [number, number, number];
+    /** Distance range (m) over which all the far effects fade in (default 140 to 400). */
+    d0?: number;
+    d1?: number;
+    /**
+     * Linear albedo the coat is pulled toward at full distance, and how far (0..1). Lifts a near-black coat to a readable
+     * species colour at range (warm brown bison, tan pronghorn, cool grey wolf) while keeping some of its own shading.
+     */
+    tint?: [number, number, number];
+    mix?: number;
+    /**
+     * Ambient floor at full distance: the coat also gets this share of the scene's ambient light (self-lit by it), so animals
+     * in shade or at dusk stay a value above the shadows instead of going black. Scales with the scene light, never glows.
+     */
+    floor?: number;
+    /** Share of the sky fill removed in low light (stops pale coats glowing against a dark scene). Default 0. */
+    lowFill?: number;
+  };
   triangles: number;
 }
 

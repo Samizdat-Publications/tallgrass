@@ -117,7 +117,8 @@ export function buildWolf(): ModelDef {
     neutral: 0.4,
     // from the wide view a wolf is a little darker (value contrast with gold grass) and one that stalks, chases or feeds
     // gets a cool rim of light
-    far: { gain: 0.66, rim: 0.1, hunt: 0.35, rimCol: [0.72, 0.84, 1.0] },
+    // from 70 m out a wolf deepens to a cool slate (a hue the gold grass and brown herds do not have) and gets a cool rim
+    far: { gain: 0.8, rim: 0.08, hunt: 0.3, rimCol: [0.8, 0.88, 1.0], d0: 70, d1: 280, tint: [0.095, 0.1, 0.125], mix: 0.55, floor: 0.12 },
     params: {
       ...DEFAULT_PARAMS,
       kind: 0,

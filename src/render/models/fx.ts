@@ -242,6 +242,11 @@ export class KillSites {
           vec3 tint = mix(stain, dirt, smoothstep(0.1, 0.8, edge) * 0.9);
           // on bright snow the same multiply would read as an ink blot: keep only a faint trampled-slush mark
           tint = mix(tint, vec3(0.86, 0.84, 0.86), 0.7 * clamp(uSnow, 0.0, 1.0));
+          // a fresh kill (most of the meat still on it) has a dark red-brown stain at its heart, so it reads as a downed animal
+          // and not a lump: strongest right at the body, fading with the carcass; on snow it shows as blood
+          float fresh = smoothstep(0.7, 0.97, rem) * (1.0 - smoothstep(0.15, 0.75, edge));
+          tint *= mix(vec3(1.0), vec3(1.0, 0.55, 0.5), fresh);
+          a = max(a, fresh * 0.7 * smoothstep(0.1, 0.3, r));
           gl_FragColor = vec4(mix(vec3(1.0), tint, min(a * 0.9, 0.85)), 1.0);
         }`,
     });
@@ -348,24 +353,26 @@ export class KillSites {
 // Distance markers
 
 /**
- * [r, g, b, size in px on a 900 px tall viewport, max alpha, solo] per species id. Deliberately small and quiet. A solo
- * species (predators) gets its dot even when alone; the rest only mark herds, packs and flocks.
+ * [r, g, b, size in px on a 900 px tall viewport, max alpha, solo] per species id. Only the predators have one: a faint
+ * soft glint around the animal from about 170 m out (a pack of wolves is 2 to 3% of the animals, so without it they are
+ * lost in a wide shot). The herds need none: their boosted bodies already read, and the coat is lifted for range in the
+ * shader (see ModelDef.far).
  */
 const MARKER: Array<[number, number, number, number, number, boolean] | null> = [
-  [0.045, 0.03, 0.022, 3.6, 0.5, false], // bison: dark umber
-  [0.13, 0.16, 0.23, 5.2, 0.6, true], // wolf: dark slate, so a pale wolf in gold grass has a dark core and reads from the wide view
-  [0.015, 0.015, 0.02, 3.0, 0.5, false], // raven: black speck
-  [0.5, 0.34, 0.2, 3.0, 0.3, false], // pronghorn: warm tan
+  null, // bison
+  [0.7, 0.8, 0.98, 18, 0.1, true], // wolf: a cool pale glint under the dark slate body
+  null, // raven
+  null, // pronghorn
   null, // rabbit
-  [0.2, 0.17, 0.12, 4.4, 0.5, true], // cougar: dark umber-grey
+  [0.95, 0.8, 0.55, 18, 0.08, true], // cougar: a warm one
 ];
 
 /** A marker is only drawn when at least this many of the same species share a ~24 m neighbourhood: herds and packs, never loners. */
 const CLUSTER_MIN = 3;
 const CLUSTER_CELL = 24;
 /** Markers are fully off inside this camera distance, and fade in over the next FADE_LEN meters. */
-const NEAR_OFF = 250;
-const FADE_LEN = 150;
+const NEAR_OFF = 170;
+const FADE_LEN = 130;
 /** Chase ripples are for the wide view only: gone inside 200 m, full strength by about 330 m. */
 const PING_NEAR = 200;
 const PING_FAR = 330;
@@ -382,10 +389,9 @@ const PX_HIDE = 6.5;
 
 /**
  * Quiet readability aids for the high drone view, all hidden up close:
- *  - species-colored dots that appear only when the camera is far (hidden inside ~250 m) and only for animals still
- *    smaller than about 6 px on screen: herds, packs and flocks as a group, predators even alone;
- *  - a slow cream ripple on the ground around a predator that is chasing or stalking and around anything feeding at a
- *    carcass (from about 170 m), so the hunt and the kill are where the eye goes.
+ *  - a very faint small glint under each predator (wolf, cougar) from about 170 m out, fully in by 300 m (see MARKER);
+ *  - a slow, thin, species-tinted ripple on the ground around a predator that is chasing (from about 200 m), so the hunt
+ *    is where the eye goes.
  */
 export class Markers {
   /** The dots (depth tested, so a ridge hides them). */
@@ -463,7 +469,8 @@ export class Markers {
         varying vec2 vUv; varying vec4 vCol;
         void main() {
           float r = length(vUv);
-          float a = 1.0 - smoothstep(0.2, 1.0, r);
+          // a small soft glint, brightest just off the animal's centre so it halos the body without veiling it
+          float a = smoothstep(0.0, 0.35, r) * (1.0 - smoothstep(0.35, 1.0, r));
           a *= a;
           if (a * vCol.a < 0.004) discard;
           gl_FragColor = vec4(vCol.rgb, a * vCol.a);
@@ -561,7 +568,7 @@ export class Markers {
     const d2 = dx * dx + dy * dy + dz * dz;
     if (d2 < NEAR_OFF * NEAR_OFF) return; // fully faded: skip the work
     const px = (length * scale * this.pxK) / Math.sqrt(d2);
-    if (px > PX_HIDE) return;
+    if (px > PX_HIDE && !mk[5]) return;
     if (this.m >= this.cap) this.grow();
     const o = this.m++ * 8;
     const st = this.st;
@@ -604,7 +611,7 @@ export class Markers {
         if (gj < G - 1) cnt += this.grid[(sp * G + gj + 1) * G + gi];
         if (cnt < CLUSTER_MIN && !mk[5]) continue;
         const px = st[o + 4];
-        const readable = 1 - Math.min(1, Math.max(0, (px - PX_SHOW) / (PX_HIDE - PX_SHOW)));
+        const readable = mk[5] ? 1 : 1 - Math.min(1, Math.max(0, (px - PX_SHOW) / (PX_HIDE - PX_SHOW)));
         const dense = mk[5] ? 1 : Math.min(1, (cnt - CLUSTER_MIN + 1) / 5);
         const a = mk[4] * readable * (0.45 + 0.55 * dense);
         if (a < 0.02) continue;

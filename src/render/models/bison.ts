@@ -150,6 +150,9 @@ export function buildBison(): ModelDef {
     fill: 1.6,
     warm: [1.24, 0.98, 0.7],
     neutral: 0.85,
+    // at range the near-black chocolate coat is lifted to a readable warm brown (never a stain), with an ambient floor so a
+    // herd in shade or at dusk stays a value above the shadows
+    far: { gain: 1, rim: 0, hunt: 0, rimCol: [1, 0.8, 0.5], d0: 40, d1: 220, tint: [0.18, 0.11, 0.072], mix: 0.65, floor: 0.22 },
     params: {
       ...DEFAULT_PARAMS,
       kind: 0,

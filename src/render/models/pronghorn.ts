@@ -120,7 +120,7 @@ export function buildPronghorn(): ModelDef {
     warm: [1.1, 1.0, 0.84],
     neutral: 0.7,
     // from the drone view the pale coat is pulled down a little so a herd reads as tan and white, not a bright smear
-    far: { gain: 0.86, rim: 0, hunt: 0, rimCol: [1, 1, 1] },
+    far: { gain: 0.9, rim: 0, hunt: 0, rimCol: [1, 1, 1], d0: 100, d1: 340, tint: [0.4, 0.255, 0.13], mix: 0.28, lowFill: 0.3 },
     params: {
       ...DEFAULT_PARAMS,
       kind: 0,
