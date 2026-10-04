@@ -23,7 +23,14 @@ Only Track S writes this file (V2-PLAN.md section 4.3). Track R reads it with `g
   - Elder text now says the animal died at a great age.
   - `tools/smoke.ts` browser smoke tool (see above).
 
+- **S16 Share codes and replay** (sim side; R12 wires the UI).
+  - `src/sim/sharecode.ts`: `encodeShare`, `decodeShare` (warning when the code comes from a different sim build or a newer format), `shareUrl`, `simBuildId`. The code is base64url JSON `{v, b, seed, scenario, params, log}`.
+  - Worker: logs every player `apply` with its tick; `init` takes `replay` (merged after the scenario's schedule, stable by tick, which is exactly where a live apply lands); `{type:'getLog'}` answers `{type:'log', tick, log}`.
+  - `src/sim/sharecode.test.ts`: round trip, bad codes, warnings, and a live run vs its decoded replay give the same valley.
+- Chronicle text for the 14 v2 event kinds and names for species 6 to 11 (`describe.ts`, tested by `src/ui/describe.test.ts`).
+
 ## Decisions
+- Share-code build check fingerprints the default params (`simBuildId`) | it changes exactly when the default world changes (each adoption), needs no build step, and is the same in worker, page and Node | a git hash injected by Vite (not available to the headless tools).
 - Smoke tool is `tools/smoke.ts`, not `tools/smoke.mjs` | section 4.3 gives Track S `tools/*.ts`, not `.mjs` | writing a Track R file.
 - Smoke tool exits 2 (SKIP) when frames arrive slower than 1 per second | software GL in the cloud is too slow for the ready gate, and that is not a broken build | failing the cloud run every time.
 - Registry: pronghorn is guild `browser`; `isGrazer` covers grazer and browser. `core` is true for bison, wolf, raven, pronghorn | they are the species present by default | marking all six core.
@@ -34,6 +41,7 @@ Only Track S writes this file (V2-PLAN.md section 4.3). Track R reads it with `g
 - batch.ts workers boot through `batchWorkerBoot.mjs` | fixes cloud batches with no change to results | running screens single-threaded.
 
 ## Requests for Track R
+- S16 wiring (R12 Share button): on load, if `?w=` is present, `decodeShare(q.get('w'))` (catch: show "That valley code could not be read" and start normally); use `state.seed`, `scenarioById(state.scenario)` and `state.params` (they already include the scenario's params, so pass them as `params` and the scenario's `schedule` as `schedule`), and send `replay: state.log` in `init`; show `warning` once if set. Share button: send `{type:'getLog'}`, on the `log` reply build `shareUrl(location.href, {seed, scenario: scenario.id, params: simParams, log})` and copy it.
 - R0 item 2 (registry-safe render and UI): Track R files that still hard-code species are `src/ui/palette.ts` (can derive from `SPECIES[].color`), `src/ui/popgraph.ts` (`ALWAYS_SHOWN = 3`), `src/ui/traits.ts` (index table over TRAIT_SERIES), `src/ui/story.ts`, `src/render/animals.ts` and `src/render/models/*`, plus any `SPECIES_NAMES[...]` or `Sp.*` lookups that assume 6 species.
 - Run `npx tsx tools/smoke.ts` on the GPU machine after merging S0. In the cloud the page logs one 404 (a resource that is not served by `vite` dev here; the URL was not reported by Playwright). If it shows up locally as a console error, the smoke tool will fail on it.
 - Confirm one local `npm run batch` still runs on Windows with the boot file.

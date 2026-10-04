@@ -1,16 +1,23 @@
 // Web Worker host for the simulation. The main thread only renders and sends commands.
 import { NG, GENE_NAMES, G_COAT, G_SIZE, G_SPEED } from './agents';
+import type { LoggedIntervention } from './sharecode';
 import { Sim, SimEvent, StoryEntry } from './sim';
 import { SPECIES as REGISTRY } from './species';
 import { Intervention, SPECIES_COUNT, TICKS_PER_SECOND } from './types';
 
 export type ToWorker =
-  | { type: 'init'; seed: number; params?: Record<string, number>; schedule?: { tick: number; iv: Intervention }[] }
+  | {
+      type: 'init'; seed: number; params?: Record<string, number>; schedule?: { tick: number; iv: Intervention }[];
+      /** Player interventions to replay at their ticks (a share code's log, S16). Applied after the scenario's own schedule at the same tick. */
+      replay?: LoggedIntervention[];
+    }
   | { type: 'speed'; speed: number }
   | { type: 'apply'; iv: Intervention }
   | { type: 'select'; id: number | null }
   | { type: 'skip' }
-  | { type: 'step'; ticks: number };
+  | { type: 'step'; ticks: number }
+  /** Ask for the intervention log, to build a share code; answered with a 'log' message. */
+  | { type: 'getLog' };
 
 export interface AnimalDetail {
   id: number;
@@ -58,6 +65,8 @@ export const TRAIT_SERIES: [number, number, string][] = REGISTRY.filter((d) => d
 
 export type FromWorker =
   | { type: 'ready'; seed: number }
+  /** Every player intervention so far (replayed ones included), with its tick. */
+  | { type: 'log'; tick: number; log: LoggedIntervention[] }
   | {
       type: 'snap';
       tick: number;
@@ -93,6 +102,8 @@ const SKIP_KINDS = new Set(['stampede', 'packFounded', 'packLost', 'drought', 'o
 
 let sim: Sim | null = null;
 let schedule: { tick: number; iv: Intervention }[] = [];
+/** Player interventions with the tick they took effect at, for share codes. Scenario schedules are not logged. */
+let ivLog: LoggedIntervention[] = [];
 let speed = 1;
 let selectedId: number | null = null;
 /** Serial of the next event the page has not seen (compare Sim.eventSerial). */
@@ -281,7 +292,10 @@ ctx.onmessage = (e: MessageEvent<ToWorker>) => {
   switch (m.type) {
     case 'init':
       sim = new Sim({ seed: m.seed, params: m.params });
-      schedule = (m.schedule ?? []).slice().sort((x, y) => x.tick - y.tick);
+      // stable sort: at the same tick the scenario's own interventions run first, then the replayed ones in order,
+      // which is where a live 'apply' lands too (after the step that reaches its tick, see record())
+      ivLog = (m.replay ?? []).map((e) => ({ tick: e.tick, iv: e.iv }));
+      schedule = [...(m.schedule ?? []), ...ivLog].sort((x, y) => x.tick - y.tick);
       eventCursor = 0;
       history = [];
       for (let k = 0; k < 1; k++) record();
@@ -296,7 +310,10 @@ ctx.onmessage = (e: MessageEvent<ToWorker>) => {
       skipping = false;
       break;
     case 'apply':
-      sim?.apply(m.iv);
+      if (sim) {
+        ivLog.push({ tick: sim.tick, iv: m.iv });
+        sim.apply(m.iv);
+      }
       post(true);
       break;
     case 'select':
@@ -309,6 +326,9 @@ ctx.onmessage = (e: MessageEvent<ToWorker>) => {
     case 'step':
       if (sim) for (let k = 0; k < m.ticks; k++) { sim.step(1); record(); }
       post(true);
+      break;
+    case 'getLog':
+      ctx.postMessage({ type: 'log', tick: sim?.tick ?? 0, log: ivLog.map((e) => ({ tick: e.tick, iv: e.iv })) } satisfies FromWorker);
       break;
   }
 };
