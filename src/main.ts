@@ -120,7 +120,13 @@ worker.onmessage = (e: MessageEvent<FromWorker>) => {
     if (!q.has('cam')) focusHerd(m.agents, m.count, true);
   }
 };
-send({ type: 'init', seed, params: scenario.params, schedule: scenario.schedule });
+// dev: ?p=key:value,key:value overrides sim parameters on top of the scenario (for previewing experiments in the real game)
+const devParams: Record<string, number> = {};
+for (const kv of (q.get('p') ?? '').split(',')) {
+  const [k, v] = kv.split(':');
+  if (k && v !== undefined && Number.isFinite(Number(v))) devParams[k.trim()] = Number(v);
+}
+send({ type: 'init', seed, params: { ...scenario.params, ...devParams }, schedule: scenario.schedule });
 send({ type: 'speed', speed });
 
 /** Frame the biggest bison herd like a documentary opening shot. */

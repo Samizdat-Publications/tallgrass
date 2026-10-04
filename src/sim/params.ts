@@ -92,6 +92,8 @@ export interface Params {
   loneIndividual: number;
   /** Width in seasons of the yearly conception window that puts births in mid-spring (0 = conceive any time outside winter). */
   matingWindow: number;
+  /** If > 0, grazing and resting herbivores keep within this many metres of their nearest herd-mate instead of drifting to the herd centre (0 = centre). */
+  herdNearest: number;
   /** Amplitude of the slow climate cycle on grass growth (0 = off; 0.3 = +/-30%). */
   climateAmp: number;
   // fear
@@ -208,6 +210,7 @@ export function defaultParams(): Params {
     wolfPreyRef: 0,
     loneIndividual: 0,
     matingWindow: 0,
+    herdNearest: 0,
     climateAmp: 0,
     fearKill: 0.7,
     fearKillRadius: 22,

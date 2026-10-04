@@ -899,6 +899,7 @@ export class Sim implements SimLike {
     const bx = Math.min(nb - 1, Math.max(0, (x / bs) | 0)), by = Math.min(nb - 1, Math.max(0, (y / bs) | 0));
     let n = 0, cx = 0, cy = 0, avx = 0, avy = 0, sepx = 0, sepy = 0, alarm = 0, alx = 0, aly = 0, infNear = 0, maxFlee = 0;
     let mate = -1, mateD = 1e9;
+    let nnx = 0, nny = 0, nnd2 = 1e9;
     const wantMate = !a.male[i] && !juvenile && a.pregnant[i] === 0 && a.cooldown[i] === 0 && a.energy[i] > p.conceiveEnergy;
     for (let yy = by - 1; yy <= by + 1; yy++) {
       if (yy < 0 || yy >= nb) continue;
@@ -914,6 +915,7 @@ export class Sim implements SimLike {
           // a herd animal tracks its nearest few dozen neighbors, not the whole crowd
           if (n >= 40 && d2 > 9) continue;
           n++;
+          if (d2 < nnd2) { nnd2 = d2; nnx = dx; nny = dy; }
           cx += a.x[j]; cy += a.y[j];
           avx += a.vx[j]; avy += a.vy[j];
           if (d2 < spacing2) {
@@ -1050,8 +1052,13 @@ export class Sim implements SimLike {
         dvx = sepx * 0.5;
         dvy = sepy * 0.5;
         if (n > 0) {
-          const dx = cx - x, dy = cy - y, d = Math.sqrt(dx * dx + dy * dy);
-          if (d > coh + 1) { dvx += (dx / d) * 0.6 * herd; dvy += (dy / d) * 0.6 * herd; state = St.Walk; }
+          if (p.herdNearest > 0) {
+            const d = Math.sqrt(nnd2);
+            if (d > p.herdNearest + 1) { dvx += (nnx / d) * 0.6 * herd; dvy += (nny / d) * 0.6 * herd; state = St.Walk; }
+          } else {
+            const dx = cx - x, dy = cy - y, d = Math.sqrt(dx * dx + dy * dy);
+            if (d > coh + 1) { dvx += (dx / d) * 0.6 * herd; dvy += (dy / d) * 0.6 * herd; state = St.Walk; }
+          }
         }
       } else {
         // graze while drifting toward better grass; walk on only when the patch is spent
@@ -1079,8 +1086,14 @@ export class Sim implements SimLike {
           dvx = bdx * v + sepx * 0.5;
           dvy = bdy * v + sepy * 0.5;
           if (n > 0) {
-            const dx = cx - x, dy = cy - y, d = Math.sqrt(dx * dx + dy * dy);
-            if (d > coh) { dvx += (dx / d) * 0.3 * herd; dvy += (dy / d) * 0.3 * herd; }
+            if (p.herdNearest > 0) {
+              // stay within reach of the nearest herd-mate rather than the herd's centre: grazing fronts and strands, not rings
+              const d = Math.sqrt(nnd2);
+              if (d > p.herdNearest) { dvx += (nnx / d) * 0.3 * herd; dvy += (nny / d) * 0.3 * herd; }
+            } else {
+              const dx = cx - x, dy = cy - y, d = Math.sqrt(dx * dx + dy * dy);
+              if (d > coh) { dvx += (dx / d) * 0.3 * herd; dvy += (dy / d) * 0.3 * herd; }
+            }
           }
         } else {
           if (bestS < p.migrateBelow) {
