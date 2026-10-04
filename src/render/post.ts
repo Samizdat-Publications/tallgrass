@@ -17,7 +17,7 @@ export type Quality = 'high' | 'medium';
 
 /** God ray gain (additive HDR, scaled by the haze terms), and the dawn pool's extinction per metre at the valley floor. */
 const GODRAY_GAIN = 2.4;
-const DAWN_DENSITY = 0.012;
+const DAWN_DENSITY = 0.07;
 const _snowCol = new THREE.Color();
 
 const FS_VERT = 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }';
@@ -109,7 +109,10 @@ class FogPass extends Pass {
         uAerialNight: { value: 0.0 },
         // dawn pool (R2.8): mist density (extinction per metre at the valley floor), height falloff, and the clock and wind that drift it
         uDawn: { value: 0.0 },
-        uDawnFall: { value: 0.08 },
+        uDawnFall: { value: 0.0 },
+        tPool: { value: null },
+        uPoolRect: { value: new THREE.Vector4(0, 0, 512, 1 / 512) },
+        uPoolTop: { value: -1000.0 },
         uTime: shared.time,
         uWind: shared.wind,
         uSunDir: shared.sunDir,
@@ -142,6 +145,9 @@ class FogPass extends Pass {
         uniform float uAerialNight;
         uniform float uDawn;
         uniform float uDawnFall;
+        uniform sampler2D tPool;
+        uniform vec4 uPoolRect;
+        uniform float uPoolTop;
         uniform float uTime;
         uniform vec3 uWind;
         ${SKY_GLSL}
@@ -193,25 +199,39 @@ class FogPass extends Pass {
             mistOd = uMist * e0 * dist;
           }
           mistOd = min(max(mistOd, 0.0), 0.9);
-          // Dawn pool: after a clear, calm night mist gathers in the low ground (the same exponential height model as the mist
-          // above, but a thinner layer) and drifts in slow banks. The noise is sampled partway along the ray and slides with the wind.
+          // Dawn pool: after a clear, calm night mist lies in the low ground. The pool surface is read from a coarse map of the valley
+          // floor (tPool: the local lowest ground a few metres up, built once from the terrain), so it fills creek valleys and swales
+          // and leaves hilltops and upper slopes clear above a soft top surface. The ray is marched a few steps through the part of it
+          // below the highest pool top; rays that stay above that (sky, hills, a high camera looking out) skip it entirely.
           float dawnOd = 0.0;
-          // (skipped where the whole ray stays far above the pool: exp(-6) of the floor density is nothing)
-          if (uDawn > 0.002 && min(y0, y0 + dy * dist) * uDawnFall < 6.0) {
-            float kd = uDawnFall;
-            float ed0 = exp(clamp(-kd * y0, -60.0, 60.0));
-            float dod;
-            if (abs(dy * kd) > 1e-4) {
-              float ed1 = exp(clamp(-kd * (y0 + dy * dist), -60.0, 60.0));
-              dod = (ed0 - ed1) / (kd * dy);
-            } else {
-              dod = ed0 * dist;
+          if (uDawn > 0.002) {
+            float yc = uCamPos.y;
+            float tIn = 0.0, tOut = dist;
+            if (yc > uPoolTop) { if (dy >= -1e-4) tOut = 0.0; else tIn = (yc - uPoolTop) / (-dy); }
+            else if (dy > 1e-4) tOut = min(tOut, (uPoolTop - yc) / dy);
+            tOut = min(tOut, tIn + 700.0);
+            if (tOut > tIn + 0.01) {
+              float len = tOut - tIn;
+              float jit = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
+              vec2 drift = uWind.xy * (0.6 + 1.8 * uWind.z) * uTime * 0.35;
+              float acc = 0.0;
+              for (int i = 0; i < 12; i++) {
+                float s0 = (float(i) + 0.25 + 0.5 * jit) / 12.0;
+                float t = tIn + len * pow(s0, 1.5);
+                float wgt = len * 1.5 * sqrt(s0) / 12.0;
+                vec3 p = uCamPos + dir * t;
+                vec2 puv = (p.xz - uPoolRect.xy) * uPoolRect.w;
+                float top = texture2D(tPool, puv).r - uDawnFall;
+                float inside = min(min(puv.x, puv.y), min(1.0 - puv.x, 1.0 - puv.y));
+                float occ = (1.0 - smoothstep(top - 2.2, top + 0.8, p.y)) * smoothstep(-0.05, 0.0, inside);
+                // banks: slow drifting patches, and a little thicker toward the floor
+                float bank = tgNoise2(p.xz * 0.02 - drift * 0.05);
+                float body = 0.45 + 1.1 * smoothstep(0.2, 0.8, bank);
+                body *= 0.65 + 0.35 * clamp((top - p.y) / 3.0, 0.0, 1.0);
+                acc += occ * body * wgt;
+              }
+              dawnOd = min(uDawn * acc, 2.2);
             }
-            vec3 sp = uCamPos + dir * min(dist * 0.55, 260.0);
-            vec2 drift = uWind.xy * (0.6 + 1.8 * uWind.z) * uTime * 0.35;
-            float bank = 0.7 * tgNoise2(sp.xz * 0.011 - drift * 0.06) + 0.3 * tgNoise2(sp.xz * 0.035 - drift * 0.2 + 7.3);
-            dawnOd = uDawn * max(dod, 0.0) * (0.25 + 1.5 * smoothstep(0.25, 0.8, bank));
-            dawnOd = min(dawnOd, 1.6);
           }
           // Aerial perspective: Beer-Lambert extinction over the whole view ray (thinning with altitude like the near term), so the
           // mid and far hills visibly lose contrast and take on the colour of the light scattered into the ray.
@@ -227,7 +247,10 @@ class FogPass extends Pass {
           fc = mix(fc, fc * vec3(0.92, 0.97, 1.04) + vec3(0.02, 0.03, 0.04), mf * 0.6);
           // dawn mist is lit by the low sun: pale and soft, warm toward the light
           float dShare = dawnOd / (od + mistOd + dawnOd + 1e-5);
-          fc = mix(fc, fc * vec3(1.03, 1.02, 1.05) + uSunTint * (0.08 + 0.45 * tgHGn(cosS, 0.6)) * smoothstep(-0.05, 0.12, uSunDir.y) * (1.0 - uAerialNight), dShare * 0.85);
+          // (desaturated toward the sky's own brightness, so it reads pale warm white, then lit gold on the sun's side)
+          vec3 mc = mix(fc, vec3(dot(fc, vec3(0.3333))), 0.62) * 1.08 + vec3(0.02, 0.022, 0.028);
+          mc += uSunTint * (0.04 + 0.24 * tgHGn(cosS, 0.6)) * smoothstep(-0.05, 0.12, uSunDir.y) * (1.0 - uAerialNight);
+          fc = mix(fc, mc, dShare * 0.92);
           // forward-scattering lobe toward the sun (HG g 0.75) plus a broad warm floor, tinted by the sun colour, applied in
           // proportion to how much of the fog is aerial haze. Dust (drought) swaps the cool-away-from-sun side for a tan.
           float aerShare = aerFog / (aerFog + fog0 + 1e-4);
@@ -644,7 +667,7 @@ export class PostFX {
     f.uMist.value = L.mistDensity;
     // dawn pool: density at the valley floor, and a falloff that tightens toward the ground as it burns off
     f.uDawn.value = this.dawnNow * DAWN_DENSITY;
-    f.uDawnFall.value = 0.075 * (1 + 1.4 * (1 - this.dawnEnv));
+    f.uDawnFall.value = 3.2 * (1 - this.dawnEnv);   // the pool surface sinks as it burns off
     this.applyAerial(f);
     const g = this.grade.material.uniforms;
     (g.uShadowTint.value as THREE.Color).copy(L.gradeShadow);
@@ -766,6 +789,53 @@ export class PostFX {
     const lc = sh.lightColor.value;
     const m = Math.max(lc.r, lc.g, lc.b, 1e-3);
     (f.uSunTint.value as THREE.Color).setRGB(lc.r / m, lc.g / m * 0.97, lc.b / m * 0.9);
+  }
+
+  /**
+   * Build the dawn pool map once: for a 64 x 64 grid over the valley, the local lowest ground within about 50 m (the floor the mist
+   * settles on), smoothed, plus the pool depth. A pool top that follows the valley floor leaves hills and upper slopes above it.
+   */
+  setPoolMap(worldSize: number, heightAt: (x: number, z: number) => number, depth = 4.5): void {
+    const G = 64, cell = worldSize / G;
+    const h = new Float32Array(G * G);
+    for (let j = 0; j < G; j++) for (let i = 0; i < G; i++) h[j * G + i] = heightAt((i + 0.5) * cell, (j + 0.5) * cell);
+    const R = 6;
+    const m = new Float32Array(G * G);
+    for (let j = 0; j < G; j++) for (let i = 0; i < G; i++) {
+      let lo = 1e9;
+      for (let dj = -R; dj <= R; dj++) for (let di = -R; di <= R; di++) {
+        if (di * di + dj * dj > R * R) continue;
+        const x = Math.min(G - 1, Math.max(0, i + di)), y = Math.min(G - 1, Math.max(0, j + dj));
+        lo = Math.min(lo, h[y * G + x]);
+      }
+      m[j * G + i] = lo;
+    }
+    // smooth the floor so the pool top is a gentle surface, not a stepped one
+    let src = m;
+    for (let pass = 0; pass < 3; pass++) {
+      const dst = new Float32Array(G * G);
+      for (let j = 0; j < G; j++) for (let i = 0; i < G; i++) {
+        let sum = 0, n = 0;
+        for (let dj = -2; dj <= 2; dj++) for (let di = -2; di <= 2; di++) {
+          const x = Math.min(G - 1, Math.max(0, i + di)), y = Math.min(G - 1, Math.max(0, j + dj));
+          sum += src[y * G + x]; n++;
+        }
+        dst[j * G + i] = sum / n;
+      }
+      src = dst;
+    }
+    const data = new Uint16Array(G * G);
+    let top = -1e9;
+    for (let k = 0; k < G * G; k++) { const t = src[k] + depth; top = Math.max(top, t); data[k] = THREE.DataUtils.toHalfFloat(t); }
+    const tex = new THREE.DataTexture(data, G, G, THREE.RedFormat, THREE.HalfFloatType);
+    tex.minFilter = tex.magFilter = THREE.LinearFilter;
+    tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
+    tex.generateMipmaps = false;
+    tex.needsUpdate = true;
+    const u = this.fog.material.uniforms;
+    u.tPool.value = tex;
+    (u.uPoolRect.value as THREE.Vector4).set(0, 0, worldSize, 1 / worldSize);
+    u.uPoolTop.value = top + 0.8;
   }
 
   setMistBase(y: number): void { this.fog.material.uniforms.uMistBase.value = y; }

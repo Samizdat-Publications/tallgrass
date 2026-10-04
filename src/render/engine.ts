@@ -225,6 +225,7 @@ export class Engine {
     let hmin = 1e9;
     for (let i = 0; i < world.height.length; i++) hmin = Math.min(hmin, world.height[i]);
     this.post.setMistBase(hmin);
+    this.post.setPoolMap(world.size, this.terrain.heightAt);
 
     // 'low' preset: open grassland (no trees or water within 22 m, gentle slope) near the middle of the valley
     let lowAnchor = { x: world.size / 2, z: world.size / 2 };

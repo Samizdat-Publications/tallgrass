@@ -74,6 +74,7 @@ export class Snow {
         uColor: { value: new THREE.Color(1, 1, 1) },
         uExt: { value: 0.0 },
         uAlpha: { value: 0.9 },
+        uBlizz: { value: 0 },
       },
       vertexShader: /* glsl */ `
         attribute vec4 aSeed;
@@ -88,6 +89,7 @@ export class Snow {
         uniform float uFlake;
         uniform float uExt;
         uniform float uAlpha;
+        uniform float uBlizz;
         varying vec2 vQ;
         varying float vK;
         varying float vA;
@@ -111,20 +113,25 @@ export class Snow {
           float sp = length(vv.xy);
           vec2 ax = sp > 1e-3 ? vv.xy / sp : vec2(0.0, -1.0);
           vec2 ac = vec2(ax.y, -ax.x);   // handedness chosen so the quad faces the camera (it is back-face culled otherwise)
-          float world = uFlake * (0.55 + 0.9 * aSeed.w);
+          // most flakes are small, a few are big (the cube skews the sizes down)
+          float world = uFlake * (0.45 + 1.6 * aSeed.w * aSeed.w * aSeed.w);
           float pxW = depth * uPx;                 // metres per pixel at this depth
-          float sz = max(world, pxW * 1.15);
+          float sz = max(world, pxW * 1.6);        // never thinner than about a pixel
+          // a streak is thin across (a pixel or two) and long along the motion; a round flake keeps its radius
+          float aw = sz * mix(1.0, 0.55, uBlizz);
           float len = sp * uShutter * (0.55 + 0.9 * aSeed.x);
+          float L = aw + len * 0.5;
           vec2 q = position.xy;                    // -1..1
           vec3 cv = pv;
-          cv.xy += ac * q.x * sz + ax * q.y * (sz + len * 0.5);
-          vK = (sz + len * 0.5) / sz;                // half length in radii (1 = round)
+          cv.xy += ac * q.x * aw + ax * q.y * L;
+          vK = L / aw;                             // half length in radii (1 = round)
           vQ = vec2(q.x, q.y * vK);
-          // energy-preserving fade for flakes smaller than a pixel, a soft edge at the box, a soft near clip, and the visibility range
+          // energy-preserving fade for flakes smaller than a pixel, a soft edge at the box, a soft near clip (fewer big near flakes),
+          // and the visibility range; every flake gets its own brightness
           float small = clamp(world / sz, 0.0, 1.0);
           float edge = 1.0 - smoothstep(0.34 * uBox, 0.5 * uBox, r);
-          float nearF = smoothstep(0.35, 1.4, depth);
-          vA = uAlpha * small * small * edge * nearF * exp(-depth * uExt);
+          float nearF = smoothstep(0.7, 3.0, depth);
+          vA = uAlpha * (0.45 + 0.55 * aSeed.z) * small * edge * nearF * exp(-depth * uExt);
           gl_Position = projectionMatrix * vec4(cv, 1.0);
         }`,
       fragmentShader: /* glsl */ `
@@ -138,8 +145,11 @@ export class Snow {
         varying float vA;
         varying float vZ;
         void main() {
-          // soft round flake (an elongated capsule when it streaks)
-          float a = 1.0 - smoothstep(0.1, 1.0, length(vec2(vQ.x, max(abs(vQ.y) - (vK - 1.0), 0.0))));
+          // soft round flake: a gaussian blob, stretched along its motion into a streak with a bright core and tapering tails
+          float d2 = dot(vec2(vQ.x, max(abs(vQ.y) - (vK - 1.0), 0.0)), vec2(vQ.x, max(abs(vQ.y) - (vK - 1.0), 0.0)));
+          float a = exp(-2.0 * d2) * (1.0 - smoothstep(0.0, 1.0, d2));
+          float tail = 1.0 - smoothstep(0.05, 1.0, abs(vQ.y) / vK);
+          a *= mix(1.0, tail * tail, smoothstep(1.0, 2.0, vK));
           a *= vA;
           if (a < 0.003) discard;
           // hand depth test against the scene (flakes are not in the depth buffer, and the pass runs after the fog)
@@ -173,7 +183,7 @@ export class Snow {
     (u.uWindV.value as THREE.Vector2).set(p.windX * vw, p.windZ * vw);
     u.uFall.value = 1.15 * (1 - 0.45 * b);
     u.uFlutter.value = 1 - 0.8 * smoothstep(0.3, 0.9, ws);
-    u.uShutter.value = 0.012 + 0.012 * b;
+    u.uShutter.value = 0.012 + 0.03 * b;
     // the volume is small near the ground and widens with altitude; a blizzard tightens it (you cannot see far)
     const box = clamp(16 + 0.3 * p.aboveGround, 16, 80) * (1 - 0.2 * b);
     u.uBox.value = box;
@@ -181,14 +191,15 @@ export class Snow {
     (u.uCam.value as THREE.Vector3).copy(camera.position);
     this.pxScale = 2 * Math.tan(THREE.MathUtils.degToRad(camera.fov) * 0.5) / Math.max(1, (u.uRes.value as THREE.Vector2).y);
     u.uPx.value = this.pxScale;
-    u.uFlake.value = 0.011;
+    u.uFlake.value = 0.013;
+    u.uBlizz.value = b;
     // how many flakes of the pool are in play: a steady fall, then a thick one in a blizzard
     const density = fall * (0.7 + 0.3 * b);
     this.geo.instanceCount = Math.round(MAX_FLAKES * clamp(density, 0, 1));
     // the visibility range the flakes themselves fade out over (m)
     u.uExt.value = 0.0015 + 0.02 * b;
     (u.uColor.value as THREE.Color).copy(p.color);
-    u.uAlpha.value = 0.85;
+    u.uAlpha.value = 1.0 - 0.1 * b;
   }
 
   dispose(): void { this.geo.dispose(); this.material.dispose(); }
