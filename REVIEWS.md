@@ -174,10 +174,10 @@ Stills critic: Visual 7, Readability 5, Life 6, Ecosystem 5, UI 7, Keep watching
 |---|---|---|---|---|
 | 1 | Wolves and ravens flat; ravens crash in a die-off | DEFER (researched) | lead | Hungry wolves (opt-in) gives wolf CV 0.27 with a lag, but pronghorn 0/20 over 1,000 generations. Ravens are capped by nest sites; uncapping them crashed them out (00:20 Saturday). |
 | 2 | Evolution saturates by year 300; herding lost; bison twins | DEFER (researched) | lead | sprintCost, herdEyes and a bison single-calf cap (L4: 29/32) screened; next is a per-species sprint cost plus the calf cap. |
-| 3 | Winter, drought and wide shots muddy; drought mauve; night pond white ring | PARTLY | renderer builder (riparian round in progress) | The mauve in still 11 is partly the territory tints over drought ground. Drought grading and the night pond rim are next-session items. |
+| 3 | Winter, drought and wide shots muddy; drought mauve; night pond white ring | PARTLY | renderer builder (riparian round in progress) | The mauve in still 11 is partly the territory tints over drought ground. Night pond rim FIXED 10:28 (snow on ice greys under moonlight and drifts against the shore). Drought grading is a next-session item. |
 | 4 | Herds as one carpet, clipping | DEFER | lead | herdNearest 6 does not visibly loosen herds (scratch/herds/compare_early.jpg); next is personal space while grazing. |
 | 5 | Donut rings around water | DEFER | lead | Same root as 4: water-seeking plus herd cohesion. |
-| 6 | UI boxes in the action | DONE (not visible in this round) | UI builder | Panels dim after 20 s idle, but these stills were captured with ?dim=0; H gives a clean ambient view. |
+| 6 | UI boxes in the action | DONE (not visible in this round) | UI builder, lead | Panels dim after 20 s idle, but these stills were captured with ?dim=0; H gives a clean ambient view. Chapter cards about 18% smaller (10:31). |
 | 7 | Events told, not shown | DEFER | lead | Sick animals already lower their heads; stampedes raise dust in dry ground only. |
 | 8 | Fragile, slow opening; 100x runs at 34x | DEFER | lead | Near-equilibrium start rejected (cost persistence); fast-forward is CPU-bound on the sim. |
 | 9 | Potato rocks, repeated bare trees | DEFER | renderer | Rocks were reworked at 09:44; still read as smooth ovals. |
