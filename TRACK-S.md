@@ -48,6 +48,13 @@ Only Track S writes this file (V2-PLAN.md section 4.3). Track R reads it with `g
 - batch.ts workers boot through `batchWorkerBoot.mjs` | fixes cloud batches with no change to results | running screens single-threaded.
 
 ## Requests for Track R
+- **S3 screens, 32 seeds, on the local CPU** (the cloud has 4 cores and is running the 16-seed versions). From a frozen worktree of `v2-sim@bc62e1e`, each `npx tsx src/headless/batch.ts --seeds 32 --ticks 240000 --sample 600 --threads 10 --params '<P>' --out scratch/screens/<name>32`:
+  - A: `{"calendarScale":2}` (or reuse scratch/cal2)
+  - B: `{"calendarScale":2,"openPrairie":1,"ravenVagrants":1}`
+  - C: B + `"cdvRate":0.15,"mangeRate":0.03`
+  - D: C + `"wolfPreyRef":1000,"wolfRareHalf":400,"leanLitter":0.8`
+
+  Then `python tools/adoption.py A=scratch/screens/A32 B=... C=... D=...` and paste the table here in REQUESTS-R.md (or commit the four `summary.json`/`metrics.md` files under `review/stability/v6-screens/`). I will decide adoption from the 32-seed table when it lands, and from the 16-seed table otherwise.
 - `src/ui/story.ts` `causePhrase`: add `case 6: return 'Left the valley for the open prairie'` and `case 7: return 'Died of distemper'` (new death codes from S1 and S2). Code 6 is not a death in the story sense: the memorial could read "Left the valley" rather than "In memoriam" if you want to go further.
 - S18 wiring: in `ui.ts`, keep a `DecadeLines` next to `SeasonLines` and feed it the same history rows plus the frame's sim events; add its lines to the chronicle like season lines (`major: true` for decades, so they can carry the title; the title would also make a good chapter card for kind 'decade'). Call `reset()` where `seasons.reset()` is called.
 - S16 wiring (R12 Share button): on load, if `?w=` is present, `decodeShare(q.get('w'))` (catch: show "That valley code could not be read" and start normally); use `state.seed`, `scenarioById(state.scenario)` and `state.params` (they already include the scenario's params, so pass them as `params` and the scenario's `schedule` as `schedule`), and send `replay: state.log` in `init`; show `warning` once if set. Share button: send `{type:'getLog'}`, on the `log` reply build `shareUrl(location.href, {seed, scenario: scenario.id, params: simParams, log})` and copy it.
