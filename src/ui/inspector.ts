@@ -327,9 +327,12 @@ export class Inspector {
       g.dot.style.width = `${(f(v) * 100).toFixed(1)}%`;
       g.dot.parentElement?.setAttribute('aria-valuenow', v.toFixed(2));
       g.tick.style.left = `${(f(t.base(d.sp)) * 100).toFixed(1)}%`;
-      setText(g.val, v.toFixed(2));
+      // plain words instead of a raw gene value, each against the founders (the tick): coat as paler or darker, the rest in percent
+      const dc = v - t.base(d.sp);
+      const word = t.key === 'coat' ? (dc < -0.05 ? 'paler' : dc > 0.05 ? 'darker' : 'typical') : relWord(v, t.base(d.sp));
+      setText(g.val, word);
       const parent = g.dot.parentElement?.parentElement;
-      if (parent) parent.title = `${t.title}: ${v.toFixed(2)}. The tick is where the founders started (${t.base(d.sp).toFixed(2)}).`;
+      if (parent) parent.title = `${t.title}: ${v.toFixed(2)} (${word} against the founders). The tick is where the founders started (${t.base(d.sp).toFixed(2)}).`;
     });
     this.lastKey = '';
     this.applyMeans();
@@ -386,3 +389,8 @@ function stat(value: string, label: string): HTMLElement {
 }
 
 const capFirst = (s: string): string => (s ? s[0].toUpperCase() + s.slice(1) : s);
+/** A gene as a change from the founders' value: "+12%", "-8%", or "0%" when within half a percent. */
+const relWord = (v: number, base: number): string => {
+  const pct = Math.round((v / (base || 1) - 1) * 100);
+  return pct > 0 ? `+${pct}%` : `${pct}%`;
+};
