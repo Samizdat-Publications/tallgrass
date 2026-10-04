@@ -550,12 +550,12 @@ export class Water {
             {
               float clump = tgNoise2(p * 0.8 + 3.0) * 0.6 + tgNoise2(p * 2.6 + 1.0) * 0.4;
               float frH = mix(0.36, 0.5, farK) * (0.75 + 0.5 * clump);
-              float fr = (1.0 - smoothstep(frH * 0.4, frH, hA)) * (0.5 + 0.5 * smoothstep(0.3, 0.7, clump)) * mix(0.5, 0.62, farK);
+              float fr = (1.0 - smoothstep(frH * 0.4, frH, hA)) * (0.5 + 0.5 * smoothstep(0.3, 0.7, clump)) * mix(0.5, 0.62, farK) * mix(0.35, 1.0, isCreek);
               fr *= 1.0 - 0.85 * uSnow;
               src *= 1.0 - fr;
               a = a + fr * (1.0 - a);
             }
-            float lip = (1.0 - smoothstep(0.0, mix(0.035, 0.07, farK) * (0.7 + 0.6 * rag), hA)) * 0.8 * (1.0 - dry);
+            float lip = (1.0 - smoothstep(0.0, mix(0.035, 0.07, farK) * (0.7 + 0.6 * rag), hA)) * mix(0.5, 0.8, isCreek) * (1.0 - dry);
             src *= 1.0 - lip;
             a = max(a, lip);
             if (isCreek > 0.5) {
@@ -692,7 +692,8 @@ export class Water {
             optK = clamp((1.0 - 1.1 * side) * mix(0.8, 1.5, smoothstep(3.6, 5.2, hwM)) * (1.0 - 0.35 * riffle) * (0.75 + 0.5 * reach), 0.3, 2.6);
             barK = max(smoothstep(0.15, 0.6, side), smoothstep(0.05, 0.25, barRise));
           }
-          float dOpt = max(depth - barRise * 0.9, 0.0) * optK;
+          float shelfK = (1.0 - isCreek) * farK * (1.0 - smoothstep(0.25, 0.9, depth));
+          float dOpt = max(depth - barRise * 0.9, 0.0) * optK * (1.0 - 0.35 * shelfK);
           vec3 Tr = exp(-sigma * dOpt * (1.0 / cosT + 1.0 / cosL));
           vec3 bodyC = vec3(0.0);
           if (w2 > 0.002 || depth < 0.6) {
@@ -704,7 +705,7 @@ export class Water {
             // gravel in the creek's current, olive weed on the still pond shelves
             vec3 weed = vec3(0.17, 0.2, 0.09) * (0.8 + 0.4 * n3);
             float weedK = smoothstep(0.5, 0.8, n1 * 0.7 + n2 * 0.3) * mix(0.8, 0.35, isCreek) * smoothstep(0.08, 0.3, depth) * (1.0 - barK);
-            vec3 bedAlb = mix(sand * (1.0 + 0.3 * barK), weed, weedK);
+            vec3 bedAlb = mix(sand * (1.0 + 0.3 * barK + 0.45 * shelfK), weed, weedK * (1.0 - shelfK));
             float gravel = smoothstep(0.5, 0.9, n3) * smoothstep(0.35, 0.65, n2) * isCreek * w3;
             bedAlb *= 1.0 - 0.22 * gravel;
             // wet mud right at the waterline, so the bed meets the bank without a seam
@@ -728,6 +729,8 @@ export class Water {
             float st = wNoise(vec2(q.x * 0.07, q.y * 0.7) + 23.0).x * 0.7 + wNoise(vec2(q.x * 0.22, q.y * 1.6) + 5.0).x * 0.3;
             scatC *= 0.78 + 0.44 * st;
           }
+          // a pond seen from high above shows a little more of its clear teal depth (not a black hole)
+          scatC *= 1.0 + 0.6 * farK * (1.0 - isCreek);
           bodyC += scatC * INV_PI * irr * (1.0 - Tr);
           // rain stirs silt into the water and darkens it a little
           bodyC *= 1.0 - 0.25 * rain;
@@ -736,7 +739,7 @@ export class Water {
           float edgeA = smoothstep(0.0, 0.06, depth);
           vec3 src = refl * F + bodyC * (1.0 - F) * edgeA;
           float a = F + (1.0 - F) * edgeA;
-          float lipW = (1.0 - edgeA) * 0.8 * (1.0 - dry);
+          float lipW = (1.0 - edgeA) * mix(0.5, 0.8, isCreek) * (1.0 - dry);
           src = src * (1.0 - lipW) + refl * F * lipW;
           a = mix(a, 1.0, lipW);
 
@@ -744,7 +747,12 @@ export class Water {
           float rd = max(dot(R, uLightDir), 0.0);
           // the broad sheen is kept tight, so far water glints along the sun's path only, not as a long white ribbon; under the moon
           // a faint silver path
-          vec3 glint = uLightColor * (pow(rd, 260.0) * 1.2 * (1.0 - 0.5 * uNight) + pow(rd, 60.0) * 0.07 * (1.0 - 0.6 * uNight)) * (0.3 + 0.7 * F);
+          // where the surface is calm and the ripples are too small to resolve, the sun's image stays a small spot instead of a broad
+          // lobe that fills a whole pond
+          // (a pond is calm unless a gust is on it, so its sun image is a small dancing spot plus the sparkles at any distance)
+          float calmFar = mix(1.0 - 0.6 * gust * uWind.z, max(farK, 0.8 * (1.0 - w3)), isCreek) * (1.0 - roughD);
+          float nCore = mix(260.0, 1500.0, calmFar);
+          vec3 glint = uLightColor * (pow(rd, nCore) * 1.2 * (1.0 - 0.5 * uNight) + pow(rd, 60.0) * 0.07 * (1.0 - 0.6 * uNight) * (1.0 - 0.8 * calmFar)) * (0.3 + 0.7 * F);
           // roughened water far off: the sun's glitter spreads into a broad path, a bright line where the stream crosses it
           glint += uLightColor * pow(rd, 14.0) * 0.06 * roughD * (1.0 - 0.7 * uNight);
           glint += uLightColor * pow(rd, 30.0) * 0.006 * uNight;
@@ -757,10 +765,12 @@ export class Water {
             vec2 gr = tgHash22(gi + floor(uTime * 4.0) * vec2(0.37, 1.13));
             vec3 fN = normalize(N + vec3(gr.x - 0.5, 0.0, gr.y - 0.5) * 0.3);
             float fl = pow(max(dot(reflect(-V, fN), uLightDir), 0.0), 500.0);
-            float spot = 1.0 - smoothstep(0.12, 0.42, length(fract(gp) - 0.5));
+            // jittered within the cell and only in some cells, so the sparkles never line up into a grid of dots
+            float spot = (1.0 - smoothstep(0.08, 0.3, length(fract(gp) - 0.3 - 0.4 * gr.yx))) * step(0.45, tgHash21(gi + 5.0));
             glint += uLightColor * fl * spot * 1.6 * glitW;
           }
           glint *= shadow * (1.0 - uOvercast * 0.8) * (1.0 - 0.8 * ice) * (1.0 - 0.7 * rain);
+          glint *= smoothstep(0.02, 0.3, depth);
           src += min(glint, vec3(3.0));
 
           // ---- foam: lapping at the edge of the creek, breaking white over riffles, flecks drifting downstream
@@ -799,6 +809,14 @@ export class Water {
             a = mix(a, 0.97, ice * smoothstep(-0.005, 0.03, depth));
           }
 
+          {
+            vec3 irrSun = ambC + uLightColor * max(uLightDir.y, 0.0);
+            float landLit = 0.2 * INV_PI * dot(irrSun, vec3(0.2126, 0.7152, 0.0722));
+            float capS = max(landLit * mix(mix(3.0, 1.6, farK), 1.1, smoothstep(0.0, 0.5, 1.0 - w3)), 1e-4);
+            float sLum = dot(src, vec3(0.2126, 0.7152, 0.0722));
+            // ice and snow lying on it keep their own brightness (snow on the land is far brighter than this bound)
+            src *= mix(sLum > 1e-5 ? capS * (1.0 - exp(-sLum / capS)) / sLum : 1.0, 1.0, ice);
+          }
           gl_FragColor = vec4(min(max(src, vec3(0.0)), vec3(32.0)), clamp(a, 0.0, 1.0)) * worldFade;
         }`,
       transparent: true,
