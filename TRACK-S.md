@@ -69,6 +69,8 @@ Only Track S writes this file (V2-PLAN.md section 4.3). Track R reads it with `g
 ## Screen results
 - A16 (cloud, default v5 params, 16 seeds x 200 years, frozen 61455f2), `tools/adoption.py`: bison persist 15/16, presence 15/16, pronghorn starvation 70% (gate <= 50%), wolf CV 0.09 (target >= 0.2), wolf-bison corr at 1-3 yr 0.21 (gate >= 0.4). Not eligible, as expected for v5. Summary in `review/stability/v6-screens/A16-cloud/`. The adoption decision waits for Track R's 32-seed A to D.
 
+- E8 (cloud, exploratory, 8 seeds x 200 years, frozen bc62e1e): D with stronger disease, `{"calendarScale":2,"openPrairie":1,"ravenVagrants":1,"cdvRate":0.3,"mangeRate":0.06,"wolfPreyRef":1000,"wolfRareHalf":400,"leanLitter":0.8}`. All species persist 8/8, presence 8/8, **wolf CV 0.24, wolf-bison corr 0.75 at 1 yr lag**, pronghorn starvation 58% (gate <= 50%). Caveat: the CSVs have no `old_pronghorn` column, so pronghorn old-age deaths are missing from the denominator and the starvation share reads high in every screen. Fix coming (generic per-species death columns), then re-screen. Disease pressure looks like the lever that makes wolves rise and fall.
+
 ## In progress
 - S6 (builder, worktree).
 - Screen A16: default params, 16 seeds x 240,000 ticks, frozen at 61455f2, output scratch/screens/A16 (cloud VM only).
