@@ -3,6 +3,7 @@
 // aerial-perspective haze so everything meets cleanly at the horizon.
 import * as THREE from 'three';
 import { NOISE_GLSL, SKY_GLSL, SharedUniforms, clamp, lerp, smoothstep } from './common';
+import { STORM_SKY_GLSL, type StormUniforms } from './storms';
 
 const C = (hex: string) => new THREE.Color(hex);
 
@@ -278,8 +279,13 @@ uniform float uNight;
 uniform float uCloud;
 uniform float uOvercast;
 uniform vec3 uWind;
+// storms (R4): gloom toward each cell, the lightning flash and the rainbow
+uniform float uStormOn;
+uniform vec4 uFlashSky;
+uniform float uRainbow;
 ${NOISE_GLSL}
 ${SKY_GLSL}
+${STORM_SKY_GLSL}
 void main() {
   vec3 d = normalize(vDir);
   vec3 col = tgSkyBase(d);
@@ -344,6 +350,27 @@ void main() {
     col = mix(col, cirC, cir * 0.7);
   }
 
+  // storm gloom: the sky darkens and cools toward each cell (the distance haze takes the same tint, see post.ts)
+  if (uStormOn > 0.5) col = tgStormTint(col, tgStormGloom(d));
+  // rainbow: an arc 40 to 42.4 degrees around the antisolar point, violet inside and red outside, with a faint secondary bow
+  if (uRainbow > 0.002 && up > -0.02) {
+    float ang = degrees(acos(clamp(dot(d, -uSunDir), -1.0, 1.0)));
+    float t1 = (ang - 39.6) / 3.0;
+    float t2 = (ang - 50.5) / 3.6;
+    float b1 = smoothstep(-0.3, 0.1, t1) * smoothstep(1.3, 0.9, t1);
+    float b2 = smoothstep(-0.3, 0.1, t2) * smoothstep(1.3, 0.9, t2) * 0.28;
+    if (b1 + b2 > 0.002) {
+      float hue = clamp(1.0 - clamp(t1, 0.0, 1.0), 0.0, 1.0) * 0.76;
+      float hue2 = clamp(clamp(t2, 0.0, 1.0), 0.0, 1.0) * 0.76;
+      vec3 c1 = clamp(abs(mod(hue * 6.0 + vec3(0.0, 4.0, 2.0), 6.0) - 3.0) - 1.0, 0.0, 1.0);
+      vec3 c2 = clamp(abs(mod(hue2 * 6.0 + vec3(0.0, 4.0, 2.0), 6.0) - 3.0) - 1.0, 0.0, 1.0);
+      float sunVis = smoothstep(0.0, 0.1, uSunDir.y);
+      col += (c1 * b1 + c2 * b2) * uRainbow * sunVis * smoothstep(-0.02, 0.05, up) * (1.0 - 0.55 * uOvercast) * (0.14 + 0.3 * (1.0 - dot(col, vec3(0.3333))));
+    }
+  }
+  // lightning flash: the whole dome brightens, most toward the strike
+  if (uFlashSky.w > 0.002) col += vec3(0.62, 0.7, 1.0) * uFlashSky.w * (0.3 + 0.9 * pow(max(dot(d, uFlashSky.xyz), 0.0), 3.0));
+
   gl_FragColor = vec4(col, 1.0);
 }
 `;
@@ -352,7 +379,7 @@ export class Sky {
   readonly mesh: THREE.Mesh;
   private material: THREE.ShaderMaterial;
 
-  constructor(shared: SharedUniforms) {
+  constructor(shared: SharedUniforms, storm: StormUniforms) {
     const geo = new THREE.SphereGeometry(1, 48, 24);
     this.material = new THREE.ShaderMaterial({
       vertexShader: VERT,
@@ -370,6 +397,11 @@ export class Sky {
         uCloud: shared.cloud,
         uOvercast: shared.overcast,
         uWind: shared.wind,
+        uStormOn: storm.on,
+        uStormSkyA: storm.skyA,
+        uStormSkyB: storm.skyB,
+        uFlashSky: storm.flashSky,
+        uRainbow: storm.rainbow,
       },
       side: THREE.BackSide,
       depthTest: false,

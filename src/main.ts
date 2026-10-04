@@ -160,6 +160,7 @@ worker.onmessage = (e: MessageEvent<FromWorker>) => {
   if (m.traitGrid) overlay.setTraitGrid(m.traitGrid);
   overlay.setPacks(m.packs, m.packSerials.map(packName));
   engine.setEnv(m.env);
+  engine.setStorms(m.storms, m.strikes, m.speed);
   if (m.tick !== lastTick) {
     const now = performance.now();
     if (lastTick >= 0) tickInterval = tickInterval * 0.8 + Math.min(500, now - lastTickChange) * 0.2;

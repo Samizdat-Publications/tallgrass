@@ -12,6 +12,7 @@ import { NOISE_GLSL, SKY_GLSL, SharedUniforms, clamp, smoothstep } from './commo
 import type { Lighting } from './sky';
 import type { EnvState } from '../sim/types';
 import { Snow, SnowPass, blizzardAmount } from './snow';
+import { STORM_SKY_GLSL, type StormUniforms } from './storms';
 
 export type Quality = 'high' | 'medium';
 
@@ -83,13 +84,17 @@ class FogPass extends Pass {
   material: THREE.ShaderMaterial;
   private quad: FullScreenQuad;
 
-  constructor(shared: SharedUniforms, private camera: THREE.PerspectiveCamera, private scenePass: ScenePass) {
+  constructor(shared: SharedUniforms, private camera: THREE.PerspectiveCamera, private scenePass: ScenePass, storm: StormUniforms) {
     super();
     this.needsSwap = true;
     this.material = new THREE.ShaderMaterial({
       uniforms: {
         tDiffuse: { value: null },
         tDepth: { value: null },
+        uStormOn: storm.on,
+        uStormShade: storm.shade,
+        uStormSkyA: storm.skyA,
+        uStormSkyB: storm.skyB,
         uInvProj: { value: new THREE.Matrix4() },
         uTexel: { value: new THREE.Vector2(1 / 1600, 1 / 900) },
         uCamWorld: { value: new THREE.Matrix4() },
@@ -150,7 +155,10 @@ class FogPass extends Pass {
         uniform float uPoolTop;
         uniform float uTime;
         uniform vec3 uWind;
+        uniform float uStormOn;
+        uniform vec4 uStormShade[4];
         ${SKY_GLSL}
+        ${STORM_SKY_GLSL}
         ${NOISE_GLSL}
         // Henyey-Greenstein phase, divided by its forward peak so the value is 1 straight at the sun and falls off with angle
         float tgHGn(float cosT, float g) {
@@ -243,6 +251,7 @@ class FogPass extends Pass {
 
           vec3 fdir = normalize(vec3(dir.x, max(dir.y, 0.0) * 0.5 + 0.015, dir.z));
           vec3 fc = tgSkyBase(fdir);
+          if (uStormOn > 0.5) fc = tgStormTint(fc, tgStormGloom(dir));   // the haze toward a storm cell is as dark as the sky behind it
           float mf = mistOd / (od + mistOd + dawnOd + 1e-5);
           fc = mix(fc, fc * vec3(0.92, 0.97, 1.04) + vec3(0.02, 0.03, 0.04), mf * 0.6);
           // dawn mist is lit by the low sun: pale and soft, warm toward the light
@@ -266,7 +275,19 @@ class FogPass extends Pass {
           vec2 shd = normalize(uSunDir.xz + vec2(1e-4)), dhd = normalize(dir.xz + vec2(1e-4));
           float az = 0.5 + 0.5 * dot(shd, dhd);
           fc += uSunTint * uHorGlow * horBand * (0.25 + 0.75 * pow(az, 4.0)) * sunUp * (1.0 - uAerialNight);
-          gl_FragColor = vec4(mix(c.rgb, fc, fog), c.a);
+          // storm cells shade the ground under them (R4): a soft disc that darkens the surface, not the haze in front of it
+          vec3 base = c.rgb;
+          if (uStormOn > 0.5) {
+            vec2 gp = uCamPos.xz + wvec.xz;
+            float sh = 0.0;
+            for (int i = 0; i < 4; i++) {
+              vec4 s = uStormShade[i];
+              if (s.w <= 0.001) break;
+              sh = max(sh, s.w * (1.0 - smoothstep(0.4 * s.z, s.z, length(gp - s.xy))));
+            }
+            base *= vec3(1.0 - sh, 1.0 - sh * 0.94, 1.0 - sh * 0.86);
+          }
+          gl_FragColor = vec4(mix(base, fc, fog), c.a);
         }`,
       depthTest: false, depthWrite: false,
     });
@@ -449,12 +470,13 @@ class GradePass extends Pass {
   material: THREE.ShaderMaterial;
   private quad: FullScreenQuad;
 
-  constructor() {
+  constructor(storm: StormUniforms) {
     super();
     this.needsSwap = true;
     this.material = new THREE.ShaderMaterial({
       uniforms: {
         tDiffuse: { value: null },
+        uFlash: storm.flash,
         uShadowTint: { value: new THREE.Color(1, 1, 1) },
         uHighTint: { value: new THREE.Color(1, 1, 1) },
         uSat: { value: 1.1 },
@@ -472,6 +494,7 @@ class GradePass extends Pass {
         varying vec2 vUv;
         uniform sampler2D tDiffuse;
         uniform float uRain;
+        uniform float uFlash;
         uniform float uTime;
         uniform vec3 uShadowTint;
         uniform vec3 uHighTint;
@@ -484,6 +507,8 @@ class GradePass extends Pass {
         void main() {
           vec4 c = texture2D(tDiffuse, vUv);
           vec3 col = c.rgb;
+          // lightning flash (R4): a few frames of exposure and cool light
+          col = col * (1.0 + 0.9 * uFlash) + vec3(0.07, 0.085, 0.14) * uFlash;
           // lift the blacks softly (more where it is darkest) so shadows keep their color
           float l0 = dot(col, vec3(0.2126, 0.7152, 0.0722));
           col += uLift * (1.0 - smoothstep(0.0, 0.35, l0) * 0.7);
@@ -589,7 +614,7 @@ export class PostFX {
   /** Objects hidden while the AO normal/depth pass renders (sky, water, big instanced grass...). */
   readonly aoExclude: THREE.Object3D[] = [];
 
-  constructor(private renderer: THREE.WebGLRenderer, scene: THREE.Scene, private camera: THREE.PerspectiveCamera, private shared: SharedUniforms) {
+  constructor(private renderer: THREE.WebGLRenderer, scene: THREE.Scene, private camera: THREE.PerspectiveCamera, private shared: SharedUniforms, storm: StormUniforms) {
     const size = renderer.getSize(new THREE.Vector2());
     const pr = renderer.getPixelRatio();
     const w = Math.max(2, Math.floor(size.x * pr)), h = Math.max(2, Math.floor(size.y * pr));
@@ -612,7 +637,7 @@ export class PostFX {
     };
     this.composer.addPass(this.gtao);
 
-    this.fog = new FogPass(shared, camera, this.scenePass);
+    this.fog = new FogPass(shared, camera, this.scenePass, storm);
     this.composer.addPass(this.fog);
 
     // god rays and falling snow go over the fogged frame and before bloom (so the shafts and the bright flakes glow)
@@ -624,7 +649,7 @@ export class PostFX {
     this.bloom = new UnrealBloomPass(new THREE.Vector2(w, h), 0.3, 0.7, 1.15);
     this.composer.addPass(this.bloom);
 
-    this.grade = new GradePass();
+    this.grade = new GradePass(storm);
     this.composer.addPass(this.grade);
 
     this.output = new OutputPass();
