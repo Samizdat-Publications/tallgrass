@@ -98,6 +98,8 @@ export interface Params {
   climateAmp: number;
   /** Rate per year at which a pair of cougars wanders in while fewer than two live in the valley (0 = closed valley). */
   cougarImmigration: number;
+  /** When an already-fleeing grazer is scared again, how much of its current flight line it keeps (0 = turn straight away from the new threat). */
+  fleeMomentum: number;
   // fear
   fearKill: number;
   fearKillRadius: number;
@@ -215,6 +217,7 @@ export function defaultParams(): Params {
     herdNearest: 0,
     climateAmp: 0,
     cougarImmigration: 0,
+    fleeMomentum: 0,
     fearKill: 0.7,
     fearKillRadius: 22,
     fearPredatorStamp: 0.0008,

@@ -998,10 +998,20 @@ export class Sim implements SimLike {
     if (threat >= 0) {
       const dx = x - a.x[threat], dy = y - a.y[threat];
       const d = Math.sqrt(dx * dx + dy * dy) + 0.01;
-      if (a.flee[i] === 0) this.logStory(i, 'fled', a.sp[threat]);
+      const wasFleeing = a.flee[i] > 0;
+      if (!wasFleeing) this.logStory(i, 'fled', a.sp[threat]);
       a.flee[i] = 24 + ((rng.next() * 16) | 0);
-      a.fleeX[i] = dx / d;
-      a.fleeY[i] = dy / d;
+      const m = wasFleeing ? p.fleeMomentum : 0;
+      if (m > 0) {
+        // a running herd keeps its line: a renewed scare bends the flight rather than turning it around
+        const fx = a.fleeX[i] * m + (dx / d) * (1 - m), fy = a.fleeY[i] * m + (dy / d) * (1 - m);
+        const fl = Math.sqrt(fx * fx + fy * fy) + 1e-6;
+        a.fleeX[i] = fx / fl;
+        a.fleeY[i] = fy / fl;
+      } else {
+        a.fleeX[i] = dx / d;
+        a.fleeY[i] = dy / d;
+      }
     } else if (alarm > 0 && a.flee[i] === 0 && rng.next() < p.alarmContagion * Math.min(1.5, a.genes[o + G_HERD])) {
       const l = Math.sqrt(alx * alx + aly * aly) + 0.01;
       // the alarm weakens with every hop, so a panic wave runs out instead of feeding itself
