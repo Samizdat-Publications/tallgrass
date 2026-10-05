@@ -25,9 +25,10 @@ export function buildCoyote(): ModelDef {
     const belly = smooth(-0.05, -0.55, n[1]);
     const chest = smooth(0.1, 0.5, x) * smooth(0.0, -0.4, n[1]);
     const saddle = smooth(0.2, 0.85, n[1]) * smooth(-0.5, -0.05, x) * (1 - smooth(0.3, 0.55, x));
-    const k = 1 - 0.5 * saddle;
+    // a grizzled grey saddle: it takes more red than blue out of the tawny coat
+    const kr = 1 - 0.36 * saddle, kg = 1 - 0.28 * saddle, kb = 1 - 0.16 * saddle;
     const w = Math.max(belly, chest);
-    return [mix(k, 1.28, w), mix(k, 1.24, w), mix(k, 1.14, w), 1];
+    return [mix(kr, 1.3, w), mix(kg, 1.3, w), mix(kb, 1.24, w), 1];
   };
 
   // Lean torso: [x, yCenter, up, down, side]
@@ -80,7 +81,7 @@ export function buildCoyote(): ModelDef {
   // Slim legs (+z right): rusty above the paws, dark paws.
   const legPaint: PaintFn = (p) => {
     if (p[1] < 0.045 * K) return [pawCol[0], pawCol[1], pawCol[2], 0.3];
-    return [1.32, 0.92, 0.66, 1];
+    return [1.12, 0.74, 0.52, 1];
   };
   const thin = 0.78;
   b.addPair(
@@ -128,16 +129,16 @@ export function buildCoyote(): ModelDef {
   return {
     geometry,
     triangles: b.triangleCount,
-    coatPale: lin(0x9a8e7a),
-    coatDark: lin(0x5a5247),
+    coatPale: lin(0xd6bd94),
+    coatDark: lin(0xa08a6c),
     bone: lin(0xd8d0bc),
     roughness: 0.93,
     fill: 1.2,
     warm: [1.0, 0.98, 0.93],
     neutral: 0.75,
     // from range a coyote is a tan-grey slim form: warmer than the wolf's slate, so the two canids read apart
-    far: { gain: 0.85, rim: 0.045, hunt: 0.22, rimCol: [0.95, 0.92, 0.86], d0: 70, d1: 280, tint: [0.15, 0.115, 0.075], mix: 0.65, floor: 0.12, lowFill: 0.5,
-      top: [0.31, 0.25, 0.18], topMix: 0.5, side: 0.2, legs: 0.9, calm: 0.6, widen: 0.1 },
+    far: { gain: 0.85, rim: 0.045, hunt: 0.22, rimCol: [0.95, 0.92, 0.86], d0: 70, d1: 280, tint: [0.27, 0.205, 0.125], mix: 0.65, floor: 0.12, lowFill: 0.5,
+      top: [0.46, 0.38, 0.27], topMix: 0.5, side: 0.2, legs: 0.9, calm: 0.6, widen: 0.1 },
     params: {
       ...DEFAULT_PARAMS,
       kind: 0,

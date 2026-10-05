@@ -825,14 +825,14 @@ const MANGE_FRAG = /* glsl */ `
         if (vTgMg > 0.01) {
           // patchy hair loss: dark mottled skin shows through in blotches (about 10 to 20 cm), over the haunches and tail root first,
           // with thinning hair (a darker, flatter coat) round the edge of each bare patch
-          vec3 mq = vTgPos * 17.0;
-          float mnz = 0.62 * tgVN(mq) + 0.38 * tgVN(mq * 2.3 + 7.1);
+          vec3 mq = vTgPos * 27.0;
+          float mnz = 0.5 * tgVN(mq) + 0.3 * tgVN(mq * 2.3 + 7.1) + 0.2 * tgVN(mq * 0.37 + 2.0);
           float mrear = smoothstep(0.2, -0.5, vTgPos.x);
-          float mthr = 1.0 - vTgMg * 0.42 - 0.2 * mrear;
+          float mthr = 1.0 - vTgMg * 0.3 - 0.3 * mrear;
           float mloss = smoothstep(mthr, mthr + 0.09, mnz);
           float medge = smoothstep(mthr - 0.14, mthr, mnz) * (1.0 - mloss);
           vec3 mskin = vec3(0.075, 0.05, 0.042) * (0.55 + 0.9 * tgVN(mq * 3.7 + 3.0));
-          diffuseColor.rgb = mix(diffuseColor.rgb * (1.0 - 0.32 * medge), mskin, mloss * 0.94);
+          diffuseColor.rgb = mix(diffuseColor.rgb * (1.0 - 0.16 * medge), mix(diffuseColor.rgb * 0.5, mskin, 0.45), mloss * 0.72);
         }
 `;
 
