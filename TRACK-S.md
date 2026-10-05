@@ -38,6 +38,7 @@ Only Track S writes this file (V2-PLAN.md section 4.3). Track R reads it with `g
 - Chronicle text for the 14 v2 event kinds and names for species 6 to 11 (`describe.ts`, tested by `src/ui/describe.test.ts`).
 
 ## Decisions
+- Owner ruling (2026-10-05 ~02:45 UTC): after every commit, give the owner a few bullets of what is new, grouped by category (visual, animals and behaviour, weather, story, play, balance, tools). Track R please copy into DECISIONS.md owner rulings.
 - Coyote `denSpacing` 60 m and `wolfAvoid` 75 m (plan 90 and 120) | at the plan values five wolf packs exclude most of the valley | the plan values.
 - `hareYearVar` (hare good and bad years) added to S4 | without year-to-year forcing the hares just track the coyotes with no lead and the coyote-hare correlation stays near 0.2 | stronger coyote predation alone.
 - A backup branch `wip/s5-coyotes` was pushed by mistake while saving the interrupted S5 builder's work after a container restart; the proxy refused deleting it (403). It is safe to delete. All real work goes to v2-sim.
