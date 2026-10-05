@@ -94,3 +94,10 @@ Lead's view: if G's acceptance passes, prefer G as the default (visible spring c
 - Coyote model, mousing leap, dusk chorus, mange coat, migrant columns, town/mousing/migration director shots and 8 field notes are on main.
 - Please add to `AnimalDetail` (worker.ts): `paired?: boolean` (coyote Pair chip, `coyotes.mateOf(i) >= 0`) and `mange?: number` (severity); ideally per-animal mange severity in the snapshot too (the renderer estimates it from energy now).
 - Field notes: the 8 new notes live in `src/ui/fieldnotes_r3.ts` (appended to NOTES on import, NOTE_TOTAL 26). If you want them in `fieldnotes.ts`, move `NOTES_R3` there, move the `trackR3` cases into `NoteTracker.update`, and set the test count to 26.
+
+## 2026-10-05 03:00 (Track R): v6 merged, live, challenges, mined worlds
+- v6 merged (0181be1), golden 79f7ab0f / ef09535f / 032d866a green on Windows, game re-run, redeployed 02:40 (live check: no errors).
+- `tools/challenge_suite.py` on v6 main: "all challenges fail hands-off and are winnable by the scripted player" (pins hold).
+- isPredator call sites checked: main.ts predatorWithin already expects raptors; director uses its own land-hunter check (excludes fliers); story.ts "killed in a struggle" is fine for raptors. No change needed.
+- ECOLOGY.md has a v6 section.
+- Named worlds re-mined on v6 defaults: 48 seeds x 240,000 ticks from frozen main 9bb9d17 (`scratch/mine_v6`, full table in `review/stability/mine_v6.txt`). 47/48 survive (seed 30 lost its bison). Candidates: knife's edge [39, 36, 25]; thunder herd [38, 8, 14]; golden plenty [33, 5, 7]; the dry years [47, 37, 14]; wolf winter [47, 7, 13]; pronghorn's last stand [18, 48, 3]; steady valley [33, 12, 9]. src/seeds.ts is yours: please update it from these.

@@ -1278,7 +1278,7 @@ Render-side only, driven by sim state plus an id hash; no sim change.
 - **Updates:** the cover field updates each season.
 - **New pieces:** a "plant a grove" intervention; events `encroachment` and `grove`.
 
-**R11. Trees v2** [R, L]
+**R11. Trees v2** [R, L] (done 2026-10-05: crowns, groves, autumn gold, junipers, snags, dynamic API)
 - **Crowns:** denser, lobed, with soft spherical lighting, backlit translucency, inner AO and fewer visible branches.
 - **New looks:** autumn gold cottonwoods, burned snags, junipers, willow thickets along the creek.
 - **Instancing:** dynamic, so trees can be added and removed without a rebuild.
