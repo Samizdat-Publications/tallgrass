@@ -11,6 +11,16 @@ Per screen, over its seeds:
   wolf CV              median CV of annual mean wolf counts, after burn-in
   wolf-bison corr      median over seeds of the best correlation corr(bison[t], wolf[t+L]) for L in 1..3 years
 Thresholds scale with the seed count: the plan's "30 of 32" and "29 of 32" become ceil(n * 30/32) and ceil(n * 29/32).
+
+S8 (mule deer and cougars): when a screen has the pop_muledeer column, a second table follows, with the first screen as the control (no deer,
+no cougars). Per screen it reports:
+  mule deer present    seeds with mule deer present (pop > 0) in >= 90% of samples after burn-in
+  cougar presence      pooled share of samples with a cougar alive after burn-in (the plan's bar is 0.80 over 200 years), the median seed,
+                       and the seeds at or above 0.80
+  others vs control    seeds where each of bison, wolf, raven and pronghorn persist (bison final count > 0; the rest present in >= 90% of samples),
+                       and the largest drop against the control. With n seeds the plan's "within 1 of 32" is within max(1, round(n / 32)) seeds
+  cougar kills         per century, by prey species (cougar_kills_<prey>)
+"Adopt cougars" needs cougar presence >= 0.80, every other species within the tolerance of the control, and mule deer present in the screen.
 Eligible screens must meet all four gates; the winner is the eligible screen with the highest wolf CV, and a tie
 (within 0.01) goes to the simpler config, which is the one listed first.
 """
@@ -85,6 +95,75 @@ def screen_stats(d, scenario, burn):
     }
 
 
+def s8_stats(d, scenario, burn):
+    """Mule deer and cougar numbers of one screen (S8). Returns None when the CSVs have no pop_muledeer column."""
+    files = sorted(glob.glob(os.path.join(d, scenario, 'seed_*.csv')))
+    n = len(files)
+    out = {'n': n, 'md_present': 0, 'cg_shares': [], 'cg_any': False, 'md_any': False, 'persist': {}, 'kills': {}}
+    cent = {'muledeer': [], 'pronghorn': [], 'bison': []}
+    for sp in ('bison', 'wolf', 'raven', 'pronghorn'):
+        out['persist'][sp] = 0
+    for f in files:
+        rows = list(csv.DictReader(open(f)))
+        if not rows or 'pop_muledeer' not in rows[0]:
+            return None
+        y_end = float(rows[-1]['year'])
+        rs = [r for r in rows if float(r['year']) >= burn * y_end] or rows
+        col = lambda k: [float(r.get(k) or 0) for r in rs]
+        md, cg = col('pop_muledeer'), col('pop_cougar')
+        out['md_any'] |= max(float(r['pop_muledeer']) for r in rows) > 0
+        out['cg_any'] |= max(float(r['pop_cougar']) for r in rows) > 0
+        if sum(v > 0 for v in md) / len(md) >= 0.9:
+            out['md_present'] += 1
+        out['cg_shares'].append(sum(v > 0 for v in cg) / len(cg))
+        out['persist']['bison'] += float(rows[-1]['pop_bison']) > 0
+        for sp in ('wolf', 'raven', 'pronghorn'):
+            v = [float(r.get(f'pop_{sp}') or 0) for r in rows]
+            out['persist'][sp] += sum(x > 0 for x in v) / len(v) >= 0.9
+        yrs = y_end - float(rows[0]['year']) or 1
+        for k in cent:
+            cent[k].append(sum(float(r.get(f'cougar_kills_{k}') or 0) for r in rows) / yrs * 100)
+    out['kills'] = {k: (sum(v) / len(v) if v else 0.0) for k, v in cent.items()}
+    return out
+
+
+def s8_table(specs, scenario, burn):
+    """The S8 table and recommendation. specs is [(name, dir)] with the control first."""
+    stats = [(name, s8_stats(d, scenario, burn)) for name, d in specs]
+    if not stats or any(s is None for _, s in stats):
+        return
+    ctl_name, ctl = stats[0]
+    print('\nS8: mule deer and cougars (control = ' + ctl_name + ')')
+    print('| Screen | Seeds | Mule deer present >= 90% | Cougar presence pooled / median / seeds >= 0.8 | Bison | Wolf | Raven | Pronghorn | Worst drop vs control | Cougar kills per century: mule deer / pronghorn / bison |')
+    print('|---|---|---|---|---|---|---|---|---|---|')
+    verdicts = []
+    for name, s in stats:
+        n = s['n']
+        tol = max(1, round(n / 32))
+        sh = sorted(s['cg_shares'])
+        pooled = sum(sh) / len(sh) if sh else float('nan')
+        med = st.median(sh) if sh else float('nan')
+        ge = sum(x >= 0.8 for x in sh)
+        drops = {sp: ctl['persist'][sp] - s['persist'][sp] for sp in s['persist']}
+        worst = max(drops.values())
+        k = s['kills']
+        cg = f'{pooled:.2f} / {med:.2f} / {ge}/{n}' if s['cg_any'] else 'none'
+        print(f"| {name} | {n} | {s['md_present']}/{n} | {cg} | " + ' | '.join(f"{s['persist'][sp]}/{n}" for sp in ('bison', 'wolf', 'raven', 'pronghorn'))
+              + f" | {worst} (tolerance {tol}) | {k['muledeer']:.1f} / {k['pronghorn']:.1f} / {k['bison']:.1f} |")
+        if name != ctl_name and s['cg_any']:
+            verdicts.append((name, pooled >= 0.8 and worst <= tol and s['md_any'], pooled, worst, tol))
+    if not verdicts:
+        print('No screen has cougars, so there is no cougar adoption verdict.')
+        return
+    good = [v for v in verdicts if v[1]]
+    if good:
+        best = max(good, key=lambda v: v[2])
+        print(f"Cougar adoption: {best[0]} qualifies (presence {best[2]:.2f} >= 0.80, others within {best[4]} of the control). Cougars join the default world.")
+    else:
+        print('Cougar adoption: no screen qualifies (' + '; '.join(f'{v[0]}: presence {v[2]:.2f}, worst drop {v[3]} vs tolerance {v[4]}' for v in verdicts)
+              + "). Cougar country gets the deer instead.")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('screens', nargs='+', help='NAME=batch-out-dir, simplest config first')
@@ -116,6 +195,7 @@ def main():
         print(f"| {s['name']} | {s['n']} | {s['years']:.0f} | {s['persist']}/{s['n']} (need {s['need_p']}){mark(g['persist'])} "
               f"| {s['present']}/{s['n']} (need {s['need_pr']}){mark(g['present'])} | {s['starve']:.0%}{mark(g['starve'])} "
               f"| {s['cvw']:.2f} | {s['corr']:.2f}{mark(g['corr'])} | {'yes' if s['eligible'] else 'no'} |")
+    s8_table([(spec.partition('=')[0], spec.partition('=')[2]) if '=' in spec else (os.path.basename(spec.rstrip('/')), spec) for spec in a.screens], a.scenario, a.burn)
     elig = [s for s in rows if s['eligible']]
     if not elig:
         print('\nNo screen meets every gate: keep the current default.')

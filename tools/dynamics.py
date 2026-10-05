@@ -9,6 +9,8 @@ Per run directory prints, as medians across seeds:
   wolf CV of annual means, and the lag (years) at which wolves best track bison (cross-correlation of annual means)
   open prairie (S1): presence (share of samples with the species alive), local extinctions per 1,000 years, years absent,
     immigrants and emigrants per century (imm_<key>, emig_<key> columns), and vagrant ravens (vagrants, vagrant_in, vagrant_out)
+  mule deer and cougars (S8): mean and CV of mule deer, how they die (predation, starvation, old age), cougar presence, mean, births, cougar
+    kills per century by prey species (cougar_kills_<prey>), and the cougar's share of all mule deer deaths
   coyotes (S5): CV of the coyote series (raw samples and annual means), the hare CV, and how well the coyotes follow the hares:
     corr(hare_total at t, pop_coyote at t + lag) on half-year means at lags of 0.5, 1, 1.5 and 2 years (best of those; the plan's gate is
     0.4) and on annual means at 1 and 2 years, plus coyote kills by wolves, fawns taken, pairs and births per year
@@ -122,6 +124,8 @@ def report(d, scenario, skip):
     vag_mean, vag_max, vag_in_c, vag_out_c = [], [], [], []
     meso = {'cv_raw': [], 'cv_ann': [], 'hare_cv_raw': [], 'hare_cv_ann': [], 'best_r': [], 'best_lag': [], 'ann_r': [], 'wolf_kills': [],
             'fawns': [], 'pairs': [], 'births': [], 'mean': []}
+    s8 = {'md_mean': [], 'md_cv': [], 'md_kill': [], 'md_starve': [], 'md_old': [], 'md_cougar': [], 'cg_mean': [], 'cg_births': [], 'cg_imm': [],
+          'k_muledeer': [], 'k_pronghorn': [], 'k_bison': [], 'cg_kills': []}
     web = {'cv_a': {'rabbit': [], 'prairiedog': []}, 'cv_s': {'rabbit': [], 'prairiedog': []}, 'plague': [], 'towns': [], 'founded': [], 'boom': [], 'crash': []}
     for f in files:
         rows = list(csv.DictReader(open(f)))
@@ -152,6 +156,24 @@ def report(d, scenario, skip):
             web['crash'].append(sum(float(r.get('hare_crash', 0) or 0) for r in rows) / yrs_all * 100)
             web['towns'].append(st.mean(float(r.get('towns', 0) or 0) for r in rows_s))
         years = float(rows_s[-1]['year']) - float(rows_s[0]['year']) or 1
+        if 'pop_muledeer' in rows[0] and 'cougar_kills_muledeer' in rows[0] and max(float(r['pop_muledeer']) + float(r['pop_cougar']) for r in rows) > 0:
+            yrs_all = float(rows[-1]['year']) - float(rows[0]['year']) or 1
+            md = [float(r['pop_muledeer']) for r in rows_s]
+            _, mda = annual(rows_s, 'pop_muledeer')
+            s8['md_mean'].append(st.mean(md))
+            s8['md_cv'].append(st.pstdev(mda) / (st.mean(mda) or 1))
+            md_deaths = g('killed_muledeer') + g('starved_muledeer') + g('old_muledeer') + g('thirst_muledeer')
+            if md_deaths:
+                s8['md_kill'].append(g('killed_muledeer') / md_deaths)
+                s8['md_starve'].append(g('starved_muledeer') / md_deaths)
+                s8['md_old'].append(g('old_muledeer') / md_deaths)
+                s8['md_cougar'].append(g('cougar_kills_muledeer') / md_deaths)
+            s8['cg_mean'].append(st.mean(float(r['pop_cougar']) for r in rows_s))
+            s8['cg_births'].append(sum(float(r['births_cougar'] or 0) for r in rows) / yrs_all * 100)
+            s8['cg_imm'].append(sum(float(r.get('imm_cougar', 0) or 0) for r in rows) / yrs_all * 100)
+            for k in ('muledeer', 'pronghorn', 'bison'):
+                s8['k_' + k].append(sum(float(r[f'cougar_kills_{k}'] or 0) for r in rows) / yrs_all * 100)
+            s8['cg_kills'].append(sum(float(r['kills_cougar'] or 0) for r in rows) / yrs_all * 100)
         if 'pop_coyote' in rows[0] and 'hare_total' in rows[0] and float(rows[0]['pop_coyote']) > 0:
             cr = [float(r['pop_coyote']) for r in rows_s]
             hr = [float(r['hare_total']) for r in rows_s]
@@ -216,6 +238,9 @@ def report(d, scenario, skip):
         print('  immigrants / emigrants per century (mean over seeds): ' + ', '.join(f'{s} {st.mean(imm_c[s]):.1f} in, {st.mean(emig_c[s]):.1f} out' for s in flows))
     else:
         print('  immigrants / emigrants per century: none recorded (open prairie off, or older CSVs)')
+    if s8['md_mean']:
+        print(f"  mule deer (S8): mean {med(s8['md_mean']):.1f}, CV of annual means {med(s8['md_cv']):.2f}; deaths: predation {med(s8['md_kill']):.0%}, starvation {med(s8['md_starve']):.0%}, old age {med(s8['md_old']):.0%}; cougars take {med(s8['md_cougar']):.0%} of all mule deer deaths")
+        print(f"  cougars (S8): mean {med(s8['cg_mean']):.1f}, births {med(s8['cg_births']):.1f}, immigrants {med(s8['cg_imm']):.1f} per century; kills per century {med(s8['cg_kills']):.1f} (mule deer {med(s8['k_muledeer']):.1f}, pronghorn {med(s8['k_pronghorn']):.1f}, bison {med(s8['k_bison']):.1f})")
     if web['plague']:
         print('  small-prey web (S4): CV of annual means / of samples: ' + ', '.join(f"{sp} {med(web['cv_a'][sp]):.2f} / {med(web['cv_s'][sp]):.2f}" for sp in ('rabbit', 'prairiedog') if web['cv_a'][sp]))
         print(f"  plagues per 100 yr: median {med(web['plague']):.1f} (per seed {', '.join(f'{v:.1f}' for v in web['plague'])}); mean towns {st.mean(web['towns']):.1f}; towns founded per 100 yr {med(web['founded']):.1f}; hare booms {med(web['boom']):.1f} and crashes {med(web['crash']):.1f} per 100 yr")
