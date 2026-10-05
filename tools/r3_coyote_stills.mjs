@@ -78,6 +78,7 @@ try {
   }
 
   if (only.has('trot')) {
+    await page.evaluate(() => { const e = window.__engine; Object.assign(e.env, { dayFrac: 0.5, season: 1.2 }); e.applyEnvNow(); });
     // a coyote at a steady trot: speed 2 m/s in the sim = 3 m/s on screen; the staged snapshot is advanced each frame so it really travels
     const c = await first(6);
     if (c) {
@@ -91,7 +92,7 @@ try {
           x += Math.cos(0.4) * 0.22; z += Math.sin(0.4) * 0.22;
           const agents = new Float32Array(s0.agents); agents[c2.k * 12 + 1] = x; agents[c2.k * 12 + 2] = z;
           A.setSnapshot({ ...s0, agents, tick: s0.tick + 1 + i });
-          S.look(x, z, 5.5, 9, -0.4 * 57.3 + 25);
+          S.look(x, z, 5.5, 9, S.sunYaw() + 35);
           await S.frames(3, 0.033);
         }
       }, c);
@@ -264,6 +265,28 @@ try {
       await page.evaluate(() => window.__director.setEnabled(false));
     }
   }
+  if (only.has('herd')) {
+    // a wide view with coyotes and wolves together (two wolves and two coyotes are walked up to one spot on the snapshot)
+    await page.evaluate(() => { const e = window.__engine; Object.assign(e.env, { dayFrac: 0.42, season: 1.2 }); e.applyEnvNow(); });
+    const c = await first(6);
+    await page.evaluate(async (c2) => {
+      const S = window.__stage;
+      const ws = S.idx(1), cs2 = S.idx(6).filter((k) => k !== c2.k);
+      const put = (k, dx, dz, h) => S.set(k, { x: c2.x + dx, z: c2.z + dz, h, st: 1, spd: 0 });
+      S.set(c2.k, { st: 1, spd: 0, h: 0.4 });
+      if (ws[0] !== undefined) put(ws[0], 9, 5, 0.9);
+      if (ws[1] !== undefined) put(ws[1], 13, -4, 0.2);
+      if (ws[2] !== undefined) put(ws[2], 6, -9, 1.6);
+      if (cs2[0] !== undefined) put(cs2[0], -8, 4, 0.1);
+      if (cs2[1] !== undefined) put(cs2[1], -5, -8, 0.6);
+      await S.frames(40, 0.1);
+    }, c);
+    for (const [nm, yaw] of [['a', 35], ['b', -40], ['c', 110], ['d', -110]]) {
+      await page.evaluate(async ([c2, y]) => { const S = window.__stage; S.look(c2.x + 3, c2.z, 24, 17, S.sunYaw() + y); await S.frames(12, 0.1); }, [c, yaw]);
+      await shot('07_herd_coyotes_wolves_' + nm, 100);
+    }
+  }
+
   console.log('errors:', errors.length ? '\n' + errors.join('\n') : 'none');
   await uiStyle.evaluate((el) => el.remove());
 } catch (e) {
