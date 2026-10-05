@@ -16,7 +16,7 @@ const KINDS: SimEventKind[] = [
   'packFounded', 'packLost', 'drought', 'droughtEnd', 'outbreak', 'stampede', 'extinct', 'introduced', 'removed', 'culled',
   'fire', 'record', 'elder', 'firstKill', 'plague', 'rain',
   'immigrated', 'emigrated', 'recolonized', 'distemper', 'mange', 'townFounded', 'townLost', 'sylvaticPlague',
-  'hareBoom', 'hareCrash', 'coyotePups', 'mesoRelease', 'storm', 'lightningFire',
+  'hareBoom', 'hareCrash', 'coyotePups', 'mesoRelease', 'storm', 'lightningFire', 'eaglesArrive', 'hawksReturn',
 ];
 const EM_DASH = String.fromCharCode(0x2014);
 

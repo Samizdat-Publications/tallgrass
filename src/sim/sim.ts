@@ -8,8 +8,9 @@ import { applyOverrides, defaultParams, Params, SpeciesParams } from './params';
 import { Rng } from './rng';
 import { StormCells } from './storms';
 import { RegionalPool } from './region';
-import { SmallPrey } from './smallprey';
+import { SmallPrey, TAKE_KINDS } from './smallprey';
 import { Coyotes } from './sp/coyote';
+import { flightStep, Raptors } from './sp/raptor';
 import { AGENT_STRIDE, CARCASS_STRIDE, F_ALPHA, F_INFECTED, F_JUVENILE, F_MALE, F_MANGE, F_MIGRANT, F_PREGNANT, Intervention, SimLike, Snapshot, SPECIES_COUNT, SPECIES_KEYS, Sp, St, YEAR_TICKS, SEASON_TICKS, BASE_YEAR_TICKS, setCalendarScale } from './types';
 import { COAT_BASE, COAT_RANGE, DIET, IS_PREY, isGrazer, REACT, SPECIES, THREAT } from './species';
 import { STRIDE, Vegetation } from './vegetation';
@@ -23,7 +24,7 @@ export type SimEventKind =
   | 'packFounded' | 'packLost' | 'drought' | 'droughtEnd' | 'outbreak' | 'stampede' | 'extinct'
   | 'introduced' | 'removed' | 'culled' | 'fire' | 'record' | 'elder' | 'firstKill' | 'plague' | 'rain'
   | 'immigrated' | 'emigrated' | 'recolonized' | 'distemper' | 'mange' | 'townFounded' | 'townLost' | 'sylvaticPlague'
-  | 'hareBoom' | 'hareCrash' | 'coyotePups' | 'mesoRelease' | 'storm' | 'lightningFire';
+  | 'hareBoom' | 'hareCrash' | 'coyotePups' | 'mesoRelease' | 'storm' | 'lightningFire' | 'eaglesArrive' | 'hawksReturn';
 
 export interface SimEvent {
   tick: number;
@@ -75,6 +76,8 @@ export class Sim implements SimLike {
   readonly dis: Disease;
   /** Coyotes (S5): pairs, dens, the think and live logic. Inert (never called) while no coyote lives in the valley. */
   readonly coyotes: Coyotes;
+  /** Golden eagles and red-tailed hawks (S7): seasonal arrivals, the hunt, nests. Its think and live logic run for every raptor that exists. */
+  readonly raptors: Raptors;
   readonly prey: BucketGrid;
   readonly pred: BucketGrid;
   private preyList = new Int32Array(4096);
@@ -245,6 +248,42 @@ export class Sim implements SimLike {
       beginEmigration: (i) => this.beginEmigration(i),
       event: (kind, sp, x, y, a, b) => this.event(kind, sp, x, y, a, b),
       logStory: (i, kind, a) => this.logStory(i, kind, a),
+    });
+    this.raptors = new Raptors(this.a, this.p, this.env, this.seed, this.world, {
+      get tick() { return self.tick; },
+      get pop() { return self.pop; },
+      get small() { return self.small; },
+      get cN() { return self.cN; },
+      get cX() { return self.cX; },
+      get cY() { return self.cY; },
+      get cMeat() { return self.cMeat; },
+      nearestCarcass: (x, y, maxD, maxAge) => this.nearestCarcass(x, y, maxD, maxAge),
+      vitals: (i) => this.vitals(i, this.p.species[this.a.sp[i]]),
+      beginEmigration: (i) => this.beginEmigration(i),
+      beginMigrate: (i, outbound, tx, ty) => this.beginMigrate(i, outbound, tx, ty),
+      corridorFor: (x, y) => {
+        const c = this.world.corridors, k = this.nearestCorridor(x, y);
+        return [c[k * 4], c[k * 4 + 1], c[k * 4 + 2], c[k * 4 + 3]];
+      },
+      // no random draws: a raptor has no traits, so its genes are all 1 and its coat the species' base
+      spawnRaptor: (sp, x, y, age, male, energy, alt) => {
+        const a = this.a, i = a.spawn();
+        a.sp[i] = sp;
+        a.x[i] = x;
+        a.y[i] = y;
+        a.male[i] = male;
+        a.age[i] = age;
+        a.born[i] = this.tick - age;
+        a.energy[i] = energy;
+        a.hydration[i] = 1;
+        a.alt[i] = alt;
+        a.state[i] = St.Fly;
+        for (let g = 0; g < NG; g++) a.genes[i * NG + g] = g === G_COAT ? (COAT_BASE[sp] ?? 0.5) : 1;
+        return i;
+      },
+      noteArrivals: (sp, n) => { this.cImm[sp] += n; },
+      noteBirths: (sp, n) => { this.cBirths[sp] += n; },
+      event: (kind, sp, x, y, a, b) => this.event(kind, sp, x, y, a, b),
     });
     this.populate();
     this.coyotes.seedFounders();
@@ -520,6 +559,7 @@ export class Sim implements SimLike {
     this.pred.build(this.predList, this.predN, a.x, a.y);
     this.updatePacks();
     if (this.pop[Sp.Coyote] > 0) this.coyotes.step(t);
+    if (this.p.raptors > 0 || this.pop[Sp.Eagle] + this.pop[Sp.Hawk] > 0) this.raptors.step(t);
     if (this.region !== null) this.openPrairieStep(t);
     if (this.dis.on) this.dis.step(this.pop[Sp.Wolf]);
 
@@ -547,6 +587,9 @@ export class Sim implements SimLike {
         if ((i + t) % 3 === 0) this.coyotes.think(i);
         this.moveGround(i, P[s]);
         this.coyotes.live(i);
+      } else if (s === Sp.Eagle || s === Sp.Hawk) {
+        if ((i + t) % 4 === 0) this.raptors.think(i);
+        this.raptors.live(i);
       }
     }
 
@@ -1937,7 +1980,14 @@ export class Sim implements SimLike {
       const dx = this.cX[k] - x, dy = this.cY[k] - y, d = Math.sqrt(dx * dx + dy * dy) + 0.01;
       if (a.energy[i] < 0.9) {
         a.timer[i] = k;
-        if (d < 2.5 && a.alt[i] < 1) { state = St.Eat; }
+        if (d < 2.5 && a.alt[i] < 1) {
+          // an eagle feeding within 3 m: the raven gives way (S7), backing off the carcass and coming round again
+          if (this.pop[Sp.Eagle] > 0 && this.raptors.eagleFeedingNear(x, y, 3)) {
+            this.raptors.noteYield();
+            dvx = -(dx / d) * fly; dvy = -(dy / d) * fly; state = St.Fly;
+            a.timer[i] = -1;
+          } else state = St.Eat;
+        }
         else { dvx = (dx / d) * fly; dvy = (dy / d) * fly; state = St.Fly; }
       } else {
         // sated: circle above the kill (the classic tell)
@@ -1994,14 +2044,7 @@ export class Sim implements SimLike {
       const k = a.energy[i] < 0.9 ? a.timer[i] : -1;
       const near = k >= 0 && k < this.cN && Math.abs(this.cX[k] - a.x[i]) < 4 && Math.abs(this.cY[k] - a.y[i]) < 4;
       const targetAlt = near ? 0 : 22 + (a.id[i] % 9) * 2.5;
-      a.alt[i] += (targetAlt - a.alt[i]) * 0.03;
-      a.vx[i] += (a.dvx[i] - a.vx[i]) * 0.08;
-      a.vy[i] += (a.dvy[i] - a.vy[i]) * 0.08;
-      a.x[i] = Math.max(2, Math.min(this.world.size - 2, a.x[i] + a.vx[i] * DT));
-      a.y[i] = Math.max(2, Math.min(this.world.size - 2, a.y[i] + a.vy[i] * DT));
-      const sp = Math.hypot(a.vx[i], a.vy[i]);
-      if (sp > 0.1) a.heading[i] = Math.atan2(a.vy[i], a.vx[i]);
-      if (a.x[i] <= 2 || a.x[i] >= this.world.size - 2 || a.y[i] <= 2 || a.y[i] >= this.world.size - 2) a.heading[i] += Math.PI * 0.5;
+      flightStep(a, i, DT, this.world.size, targetAlt, 0.03, 0.08);
     }
     this.vitals(i, P);
   }
@@ -2051,7 +2094,8 @@ export class Sim implements SimLike {
       for (let s = 0; s < SPECIES_COUNT; s++) {
         if (this.everPresent[s] && this.pop[s] === 0) {
           this.everPresent[s] = 0;
-          this.event('extinct', s, 0, 0, 0, 0);
+          // the raptors come and go with the seasons: an empty valley is not an extinction
+          if (SPECIES[s].guild !== 'raptor') this.event('extinct', s, 0, 0, 0, 0);
         }
       }
     }
@@ -2306,6 +2350,7 @@ export class Sim implements SimLike {
       this.thinkMigrant(i, P);
       if (!a.alive[i]) return;
     }
+    if (s === Sp.Eagle || s === Sp.Hawk) { this.raptors.live(i); return; }
     if (SPECIES[s].flies) { this.liveRaven(i, P); return; }
     this.moveGround(i, P);
     if (s === Sp.Wolf) this.liveWolf(i, P);
@@ -2611,6 +2656,15 @@ export class Sim implements SimLike {
       row.imm_prairiedog += sd.dogArrivals;
     }
     this.coyotes.sampleRow(row);
+    // who takes the hares and prairie dogs (S7): each predator kind's catches since the last sample, and the two raptors together
+    const bk = sd ? sd.byKind : null;
+    for (let k = 0; k < TAKE_KINDS.length; k++) {
+      row[`takes_hare_${TAKE_KINDS[k]}`] = bk ? bk[k * 2] : 0;
+      row[`takes_dog_${TAKE_KINDS[k]}`] = bk ? bk[k * 2 + 1] : 0;
+    }
+    row.raptor_takes_hare = row.takes_hare_eagle + row.takes_hare_hawk;
+    row.raptor_takes_dog = row.takes_dog_eagle + row.takes_dog_hawk;
+    this.raptors.sampleRow(row);
     row.fires_lightning = this.cLightning;
     row.storm_cells = this.storms ? this.storms.cells.length : 0;
     this.cKills = 0;

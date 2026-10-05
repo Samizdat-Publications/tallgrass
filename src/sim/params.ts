@@ -198,6 +198,24 @@ export interface Params {
   coyoteOutAfter: number;
   /** Rate per base year at which a coyote pair walks in from the wider prairie while fewer than 4 live in the valley (needs openPrairie; 0 = never). */
   coyoteInRate: number;
+  // raptors (S7, src/sim/sp/raptor.ts): golden eagles (winter visitors) and red-tailed hawks (summer residents). Off at raptors 0.
+  /** Master switch (0 = no seasonal arrivals; an eagle or hawk put in by a god tool still lives and hunts). Eagles also need openPrairie to arrive. */
+  raptors: number;
+  /** Eagles that arrive together each winter: min and max (the count follows how rich the hares are). */
+  eagleMin: number;
+  eagleMax: number;
+  /** Hawk pairs that return to nest each spring: min and max (fewer when the valley has too few tall cottonwoods). */
+  hawkPairsMin: number;
+  hawkPairsMax: number;
+  /** A raptor hunts small prey (or has a hungry brood) below this energy. Low on purpose: a catch is worth 0.2 to 0.4 of the bar and a full bar wastes it. */
+  raptorHuntHunger: number;
+  /** A raptor goes to a carcass below this energy (eagles; a hawk only when the web is off or it is starving). */
+  raptorCarrionHunger: number;
+  /** Carcass meat a raptor eats per tick, and the energy a unit of meat is worth to it. */
+  raptorEatRate: number;
+  raptorMeatEnergy: number;
+  /** Hawk nests keep at least this far (m) from each other. */
+  hawkNestSpacing: number;
   /** Storm cells and lightning (0 = off). On, thunderstorm days send cells across the valley; dry lightning can start
    *  fires, and heavy rain (above 0.5) stops fire spreading. See storms.ts. */
   stormCells: number;
@@ -325,6 +343,20 @@ export function defaultParams(): Params {
   // prairie dog: a field species. Only initial (0 = the default colonies) and the smallPrey params apply; the rest keeps the
   // lookup safe for any code that indexes the species table by id
   species[Sp.PrairieDog] = base({ initial: 0, herdRadius: 0 });
+  // golden eagle (S7): a winter visitor, no founders. walkSpeed is the cruise and soaring speed, runSpeed the stoop speed (m/s), sight how far a
+  // carcass is noticed. Metabolism is low (a bird of prey fasts well); a hare is worth 0.4 of the bar (GAIN.eagle in smallprey.ts). No meat, no thirst.
+  species[Sp.Eagle] = base({
+    maxAge: 12000, matureAge: 1500, gestation: 0, birthCooldown: 0, litter: 0,
+    walkSpeed: 8, runSpeed: 22, stamina: 1e9, sight: 150, metabolism: 1 / 900, thirst: 0,
+    meat: 0, toughness: 1, initial: 0, herdRadius: 0,
+  });
+  // red-tailed hawk (S7): a summer resident that nests in a cottonwood. litter is divided by calendarScale and scaled by the female's condition
+  // (0.5 to 1.5), then held to maxLitter: 1 to 3 young at the default calendar.
+  species[Sp.Hawk] = base({
+    maxAge: 12000, matureAge: 600, gestation: 0, birthCooldown: 0, litter: 4,
+    walkSpeed: 7, runSpeed: 17, stamina: 1e9, sight: 110, metabolism: 1 / 1000, thirst: 0,
+    meat: 0, toughness: 1, initial: 0, herdRadius: 0, maxLitter: 3,
+  });
   // a species id added to the registry before it has a block here gets the defaults, so nothing indexes undefined
   for (let s = 0; s < SPECIES_COUNT; s++) species[s] ??= base({});
   return {
@@ -345,12 +377,12 @@ export function defaultParams(): Params {
     herdSpacing: 2.7,
     herdSepRange: Math.sqrt(7),
     herdCohesion: 6,
-    wolfRareHalf: 150,
+    wolfRareHalf: 400, // v6 (was 150)
     founderDesync: 1,
     wolfBreedStore: 0,
     wolfLitterBase: 0.6,
     wolfLitterSpan: 0.5,
-    wolfPreyRef: 0,
+    wolfPreyRef: 1000, // v6 (was 0)
     loneIndividual: 0,
     matingWindow: 0,
     herdNearest: 0,
@@ -359,10 +391,10 @@ export function defaultParams(): Params {
     droughtRefuge: 0,
     sprintCost: 0,
     herdEyes: 0,
-    leanLitter: 0,
+    leanLitter: 0.8, // v6 (was 0)
     cougarImmigration: 0,
     fleeMomentum: 0,
-    openPrairie: 0,
+    openPrairie: 1, // v6 (was 0)
     smallPrey: 0,
     hareK: 3,
     hareR: 2.2,
@@ -382,7 +414,7 @@ export function defaultParams(): Params {
     deerRescue: 12,
     deerBref: 35,
     deerKb: 367,
-    ravenVagrants: 0,
+    ravenVagrants: 1, // v6 (was 0)
     ravenVagrantK: 0.16,
     ravenVagrantCap: 400,
     coyoteTerritory: 75,
@@ -400,6 +432,16 @@ export function defaultParams(): Params {
     coyotePupFeed: 0.0025,
     coyoteOutAfter: 1.0,
     coyoteInRate: 1,
+    raptors: 0,
+    eagleMin: 2,
+    eagleMax: 6,
+    hawkPairsMin: 2,
+    hawkPairsMax: 4,
+    raptorHuntHunger: 0.7,
+    raptorCarrionHunger: 0.5,
+    raptorEatRate: 0.004,
+    raptorMeatEnergy: 3.5,
+    hawkNestSpacing: 140,
     stormCells: 0,
     lightningRate: 0.05,
     lightningIgnite: 0.5,
@@ -441,12 +483,12 @@ export function defaultParams(): Params {
     diseaseSpark: 0.0004,
     diseaseTicks: 450,
     diseaseMetab: 1.7,
-    cdvRate: 0,
+    cdvRate: 0.3, // v6 (was 0)
     cdvPupDeath: 0.6,
     cdvAdultDeath: 0.1,
     cdvTicks: 300,
     cdvImmuneYears: 5,
-    mangeRate: 0,
+    mangeRate: 0.06, // v6 (was 0)
     mangeSpread: 0.02,
     mangeGrowth: 0.5,
     mangeColdK: 1.5,

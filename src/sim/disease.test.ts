@@ -25,8 +25,8 @@ ok(IS_CANID[Sp.Wolf] === 1 && IS_CANID[Sp.Bison] === 0, 'wolves are canids, biso
 
 // 1. defaults are off: no disease object activity, no flags
 {
-  const sim = createSim({ seed: 5 });
-  ok(!sim.dis.on && !sim.dis.cdvOn && !sim.dis.mangeOn, 'disease is off by default');
+  const sim = createSim({ seed: 5, params: { cdvRate: 0, mangeRate: 0 } });
+  ok(!sim.dis.on && !sim.dis.cdvOn && !sim.dis.mangeOn, 'disease is off at rates 0 (v6 turns it on by default)');
   for (let k = 0; k < 400; k++) sim.step();
   const snap = sim.snapshot(false);
   let flagged = 0;
