@@ -1,0 +1,15 @@
+== ../screens/V6b16 (baseline, 16 seeds, stats from year 5)
+  persistence: bison 16/16, wolf 16/16, raven 16/16, pronghorn 16/16, rabbit 16/16, coyote 16/16, prairiedog 16/16
+  bison births per capita per year 0.42; deaths: predation 38%, starvation 40%, old age 18%
+  annual means: bison CV 0.39, median year-to-year change bison 12% pronghorn 10%
+  wolves: CV 0.29; best lag behind bison 2 yr (median corr 0.74)
+  presence (share of samples alive): bison 100%, wolf 100%, raven 100%, pronghorn 100%, rabbit 100%, coyote 100%, prairiedog 100%
+  local extinctions per 1,000 yr (mean over seeds): bison 0.0, wolf 0.0, raven 0.0, pronghorn 0.0, rabbit 0.0, coyote 0.0, prairiedog 0.0
+  years absent (median over seeds): bison 0.0, wolf 0.0, raven 0.0, pronghorn 0.0, rabbit 0.0, coyote 0.0, prairiedog 0.0
+  immigrants / emigrants per century (mean over seeds): wolf 0.2 in, 0.0 out, pronghorn 3289.3 in, 6456.7 out, coyote 97.9 in, 531.7 out, prairiedog 15.0 in, 0.0 out
+  small-prey web (S4): CV of annual means / of samples: rabbit 0.30 / 0.31, prairiedog 0.55 / 0.56
+  plagues per 100 yr: median 7.0 (per seed 4.5, 5.5, 9.0, 7.5, 3.0, 8.5, 5.0, 5.5, 9.5, 10.5, 7.0, 7.0, 8.5, 7.5, 7.0, 4.5); mean towns 1.8; towns founded per 100 yr 23.8; hare booms 0.0 and crashes 0.0 per 100 yr
+  coyotes (S5): mean 42.8, CV of samples 0.35, of annual means 0.33; hare CV 0.31 (annual means 0.30)
+    coyotes follow hares: best corr on half-year means at 0.5 to 2 yr median 0.34 (lag 2.0 yr; 8/16 seeds at 0.4 or more); annual means 0.31
+    per year: pairs with a den (mean) 8.0, births 20.3, fawns taken 4.4, killed by wolves 0.03
+  vagrant ravens: mean 199.1, max 371; arrivals 8158.8 and departures 0.0 per century

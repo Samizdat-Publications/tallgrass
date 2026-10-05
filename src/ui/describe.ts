@@ -440,6 +440,12 @@ export function describeEvent(e: SimEvent, ctx?: DescribeContext): EventText {
       if (e.sp === 3) {
         return { sentence: pick(e, [`${cap(countWord(n))} pronghorn come back over the rim for spring.`, `The pronghorn return: ${countWord(n)} file in from the open prairie.`]) };
       }
+      if (e.sp === 10) {
+        return { sentence: pick(e, [`${cap(countWord(n))} mule deer slip down into the creek draws from the wider prairie.`, `A group of ${countWord(n)} mule deer finds the groves along the creek and stays.`]) };
+      }
+      if (e.sp === 5) {
+        return { sentence: n === 2 ? 'A pair of cougars drifts in from the hills and takes up a range along the creek.' : `${cap(countWord(n))} ${n === 1 ? 'cougar arrives' : 'cougars arrive'} from the wider country.` };
+      }
       return { sentence: `${cap(countWord(n))} ${n === 1 ? sg : pl} ${n === 1 ? 'arrives' : 'arrive'} from the wider prairie.` };
     }
     case 'emigrated': {

@@ -216,6 +216,19 @@ export interface Params {
   raptorMeatEnergy: number;
   /** Hawk nests keep at least this far (m) from each other. */
   hawkNestSpacing: number;
+  // mule deer (S8, src/sim/sp/muledeer.ts): they exist only when `muledeer.initial` (or a god tool) puts some in the valley.
+  /** A mule deer browses only where tree and shrub cover is above this, or in the draws (below). */
+  muledeerCover: number;
+  /** The draws: ground within this many metres of the creek or a pond counts as habitat however open it is. */
+  muledeerDrawDist: number;
+  /** Founder groups hold muledeerGroupMin to muledeerGroupMax animals; a group that grows past the maximum stops cohering. */
+  muledeerGroupMin: number;
+  muledeerGroupMax: number;
+  /** With openPrairie on, each spring a group of this many walks in when fewer than muledeerRescueBelow mule deer live here (0 = never). */
+  muledeerRescue: number;
+  muledeerRescueBelow: number;
+  /** Rate per base year at which a pair of cougars walks in from the wider prairie while fewer than two live here, once cougars have lived here (needs openPrairie; 0 = never). */
+  cougarInRate: number;
   /** Storm cells and lightning (0 = off). On, thunderstorm days send cells across the valley; dry lightning can start
    *  fires, and heavy rain (above 0.5) stops fire spreading. See storms.ts. */
   stormCells: number;
@@ -330,7 +343,7 @@ export function defaultParams(): Params {
   // cougar: solitary ambush hunter; waits in cover near water and springs a short, explosive sprint
   species[Sp.Cougar] = base({
     maxAge: 8400, matureAge: 1300, gestation: 300, birthCooldown: 2600, litter: 2.2,
-    walkSpeed: 1.6, runSpeed: 18, stamina: 45, sight: 45, metabolism: 1 / 1050, thirst: 1 / 1700,
+    walkSpeed: 1.6, runSpeed: 18, stamina: 45, sight: 45, metabolism: 1 / 1430, thirst: 1 / 1700,
     meat: 2.5, toughness: 1.6, initial: 0, herdRadius: 0, camo: 0.8,
   });
   // coyote (S5; the plan's table): wolf-like yearly breeding at the spring tick (gestation and cooldown unused), smaller body, no founders by default.
@@ -356,6 +369,15 @@ export function defaultParams(): Params {
     maxAge: 12000, matureAge: 600, gestation: 0, birthCooldown: 0, litter: 4,
     walkSpeed: 7, runSpeed: 17, stamina: 1e9, sight: 110, metabolism: 1 / 1000, thirst: 0,
     meat: 0, toughness: 1, initial: 0, herdRadius: 0, maxLitter: 3,
+  });
+  // mule deer (S8): a browser of the creek corridor and the groves. Lifespan about the pronghorn's, twins about half the time, a fawn that
+  // hides for 160 ticks, a body a little bigger and a flight a little slower than the pronghorn's (and short-winded: stotting is costly).
+  // Where it browses and how its groups form are the muledeer* params; initial 0 keeps the default valley as it was.
+  species[Sp.MuleDeer] = base({
+    maxAge: 4800, matureAge: 450, gestation: 150, birthCooldown: 1000, litter: 1.5,
+    walkSpeed: 1.6, runSpeed: 12.5, stamina: 75, sight: 50, metabolism: 1 / 1300, thirst: 1 / 2000,
+    bite: 0.009, foodValue: 0.55, meat: 3, toughness: 0.9, initial: 0, herdRadius: 20,
+    wariness: 0.75, defense: 0.1, camo: 0.55, diet: 1, hideAge: 160, maxLitter: 2,
   });
   // a species id added to the registry before it has a block here gets the defaults, so nothing indexes undefined
   for (let s = 0; s < SPECIES_COUNT; s++) species[s] ??= base({});
@@ -432,6 +454,13 @@ export function defaultParams(): Params {
     coyotePupFeed: 0.0025,
     coyoteOutAfter: 1.0,
     coyoteInRate: 1,
+    muledeerCover: 0.25,
+    muledeerDrawDist: 40,
+    muledeerGroupMin: 3,
+    muledeerGroupMax: 10,
+    muledeerRescue: 6,
+    muledeerRescueBelow: 12,
+    cougarInRate: 1,
     raptors: 0,
     eagleMin: 2,
     eagleMax: 6,
@@ -466,9 +495,9 @@ export function defaultParams(): Params {
     wolfImmigration: 0,
     wolfArrivalTick: 0,
     wolfArrivalCount: 12,
-    cougarKillChance: 0.6,
-    cougarAmbushRadius: 18,
-    cougarRange: 120,
+    cougarKillChance: 0.9,
+    cougarAmbushRadius: 26,
+    cougarRange: 200,
     wolfOpportunism: 0.25,
     wolfTestGiveUp: 0.05,
     wolfStrife: 0.002,

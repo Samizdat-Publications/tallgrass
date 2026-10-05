@@ -10,8 +10,9 @@ import { StormCells } from './storms';
 import { RegionalPool } from './region';
 import { SmallPrey, TAKE_KINDS } from './smallprey';
 import { Coyotes } from './sp/coyote';
+import { MuleDeer } from './sp/muledeer';
 import { flightStep, Raptors } from './sp/raptor';
-import { AGENT_STRIDE, CARCASS_STRIDE, F_ALPHA, F_INFECTED, F_JUVENILE, F_MALE, F_MANGE, F_MIGRANT, F_PREGNANT, Intervention, SimLike, Snapshot, SPECIES_COUNT, SPECIES_KEYS, Sp, St, YEAR_TICKS, SEASON_TICKS, BASE_YEAR_TICKS, setCalendarScale } from './types';
+import { AGENT_STRIDE, CARCASS_STRIDE, F_ALPHA, F_INFECTED, F_JUVENILE, F_MALE, F_MANGE, F_MIGRANT, F_PREGNANT, F_STOT, Intervention, SimLike, Snapshot, SPECIES_COUNT, SPECIES_KEYS, Sp, St, YEAR_TICKS, SEASON_TICKS, BASE_YEAR_TICKS, setCalendarScale } from './types';
 import { COAT_BASE, COAT_RANGE, DIET, IS_PREY, isGrazer, REACT, SPECIES, THREAT } from './species';
 import { STRIDE, Vegetation } from './vegetation';
 import { generateWorld, World } from './world';
@@ -78,6 +79,8 @@ export class Sim implements SimLike {
   readonly coyotes: Coyotes;
   /** Golden eagles and red-tailed hawks (S7): seasonal arrivals, the hunt, nests. Its think and live logic run for every raptor that exists. */
   readonly raptors: Raptors;
+  /** Mule deer (S8): the habitat map and founder groups. Inert (never read) while no mule deer lives in the valley. */
+  readonly mule: MuleDeer;
   readonly prey: BucketGrid;
   readonly pred: BucketGrid;
   private preyList = new Int32Array(4096);
@@ -141,6 +144,8 @@ export class Sim implements SimLike {
   private cKills = 0;
   private cKillsDeer = 0;
   private cKillsCougar = 0;
+  /** Cougar kills by prey species since the last sample() call (S8). */
+  private cCougarKills = new Int32Array(SPECIES_COUNT);
   private cStrife = 0;
   private cChases = 0;
   private cGiveUps = 0;
@@ -164,6 +169,9 @@ export class Sim implements SimLike {
   /** Vagrant ravens alive (counted at the top of each tick). */
   private vagrants = 0;
   private everPresent = new Uint8Array(SPECIES_COUNT);
+  /** Mule deer and cougars have lived in this valley (and have not been removed by a god tool): the open-prairie rescues only ever refill, never found, a species (S8). */
+  private muleSeen = false;
+  private cougarSeen = false;
   private lastStampede = -99999;
   private lastOutbreak = -99999;
   private wasDrought = false;
@@ -285,6 +293,7 @@ export class Sim implements SimLike {
       noteBirths: (sp, n) => { this.cBirths[sp] += n; },
       event: (kind, sp, x, y, a, b) => this.event(kind, sp, x, y, a, b),
     });
+    this.mule = new MuleDeer(this.seed, this.world, this.p);
     this.populate();
     this.coyotes.seedFounders();
     if (this.p.openPrairie > 0 || this.p.ravenVagrants > 0) {
@@ -359,6 +368,14 @@ export class Sim implements SimLike {
         }
       }
     }
+    // mule deer (S8): groups of 3 to 10 at habitat spots (creek corridor and groves); positions come from the mule deer's own generator
+    for (const g of P[Sp.MuleDeer].initial > 0 ? this.mule.groupSizes(P[Sp.MuleDeer].initial) : []) {
+      const [hx, hy] = this.mule.spot() ?? this.goodSpot(0.4);
+      for (let k = 0; k < g; k++) {
+        const r = this.mule.rng;
+        this.spawnAdult(Sp.MuleDeer, hx + r.range(-8, 8), hy + r.range(-8, 8));
+      }
+    }
     for (let k = 0; k < P[Sp.Cougar].initial; k++) {
       const [x, y] = this.coverSpot();
       const i = this.spawnAdult(Sp.Cougar, x, y);
@@ -376,7 +393,7 @@ export class Sim implements SimLike {
     // above keep their own layouts and draws. Species that live as density fields (prairie dogs, and the jackrabbit when smallPrey
     // is on) are seeded by SmallPrey instead; the jackrabbit is the one field species that still has an agent form (smallPrey off).
     for (const d of SPECIES) {
-      if (d.id === Sp.Bison || d.id === Sp.Deer || d.id === Sp.Wolf || d.id === Sp.Cougar || d.id === Sp.Raven) continue;
+      if (d.id === Sp.Bison || d.id === Sp.Deer || d.id === Sp.Wolf || d.id === Sp.Cougar || d.id === Sp.Raven || d.id === Sp.MuleDeer) continue;
       if (d.repr === 'field' && (this.p.smallPrey > 0 || d.id !== Sp.Rabbit)) continue;
       let left = P[d.id].initial;
       while (left > 0) {
@@ -414,6 +431,8 @@ export class Sim implements SimLike {
       } else a.cooldown[i] = this.rng.int(P.birthCooldown + 1);
     }
     this.everPresent[sp] = 1;
+    if (sp === Sp.MuleDeer) this.muleSeen = true;
+    else if (sp === Sp.Cougar) this.cougarSeen = true;
     return i;
   }
 
@@ -534,6 +553,8 @@ export class Sim implements SimLike {
       const s = a.sp[i];
       this.pop[s]++;
       if (a.origin[i] === 2 && s === Sp.Raven) this.vagrants++;
+      if (s === Sp.MuleDeer) this.muleSeen = true;
+      else if (s === Sp.Cougar) this.cougarSeen = true;
       if (IS_PREY[s]) this.preyList[this.preyN++] = i;
       else if (THREAT[s] > 0) {
         this.predList[this.predN++] = i;
@@ -554,6 +575,7 @@ export class Sim implements SimLike {
       this.refreshCoarse();
       if (this.small !== null) this.small.step(t); // the web reads the map just refreshed, so it is never stale
       if (this.small !== null) this.coyotes.tickPrey(t);
+      if (this.pop[Sp.MuleDeer] > 0) this.mule.refresh(this.veg.browse, this.veg.grass);
     }
     this.prey.build(this.preyList, this.preyN, a.x, a.y);
     this.pred.build(this.predList, this.predN, a.x, a.y);
@@ -1067,6 +1089,8 @@ export class Sim implements SimLike {
     const x = a.x[i], y = a.y[i];
     const o = i * NG;
     const juvenile = a.age[i] < P.matureAge;
+    // a mule deer (S8) browses only in its habitat: tree and shrub cover and the draws along the water (null for every other species)
+    const mh = s === Sp.MuleDeer ? this.mule.hab : null;
     const hr = P.herdRadius, hr2 = hr * hr;
     const spacing = p.herdSpacing, spacing2 = p.herdSepRange * p.herdSepRange, coh = p.herdCohesion;
 
@@ -1208,7 +1232,8 @@ export class Sim implements SimLike {
     const walk = P.walkSpeed;
     let dvx = 0, dvy = 0;
     let state: number = St.Idle;
-    const herd = a.genes[o + G_HERD];
+    // a mule deer group that has grown past muledeerGroupMax stops cohering and drifts apart, so the groups stay 3 to 10
+    const herd = a.genes[o + G_HERD] * (mh !== null && n >= p.muledeerGroupMax ? -0.6 : 1);
     if (n > 0) { cx /= n; cy /= n; avx /= n; avy /= n; }
     const c = this.veg.cellAt(x, y);
     if (a.flee[i] > 0 && a.hydration[i] < 0.2 && threat < 0) a.flee[i] = 0;
@@ -1234,7 +1259,7 @@ export class Sim implements SimLike {
       const browser = P.diet > 0;
       // dogGrazeBonus (S4): grazers favour the edges of prairie dog towns, where the grass regrows short and sweet
       const gb = !browser && this.small !== null && this.p.dogGrazeBonus > 0 ? this.small.grazeBonus : null;
-      const gHere = browser ? (this.veg.browse[c] > 0.03 ? this.veg.browse[c] * 1.6 + this.veg.grass[c] * 0.3 : 0) : this.veg.grass[c];
+      const gHere = (browser ? (this.veg.browse[c] > 0.03 ? this.veg.browse[c] * 1.6 + this.veg.grass[c] * 0.3 : 0) : this.veg.grass[c]) * (mh !== null ? mh[c] : 1);
       if (hiding) {
         // a young fawn lies still in the grass while its mother grazes nearby
         state = St.Rest;
@@ -1274,7 +1299,7 @@ export class Sim implements SimLike {
             if (sx < 3 || sy < 3 || sx > this.world.size - 3 || sy > this.world.size - 3) continue;
             const sc = this.veg.cellAt(sx, sy);
             if (this.world.water[sc]) continue;
-            const food = browser ? this.veg.browse[sc] * 1.6 + this.veg.grass[sc] * 0.35 : this.veg.grass[sc];
+            const food = (browser ? this.veg.browse[sc] * 1.6 + this.veg.grass[sc] * 0.35 : this.veg.grass[sc]) * (mh !== null ? mh[sc] : 1);
             let score = food - p.fearWeight * this.veg.fear[sc] - 0.004 * this.prey.counts[this.prey.bucketOf(sx, sy)] + (k === 0 ? 0.03 : 0) + rng.next() * 0.02;
             if (gb !== null) score += gb[this.small!.cellOf(sx, sy)];
             if (score > bestS) { bestS = score; bdx = ux; bdy = uy; }
@@ -1306,7 +1331,7 @@ export class Sim implements SimLike {
               for (let xx = Math.max(0, bx0 - R); xx <= Math.min(B - 1, bx0 + R); xx++) {
                 const k = yy * B + xx;
                 const cx2 = (xx + 0.5) * cs, cy2 = (yy + 0.5) * cs;
-                const food = browser ? this.coarseBrowse[k] * 1.6 + this.coarseGrass[k] * 0.35 : this.coarseGrass[k];
+                const food = mh !== null ? this.mule.coarse[k] : browser ? this.coarseBrowse[k] * 1.6 + this.coarseGrass[k] * 0.35 : this.coarseGrass[k];
                 let v = food - 0.0012 * Math.hypot(cx2 - x, cy2 - y) - 0.004 * this.prey.counts[this.prey.bucketOf(cx2, cy2)];
                 if (gb !== null) v += gb[k];
                 if (v > bv) { bv = v; tx = cx2; ty = cy2; }
@@ -1922,6 +1947,7 @@ export class Sim implements SimLike {
             a.kills[i]++;
             this.cKills++;
             this.cKillsCougar++;
+            this.cCougarKills[a.sp[t]]++;
             this.totalKills++;
             this.logStory(i, 'kill', a.sp[t]);
             this.veg.stamp(this.veg.fear, a.x[t], a.y[t], p.fearKillRadius, p.fearKill, 1);
@@ -2131,7 +2157,7 @@ export class Sim implements SimLike {
         left -= m;
       }
     } else {
-      const [cx, cy] = x !== undefined && y !== undefined ? [x, y] : this.goodSpot(0.4);
+      const [cx, cy] = x !== undefined && y !== undefined ? [x, y] : sp === Sp.MuleDeer ? (this.mule.spot() ?? this.goodSpot(0.4)) : this.goodSpot(0.4);
       for (let k = 0; k < count; k++) {
         const i = this.spawnAdult(sp, cx + this.rng.range(-15, 15), cy + this.rng.range(-15, 15));
         if (SPECIES[sp].flies) { this.a.alt[i] = 30; this.a.state[i] = St.Fly; }
@@ -2170,6 +2196,8 @@ export class Sim implements SimLike {
         for (let i = 0; i < a.hi; i++) if (a.alive[i] && a.sp[i] === iv.species) { this.die(i, 'removed'); n++; }
         if (iv.species === Sp.Wolf) for (let pk = 0; pk < MAX_PACKS; pk++) this.packAlive[pk] = 0;
         this.everPresent[iv.species] = 0;
+        if (iv.species === Sp.MuleDeer) this.muleSeen = false;
+        else if (iv.species === Sp.Cougar) this.cougarSeen = false;
         this.event('removed', iv.species, 0, 0, n, 0);
         break;
       }
@@ -2280,10 +2308,37 @@ export class Sim implements SimLike {
     if (t > 0 && t % 100 === 0) {
       this.wolfArrivals();
       if (p.coyoteInRate > 0 && this.coyotes.seen) this.coyoteArrivals();
+      if (p.cougarInRate > 0 && this.cougarSeen && this.pop[Sp.Cougar] < 2) this.cougarArrivals();
     }
     const yt = this.env.yearTick(t);
     if (yt === Math.round(2.6 * SEASON_TICKS)) this.pronghornExodus();
     else if (yt === Math.round(0.25 * SEASON_TICKS)) this.pronghornReturn();
+    else if (yt === Math.round(0.3 * SEASON_TICKS)) this.muleReturn();
+  }
+
+  /** Spring rescue (S8, season 0.3): a group of mule deer walks in to a habitat spot when too few remain (and some have lived here before). */
+  private muleReturn(): void {
+    const p = this.p;
+    if (p.muledeerRescue <= 0 || !this.muleSeen || this.pop[Sp.MuleDeer] >= p.muledeerRescueBelow) return;
+    const spot = this.mule.spot();
+    if (!spot) return;
+    const c = this.world.corridors, k = this.nearestCorridor(spot[0], spot[1]);
+    const bx = c[k * 4], by = c[k * 4 + 1], nx = c[k * 4 + 2], ny = c[k * 4 + 3];
+    const n = Math.round(p.muledeerRescue);
+    this.spawnArrivals(Sp.MuleDeer, n, bx, by, nx, ny, spot[0], spot[1], 1, 8);
+    this.event('immigrated', Sp.MuleDeer, bx, by, n, 0);
+  }
+
+  /** Every 100 ticks, with fewer than two cougars left (and some having lived here), a pair may walk in from the prairie to a cover spot (S8, cougarInRate). */
+  private cougarArrivals(): void {
+    const a = this.a, r = this.region!.rng;
+    if (r.next() >= (this.p.cougarInRate * 100) / BASE_YEAR_TICKS) return;
+    const [sx, sy] = this.coverSpot();
+    const c = this.world.corridors, k = this.nearestCorridor(sx, sy);
+    const bx = c[k * 4], by = c[k * 4 + 1], nx = c[k * 4 + 2], ny = c[k * 4 + 3];
+    const slots = this.spawnArrivals(Sp.Cougar, 2, bx, by, nx, ny, sx, sy, 1, 5);
+    for (const i of slots) { a.energy[i] = 0.8; a.fleeX[i] = sx; a.fleeY[i] = sy; }
+    this.event('immigrated', Sp.Cougar, bx, by, 2, 0);
   }
 
   private beginMigrate(i: number, outbound: boolean, tx: number, ty: number): void {
@@ -2600,6 +2655,10 @@ export class Sim implements SimLike {
     row.kills_pronghorn = this.cKillsDeer;
     row.strife_wolf = this.cStrife;
     row.kills_cougar = this.cKillsCougar;
+    // cougar kills by prey species since the last sample (S8)
+    row.cougar_kills_muledeer = this.cCougarKills[Sp.MuleDeer];
+    row.cougar_kills_pronghorn = this.cCougarKills[Sp.Deer];
+    row.cougar_kills_bison = this.cCougarKills[Sp.Bison];
     row.births_pronghorn = this.cBirths[Sp.Deer];
     row.starved_pronghorn = this.cStarve[Sp.Deer];
     row.chases = this.cChases;
@@ -2671,6 +2730,7 @@ export class Sim implements SimLike {
     this.cKillsDeer = 0;
     this.cStrife = 0;
     this.cKillsCougar = 0;
+    this.cCougarKills.fill(0);
     this.cChases = 0;
     this.cGiveUps = 0;
     this.cBirths.fill(0);
@@ -2715,6 +2775,7 @@ export class Sim implements SimLike {
       if (a.infected[i] > 0 || (a.cdv[i] > 0 && IS_CANID[s])) f |= F_INFECTED;
       if (a.mange[i] > 0) f |= F_MANGE;
       if (a.male[i]) f |= F_MALE;
+      if (s === Sp.MuleDeer && a.state[i] === St.Flee) f |= F_STOT;
       const pk = a.pack[i];
       if (pk >= 0 && (this.packAlphaF[pk] === i || this.packAlphaM[pk] === i)) f |= F_ALPHA;
       out[o + 8] = f;

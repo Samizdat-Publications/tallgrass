@@ -55,9 +55,11 @@ export const SCENARIOS: Scenario[] = [
   },
   {
     id: 'cougars', name: 'Cougar country',
-    blurb: 'Six cougars lie in wait in the groves along the creek, ambushing alongside the wolf packs. When the valley empties of cats, a pair wanders in from the hills.',
-    // tuned on v5 (screen cgB): surer ambushes, a wider strike zone, a leaner metabolism, and dispersers from outside
-    params: { 'cougar.initial': 6, cougarKillChance: 0.9, cougarAmbushRadius: 26, 'cougar.metabolism': 0.0007, cougarImmigration: 0.5 }, schedule: [],
+    blurb: 'Six cougars lie in wait in the groves along the creek, ambushing alongside the wolf packs, and sixty mule deer browse the same draws. When the valley empties of cats, a pair wanders in from the hills.',
+    // tuned on v5 (screen cgB): surer ambushes, a wider strike zone, a leaner metabolism, and dispersers from outside (S8 made these the
+    // cougar defaults and added cougarRange 200 and cougarInRate; they stay explicit here so the scenario does not move if the defaults do).
+    // Mule deer (S8) are the cats' first choice of prey; without them the cats live on pronghorn, bison calves and wolf kills.
+    params: { 'cougar.initial': 6, 'muledeer.initial': 60, cougarKillChance: 0.9, cougarAmbushRadius: 26, 'cougar.metabolism': 0.0007, cougarImmigration: 0.5 }, schedule: [],
   },
   {
     id: 'hungrywolves', name: 'Hungry wolves',

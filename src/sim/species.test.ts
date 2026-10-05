@@ -1,5 +1,5 @@
 // Unit tests for the species registry and the event serial. Run: npx tsx src/sim/species.test.ts
-import { AGENT_STRIDE, F_MANGE, F_MIGRANT, SPECIES_COUNT, SPECIES_KEYS, SPECIES_NAMES, STATE_NAMES, Sp, St } from './types';
+import { AGENT_STRIDE, F_MANGE, F_MIGRANT, F_STOT, SPECIES_COUNT, SPECIES_KEYS, SPECIES_NAMES, STATE_NAMES, Sp, St } from './types';
 import { COAT_BASE, COAT_RANGE, DIET, PARAM_PREFIX, SPECIES, SPECIES_BY_KEY, canHunt, isGrazer, isPredator, isPrey, isThreat } from './species';
 import { Agents } from './agents';
 import { createSim } from './sim';
@@ -17,13 +17,18 @@ function ok(cond: boolean, msg: string): void {
 
 // ids are positions, and the Sp constants agree with the registry
 ok(SPECIES.every((d, i) => d.id === i), 'registry ids are array positions');
-ok(SPECIES_COUNT === SPECIES.length && SPECIES_COUNT === 10, 'SPECIES_COUNT is 10 after S7');
-ok(SPECIES_KEYS.join() === 'bison,wolf,raven,pronghorn,rabbit,cougar,coyote,prairiedog,eagle,hawk', 'SPECIES_KEYS order');
-ok(SPECIES_NAMES.join() === 'Bison,Wolf,Raven,Pronghorn,Jackrabbit,Cougar,Coyote,Prairie dog,Golden eagle,Red-tailed hawk', 'SPECIES_NAMES order');
+ok(SPECIES_COUNT === SPECIES.length && SPECIES_COUNT === 11, 'SPECIES_COUNT is 11 after S8');
+ok(SPECIES_KEYS.join() === 'bison,wolf,raven,pronghorn,rabbit,cougar,coyote,prairiedog,eagle,hawk,muledeer', 'SPECIES_KEYS order');
+ok(SPECIES_NAMES.join() === 'Bison,Wolf,Raven,Pronghorn,Jackrabbit,Cougar,Coyote,Prairie dog,Golden eagle,Red-tailed hawk,Mule deer', 'SPECIES_NAMES order');
 ok(SPECIES_BY_KEY.bison.id === Sp.Bison && SPECIES_BY_KEY.wolf.id === Sp.Wolf && SPECIES_BY_KEY.raven.id === Sp.Raven, 'Sp ids match keys (1)');
 ok(SPECIES_BY_KEY.pronghorn.id === Sp.Deer && SPECIES_BY_KEY.rabbit.id === Sp.Rabbit && SPECIES_BY_KEY.cougar.id === Sp.Cougar, 'Sp ids match keys (2)');
 ok(SPECIES_BY_KEY.coyote.id === Sp.Coyote && SPECIES_BY_KEY.prairiedog.id === Sp.PrairieDog && Sp.Coyote === 6 && Sp.PrairieDog === 7, 'Sp ids match keys (3)');
 ok(SPECIES_BY_KEY.eagle.id === Sp.Eagle && SPECIES_BY_KEY.hawk.id === Sp.Hawk && Sp.Eagle === 8 && Sp.Hawk === 9, 'Sp ids match keys (4)');
+ok(SPECIES_BY_KEY.muledeer.id === Sp.MuleDeer && Sp.MuleDeer === 10, 'Sp ids match keys (5)');
+ok(SPECIES[Sp.MuleDeer].guild === 'browser' && SPECIES[Sp.MuleDeer].prey && SPECIES[Sp.MuleDeer].threat === 0 && SPECIES[Sp.MuleDeer].repr === 'agent' && !SPECIES[Sp.MuleDeer].core, 'mule deer registry entry');
+ok(isGrazer(Sp.MuleDeer) && isPrey(Sp.MuleDeer) && !isPredator(Sp.MuleDeer) && !isThreat(Sp.MuleDeer), 'mule deer is a browsing prey animal');
+ok(canHunt(Sp.Wolf, Sp.MuleDeer) && canHunt(Sp.Cougar, Sp.MuleDeer) && !canHunt(Sp.Coyote, Sp.MuleDeer), 'wolves and cougars hunt mule deer');
+ok(DIET[Sp.Cougar][Sp.MuleDeer] > DIET[Sp.Cougar][Sp.Deer] && DIET[Sp.Cougar][Sp.Deer] > DIET[Sp.Cougar][Sp.Bison] && DIET[Sp.Cougar][Sp.Bison] > 0, 'cougar prefers mule deer, then pronghorn, then bison calves');
 ok([Sp.Eagle, Sp.Hawk].every((s) => SPECIES[s].repr === 'agent' && SPECIES[s].guild === 'raptor' && SPECIES[s].flies && SPECIES[s].threat === 0 && !SPECIES[s].prey && !SPECIES[s].core), 'eagle and hawk: flying raptor agents, no threat to grazers, not core');
 ok([Sp.Eagle, Sp.Hawk].every((s) => isPredator(s) && !isThreat(s) && !isGrazer(s) && !isPrey(s)), 'raptors are predators in the registry but not in the predator grid');
 ok(SPECIES_BY_KEY.rabbit.repr === 'field' && SPECIES_BY_KEY.prairiedog.repr === 'field' && SPECIES_BY_KEY.coyote.repr === 'agent', 'field and agent species');
@@ -33,7 +38,7 @@ ok(new Set(SPECIES.map((d) => d.key)).size === SPECIES.length, 'keys are unique'
 ok(SPECIES.every((d) => /^#[0-9A-Fa-f]{6}$/.test(d.color)), 'colours are hex');
 ok(DIET.length === SPECIES_COUNT && DIET.every((r) => r.length === SPECIES_COUNT), 'DIET is square');
 ok(COAT_BASE.length >= SPECIES_COUNT && COAT_RANGE.length >= SPECIES_COUNT, 'coat tables cover every species');
-ok(PARAM_PREFIX.join() === 'bison,wolf,raven,deer,rabbit,cougar,coyote,prairiedog,eagle,hawk', 'param prefixes keep the v1 names');
+ok(PARAM_PREFIX.join() === 'bison,wolf,raven,deer,rabbit,cougar,coyote,prairiedog,eagle,hawk,muledeer', 'param prefixes keep the v1 names');
 const params = defaultParams();
 ok(params.species.length === SPECIES_COUNT, 'default params cover every species');
 ok(params.species.every((s) => s !== undefined && s.matureAge > 0), 'every species id has a params block (no matureAge of undefined)');
@@ -50,7 +55,7 @@ ok(!canHunt(Sp.Wolf, Sp.Raven) && !canHunt(Sp.Wolf, Sp.Cougar) && !canHunt(Sp.Bi
 
 // contract additions
 ok(St.Migrate === 11 && STATE_NAMES[St.Migrate] === 'migrating', 'St.Migrate');
-ok(F_MANGE === 32 && F_MIGRANT === 64, 'flag bits');
+ok(F_MANGE === 32 && F_MIGRANT === 64 && F_STOT === 128, 'flag bits');
 ok(AGENT_STRIDE === 12, 'snapshot stride unchanged');
 
 // new agent fields start at zero, survive pool growth, and reset on respawn

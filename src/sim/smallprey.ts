@@ -17,8 +17,8 @@
 //   townFounded   sp PrairieDog, (x, y) the town's centre, a = cells in the town, b = prairie dogs in it
 //   townLost      sp PrairieDog, (x, y) the old town's centre, a = cells it covered, b = the highest plague level (0..1) over those cells now
 //   sylvaticPlague sp PrairieDog, (x, y) where the outbreak began, a = prairie dogs lost, b = duration in ticks. Fires when the outbreak has faded.
-//   hareBoom      sp Rabbit, (x, y) the hare-weighted centre, a = valley total, b = its 10-year mean. Total passed 2x the mean.
-//   hareCrash     sp Rabbit, (x, y) as above, a = valley total, b = 10-year mean. Total fell under 0.4x the mean.
+//   hareBoom      sp Rabbit, (x, y) the hare-weighted centre, a = valley total, b = its 10-year mean. Total passed 1.5x the mean.
+//   hareCrash     sp Rabbit, (x, y) as above, a = valley total, b = 10-year mean. Total fell under 0.6x the mean.
 //   immigrated    sp Rabbit or PrairieDog, only with openPrairie on: the rescue arrival (a = animals, b = 0).
 // A town is a group of 8-connected cells (at least TOWN_MIN_CELLS) that each hold an active colony.
 import type { Environment } from './env';
@@ -98,8 +98,8 @@ const PLAGUE_SPREAD_MIN = 0.2;
 const PLAGUE_CATCH_DOGS = 0.3;
 /** Booms and crashes: window of the mean (valley years), thresholds, the minimum spacing per kind (valley years), warm-up (valley years). */
 const BOOM_WINDOW_YEARS = 10;
-const BOOM_RATIO = 2;
-const CRASH_RATIO = 0.4;
+const BOOM_RATIO = 1.5; // the 96th percentile of total/mean in the v6b screen (2x never happened)
+const CRASH_RATIO = 0.6; // the 5th percentile (0.4x never happened)
 const BOOM_SPACING_YEARS = 5;
 /** Rescue: hares arrive when the valley holds fewer than RESCUE_HARE_BELOW; a dog colony once per RESCUE_DOG_YEARS base years with no town. */
 const RESCUE_HARE_BELOW = 20;

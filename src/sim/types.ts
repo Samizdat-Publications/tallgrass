@@ -12,6 +12,7 @@ export const Sp = {
   PrairieDog: 7,
   Eagle: 8,
   Hawk: 9,
+  MuleDeer: 10,
 } as const;
 export type Sp = (typeof Sp)[keyof typeof Sp];
 // Derived from the registry in species.ts. Keep the `Sp` ids above in step with SPECIES[].id.
@@ -45,6 +46,8 @@ export const F_MALE = 8;
 export const F_ALPHA = 16;
 export const F_MANGE = 32;
 export const F_MIGRANT = 64;
+/** Set while a mule deer is fleeing: the renderer draws the stotting gait (all four feet bouncing together). */
+export const F_STOT = 128;
 
 /**
  * Agent snapshot record, Float32, AGENT_STRIDE floats per alive agent:
