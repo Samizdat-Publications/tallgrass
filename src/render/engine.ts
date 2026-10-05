@@ -21,6 +21,7 @@ import { Sky, computeAtmosphere, createLighting, Lighting, Smoothed } from './sk
 import { Trees } from './trees';
 import { PostFX, Quality } from './post';
 import { Smoke } from './smoke';
+import { Fireflies, fireflyAmount } from './fireflies';
 import { Storms } from './storms';
 import { DroneCamera, CameraPreset } from './camera';
 import { grassTint } from './grass';
@@ -121,6 +122,7 @@ export class Engine {
   readonly sky: Sky;
   readonly cloudShadow: CloudShadow;
   readonly smoke: Smoke;
+  readonly fireflies: Fireflies;
   /** Storm visuals (R4): cloud masses, rain shafts, lightning, rainbow. Fed by setStorms(). */
   readonly storms: Storms;
   readonly post: PostFX;
@@ -225,6 +227,7 @@ export class Engine {
     this.sky = new Sky(this.uniforms, this.storms.uniforms);
     this.cloudShadow = new CloudShadow(this.uniforms, world.size);
     this.smoke = new Smoke(world, this.uniforms, this.terrain.heightAt);
+    this.fireflies = new Fireflies(world, this.uniforms.time, this.terrain.heightAt);
 
     this.sun = new SunLight(0xffffff, 1);
     // two cascades with a wide blend band, so the drop in shadow resolution fades in instead of showing as a line (see sunshadow.ts)
@@ -240,10 +243,10 @@ export class Engine {
     this.hemi = new THREE.HemisphereLight(0xffffff, 0x886644, 1);
 
     this.scene.userData.tgUniforms = this.uniforms;
-    this.scene.add(this.sky.mesh, this.terrain.mesh, this.water.mesh, this.trees.group, this.smoke.mesh, this.storms.group, this.sun, this.hemi);
+    this.scene.add(this.sky.mesh, this.terrain.mesh, this.water.mesh, this.trees.group, this.smoke.mesh, this.fireflies.mesh, this.storms.group, this.sun, this.hemi);
 
     this.post = new PostFX(renderer, this.scene, this.camera, this.uniforms, this.storms.uniforms);
-    this.post.aoExclude.push(this.sky.mesh, this.water.mesh, this.smoke.mesh, ...this.storms.meshes);
+    this.post.aoExclude.push(this.sky.mesh, this.water.mesh, this.smoke.mesh, this.fireflies.mesh, ...this.storms.meshes);
     // GTAO renders its own normal/depth pass with an override material that ignores alpha cut-outs, so a sparse canopy would occlude
     // the sky behind its gaps and show as grey smoke. Keep alpha-cut foliage (crowns and shrubs) out of that pass.
     for (const m of this.trees.meshes) if (m.name.startsWith('cottonwood-crown') || m.name.startsWith('shrubs')) this.post.aoExclude.push(m);
@@ -402,6 +405,7 @@ export class Engine {
     this.smoke.update(dt, this.camera);
     this.storms.update(dt, this.camera, this.env);
     this.updateEnvState(dt);
+    this.fireflies.update(fireflyAmount(this.env.season, this.lighting.sunElDeg, this.rainSm, this.sm.overcast, this.env.warmth), this.renderer.domElement.height, this.camera.fov);
     this.post.render(dt);
     this.firstFrame = false;
   }
@@ -489,6 +493,7 @@ export class Engine {
     this.sky.dispose();
     this.cloudShadow.dispose();
     this.smoke.dispose();
+    this.fireflies.dispose();
     this.storms.dispose();
     this.vegTexture.dispose();
     this.renderer.dispose();
