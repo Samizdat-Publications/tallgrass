@@ -6,7 +6,7 @@ import type { SimEvent, StoryEntry } from '../sim/sim';
 import type { Settings } from './settings';
 
 export type ToolId = 'rain' | 'drought' | 'fire' | 'plague' | 'cull' | 'addWolves' | 'addBison' | 'removeWolves';
-export type OverlayId = 'none' | 'vegetation' | 'fear' | 'territory' | 'traits';
+export type OverlayId = 'none' | 'vegetation' | 'fear' | 'territory' | 'traits' | 'smallprey';
 
 export interface UIActions {
   /** 0 = pause, 1, 10, 100 */

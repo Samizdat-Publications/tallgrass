@@ -9,6 +9,7 @@ import {
   HEIGHT_GLSL, NOISE_GLSL, POND_GLSL, SharedUniforms, clamp, fbm2, injectSafeOutput, injectTerrainShadow, makePondUniform, smoothstep, vnoise2,
 } from './common';
 import { SEASON_GLSL } from './season';
+import { SMALL_TEX, TOWN_ON } from './smalltex';
 
 const SHADOW_RES = 512;
 const FAR_RES = 512;
@@ -760,6 +761,8 @@ export class Terrain {
       const u = shader.uniforms;
       u.uPonds = pondU;
       u.tVeg = sh.vegTex;
+      u.tSmall = SMALL_TEX; // prairie dog towns (smallprey.ts)
+      u.uTownOn = TOWN_ON;
       u.tStatic = sh.staticTex;
       u.tTrail = sh.trailTex;
       u.uFarStats = sh.farStats;
@@ -853,6 +856,8 @@ const GROUND_PARS = /* glsl */ `
 uniform sampler2D tVeg;
 uniform sampler2D tStatic;
 uniform sampler2D tTrail;
+uniform sampler2D tSmall;
+uniform float uTownOn;
 uniform sampler2D tMacro1;
 uniform sampler2D tMacro2;
 uniform sampler2D tMacro3;
@@ -1192,6 +1197,17 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
   // drought soil is dry dusty tan, not dark earth
   vec3 soilCol = uDrought > 0.001 ? tgDroughtSoil(uSoil, uDrought) : uSoil;
   vec3 col = mix(shortGrass, soilCol * (0.8 + 0.5 * nA), soilShow * 0.85);
+  // prairie dog town (smallprey.ts, R3): the colony clips its turf short and fresh, and the earth round the burrows is pale and trodden
+  if (uTownOn > 0.5) {
+    float townB = texture2D(tSmall, cuvM).b * inS;
+    float tt = smoothstep(0.1, 0.6, townB + (nM1 - 0.5) * 0.3 + (nC - 0.5) * 0.1);
+    if (tt > 0.002) {
+      vec3 turf = mix(uGrassGreen, uGrassDry, 0.2) * vec3(0.98, 1.1, 0.74) * (0.86 + 0.3 * nA);
+      col = mix(col, turf, tt * 0.5 * (1.0 - 0.7 * winterK) * (1.0 - 0.6 * uDrought));
+      float bare = smoothstep(0.52, 0.8, tgNoise2(xz * 0.9 + 17.0) * 0.6 + tgNoise2(xz * 3.1 + 5.0) * 0.4) * tt;
+      col = mix(col, vec3(0.5, 0.4, 0.27) * (0.8 + 0.4 * nC) * (1.0 - 0.5 * uNight), bare * 0.55);
+    }
+  }
   // the apron is dry, pale, dusty earth (lighter than the damp mud at the waterline, which the wet line below darkens again)
   if (apron > 0.003) {
     float ag = tgNoise2(xz * 2.3 + 5.0) * 0.6 + tgNoise2(xz * 7.1 + 1.0) * 0.4;

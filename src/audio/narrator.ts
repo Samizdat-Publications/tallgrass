@@ -10,8 +10,10 @@ import type { SimEvent } from '../sim/sim';
 import { FeedFilter } from '../ui/feed';
 import type { AudioDirector } from './audio';
 import {
-  DUCK_AMOUNT, DUCK_RAMP_S, NARRATION_IDS, NARRATION_TEXT, OPENING_DELAY_MS, gapElapsed, gateOpen, isStale, lineVariants, pickVariant, priority,
+  DUCK_AMOUNT, DUCK_RAMP_S, KIND_COOLDOWN_YEARS, NARRATION_IDS, NARRATION_TEXT, OPENING_DELAY_MS, TOWN_BACK_YEARS, gapElapsed, gateOpen, isStale,
+  lineVariants, pickVariant, priority,
 } from './narration';
+import { YEAR_TICKS } from '../sim/types';
 
 const STORAGE_KEY = 'tallgrass.narrator.v1';
 /** An opening line that could not start within this long of its due time is not worth saying any more. */
@@ -55,6 +57,9 @@ export class Narrator {
   private openingDone = false;
   private openingAt = -1;
   private wasFilming = false;
+  /** The sim tick of the last prairie dog plague seen, and of the last line queued for each kind and species (for KIND_COOLDOWN_YEARS). */
+  private plagueTick: number | null = null;
+  private lastQueued = new Map<string, number>();
 
   constructor(
     private audio: AudioDirector,
@@ -120,9 +125,16 @@ export class Narrator {
     for (const e of events) {
       if ((e.kind === 'packLost' || e.kind === 'packFounded') && flash.has(e.a)) continue;
       if (currentTick !== undefined && currentTick - e.tick > STALE_TICKS) continue;
-      const variants = lineVariants(e);
+      if (e.kind === 'sylvaticPlague') this.plagueTick = e.tick;
+      const sincePlague = this.plagueTick !== null && e.tick - this.plagueTick < TOWN_BACK_YEARS * YEAR_TICKS ? e.tick - this.plagueTick : undefined;
+      const variants = lineVariants(e, { sincePlague });
       if (!variants) continue;
       if (!this.feed.accept(e)) continue; // the same thinning as the chronicle: no stampede after stampede
+      const rest = KIND_COOLDOWN_YEARS[e.kind];
+      const ckey = `${e.kind}:${e.sp}`;
+      const prev = this.lastQueued.get(ckey);
+      if (rest !== undefined && prev !== undefined && e.tick >= prev && e.tick - prev < rest * YEAR_TICKS) continue;
+      this.lastQueued.set(ckey, e.tick);
       const cand: Candidate = { kind: e.kind, variants, at: t, pri: priority(e.kind) };
       const p = this.pending;
       if (!p || isStale(t, p.at) || cand.pri >= p.pri) this.pending = cand;

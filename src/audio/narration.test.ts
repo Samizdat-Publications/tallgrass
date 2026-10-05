@@ -1,6 +1,6 @@
 // Unit tests for the narrator's policy. Run: npx tsx src/audio/narration.test.ts
 import type { SimEvent, SimEventKind } from '../sim/sim';
-import { MAX_AGE_MS, MIN_GAP_MS, NARRATION_IDS, NARRATION_TEXT, OPENING_DELAY_MS, gapElapsed, gateOpen, isStale, lineVariants, pickVariant, speedAllowsNarration } from './narration';
+import { KIND_COOLDOWN_YEARS, MAX_AGE_MS, MIN_GAP_MS, NARRATION_IDS, NARRATION_TEXT, OPENING_DELAY_MS, gapElapsed, gateOpen, isStale, lineVariants, pickVariant, priority, speedAllowsNarration } from './narration';
 import { Narrator } from './narrator';
 import type { AudioDirector } from './audio';
 
@@ -40,7 +40,28 @@ ok(lineVariants(ev('outbreak'))?.length === 2 && lineVariants(ev('packLost'))?.l
 for (const k of ['drought', 'outbreak', 'stampede', 'packFounded', 'packLost', 'fire', 'firstKill'] as SimEventKind[]) {
   for (const v of lineVariants(ev(k, { a: 4800 + 3 * 100, tick: 9000 })) ?? []) ok(!!NARRATION_TEXT[v], `text for ${v}`);
 }
-ok(NARRATION_IDS.length === 18 && NARRATION_IDS.every((i) => NARRATION_TEXT[i].length > 10), '18 lines, each with text');
+ok(NARRATION_IDS.length === 32 && NARRATION_IDS.every((i) => NARRATION_TEXT[i].length > 10), '32 lines, each with text');
+ok(NARRATION_IDS.every((i) => !/[—–]/.test(NARRATION_TEXT[i])), 'no dashes in the spoken text');
+
+// ---- R3 lines: the events Track S emits
+ok(lineVariants(ev('immigrated', { sp: 1, a: 2 }))?.[0] === 'wolvesArrive_1', 'wolves arrive from outside');
+ok(lineVariants(ev('immigrated', { sp: 3, a: 12 }))?.[0] === 'pronghornReturn_1', 'pronghorn return');
+ok(lineVariants(ev('immigrated', { sp: 4, a: 10 })) === null && lineVariants(ev('immigrated', { sp: 7, a: 4 })) === null, 'the hare and prairie dog rescues are silent');
+ok(lineVariants(ev('emigrated', { sp: 3, a: 40 }))?.[0] === 'pronghornLeave_1', 'pronghorn leave');
+ok(lineVariants(ev('emigrated', { sp: 3, a: 2 })) === null && lineVariants(ev('emigrated', { sp: 1, a: 1 })) === null, 'a lone leaver is not worth a line');
+ok(lineVariants(ev('recolonized', { sp: 1, a: 2 }))?.[0] === 'returned_1', 'a species returns');
+ok(lineVariants(ev('distemper', { sp: 1, a: 3, b: 1 }))?.[0] === 'distemper_1' && lineVariants(ev('distemper', { sp: 1, a: 0, b: 0 })) === null, 'distemper, when it kills');
+ok(lineVariants(ev('mange', { sp: 1, a: 4 }))?.[0] === 'mange_1', 'mange');
+ok(lineVariants(ev('sylvaticPlague', { sp: 7, a: 30 }))?.[0] === 'plague_1', 'plague in the town');
+ok(lineVariants(ev('townFounded', { sp: 7 })) === null, 'a town founded with no plague behind it is silent');
+ok(lineVariants(ev('townFounded', { sp: 7 }), { sincePlague: 5000 })?.[0] === 'townBack_1', 'a town founded after a plague is a town recovering');
+ok(lineVariants(ev('hareBoom', { sp: 4 }))?.[0] === 'hareBoom_1' && lineVariants(ev('hareCrash', { sp: 4 }))?.[0] === 'hareCrash_1', 'hare boom and crash');
+ok(lineVariants(ev('coyotePups', { sp: 6, a: 4 }))?.[0] === 'coyotePups_1', 'coyote pups');
+ok(lineVariants(ev('mesoRelease', { sp: 6 }))?.[0] === 'mesoRelease_1', 'coyotes take over');
+ok(lineVariants(ev('lightningFire'))?.[0] === 'lightningFire_1' && lineVariants(ev('storm'))?.[0] === 'storm_1', 'lightning fire and a storm');
+ok(priority('recolonized') > priority('sylvaticPlague') && priority('sylvaticPlague') > priority('storm') && priority('extinct') > priority('mesoRelease'), 'bigger news outranks smaller');
+ok(priority('storm') > 0 && priority('townFounded') > 0 && priority('hareBoom') > priority('coyotePups'), 'every new kind has a priority');
+ok((KIND_COOLDOWN_YEARS.emigrated ?? 0) >= 3 && (KIND_COOLDOWN_YEARS.storm ?? 0) >= 2, 'the yearly kinds are given a rest');
 
 // ---- variants
 ok(pickVariant(['a', 'b'], 'a', 0) === 'b' && pickVariant(['a', 'b'], 'b', 0.99) === 'a', 'a variant never repeats back to back');

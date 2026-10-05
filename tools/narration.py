@@ -35,6 +35,21 @@ LINES = {
     "extinct_raven": "The ravens have abandoned the valley.",
     "introducedWolf_1": "Wolves return to the valley. The herds have forgotten what it means to be watched.",
     "fire_1": "Fire on the prairie. It looks like ruin, but within a season the burned ground will be the greenest in the valley.",
+    # R3: the small-prey web, the canines' troubles, the storms and the valley's comings and goings
+    "wolvesArrive_1": "Wolves have come in from beyond the valley. A new pair finds an empty den and settles in.",
+    "returned_1": "An animal that had vanished from the valley has found its own way back.",
+    "pronghornLeave_1": "Winter is coming, and the pronghorn drift out of the valley toward the open prairie.",
+    "pronghornReturn_1": "With the spring, the pronghorn return.",
+    "distemper_1": "Distemper moves through the canines. It spreads where they gather, and the young are the first to go.",
+    "mange_1": "Mange has taken hold. The coats thin out, and a hard winter will finish what it started.",
+    "plague_1": "Plague has reached the prairie dog town. Within a season, almost every one of them will be gone.",
+    "townBack_1": "A few survivors start digging again. Slowly, the town comes back.",
+    "hareBoom_1": "Jackrabbits are everywhere. A year like this does not last.",
+    "hareCrash_1": "The jackrabbits have crashed. The prairie is suddenly much quieter.",
+    "coyotePups_1": "Coyote pups at the den. Small, quick, and always hungry.",
+    "mesoRelease_1": "With the wolves so few, the coyotes have taken their place. The valley has a new hunter.",
+    "lightningFire_1": "Lightning strikes the dry grass, and the prairie catches fire.",
+    "storm_1": "A thunderstorm crosses the valley. The air goes still, and then the sky breaks open.",
 }
 
 # What is actually sent to the voice when it differs from the caption text (pauses as ElevenLabs break tags).

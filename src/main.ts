@@ -5,6 +5,8 @@ import { GrassField } from './render/grass';
 import { AnimalLayer } from './render/animals';
 import { OverlayLayer } from './render/overlay';
 import { Cranes } from './render/cranes';
+import { SmallPreyLayer } from './render/smallprey';
+import { SmallPreyOverlay } from './render/smalloverlay';
 import { GameUI, type OverlayId, type ToolId } from './ui/ui';
 import { loadSettings, type QualityPreset, type Settings } from './ui/settings';
 import { titleWanted } from './ui/title';
@@ -19,6 +21,7 @@ import { AudioDirector } from './audio/audio';
 import { Narrator } from './audio/narrator';
 import { countNearby, nearWater01, scanTension } from './audio/inputs';
 import type { TensionSample } from './audio/music';
+import type { Nearby } from './audio/mix';
 import { DAY_TICKS, setCalendarScale, Sp, YEAR_TICKS, type Intervention, type Snapshot } from './sim/types';
 import { applyOverrides, defaultParams } from './sim/params';
 import { isPredator } from './sim/species';
@@ -100,6 +103,8 @@ engine.scene.add(cranes.object3D);
 engine.excludeFromAO(cranes.object3D);
 engine.onFrame((dt) => cranes.update(dt));
 audio.onFlyover = (f) => cranes.start({ ...f, delay: f.startAt - audio.now });
+// R4 strikes -> R3 thunder player (delay is distance / 343 m/s at 1x, 0 at 10x and up)
+engine.storms.onThunder = (distance, delay) => { audio.onThunder(distance, delay); };
 (window as unknown as Record<string, unknown>).__cranes = cranes;
 // the documentary narrator: speaks on big events while the documentary camera or cinematic mode is filming
 const narrator = new Narrator(audio);
@@ -165,6 +170,11 @@ worker.onmessage = (e: MessageEvent<FromWorker>) => {
   pendingEvents = pendingEvents.concat(m.events);
   pendingHistory = pendingHistory.concat(m.history);
   if (m.veg) engine.setVeg(m.veg);
+  if (m.small) {
+    smallprey.setSmall(m.small);
+    // the turf in towns is clipped short: the render copy of the biomass is cut inside them (the blade layer and the terrain follow it)
+    if (smallprey.clipVeg(engine.vegTexture.image.data as Uint8Array)) engine.vegTexture.needsUpdate = true;
+  }
   if (m.traitGrid) overlay.setTraitGrid(m.traitGrid);
   overlay.setPacks(m.packs, m.packSerials.map(packName));
   engine.setEnv(m.env);
@@ -179,6 +189,7 @@ worker.onmessage = (e: MessageEvent<FromWorker>) => {
       carcassCount: m.carcassCount, carcasses: m.carcasses, pop: Int32Array.from(m.pop),
     };
     animals.setSnapshot(snap);
+    smallprey.setAgents(m.agents, m.count);
   }
   pending = m;
   if (!ready) {
@@ -197,6 +208,17 @@ for (const kv of (q.get('p') ?? '').split(',')) {
 const simParams: Record<string, number> = shared ? { ...shared.state.params } : { ...scenario.params, ...(challenge?.params ?? {}), ...devParams };
 // the game's own clocks (UI calendar, weather easing) follow the same valley calendar as the sim in the worker
 try { setCalendarScale(applyOverrides(defaultParams(), simParams).calendarScale); } catch { /* unknown dev param: the worker reports it */ }
+// small-prey web (R3): prairie dog towns and jackrabbits, drawn only when the sim sends the small-prey fields (smallPrey param on)
+let smallCaps = { hareK: 3, dogK: 4 };
+try {
+  const rp = applyOverrides(defaultParams(), simParams);
+  smallCaps = { hareK: rp.hareK, dogK: rp.dogK };
+} catch { /* unknown dev param: the worker reports it */ }
+const smallprey = new SmallPreyLayer(renderWorld, { ...smallCaps, shared: engine.uniforms });
+// where a dog yips or an alarm wave starts: the audio places it in the world
+smallprey.onBark = (kind, x, y, z) => audio.onSmallPrey(kind, x, y, z);
+engine.scene.add(smallprey.object3D);
+engine.excludeFromAO(smallprey.object3D);
 send({ type: 'init', seed, params: simParams, schedule: scenario.schedule, replay: shared?.state.log });
 send({ type: 'speed', speed });
 
@@ -249,7 +271,7 @@ const ui = new GameUI(document.getElementById('ui')!, {
   },
   select: (id) => select(id),
   flyTo: (x, y) => { takeCamera(); engine.cam.flyTo(x, y); },
-  setOverlay: (o: OverlayId) => overlay.setMode(o),
+  setOverlay: (o: OverlayId) => { overlay.setMode(o === 'smallprey' ? 'none' : o); smallOverlay.setMode(o === 'smallprey'); },
   setCinematic: (on) => { following = null; cinematicOn = on; autoCam = false; director.setEnabled(on); takeCamera(); },
   takeCamera: () => takeCamera(),
   setNarrator: (on) => { narrator.enabled = on; },
@@ -375,6 +397,10 @@ const overlay = new OverlayLayer(world.size, (x, z) => engine.groundHeight(x, z)
 });
 engine.scene.add(overlay.object3D);
 engine.excludeFromAO(overlay.object3D);
+// the Small prey overlay is its own mesh (render/smalloverlay.ts): choosing it hides the other overlay and the reverse
+const smallOverlay = new SmallPreyOverlay(world.size, (x, z) => engine.groundHeight(x, z), engine.uniforms, document.querySelector<HTMLElement>('.tg-overlay') ?? document.body);
+engine.scene.add(smallOverlay.object3D);
+engine.excludeFromAO(smallOverlay.object3D);
 
 // Documentary camera by default: when nobody has touched the camera for a while, the director films hunts, kills,
 // herds and vistas with the UI still up. Any camera input, fly-to, selection or follow hands control straight back.
@@ -465,7 +491,8 @@ const sun = { dir: engine.uniforms.lightDir.value, color: engine.uniforms.lightC
 let fpsAcc = 0, fpsN = 0;
 let audioFrame = 0;
 let guideAt = 0;
-let nearbyCache = { bison: 0, wolf: 0, raven: 0, pronghorn: 0 };
+let nearbyCache: Nearby = { bison: 0, wolf: 0, raven: 0, pronghorn: 0, coyote: 0 };
+const camFwdV = new THREE.Vector3();
 let tensionCache: TensionSample | null = null;
 const heardDeaths = new Map<number, number>();
 // field notes: a fresh carcass with a predator beside it is a kill; one the documentary camera caught close to its focus
@@ -490,6 +517,10 @@ engine.onFrame((dt, t) => {
   // years flying by: let the camera drift slowly instead of sitting like a security camera
   engine.cam.idleDrift = speed >= 10 ? 0.025 : 0;
   animals.update(dt, alpha, t);
+  smallprey.timeScale = speed > 0 ? 1 : 0;
+  engine.cam.getFocus(focusV);
+  smallprey.update(dt, engine.camera, { x: focusV.x, z: focusV.z });
+  smallOverlay.update(dt);
   if (autoCamAllowed && autoCamEnabled && !autoCam && !cinematicOn && following === null && performance.now() - lastCamInput > 25000) {
     autoCam = true;
     director.setEnabled(true);
@@ -516,7 +547,8 @@ engine.onFrame((dt, t) => {
       ui.observeGuide(pending.agents, pending.count, focusV.x, focusV.z);
     }
     if ((audioFrame & 3) === 0) { nearbyCache = countNearby(pending.agents, pending.count, cp.x, cp.z, 250); tensionCache = scanTension(pending.agents, pending.count, cp.x, cp.z, pending.carcasses, pending.carcassCount); }
-    audio.update(dt, { env: pending.env, camX: cp.x, camY: cp.z, camHeight, speed: pending.speed, nearby: nearbyCache, nearWater: nearWater01(world, cp.x, cp.z), tension: tensionCache });
+    engine.camera.getWorldDirection(camFwdV);
+    audio.update(dt, { env: pending.env, camX: cp.x, camY: cp.z, camHeight, speed: pending.speed, nearby: nearbyCache, nearWater: nearWater01(world, cp.x, cp.z), tension: tensionCache, camFwd: [camFwdV.x, camFwdV.y, camFwdV.z], coyotes: nearbyCache.coyote ?? 0 });
     if (!skipping) for (const ev of pendingEvents) if (ev.x !== 0 || ev.y !== 0) audio.onEvent(ev, Math.hypot(ev.x - cp.x, ev.y - cp.z, camHeight));
     if (!skipping) narrator.onEvents(pendingEvents, pending.tick);
     narrator.update({ filming: autoCam || cinematicOn, speed: pending.speed });
@@ -597,6 +629,7 @@ w.__concept = (o: { dist?: number; pitch?: number; sunOff?: number; shift?: numb
 };
 w.__select = select;
 w.__animals = animals;
+w.__smallprey = smallprey;
 w.__grass = grass;
 w.__snap = () => pending;
 w.__director = director;
