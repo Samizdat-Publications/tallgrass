@@ -17,8 +17,9 @@ import { sampleHeight } from '../sim/world';
 import type { World } from '../sim/world';
 import { getModel } from './models';
 import type { AnimParams, ModelDef } from './models';
-import { IK_FAR, IK_NEAR, gaitMix, gaitStride, legRigOf, stanceBodyDy } from './models/legmath';
+import { IK_FAR, IK_NEAR, gaitMix, gaitStride, legRigOf, stanceBodyDy, timelapseGaitSpd, timelapseHz, timelapseK } from './models/legmath';
 import type { LegRig } from './models/legmath';
+import { ContactShadows } from './models/contact';
 import { makeAnimalMaterials } from './models/shader';
 import type { AnimalShared } from './models/shader';
 import { Dust, KillSites, Markers, SceneLit } from './models/fx';
@@ -157,6 +158,16 @@ function legBoost(p: AnimParams, vs: number, camD: number, uPxK: number): number
  * Only a time-lapse (10x and up, where the body covers ten times the ground per frame) can hit it, and then the feet slide.
  */
 const MAX_CADENCE = 12;
+
+/**
+ * Time-lapse landing dust (the ground-contact cue of the bound at 4x and up, see timelapseK in models/legmath.ts): at most this many
+ * puffs a frame across all animals, one per TL_TRAIL_M metres of ground a mover covers (times its drawn scale), only within
+ * TL_DUST_RANGE m of the camera and only for animals actually travelling faster than TL_MIN_VIS m/s on screen.
+ */
+const TL_PUFFS_PER_FRAME = 40;
+const TL_TRAIL_M = 4.5;
+const TL_DUST_RANGE = 170;
+const TL_MIN_VIS = 5;
 
 /**
  * Render-side heading dynamics per species: natural frequency (rad/s) of the critically damped spring that chases the sim
@@ -472,6 +483,8 @@ class Slots {
   pitch = new Float32Array(this.cap);
   sick = new Float32Array(this.cap);
   dust = new Float32Array(this.cap);
+  /** Distance travelled (in trail spacings) since the last time-lapse dust puff. */
+  tdust = new Float32Array(this.cap);
   fresh = new Uint8Array(this.cap);
   stamp = new Uint32Array(this.cap);
   map = new Map<number, number>();
@@ -540,6 +553,7 @@ class Slots {
     this.pitch = g(this.pitch, Float32Array);
     this.sick = g(this.sick, Float32Array);
     this.dust = g(this.dust, Float32Array);
+    this.tdust = g(this.tdust, Float32Array);
     this.fresh = g(this.fresh, Uint8Array);
     this.stamp = g(this.stamp, Uint32Array);
     this.cap = n;
@@ -559,10 +573,12 @@ export class AnimalLayer {
   /** The non-null batches, for loops over every drawn species. */
   private live: Batch[] = [];
   private uTime = { value: 0 };
-  private shared: AnimalShared = {
+  private shared: AnimalShared & { uTL: { value: number }; uNightK: { value: number } } = {
     uTime: this.uTime, uCamPos: { value: new THREE.Vector3(256, 400, 256) }, uPxK: { value: 900 / (2 * Math.tan((45 * Math.PI) / 360)) },
     tHeight: { value: null }, uCell: { value: 1 }, uHN: { value: 2 },
     uLow: { value: 0 },
+    uTL: { value: 0 },
+    uNightK: { value: 1 },
     uAmb: { value: new THREE.Vector3(0.6, 0.55, 0.45) },
     probe: (scene, exposure) => {
       this.lit.probe(scene);
@@ -583,7 +599,11 @@ export class AnimalLayer {
   private heightTex: THREE.DataTexture;
   /** Rest-pose leg bones by species (quadrupeds only), read from the meshes. */
   private rigs: Array<LegRig | null> = [];
+  /** Leg cycles per second of the time-lapse bound by species id (see timelapseHz). */
+  private tlHz: number[] = [];
   private dust: Dust;
+  /** Soft contact shadow under every ground animal (see models/contact.ts). */
+  readonly contact: ContactShadows;
   private kills: KillSites;
   private markers: Markers;
   private slots = new Slots();
@@ -650,6 +670,7 @@ export class AnimalLayer {
         continue;
       }
       this.rigs.push(def.params.kind === 0 ? legRigOf(def.geometry) : null);
+      this.tlHz[sp] = def.params.kind === 0 ? timelapseHz(def.params) : 2.6;
       const { material, depth } = makeAnimalMaterials(sp, def, this.shared);
       // animals sit in hill shadow like the terrain and trees do (the depth material casts only, so it needs nothing)
       const baseCompile = material.onBeforeCompile;
@@ -665,7 +686,8 @@ export class AnimalLayer {
     this.kills = new KillSites(world, this.lit);
     this.dust = new Dust(this.lit);
     this.markers = new Markers(world.size);
-    this.object3D.add(this.kills.mesh, this.dust.mesh, this.markers.mesh, this.markers.pingMesh);
+    this.contact = new ContactShadows(this.shared);
+    this.object3D.add(this.kills.mesh, this.contact.mesh, this.dust.mesh, this.markers.mesh, this.markers.pingMesh);
 
     // Selection ring: a crisp thin cream ring with a dark edge on both sides (so it reads on gold grass, snow and dusk alike),
     // hugging the terrain under the selected animal. Its line stays about 2.5 px wide at any camera distance.
@@ -1222,6 +1244,11 @@ export class AnimalLayer {
     this.dust.update(running);
     this.markers.begin();
     const dustRate = Math.min(this.timeScale, 3);
+    // time-lapse (see timelapseK in models/legmath.ts): 0 up to 3x, 1 from 8x. Drives the bound pose, the cadence and the landing dust.
+    const tl = timelapseK(this.timeScale);
+    this.shared.uTL.value = tl;
+    let tlBudget = tl > 0.05 ? TL_PUFFS_PER_FRAME : 0;
+    this.contact.begin();
     this.clock += running;
     const clock = this.clock;
     for (const fi of this.falls.values()) fi.pbest = 0;
@@ -1553,7 +1580,10 @@ export class AnimalLayer {
         if (rvFlut > 0) rvLift += 0.3 * 4 * rvFlut * (1 - rvFlut);
       }
       // a creature that is not actually going anywhere (blocked, turning on the spot) stands rather than marching in place
-      const gaitSpd = Math.min(spdS, S.vis[slot] * 1.6 + 0.15);
+      const gaitSpd1 = Math.min(spdS, S.vis[slot] * 1.6 + 0.15);
+      // time-lapse: the pose follows the apparent speed (blended in from 3x to 8x), see timelapseGaitSpd
+      const tlK = pr.kind <= 1 ? tl : 0;
+      const gaitSpd = tlK > 0 ? timelapseGaitSpd(pr, gaitSpd1, S.vis[slot], tlK) : gaitSpd1;
       // the model is drawn scaled (species readability boost, age, size), and its stride scales with it
       const vs = sc * this.speciesScale[sp];
       // the vertex shader scales an animal that would be a few pixels long (distance readability, ModelDef.minPx): its stride
@@ -1561,7 +1591,14 @@ export class AnimalLayer {
       const camP = this.shared.uCamPos.value;
       const camD = Math.hypot(x - camP.x, g0 - camP.y, z - camP.z);
       const sizeBoost = pr.kind === 0 ? legBoost(pr, vs, camD, this.shared.uPxK.value) : 1;
-      S.phase[slot] = (S.phase[slot] + Math.min(dsGround / (strideFor(pr, gaitSpd) * vs * sizeBoost), MAX_CADENCE * dt)) % 1;
+      let dph = Math.min(dsGround / (strideFor(pr, gaitSpd) * vs * sizeBoost), MAX_CADENCE * dt);
+      if (tlK > 0) {
+        // the bound rate replaces the distance lock as the time-lapse takes over: a readable few Hz (each animal a little off the
+        // others so a herd does not bound in step) that runs only while the animal is actually travelling
+        const hz = this.tlHz[sp] * (0.88 + 0.24 * hash01(id * 7 + 3));
+        dph += (hz * dt * smoothstep(1.5, 5, S.vis[slot]) - dph) * tlK;
+      }
+      S.phase[slot] = (S.phase[slot] + dph) % 1;
 
       // The drawn heading is a critically damped follower of the sim heading, rate limited, so a turn is a curve with some
       // momentum behind it rather than a snap on a central pivot.
@@ -1673,6 +1710,19 @@ export class AnimalLayer {
         const edge = Math.min(x, z, world.size - x, world.size - z);
         fadeQ = Math.round((1 - smoothstep(FADE_GONE, FADE_FULL, edge)) * 15);
       }
+      // Contact shadow: a soft blob at knee height under every ground animal (models/contact.ts). It is as long as the body, a
+      // little wider, and grows with the distance readability boost so a herd seen from afar keeps its grounding.
+      if (pr.kind <= 1 && camD < 150 && fadeQ < 8) {
+        const cw = sampleHeight(H, hn, cell, x, z);
+        const wcell = Math.min(world.n - 1, Math.max(0, Math.floor(z / cell))) * world.n + Math.min(world.n - 1, Math.max(0, Math.floor(x / cell)));
+        if (!world.water[wcell]) {
+          const bl = pr.length * vs * sizeBoost;
+          const bw = (0.12 * Math.max(pr.length, 1) * vs + 0.05) * sizeBoost;
+          // (lying animals cast a rounder, slightly wider shadow; the blob lies at knee height: the canopy of the grass, not the soil)
+          const lyK = S.lie[slot];
+          this.contact.add(x, cw, z, ch, sh, pitch, roll, Math.min(0.32, 0.22 * pr.height * vs) * Math.min(1.5, sizeBoost), 0.55 * bl * (1 - 0.2 * lyK), (1.15 + 0.35 * lyK) * bw + 0.1 * vs, 0.5);
+        }
+      }
       if (fadeQ < 8) this.markers.add(sp, x, y + (FLIES[sp] ? 0.3 : pr.height * 0.6 * vs), z, pr.boostLen, vs);
       // from the wide view, a faint ripple where a predator is actually chasing
       if (state === St.Chase && HUNTER[sp]) this.markers.addPing(sp, x, y + 0.3, z);
@@ -1702,6 +1752,26 @@ export class AnimalLayer {
         }
         if (S.dust[slot] > 1) S.dust[slot] = 1;
       }
+
+      // Time-lapse ground contact (the cue that the bound is touching down, see timelapseK): one small puff per few metres of ground a
+      // fast mover covers, thrown behind it along its path. A herd running at 10x or 100x leaves a faint trail instead of floating.
+      if (tlK > 0.25 && tlBudget > 0 && S.vis[slot] > TL_MIN_VIS && camD < TL_DUST_RANGE && pr.kind <= 1 && S.lie[slot] < 0.5) {
+        S.tdust[slot] += ds / (TL_TRAIL_M * vs);
+        let guard = 2;
+        while (S.tdust[slot] >= 1 && guard-- > 0 && tlBudget > 0) {
+          S.tdust[slot] -= 1;
+          const gd = this.groundDry(x, z) * this.dust.dryness;
+          if (gd <= 0.03) continue;
+          const wci = Math.min(world.n - 1, Math.max(0, Math.floor(x / cell))), wcj = Math.min(world.n - 1, Math.max(0, Math.floor(z / cell)));
+          if (world.water[wcj * world.n + wci]) continue;
+          const back = -Math.random() * Math.max(ds, 0.5 * vs), side = (Math.random() - 0.5) * 0.4 * pr.length * vs;
+          const px = x + ch * back - sh * side, pz = z + sh * back + ch * side;
+          const sz = 0.5 * vs * Math.sqrt(pr.length) * (0.8 + 0.4 * Math.random());
+          this.dust.emit(px, sampleHeight(H, hn, cell, px, pz) + 0.12, pz, (Math.random() - 0.5) * 0.5, 0.1 + Math.random() * 0.2, (Math.random() - 0.5) * 0.5, sz, 0.7 + Math.random() * 0.5, 0.17 * Math.min(1, tlK * 1.3), Math.random(), gd);
+          tlBudget--;
+        }
+        if (S.tdust[slot] > 2) S.tdust[slot] = 0;
+      } else if (S.tdust[slot] > 0) S.tdust[slot] = 0;
 
       const k = b.count - 1;
       b.ids[k] = id;
@@ -1864,6 +1934,7 @@ export class AnimalLayer {
       }
     }
     this.markers.end();
+    this.contact.end();
     this.updateRing();
   }
 
@@ -1993,6 +2064,7 @@ export class AnimalLayer {
     this.heightTex.dispose();
     this.markers.dispose();
     this.dust.dispose();
+    this.contact.dispose();
     this.kills.dispose();
     this.ringGeo.dispose();
     this.ringMat.dispose();

@@ -365,3 +365,38 @@ export function stanceBodyDy(p: AnimParams, rig: LegRig, gm: GaitMix, ph: number
   }
   return n ? sum / n : 0;
 }
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Time-lapse gait (render only; the foot-lock rig is untouched at and below TL_LO x)
+//
+// At 10x and up the body covers ten times the ground per frame, so a planted foot cannot stand still: the cadence cap (12 Hz) is
+// hit, the legs alias at video frame rates and read as detached from the motion ("hockey pucks"). From TL_LO to TL_HI x the gait
+// is blended toward a time-lapse look: the pose follows the APPARENT speed (an animal covering 10 m/s is galloping, whatever its
+// own pace), the stride is the long flying-gallop stride, and the cadence is a readable bound rate (timelapseHz) instead of a
+// distance lock. The body also bounds (uTL in models/shader.ts) and the animal layer drops dust where it lands.
+
+export const TL_LO = 3;
+export const TL_HI = 8;
+/** 0 at and below TL_LO x sim speed, 1 at and above TL_HI x. */
+export const timelapseK = (ts: number): number => sstep(TL_LO, TL_HI, ts);
+/** Share of the species' natural flat-out gallop cadence that the time-lapse bound runs at (slower than the real one reads clearer). */
+export const TL_CADENCE_SHARE = 0.75;
+
+/**
+ * Leg cycles per second of the time-lapse bound for a quadruped: a share of its natural cadence at the top of its gallop band
+ * (wolf about 3.7 Hz, bison about 2.2 Hz, cougar 4.1 Hz), so a heavy animal still bounds slower than a light one.
+ */
+export function timelapseHz(p: AnimParams): number {
+  const top = Math.max(p.gal1, 1);
+  return clamp((TL_CADENCE_SHARE * top) / gaitStride(p, top), 1.2, 4.5);
+}
+
+/**
+ * The pace the gait pose is drawn at under time-lapse: the larger of the animal's own gait pace and its apparent ground speed,
+ * capped where the gallop stride stops growing (fast1, the flying gallop), blended in by `tl`.
+ */
+export function timelapseGaitSpd(p: AnimParams, gaitSpd: number, apparent: number, tl: number): number {
+  if (tl <= 0) return gaitSpd;
+  const cap = p.fast1 ?? p.gal1 * 2.2;
+  return gaitSpd + (Math.max(gaitSpd, Math.min(apparent * 0.9, cap)) - gaitSpd) * tl;
+}
