@@ -21,6 +21,7 @@ import type { World } from '../sim/world';
 import type { EnvState } from '../sim/types';
 import { COPPER_KEYS, CURE_KEYS, SEED_KEYS, SEASON_GLSL, keyCurve, smooth01, winterK } from './season';
 import { CLOUD_SHADOW_GLSL, POND_GLSL, cloudShadowUniforms, makePondUniform, type SharedUniforms } from './common';
+import { STORM_GUST_GLSL, stormGustUniform } from './storms';
 
 export interface GrassOptions {
   quality?: 'high' | 'medium';
@@ -273,6 +274,7 @@ uniform float uMoistK;
 uniform float uWindGain;
 uniform float uCopper;
 uniform float uSnow;
+${STORM_GUST_GLSL}
 
 varying vec2 vUv;
 varying vec3 vN;
@@ -482,8 +484,10 @@ void main() {
   float g2 = texture(uWind, vec2(wp.x * 0.061 - uTime * 0.34, wp.y * 0.021 + 0.71)).g;
   float g0 = texture(uWind, vec2(wp.x * 0.0071 - uTime * 0.05, wp.y * 0.0031 + 0.13)).r;
   float gust = smoothstep(0.3, 0.7, 0.5 * g1 + 0.3 * g2 + 0.2 * g0);
+  float stormW = tgStormWind(p, wd);  // R4: stronger gusts under and ahead of storm cells
+  gust = clamp(gust + 0.9 * stormW, 0.0, 1.0);
 
-  float ws = uWindStr * uWindGain;
+  float ws = uWindStr * uWindGain * (1.0 + 0.9 * stormW);
   float wsc = clamp(ws, 0.0, 1.0);
   float stiff = 0.75 + 0.5 * rD;
   float restLean = (0.05 + 0.3 * rE * rE) * mix(1.0, 0.35, smoothstep(30.0, 100.0, dist));
@@ -1077,6 +1081,7 @@ export class GrassField {
       uSeedFrac: { value: 0.1 },
       uMoistK: { value: 1.1 },
       uWindGain: { value: 1 },
+      uStorm: stormGustUniform,
       uSunDir: { value: new THREE.Vector3(0.5, 0.5, 0.5).normalize() },
       uSunColor: { value: new THREE.Color(1, 1, 1) },
       uTrans: { value: 1.2 },

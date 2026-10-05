@@ -21,6 +21,7 @@ import { Sky, computeAtmosphere, createLighting, Lighting, Smoothed } from './sk
 import { Trees } from './trees';
 import { PostFX, Quality } from './post';
 import { Smoke } from './smoke';
+import { Storms } from './storms';
 import { DroneCamera, CameraPreset } from './camera';
 import { grassTint } from './grass';
 import { CURE_KEYS, LEAF_KEYS, PACK_KEYS, keyCurve } from './season';
@@ -112,6 +113,8 @@ export class Engine {
   readonly sky: Sky;
   readonly cloudShadow: CloudShadow;
   readonly smoke: Smoke;
+  /** Storm visuals (R4): cloud masses, rain shafts, lightning, rainbow. Fed by setStorms(). */
+  readonly storms: Storms;
   readonly post: PostFX;
   readonly lighting: Lighting = createLighting();
 
@@ -200,7 +203,8 @@ export class Engine {
     this.terrain = new Terrain(world, this.uniforms);
     this.water = new Water(world, this.uniforms, this.terrain.creekDist);
     this.trees = new Trees(world, this.uniforms, this.terrain.heightAt);
-    this.sky = new Sky(this.uniforms);
+    this.storms = new Storms(world, this.uniforms, this.terrain.heightAt);
+    this.sky = new Sky(this.uniforms, this.storms.uniforms);
     this.cloudShadow = new CloudShadow(this.uniforms, world.size);
     this.smoke = new Smoke(world, this.uniforms, this.terrain.heightAt);
 
@@ -218,10 +222,10 @@ export class Engine {
     this.hemi = new THREE.HemisphereLight(0xffffff, 0x886644, 1);
 
     this.scene.userData.tgUniforms = this.uniforms;
-    this.scene.add(this.sky.mesh, this.terrain.mesh, this.water.mesh, this.trees.group, this.smoke.mesh, this.sun, this.hemi);
+    this.scene.add(this.sky.mesh, this.terrain.mesh, this.water.mesh, this.trees.group, this.smoke.mesh, this.storms.group, this.sun, this.hemi);
 
-    this.post = new PostFX(renderer, this.scene, this.camera, this.uniforms);
-    this.post.aoExclude.push(this.sky.mesh, this.water.mesh, this.smoke.mesh);
+    this.post = new PostFX(renderer, this.scene, this.camera, this.uniforms, this.storms.uniforms);
+    this.post.aoExclude.push(this.sky.mesh, this.water.mesh, this.smoke.mesh, ...this.storms.meshes);
     // GTAO renders its own normal/depth pass with an override material that ignores alpha cut-outs, so a sparse canopy would occlude
     // the sky behind its gaps and show as grey smoke. Keep alpha-cut foliage (crowns and shrubs) out of that pass.
     for (const m of this.trees.meshes) if (m.name.startsWith('cottonwood-crown') || m.name.startsWith('shrubs')) this.post.aoExclude.push(m);
@@ -320,6 +324,14 @@ export class Engine {
     this.terrain.updateShadow(this.renderer, this.uniforms.lightDir.value, true);
   }
 
+  /**
+   * Feed the storm cells and strikes of a sim snapshot (undefined leaves the visuals as they are; an empty array clears the cells).
+   * `speed` is the sim speed multiplier: thunder arrives after distance / 343 s at 1x and at once from 10x.
+   */
+  setStorms(storms: Float32Array | undefined, strikes: Float32Array | undefined, speed = 1): void {
+    this.storms.setSnapshot(storms, strikes, speed);
+  }
+
   /** Register a per-frame callback. Returns an unsubscribe function. */
   onFrame(cb: (dt: number, t: number) => void): () => void {
     this.frameCbs.push(cb);
@@ -353,6 +365,7 @@ export class Engine {
     this.cam.update(dt);
     for (const cb of this.frameCbs) cb(dt, this.time);
     this.smoke.update(dt, this.camera);
+    this.storms.update(dt, this.camera, this.env);
     this.updateEnvState(dt);
     this.post.render(dt);
     this.firstFrame = false;
@@ -441,6 +454,7 @@ export class Engine {
     this.sky.dispose();
     this.cloudShadow.dispose();
     this.smoke.dispose();
+    this.storms.dispose();
     this.vegTexture.dispose();
     this.renderer.dispose();
     this.renderer.domElement.remove();
@@ -493,6 +507,7 @@ export class Engine {
     sm.overcast = ease(sm.overcast, overTarget, overTarget > sm.overcast ? 60 : 160);
     this.rainSm = ease(this.rainSm, rainTarget, rainTarget > this.rainSm ? 25 : 70);
     if (rainTarget === 0 && this.rainSm < 0.02) this.rainSm = 0;
+    this.storms.updateRainbow(this.rainSm, simTicks, w);
     // drought dust for the aerial haze (weather 2), eased slowly so the valley hazes over and clears with the dry spell
     this.dustSm = ease(this.dustSm, w === 2 ? 1 : 0, 120);
     if (w !== 2 && this.dustSm < 0.02) this.dustSm = 0;
@@ -537,7 +552,8 @@ export class Engine {
     this.sun.intensity = 1;
     this.hemi.color.copy(L.hemiSky);
     this.hemi.groundColor.copy(L.hemiGround);
-    this.hemi.intensity = L.hemiIntensity;
+    // a lightning flash lifts the ambient for a few frames
+    this.hemi.intensity = L.hemiIntensity * (1 + 2.2 * this.storms.flash);
     this.renderer.toneMappingExposure = L.exposure * this.exposure;
 
     // Shadow range follows how far the camera looks: tight when low and close, whole valley when high. The cascade split and
