@@ -700,15 +700,15 @@ Fix the complaint every Gemini round repeats: sliding feet, stiff animals, wolve
   - Two-footed hops with a wing flick, walking between pecks.
   - When a wolf lunges or feeds within 2 m, the raven flutters back 1 to 2 m.
   - Takeoff starts with a deep downstroke flare.
-- [ ] **7. Weight.**
+- [x] **7. Weight.**
   - Render-side acceleration caps: bison 2.5 m/s², pronghorn 6, wolf 5, coyote 6.
   - Body pitch of −4° when speeding up and +5° when braking.
   - Bison get a wider turning radius (`TURN` table).
   - Stampedes run head-low with more dust.
-- [ ] **8. Cougar kill.**
+- [x] **8. Cougar kill.**
   - Rush, forelegs on the shoulders, neck bite with a short hold.
   - Then it drags the carcass up to 3 m toward cover (display offset only).
-- [ ] **9. Border fade.** `F_MIGRANT` animals fade in or out (dithered) within 15 m of the border, so arrivals and departures don't pop.
+- [x] **9. Border fade.** `F_MIGRANT` animals fade in or out (dithered) within 15 m of the border, so arrivals and departures don't pop.
 
 **Gates:**
 - Rig: slip ≤ 5% at walk and trot, ≤ 8% at gallop; foot-to-ground ≤ 5 cm on 20° slopes within 45 m.
@@ -902,7 +902,7 @@ Merge S2, S4 and S5 first.
 - [ ] **1. Mange.**
   - `F_MANGE` gives a patchy coat: darker skin mottling scaled by severity, plus a thinner tail and ruff.
   - The distemper sick pose already exists (`F_INFECTED`).
-- [ ] **2. Prairie dog towns** (new `src/render/smallprey.ts`):
+- [x] **2. Prairie dog towns** (new `src/render/smallprey.ts`):
   - **Mounds:** instanced dirt cones, each with a bare ring.
     - About 12 × `town` per cell, placed by hash.
     - They stay after a die-off and slowly grass over.
@@ -915,7 +915,7 @@ Merge S2, S4 and S5 first.
     - Each dog dives into its burrow at t = distance ÷ 8 m/s, so the wave sweeps across the town.
     - Dogs reappear 6 to 15 s after the threat leaves.
     - Sentinels bark (audio).
-- [ ] **3. Jackrabbit puppets** (rabbit model, hopper kind):
+- [x] **3. Jackrabbit puppets** (rabbit model, hopper kind):
   - Within 90 m; budget 250; per cell n = min(10, round(hare[c] × 0.3)).
   - Graze, sit up, ears up.
   - Bound away in a zig-zag from predators within 25 m.
@@ -929,12 +929,12 @@ Merge S2, S4 and S5 first.
     - a howl and yip chorus at dusk while resting: sitting, muzzle up, synced to the audio
     - a wary head-up glance every 2 to 3 s while scavenging
 - [ ] **5. Migrants.** Border fade (R1 item 9 if not done), and groups travel in a short column.
-- [ ] **6. UI.**
+- [x] **6. UI.**
   - Graph rows and colours for coyote, jackrabbit and prairie dog.
   - The inspector shows coyotes, with a "pair" chip.
   - A "Small prey" overlay: densities, towns, plague.
   - The chronicle text comes from Track S.
-- [ ] **7. Audio** (ElevenLabs; log each call in ASSETS.md; ≤ 25 generations):
+- [x] **7. Audio** (ElevenLabs; log each call in ASSETS.md; ≤ 25 generations):
   - New sounds:
     - coyote yip chorus ×2
     - a lone coyote howl
@@ -943,7 +943,7 @@ Merge S2, S4 and S5 first.
     - close thunder crack ×2 (for R4)
     - meadowlark song (spring and summer mornings)
   - Positional sound (PannerNode) at the source when the camera is low.
-- [ ] **8. Narrator** (same voice, "George"; `tools/narration.py`).
+- [x] **8. Narrator** (same voice, "George"; `tools/narration.py`).
   - About 14 lines:
     - wolves arrive from outside
     - a species returns
@@ -1013,21 +1013,21 @@ Rain stays global, as now, so the weather sequence doesn't change. Lightning is 
 ### R4. Storm visuals [Track R, M]
 Merge S6 first.
 
-- [ ] **1. Clouds.**
+- [x] **1. Clouds.**
   - Each cell gets a cumulonimbus mass: layered billboards with lit tops and dark bases, plus an anvil on strong cells.
   - The sky darkens toward cells.
   - The cell's shadow moves across the ground.
-- [ ] **2. Rain shafts.**
+- [x] **2. Rain shafts.**
   - Textured vertical curtains under each cell, visible from far away.
   - They fade near the camera, where the screen rain streaks take over.
-- [ ] **3. Lightning.**
+- [x] **3. Lightning.**
   - A forked bolt mesh from the cloud base to the strike: 0.12 to 0.2 s, with 1 or 2 restrikes.
   - A scene flash: ambient and sky boosted for 2 to 3 frames.
   - Thunder is delayed by distance ÷ 343 m/s at 1x; no delay at 10x and above.
-- [ ] **4. Wind.** Grass gust bands get stronger under and ahead of cells.
-- [ ] **5. Rainbow.** After a storm, with the sun low behind the camera: a sky-shader arc at 42° around the antisolar point, fading as the rain clears.
-- [ ] **6. Lightning fire.** Strike, flash, then the smoke column starts.
-- [ ] **7. Bench view.** Add a "storm" view to `gpubench.mjs`.
+- [x] **4. Wind.** Grass gust bands get stronger under and ahead of cells.
+- [x] **5. Rainbow.** After a storm, with the sun low behind the camera: a sky-shader arc at 42° around the antisolar point, fading as the rain clears.
+- [x] **6. Lightning fire.** Strike, flash, then the smoke column starts.
+- [x] **7. Bench view.** Add a "storm" view to `gpubench.mjs`.
 
 **Gates:**
 - The storm reads from both the drone view and the low view.
