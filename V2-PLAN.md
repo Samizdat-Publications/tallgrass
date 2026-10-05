@@ -1091,7 +1091,7 @@ Merge S6 first.
   - Cougars join the default world if they are present ≥ 80% of the time over 200 years and the other species stay within 1 of 32.
   - Otherwise "Cougar country" gets deer.
 
-**R6. Deer render** [R, M]
+**R6. Deer render** [R, M] (done 2026-10-05)
 - The mule deer model is built from the pronghorn: big ears, black-tipped tail, white rump, grey-brown coat.
 - Antlers grow from spring, are full in autumn and are shed in late winter.
 - Stotting gait: all four feet bounce together.

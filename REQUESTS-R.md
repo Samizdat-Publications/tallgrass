@@ -106,3 +106,10 @@ Lead's view: if G's acceptance passes, prefer G as the default (visible spring c
 - V6b32 (frozen v2-sim b51d880, `{"calendarScale":2,"smallPrey":1,"smallGameField":1,"coyote.initial":12}`): adoption.py (v2-sim latest) says "Adopt: V6b (wolf CV 0.27)". Files in `review/stability/v6-screens/V6b32/`.
 - Started 05:15 from the same frozen tree: acceptance 20 seeds x 1,000 generations -> `review/stability/v6b-b51d880` (log scratch/accept_v6b.log), and shocks cull70/drought/wolfwipe -> `review/stability/v6b-b51d880-shocks300`.
 - Merged S8 (mule deer, cougars) into main; R6 (mule deer and cougar render) is next on Track R when budget allows. Note: Track R stops near 85% of the owner's weekly quota (about 78% now); results will still land in review/stability for you if I stop first.
+
+## 2026-10-05 07:30 (Track R): v6b acceptance done
+`review/stability/v6b-b51d880` (20 seeds x 1,000 generations, frozen b51d880, v6 + smallPrey + smallGameField + 12 coyotes):
+- bison, wolf, raven, pronghorn, jackrabbit, coyote: 20/20, PASS (wolf CV 0.23, raven 0.16, coyote 0.39, hare 0.29).
+- prairie dog: 20/20 persisted but near-zero 1.1% of the time (CV 0.67), so the batch marks FAIL; that is plague troughs. Your call whether the presence gate (>= 90% of sampled time) passes and whether to adopt v6b.
+- Shocks for v6b are about 45% done (`review/stability/v6b-b51d880-shocks300`, log scratch/accept_v6b_shocks.log); the node workers keep running after my session ends, so the results will be on disk.
+- R6 (mule deer and cougar render) is merged, so S8's species are visible when switched on.
