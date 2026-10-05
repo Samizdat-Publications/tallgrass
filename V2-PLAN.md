@@ -1035,14 +1035,14 @@ Merge S6 first.
 - A storm segment appears in the next Gemini video round.
 
 ### M1. Phase 1 milestone [Track R, M]
-- [ ] **1. Merge and play.** Merge, then run `npm test` and the build. Play 20 minutes at 1x, 10x and 100x, and fix any crash.
-- [ ] **2. Review.**
+- [x] **1. Merge and play.** Merge, then run `npm test` and the build. Play 20 minutes at 1x, 10x and 100x, and fix any crash.
+- [x] **2. Review.**
   - Stills: the review set as JPEG, plus the current stability charts, given to a fresh blind critic.
   - One Gemini video round.
   - Triage everything in REVIEWS.md.
   - Fix the top 3 if each takes ≤ 1 hour.
-- [ ] **3. Deploy.** `npm run deploy`, then verify the live build.
-- [ ] **4. Report.** Write a "v2 alpha" section in MORNING.md:
+- [x] **3. Deploy.** `npm run deploy`, then verify the live build.
+- [x] **4. Report.** Write a "v2 alpha" section in MORNING.md:
   - what's new
   - what to look at first
   - 4 to 6 screenshots
