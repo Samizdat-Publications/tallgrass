@@ -106,6 +106,9 @@ Only Track S writes this file (V2-PLAN.md section 4.3). Track R reads it with `g
 
 - V6b16 (cloud, v6 + smallPrey, smallGameField, 12 coyotes, frozen 0daf0c8): all 7 species 16/16, presence 16/16, pronghorn starvation 42% (v6: 49%; coyotes take fawns), wolf CV 0.28, corr 0.73: eligible. S4/S5 gates: hares present 100%, dogs 100%, hare CV 0.31 (pass), plagues 7 per 100 yr (pass), coyotes present 100%, coyote CV 0.33 (pass), coyote-hare corr median 0.34 at 2 yr (gate 0.4; 8/16 seeds pass). Hare boom/crash events never fire (thresholds too strict for the real swings; fix later).
 
+- CM8 (cloud, v6 + 6 cougars + 60 mule deer, frozen a91500b): core species 8/8, cougars present 96% (S8 gate 80%), mule deer 99% but volatile (annual CV 1.2, 61% starvation), wolf CV 0.27, pronghorn starvation 47%. Cougars meet the S8 rule.
+- Plan: one combined candidate **v7 = v6 + smallPrey, smallGameField, 12 coyotes, 6 cougars, 60 mule deer, raptors, stormCells** instead of separate v6b/v6c/S8 adoptions (one acceptance instead of four). ALL16 cloud screen running.
+
 ## In progress
 - E8b screen (E8 again at 3bb97a5 with the death columns), scratch/screens/E8b.
 - Screen A16: default params, 16 seeds x 240,000 ticks, frozen at 61455f2, output scratch/screens/A16 (cloud VM only).

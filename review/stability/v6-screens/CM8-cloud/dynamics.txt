@@ -1,0 +1,12 @@
+== scratch/screens/CM8 (baseline, 8 seeds, stats from year 5)
+  persistence: bison 8/8, wolf 8/8, raven 8/8, pronghorn 8/8, cougar 8/8, muledeer 8/8
+  bison births per capita per year 0.42; deaths: predation 35%, starvation 43%, old age 18%
+  annual means: bison CV 0.36, median year-to-year change bison 12% pronghorn 11%
+  wolves: CV 0.28; best lag behind bison 2 yr (median corr 0.66)
+  presence (share of samples alive): bison 100%, wolf 100%, raven 100%, pronghorn 100%, cougar 96%, muledeer 99%
+  local extinctions per 1,000 yr (mean over seeds): bison 0.0, wolf 0.0, raven 0.0, pronghorn 0.0, cougar 22.4, muledeer 19.9
+  years absent (median over seeds): bison 0.0, wolf 0.0, raven 0.0, pronghorn 0.0, cougar 8.5, muledeer 1.5
+  immigrants / emigrants per century (mean over seeds): pronghorn 2280.3 in, 10396.1 out, cougar 7.2 in, 0.0 out, muledeer 216.8 in, 0.0 out
+  mule deer (S8): mean 43.7, CV of annual means 1.20; deaths: predation 18%, starvation 61%, old age 20%; cougars take 0% of all mule deer deaths
+  cougars (S8): mean 6.2, births 204.5, immigrants 7.0 per century; kills per century 20.8 (mule deer 3.2, pronghorn 11.0, bison 6.2)
+  vagrant ravens: mean 210.0, max 370; arrivals 8552.8 and departures 0.0 per century
