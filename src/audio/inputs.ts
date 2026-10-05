@@ -10,19 +10,20 @@ import { clamp01 } from './mix';
  * (Float32, AGENT_STRIDE floats per animal: species at 0, x at 1, y at 2). Pass the camera's sim x and y.
  */
 export function countNearby(agents: Float32Array, count: number, camX: number, camY: number, radius = 250): Nearby {
-  const out: Nearby = { bison: 0, wolf: 0, raven: 0, pronghorn: 0 };
+  const out: Nearby = { bison: 0, wolf: 0, raven: 0, pronghorn: 0, coyote: 0 };
   const r2 = radius * radius;
   for (let i = 0; i < count; i++) {
     const o = i * AGENT_STRIDE;
     const dx = agents[o + 1] - camX;
     const dy = agents[o + 2] - camY;
     if (dx * dx + dy * dy > r2) continue;
-    // only the four species the soundscape mixes are counted; any other species id (registry growth) falls through uncounted
+    // only the species the soundscape mixes are counted; any other species id (registry growth) falls through uncounted
     switch (agents[o]) {
       case Sp.Bison: out.bison++; break;
       case Sp.Wolf: out.wolf++; break;
       case Sp.Raven: out.raven++; break;
       case Sp.Deer: out.pronghorn++; break;
+      case Sp.Coyote: out.coyote = (out.coyote ?? 0) + 1; break;
     }
   }
   return out;

@@ -13,6 +13,8 @@ import {
 import type { BedMix, BedName, Nearby, Segment, SpotKey, SpotRule } from './mix';
 import { MusicDirector } from './music';
 import type { TensionSample } from './music';
+import { WILD_FILES, larkSpot, pickCoyoteClip, placement, thunderPlan, wildPlan } from './wildlife';
+import type { WildClip } from './wildlife';
 
 export type { BedMix, BedName, Nearby } from './mix';
 export { bedMix } from './mix';
@@ -33,6 +35,10 @@ export interface AudioFrame {
   nearWater: number;
   /** Chases, kills and die-offs around the camera (scanTension in inputs.ts); drives the music tension. Optional. */
   tension?: TensionSample | null;
+  /** The direction the camera looks (three coordinates, a unit vector): sounds placed in the world are panned by it. Optional (default: north). */
+  camFwd?: readonly [number, number, number];
+  /** Coyotes near the camera (Nearby.coyote); they only call while there are some. Optional. */
+  coyotes?: number;
 }
 
 /**
@@ -54,7 +60,7 @@ export interface Flyover {
   season: 'spring' | 'autumn';
 }
 
-type ClipName = BedName | 'thunder' | 'wolfPack' | 'wolfSingle' | 'bison' | 'stampede' | 'raven' | 'rut' | 'crane';
+type ClipName = BedName | 'thunder' | 'wolfPack' | 'wolfSingle' | 'bison' | 'stampede' | 'raven' | 'rut' | 'crane' | WildClip;
 
 const FILES: Record<ClipName, string> = {
   wind: 'wind_day',
@@ -73,6 +79,7 @@ const FILES: Record<ClipName, string> = {
   grasshopper: 'grasshopper',
   rut: 'bison_rut',
   crane: 'crane_bugle',
+  ...WILD_FILES,
 };
 
 /** Per-bed loudness trim. The files are levelled to the same RMS, so this is the artistic balance. */
@@ -137,6 +144,9 @@ export class AudioDirector {
   private voices = 0;
   private armed: Record<SpotKey, boolean> = { wolf: false, raven: false, bison: false, thunder: false, rut: false, crane: false };
   private timers: Record<SpotKey, number> = { wolf: 0, raven: 0, bison: 0, thunder: 0, rut: 0, crane: 0 };
+  /** The R3 wildlife spots (coyotes at dusk, the meadowlark by day), see wildlife.ts. */
+  private wildArmed = { coyote: false, lark: false };
+  private wildTimers = { coyote: 0, lark: 0 };
   private musicDuck: GainNode | null = null;
   private lastEvent = new Map<string, number>();
   private last: AudioFrame | null = null;
@@ -246,7 +256,11 @@ export class AudioDirector {
       this.updateBeds(s, ctx.currentTime);
     }
     this.music.update(dt, { env: s.env, speed: s.speed, tension: s.tension ?? null }, ctx.currentTime);
-    if (!this._muted) this.updateSpots(dt, s);
+    this.updateListener(s);
+    if (!this._muted) {
+      this.updateSpots(dt, s);
+      this.updateWild(dt, s);
+    }
   }
 
   /** A sim event happened `distance` metres from the camera. Plays the matching one-shot, if any. */
@@ -473,6 +487,7 @@ export class AudioDirector {
           let segments: Segment[] = [{ start: 0, end: buf.duration }];
           if (name === 'raven') segments = segmentClip(buf.getChannelData(0), buf.sampleRate, { relDb: 22 });
           if (name === 'bison') segments = segmentClip(buf.getChannelData(0), buf.sampleRate, { relDb: 12, minGap: 0.04, minLen: 0.12 });
+          if (name === 'dogYip') segments = segmentClip(buf.getChannelData(0), buf.sampleRate, { relDb: 16, minGap: 0.05, minLen: 0.06 });
           this.segs.set(name, segments);
           this.decoded[name] = { seconds: buf.duration, channels: buf.numberOfChannels, sampleRate: buf.sampleRate, segments: segments.length };
         } catch (err) {
@@ -564,6 +579,7 @@ export class AudioDirector {
     this.bedsStarted = true;
     // First spot sounds come after a plausible wait, not all at once.
     this.timers = { wolf: rand(12, 40), raven: rand(6, 16), bison: rand(4, 10), thunder: rand(6, 20), rut: rand(5, 14), crane: rand(8, 30) };
+    this.wildTimers = { coyote: rand(10, 30), lark: rand(3, 9) };
     if (this.last) this.updateBeds(this.last, ctx.currentTime);
   }
 
@@ -694,6 +710,156 @@ export class AudioDirector {
       }
     }
     return f;
+  }
+
+  // ------------------------------------------------------------------------------------------------ wildlife (R3)
+
+  /**
+   * A lightning strike `distance` metres away (the storm layer calls this when a bolt flashes): its thunder arrives `delay` seconds
+   * later (the storm layer picks the speed of sound it wants; distance / 340 is the honest value). Close strikes crack, far ones
+   * only rumble. `pan` is -1 .. 1 (left to right), random when left out. Returns the sound's length in seconds (0 if nothing played).
+   */
+  onThunder(distance: number, delay = 0, pan?: number): number {
+    const ctx = this.ctx;
+    if (!ctx || ctx.state !== 'running' || !this.bedsStarted || this._muted) return 0;
+    const plan = thunderPlan(distance, Math.random());
+    const p = pan ?? (Math.random() * 2 - 1) * 0.5;
+    const clip: ClipName = plan.clip === 'rumble' ? 'thunder' : plan.clip;
+    return this.play(clip, { gain: plan.gain, rate: plan.rate, distance: plan.cutoffD01, pan: p, delay: Math.max(0, delay) });
+  }
+
+  /**
+   * The small-prey layer's sounds, placed where they happen (three coordinates: x, height above ground, z): 'alarm' is a prairie dog
+   * town's alarm chorus (an alarm wave has begun), 'yip' one dog's jump-yip. Positional while the camera is low, a plain sound
+   * from up high.
+   */
+  onSmallPrey(kind: 'alarm' | 'yip', x: number, y: number, z: number): void {
+    const ctx = this.ctx;
+    if (!ctx || ctx.state !== 'running' || !this.bedsStarted || this._muted) return;
+    if (kind === 'alarm') {
+      this.playAt('dogAlarm', x, y + 0.4, z, { gain: 0.95, rate: rand(0.96, 1.04) });
+      return;
+    }
+    const segs = this.segs.get('dogYip') ?? [];
+    const seg = segs.length > 0 ? segs[Math.floor(Math.random() * segs.length)] : undefined;
+    // a prairie dog is smaller than the dog the clip sounds like: pitched up
+    this.playAt('dogYip', x, y + 0.3, z, { gain: 0.85, rate: rand(1.3, 1.5), segment: seg });
+  }
+
+  /** Sync the Web Audio listener to the camera (position and the way it looks), once per frame. */
+  private updateListener(s: AudioFrame): void {
+    const ctx = this.ctx;
+    if (!ctx) return;
+    const L = ctx.listener;
+    const f = s.camFwd ?? [0, 0, -1];
+    if (L.positionX) {
+      L.positionX.value = s.camX;
+      L.positionY.value = s.camHeight;
+      L.positionZ.value = s.camY;
+      L.forwardX.value = f[0];
+      L.forwardY.value = f[1];
+      L.forwardZ.value = f[2];
+      L.upX.value = 0;
+      L.upY.value = 1;
+      L.upZ.value = 0;
+    } else {
+      (L as unknown as { setPosition(x: number, y: number, z: number): void }).setPosition(s.camX, s.camHeight, s.camY);
+      (L as unknown as { setOrientation(...a: number[]): void }).setOrientation(f[0], f[1], f[2], 0, 1, 0);
+    }
+  }
+
+  private updateWild(dt: number, s: AudioFrame): void {
+    const plan = wildPlan(s.env, s.camHeight, s.coyotes ?? 0, s.speed);
+    for (const k of ['coyote', 'lark'] as const) {
+      const rule = plan[k];
+      if (!Number.isFinite(rule.mean)) {
+        this.wildArmed[k] = false;
+        continue;
+      }
+      if (!this.wildArmed[k]) {
+        this.wildArmed[k] = true;
+        this.wildTimers[k] = nextDelay(rule.mean, Math.random()) * 0.6;
+      }
+      this.wildTimers[k] -= dt;
+      if (this.wildTimers[k] > 0) continue;
+      this.fireWild(k, rule, s);
+      this.wildTimers[k] = nextDelay(rule.mean, Math.random());
+    }
+  }
+
+  private fireWild(k: 'coyote' | 'lark', rule: SpotRule, s: AudioFrame): void {
+    if (k === 'lark') {
+      const spot = larkSpot(s.camX, s.camY, Math.random() * Math.PI * 2, Math.random());
+      this.playAt('lark', spot.x, 1.6, spot.z, { gain: rule.gain * rand(0.8, 1.1), rate: rand(0.96, 1.05) });
+      return;
+    }
+    // coyotes call from somewhere out in the grass, 80 to 260 m off
+    const a = Math.random() * Math.PI * 2;
+    const d = lerp(80, 260, clamp01(rule.distance + (Math.random() - 0.5) * 0.3));
+    this.playAt(pickCoyoteClip(Math.random()), s.camX + Math.cos(a) * d, 0.8, s.camY + Math.sin(a) * d, { gain: rule.gain * rand(0.8, 1.15), rate: rand(0.95, 1.06) });
+  }
+
+  /**
+   * Play a clip from a place in the world (three coordinates: x, height above the ground, z). With the camera low it goes through a
+   * PannerNode at the source (panned and softened by where it is, the listener follows the camera); from up high it is an ordinary
+   * distance-filtered sound with no panning, as every other spot sound is. Returns the audible length in seconds (0 if nothing played).
+   */
+  private playAt(clip: ClipName, wx: number, wy: number, wz: number, o: { gain: number; rate?: number; segment?: Segment; delay?: number }): number {
+    const ctx = this.ctx;
+    const buf = this.buffers.get(clip);
+    const s = this.last;
+    if (!ctx || !buf || !s || !this.spotBus || this.voices >= MAX_VOICES) return 0;
+    const gd = Math.hypot(wx - s.camX, wz - s.camY);
+    const pl = placement(s.camHeight, gd);
+    if (!pl.positional) return this.play(clip, { ...o, distance: Math.max(0.12, pl.distance01), pan: 0 });
+    const rate = o.rate ?? 1;
+    const seg = o.segment ?? { start: 0, end: buf.duration };
+    const len = Math.max(0.05, seg.end - seg.start);
+    const dur = len / rate;
+    const gain = clamp01(o.gain);
+    if (gain < 0.004) return 0;
+    const t0 = ctx.currentTime + (o.delay ?? 0);
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    src.playbackRate.value = rate;
+    const lp = ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.value = distanceCutoff(clamp01(gd / 450));
+    lp.Q.value = 0.5;
+    const g = ctx.createGain();
+    const pan = ctx.createPanner();
+    pan.panningModel = 'equalpower';
+    pan.distanceModel = 'inverse';
+    pan.refDistance = 15;
+    pan.rolloffFactor = 0.7;
+    pan.maxDistance = 800;
+    if (pan.positionX) {
+      pan.positionX.value = wx;
+      pan.positionY.value = wy;
+      pan.positionZ.value = wz;
+    } else {
+      (pan as unknown as { setPosition(x: number, y: number, z: number): void }).setPosition(wx, wy, wz);
+    }
+    src.connect(lp);
+    lp.connect(g);
+    g.connect(pan);
+    pan.connect(this.spotBus);
+    const fadeIn = Math.min(0.03, dur * 0.25);
+    const fadeOut = Math.min(0.12, dur * 0.4);
+    g.gain.setValueAtTime(0, t0);
+    g.gain.linearRampToValueAtTime(gain, t0 + fadeIn);
+    g.gain.setValueAtTime(gain, Math.max(t0 + fadeIn, t0 + dur - fadeOut));
+    g.gain.linearRampToValueAtTime(0, t0 + dur);
+    src.start(t0, seg.start, len);
+    this.voices++;
+    src.onended = () => {
+      this.voices = Math.max(0, this.voices - 1);
+      src.disconnect();
+      lp.disconnect();
+      g.disconnect();
+      pan.disconnect();
+    };
+    return dur;
   }
 
   // ------------------------------------------------------------------------------------------------ voices

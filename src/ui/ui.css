@@ -2502,6 +2502,37 @@ button.tg-ent-b:hover {
   color: var(--paper-dim);
   line-height: 1.35;
 }
+/* the Small prey overlay's legend: a swatch and a name per layer (render/smalloverlay.ts) */
+.tg-map-legend-row {
+  display: flex;
+  align-items: center;
+  gap: calc(8 * var(--u));
+  font-size: calc(13.5 * var(--u));
+  line-height: 1.5;
+}
+.tg-map-swatch {
+  flex: none;
+  width: calc(16 * var(--u));
+  height: calc(9 * var(--u));
+  border-radius: calc(3 * var(--u));
+  background: #9ec7f2;
+}
+.tg-map-swatch-hare {
+  background: #9ec7f2;
+}
+.tg-map-swatch-dog {
+  background: #ed9e33;
+}
+.tg-map-swatch-town {
+  background: transparent;
+  border: calc(1.5 * var(--u)) solid #ffeeb8;
+}
+.tg-map-swatch-plague {
+  background: repeating-linear-gradient(135deg, #dc1a66 0 calc(3 * var(--u)), rgba(220, 26, 102, 0.35) calc(3 * var(--u)) calc(6 * var(--u)));
+}
+.tg-map-legend-small .tg-map-legend-note {
+  margin-top: calc(5 * var(--u));
+}
 @media (max-width: 720px) {
   .tg-map-legend {
     left: auto;

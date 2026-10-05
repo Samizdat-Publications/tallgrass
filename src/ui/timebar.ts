@@ -35,6 +35,7 @@ const OVERLAYS: { id: OverlayId; label: string; blurb: string }[] = [
   { id: 'fear', label: 'Landscape of fear', blurb: 'Where the herds feel unsafe' },
   { id: 'territory', label: 'Territories', blurb: 'Pack ranges and dens' },
   { id: 'traits', label: 'Trait heatmap', blurb: 'Where the fastest bodies live' },
+  { id: 'smallprey', label: 'Small prey', blurb: 'Jackrabbits, prairie dog towns and plague' },
 ];
 
 export class TimeBar {
