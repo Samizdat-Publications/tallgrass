@@ -79,6 +79,8 @@ attribute vec4 aFx2;
 uniform float uTime;
 uniform vec3 uCamPos;
 uniform float uPxK;
+// Time-lapse weight 0..1 (the animal layer, from 3x to 8x sim speed): the body bounds once per leg cycle (see the end of tgAnimate)
+uniform float uTL;
 
 // Border fade (animals with the migrant flag within 15 m of the world edge): the animal layer packs the fade into aLook.w as
 // floor() = selected (0 or 1) + 2 * q, q = 0 (fully there) .. 15 (gone), fract() = sickness. A stippled discard in the fragment
@@ -576,6 +578,14 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
   // the body's own motion on top of the legs (the same function the legs aimed through): bob and terrain offset, pitch, the
   // distance cues and the pounce leap
   tgBodyFwd(p, n);
+  // Time-lapse bound (render only, not in the foot-lock rig): the whole animal leaves the ground once per leg cycle and lands again,
+  // so at 10x and 100x a mover reads as bounding over the land (landing dust is thrown by the animal layer), not sliding on it.
+  // The legs keep their solved pose (the feet leave the ground with the body); the arc is zero for the half of the cycle in contact.
+  if (uTL > 0.001 && !dead) {
+    float mvTL = clamp(tgGW.y * 0.6 + tgGW.z, 0.0, 1.0) * (1.0 - lie);
+    float arcTL = max(sin(cyc + 1.2), 0.0);
+    p.y += uTL * mvTL * BODY_LEN * 0.11 * arcTL;
+  }
 #else
   p.y += bob + breathe - lie * LIE_DROP - crouchBody * CROUCH_DROP - sick * 0.035 * COM_Y; // a sick animal sags a little
   tgRotZ(p, n, vec3(0.0, COM_Y, 0.0), pitch);
@@ -692,6 +702,15 @@ void tgShade(vec3 on) {
   float sick = dead ? 0.0 : fract(aLook.w);
   float luma = dot(col, vec3(0.2126, 0.7152, 0.0722));
   col = mix(col, vec3(luma * 0.92) * vec3(0.97, 0.97, 0.96), 0.6 * sick) * (1.0 - 0.1 * sick);
+#if KIND != 2
+  if (!dead) {
+    // Grass occlusion: the lower leg stands in the grass, so it is darker and a little green (the blades shade and bounce light on it
+    // and the ground under the animal gets none), fading out by the belly. Without it the feet are as bright as the back and the
+    // animal looks pasted on top of the grass instead of standing in it.
+    float occ = 1.0 - smoothstep(0.0, LEGL * 1.1 + 0.02, position.y);
+    col *= mix(vec3(1.0), vec3(0.5, 0.6, 0.42), occ * occ * (3.0 - 2.0 * occ) * 0.85);
+  }
+#endif
   vTgColor = col;
   float tgFl = floor(aLook.w + 0.001);
   vTgSel = tgFl - 2.0 * floor(tgFl * 0.5);
@@ -731,6 +750,10 @@ export interface AnimalShared {
   uHN: { value: number };
   /** How dark the scene is, 0 bright day .. 1 night (from the scene's lights); updated by `probe`. */
   uLow: { value: number };
+  /** Time-lapse weight 0..1 (the bound of the body at 10x and up). Optional: a layer that does not set it (small prey) gets 0. */
+  uTL?: { value: number };
+  /** Strength of the night lift (moon rim, albedo and fill) 0..1, 1 = on; a tuning and A/B hook. Optional: defaults to 1. */
+  uNightK?: { value: number };
   /** Ambient light of the scene as an rgb (0 night .. about 0.7 day), set by `probe`. */
   uAmb: { value: THREE.Vector3 };
   /** Reads the lights of the scene being rendered into `uLow` (called once per draw of the main view). */
@@ -738,6 +761,8 @@ export interface AnimalShared {
 }
 
 export function makeAnimalMaterials(sp: number, def: ModelDef, shared: AnimalShared): AnimalMaterials {
+  shared.uTL ??= { value: 0 };
+  shared.uNightK ??= { value: 1 };
   const defs = defines(def.params, def.far, def.geometry);
   const material = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: def.roughness, metalness: 0 });
   material.onBeforeCompile = (shader) => {
@@ -759,6 +784,8 @@ export function makeAnimalMaterials(sp: number, def: ModelDef, shared: AnimalSha
     shader.uniforms.uRimK = { value: far.rim };
     shader.uniforms.uHuntK = { value: far.hunt };
     shader.uniforms.uLow = shared.uLow;
+    shader.uniforms.uTL = shared.uTL!;
+    shader.uniforms.uNightK = shared.uNightK!;
     shader.uniforms.uAmb = shared.uAmb;
     shader.uniforms.uFarTint = { value: new THREE.Vector3(...(far.tint ?? [1, 1, 1])) };
     shader.uniforms.uFarMix = { value: far.tint ? far.mix ?? 0.5 : 0 };
@@ -778,7 +805,7 @@ export function makeAnimalMaterials(sp: number, def: ModelDef, shared: AnimalSha
       .replace('#include <begin_vertex>', 'vec3 transformed = tgP;');
     shader.fragmentShader = shader.fragmentShader
       .replace('#include <clipping_planes_fragment>', '#include <clipping_planes_fragment>\n if (tgFadeDiscard(vTgFade)) discard;')
-      .replace('#include <common>', `#include <common>\n${FADE_FRAG_DECL}\nvarying vec3 vTgColor;\nvarying float vTgSel;\nvarying float vTgFar;\nvarying float vTgHunt;\nuniform float uFill;\nuniform vec3 uWarm;\nuniform float uNeutral;\nuniform float uFarGain;\nuniform vec3 uRimCol;\nuniform float uRimK;\nuniform float uHuntK;\nuniform float uLow;\nuniform vec3 uAmb;\nuniform vec3 uFarTint;\nuniform float uFarMix;\nuniform float uFloor;\nuniform float uLowFill;\nvarying float vTgUp;\nuniform vec3 uTopCol;\nuniform float uTopMix;\nuniform float uSideDark;`)
+      .replace('#include <common>', `#include <common>\n${FADE_FRAG_DECL}\nvarying vec3 vTgColor;\nvarying float vTgSel;\nvarying float vTgFar;\nvarying float vTgHunt;\nuniform float uFill;\nuniform vec3 uWarm;\nuniform float uNeutral;\nuniform float uFarGain;\nuniform vec3 uRimCol;\nuniform float uRimK;\nuniform float uHuntK;\nuniform float uLow;\nuniform vec3 uAmb;\nuniform vec3 uFarTint;\nuniform float uFarMix;\nuniform float uFloor;\nuniform float uLowFill;\nvarying float vTgUp;\nuniform vec3 uTopCol;\nuniform float uTopMix;\nuniform float uSideDark;\nuniform float uNightK;`)
       // Bright parts of the coat (the white bands and rump) are pulled toward a mid value as the light drops, so they
       // darken with the scene instead of glowing against the dark herds at dusk and night.
       .replace('#include <color_fragment>', `vec3 tgC = vTgColor * mix(1.0, uFarGain, vTgFar);
@@ -795,7 +822,12 @@ export function makeAnimalMaterials(sp: number, def: ModelDef, shared: AnimalSha
         float tgL = dot(tgC, vec3(0.2126, 0.7152, 0.0722));
         tgC = mix(tgC, vec3(tgL), 0.3 * uLow * vTgFar);
         tgC *= 1.0 - 0.8 * uLow * max(tgL - 0.16, 0.0) / max(tgL, 1e-3);
-        diffuseColor.rgb *= tgC;`)
+        diffuseColor.rgb *= tgC;
+        // night lift: the coat reflects more of the little light there is, so the animals do not sink into the blue ground (the
+        // far-view dimming above takes the coat down at night, this gives part of it back)
+        // (pale coats, a pronghorn's white, get little of it: they already stand out against the dark ground)
+        float tgNL = 1.0 - 0.7 * smoothstep(0.18, 0.5, dot(diffuseColor.rgb, vec3(0.2126, 0.7152, 0.0722)));
+        diffuseColor.rgb *= 1.0 + 0.35 * uLow * uNightK * tgNL;`)
       // sky fill: pull toward a warm neutral (so brown coats stay brown in blue shade), then boost it so the shaded side keeps form
       .replace(
         '#include <lights_fragment_end>',
@@ -810,7 +842,14 @@ export function makeAnimalMaterials(sp: number, def: ModelDef, shared: AnimalSha
         totalEmissiveRadiance += uRimCol * vTgFar * (uRimK + vTgHunt * uHuntK) * tgEdge * (1.0 - 0.9 * uLow);
         // ambient floor: a share of the scene's own ambient light reaches the coat unshadowed, so a herd in shade or at dusk
         // keeps its value above the shadows; it scales with the light, so it dims with the scene and never glows
-        totalEmissiveRadiance += diffuseColor.rgb * uAmb * uFloor * vTgFar * (1.0 - 0.75 * uLow);`,
+        totalEmissiveRadiance += diffuseColor.rgb * uAmb * uFloor * vTgFar * (1.0 - 0.75 * uLow);
+        // Moonlight (night only, uLow near 1): a cool rim along every silhouette edge, strongest on the surfaces that face the sky,
+        // plus a cool fill on the coat itself. Starker than the day lighting on purpose, so an animal reads against the dark ground
+        // by its outline and by value, without the night looking like day.
+        float tgNR = pow(1.0 - clamp(dot(normalize(vViewPosition), normal), 0.0, 1.0), 2.8);
+        float tgNK = smoothstep(0.25, 0.85, uLow) * uNightK;
+        totalEmissiveRadiance += vec3(0.5, 0.64, 0.95) * 0.4 * tgNR * (0.3 + 0.7 * vTgUp) * tgNK * (0.6 + 0.4 * vTgFar) * tgNL;
+        totalEmissiveRadiance += diffuseColor.rgb * vec3(0.045, 0.06, 0.11) * tgNK * (0.5 + 0.5 * vTgUp) * tgNL;`,
       );
   };
   material.customProgramCacheKey = () => `tg-animal-${sp}`;
@@ -823,6 +862,7 @@ export function makeAnimalMaterials(sp: number, def: ModelDef, shared: AnimalSha
     shader.uniforms.tHeight = shared.tHeight;
     shader.uniforms.uCell = shared.uCell;
     shader.uniforms.uHN = shared.uHN;
+    shader.uniforms.uTL = shared.uTL!;
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', `#include <common>\n${defs}\n${COMMON_DECL}\nvarying float vTgFade;`)
       // a bird in flight casts no shadow (collapse it to a point): at the boost the wide view needs, it would sweep a huge
