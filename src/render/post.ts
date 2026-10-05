@@ -12,6 +12,7 @@ import { NOISE_GLSL, SKY_GLSL, SharedUniforms, clamp, smoothstep } from './commo
 import type { Lighting } from './sky';
 import type { EnvState } from '../sim/types';
 import { Snow, SnowPass, blizzardAmount } from './snow';
+import { Rain, RainPass } from './rain';
 import { STORM_SKY_GLSL, type StormUniforms } from './storms';
 
 export type Quality = 'high' | 'medium';
@@ -20,6 +21,7 @@ export type Quality = 'high' | 'medium';
 const GODRAY_GAIN = 2.4;
 const DAWN_DENSITY = 0.07;
 const _snowCol = new THREE.Color();
+const _rainCol = new THREE.Color();
 
 const FS_VERT = 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }';
 
@@ -485,17 +487,13 @@ class GradePass extends Pass {
         uAspect: { value: 16 / 9 },
         uLift: { value: new THREE.Color(0, 0, 0) },
         uNight: { value: 0 },
-        uRain: { value: 0 },
-        uTime: { value: 0 },
       },
       vertexShader: FS_VERT,
       fragmentShader: /* glsl */ `
         precision highp float;
         varying vec2 vUv;
         uniform sampler2D tDiffuse;
-        uniform float uRain;
         uniform float uFlash;
-        uniform float uTime;
         uniform vec3 uShadowTint;
         uniform vec3 uHighTint;
         uniform float uSat;
@@ -522,26 +520,7 @@ class GradePass extends Pass {
           // dark teal-green grass (as in the concept art) and not as silver snow
           vec3 teal = vec3(l2) * vec3(0.86, 0.98, 1.08);
           col = mix(col, teal + (col - vec3(l2)) * 0.4, uNight * 0.85);
-          // rain: three layers of slanted streaks (near, middle, far), brighter against the dark ground than the bright sky
-          #ifdef TG_RAIN
-          {
-            float rs = 0.0;
-            for (int k = 0; k < 3; k++) {
-              float fk = float(k);
-              float sc = 60.0 + 46.0 * fk;
-              vec2 p = vec2((vUv.x * uAspect + vUv.y * (0.22 + 0.05 * fk)) * sc, vUv.y * sc * 0.07 + uTime * (3.3 + 1.7 * fk) * sc * 0.07);
-              vec2 id = floor(p);
-              vec2 fr = fract(p);
-              float h = fract(sin(dot(id + fk * 31.7, vec2(12.9898, 78.233))) * 43758.5453);
-              float h2 = fract(h * 7.31 + fk * 0.37);
-              float on = step(1.0 - (0.3 + 0.16 * fk) * uRain, h);
-              float line = smoothstep(0.14, 0.0, abs(fr.x - 0.15 - 0.7 * h2)) * smoothstep(0.0, 0.25, fr.y) * smoothstep(1.0, 0.45, fr.y);
-              rs += on * line * (1.0 - 0.28 * fk);
-            }
-            float lr = dot(col, vec3(0.2126, 0.7152, 0.0722));
-            col = mix(col, col * 0.8 + vec3(0.62, 0.7, 0.8) * (0.05 + 0.5 * lr), clamp(rs, 0.0, 1.0) * 0.6 * min(uRain * 1.2, 1.0));
-          }
-          #endif
+          // (rain is no longer drawn here: it is a world-space streak volume, see rain.ts)
           col = pow(max(col / 0.18, vec3(0.0)), vec3(uContrast)) * 0.18;
           vec2 q = (vUv - 0.5) * vec2(uAspect, 1.0) * 0.9;
           float v = smoothstep(0.35, 1.05, length(q));
@@ -605,6 +584,8 @@ export class PostFX {
   readonly godrays: GodRayPass;
   readonly snow = new Snow();
   readonly snowPass: SnowPass;
+  readonly rain = new Rain();
+  readonly rainPass: RainPass;
   readonly bloom: UnrealBloomPass;
   readonly grade: GradePass;
   readonly output: OutputPass;
@@ -645,6 +626,8 @@ export class PostFX {
     this.composer.addPass(this.godrays);
     this.snowPass = new SnowPass(this.snow, camera, () => this.scenePass.depthTexture);
     this.composer.addPass(this.snowPass);
+    this.rainPass = new RainPass(this.rain, camera, () => this.scenePass.depthTexture);
+    this.composer.addPass(this.rainPass);
 
     this.bloom = new UnrealBloomPass(new THREE.Vector2(w, h), 0.3, 0.7, 1.15);
     this.composer.addPass(this.bloom);
@@ -702,16 +685,6 @@ export class PostFX {
     g.uVignette.value = L.vignette;
     (g.uLift.value as THREE.Color).copy(L.gradeLift);
     g.uNight.value = L.gradeNight;
-    g.uRain.value = L.rain;
-    // the streak layer is compiled in only while it is raining (a shader branch on a uniform still costs the full-screen pass)
-    const defs = this.grade.material.defines as Record<string, string>;
-    const hasRain = 'TG_RAIN' in defs;
-    const wantRain = hasRain ? L.rain > 0.01 : L.rain > 0.02;
-    if (wantRain !== hasRain) {
-      if (wantRain) defs.TG_RAIN = '1'; else delete defs.TG_RAIN;
-      this.grade.material.needsUpdate = true;
-    }
-    g.uTime.value = this.shared.time.value;
     this.bloom.strength = (this.quality === 'high' ? 1 : 0.85) * L.bloom * this.hazeBloom;
   }
 
@@ -778,6 +751,23 @@ export class PostFX {
       L.hemiSky.r * L.hemiIntensity + lc.r * 0.45, L.hemiSky.g * L.hemiIntensity + lc.g * 0.45, L.hemiSky.b * L.hemiIntensity + lc.b * 0.45,
     ).multiplyScalar(0.92 / Math.PI * 1.7);
     this.snow.update(dt, this.camera, { fall, windStrength: ws, windX: Math.cos(env.windDir), windZ: Math.sin(env.windDir), aboveGround, color: _snowCol });
+  }
+
+  /**
+   * Falling rain (see rain.ts): `rain` is the eased 0..1 visible rain (already faded out when looking steeply down). Streaks are
+   * lit like the air they fall through: the sky's horizon colour and the ambient, with a little of the key light catching them.
+   */
+  updateRain(dt: number, rain: number, env: EnvState, aboveGround: number, L: Lighting): void {
+    const ws = clamp(env.windStrength, 0, 1);
+    if (rain <= 0.01) { this.rain.update(dt, this.camera, { fall: 0, windStrength: ws, windX: 1, windZ: 0, aboveGround, color: _rainCol }); return; }
+    const sh = this.shared;
+    const lc = sh.lightColor.value, hz = sh.skyHorizon.value;
+    _rainCol.setRGB(
+      hz.r * 0.55 + L.hemiSky.r * L.hemiIntensity * 0.45 + lc.r * 0.1,
+      hz.g * 0.55 + L.hemiSky.g * L.hemiIntensity * 0.45 + lc.g * 0.1,
+      hz.b * 0.55 + L.hemiSky.b * L.hemiIntensity * 0.45 + lc.b * 0.1,
+    ).multiplyScalar(0.85);
+    this.rain.update(dt, this.camera, { fall: rain, windStrength: ws, windX: Math.cos(env.windDir), windZ: Math.sin(env.windDir), aboveGround, color: _rainCol });
   }
 
   /** Bloom multiplier from the aerial pass (a little extra glow at low sun, 1 otherwise). */
@@ -874,6 +864,7 @@ export class PostFX {
     this.fog.dispose();
     this.godrays.dispose();
     this.snow.dispose();
+    this.rain.dispose();
     this.grade.dispose();
     this.finish.dispose();
     this.gtao.dispose();

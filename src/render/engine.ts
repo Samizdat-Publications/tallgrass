@@ -34,6 +34,14 @@ export type { SharedUniforms } from './common';
 const SHADOW_RANGES = [140, 190, 260, 360, 500, 700, 900];
 const NEAR_STEPS = [0.25, 0.4, 0.65, 1, 1.6, 2.5, 4, 5];
 
+/** Bark albedo scale now that trunks no longer pass through the (zeroing) AO pass; see the Engine constructor. */
+const BARK_ALBEDO = 0.34;
+
+/** The steady key-light direction a fast-forward settles on (see updateEnvState): south-south-west, 40 degrees up. */
+const HOLD_AZ = 200 * Math.PI / 180;
+const HOLD_EL = 40 * Math.PI / 180;
+const HOLD_DIR = new THREE.Vector3();
+
 const DEFAULT_ENV: EnvState = {
   tick: 0, year: 0, season: 1.2, dayFrac: 0.3, weather: 0, rain: 0, windDir: 0.35, windStrength: 0.35, warmth: 0.7,
 };
@@ -143,6 +151,16 @@ export class Engine {
   /** Falling-snow intensity 0..1: eased faster than the snowpack (flakes start and stop within seconds of the weather). */
   private snowfallSm = 0;
   private readonly rainDir = new THREE.Vector3();
+  /**
+   * Fast-forward softening of the sun. At 10x and 100x the sun laps the sky several times a second, and a hard shadow whipping across
+   * the ground reads as strobing. `simSpeed` is the sim speed of the latest snapshot (see setStorms), `fastSm` the eased 0..1 amount
+   * of softening (0 at 1x: the lighting is then exactly the unsoftened one), `dayDisp` the clock the sun is drawn from, which is
+   * low-passed per frame while fast so the sun glides instead of stepping once per snapshot.
+   */
+  private simSpeed = 1;
+  private fastSm = 0;
+  private dayDisp = NaN;
+  private readonly envDisp: EnvState = { ...DEFAULT_ENV };
   private tickPool = 0;
   private _focus = new THREE.Vector3();
   /** Fade tree canopies and trunks out of the line between the camera and the point it watches (default on). */
@@ -229,6 +247,20 @@ export class Engine {
     // GTAO renders its own normal/depth pass with an override material that ignores alpha cut-outs, so a sparse canopy would occlude
     // the sky behind its gaps and show as grey smoke. Keep alpha-cut foliage (crowns and shrubs) out of that pass.
     for (const m of this.trees.meshes) if (m.name.startsWith('cottonwood-crown') || m.name.startsWith('shrubs')) this.post.aoExclude.push(m);
+    // Bark stays out of the AO pass too: GTAO resolves every cottonwood trunk and limb to zero occlusion (the AO buffer is solid black
+    // on bark whatever the radius, thickness or scale), so a trunk beside the camera, seen against a low sun, was a full-height black
+    // slab at the frame edge. The trunks keep their own lit and fill shading, and the ground around them still gets its occlusion.
+    // The bark's brightness was tuned under that zero AO (it multiplied every trunk by about a tenth), so un-crushed it reads cream
+    // white: take its albedo down to a dark weathered grey-brown instead (one shared material, scaled once).
+    {
+      const seen = new Set<THREE.Material>();
+      for (const m of this.trees.meshes) {
+        if (!m.name.startsWith('cottonwood-bark')) continue;
+        this.post.aoExclude.push(m);
+        const mat = m.material as THREE.MeshStandardMaterial;
+        if (!seen.has(mat)) { seen.add(mat); mat.color.multiplyScalar(BARK_ALBEDO); }
+      }
+    }
     let hmin = 1e9;
     for (let i = 0; i < world.height.length; i++) hmin = Math.min(hmin, world.height[i]);
     this.post.setMistBase(hmin);
@@ -330,6 +362,8 @@ export class Engine {
    */
   setStorms(storms: Float32Array | undefined, strikes: Float32Array | undefined, speed = 1): void {
     this.storms.setSnapshot(storms, strikes, speed);
+    // -1 is the worker's "skipping to the next event" (flat out, far past 100x)
+    this.simSpeed = speed < 0 ? 100 : speed;
   }
 
   /** Register a per-frame callback. Returns an unsubscribe function. */
@@ -523,7 +557,32 @@ export class Engine {
     if (snowTarget === 0 && sm.snow < 0.03) sm.snow = 0;
     if (wetTarget === 0 && sm.wet < 0.02) sm.wet = 0;
 
-    computeAtmosphere(env, sm, u, this.lighting);
+    // fast-forward softening: eases in over about a third of a second above 10x and back out within a second at 1x
+    const fastTarget = 0.7 * smoothstep(4, 9, this.simSpeed) + 0.3 * smoothstep(40, 90, this.simSpeed);
+    if (this.firstFrame) this.fastSm = fastTarget;
+    else this.fastSm += (fastTarget - this.fastSm) * (1 - Math.exp(-dt / (fastTarget > this.fastSm ? 0.3 : 0.25)));
+    if (fastTarget === 0 && this.fastSm < 0.01) this.fastSm = 0;
+    const fast = this.fastSm;
+    // the sun's clock: the snapshot's dayFrac steps once per snapshot, which at 100x is a few degrees of sun per step. While fast it is
+    // low-passed per frame (around the day's wrap), and it hands back to the exact clock as the softening fades out
+    let atmoEnv: EnvState = env;
+    if (fast > 0 || !Number.isNaN(this.dayDisp)) {
+      let d = this.dayDisp;
+      const diff = Number.isNaN(d) ? 0 : ((env.dayFrac - d + 1.5) % 1) - 0.5;
+      if (Number.isNaN(d) || this.firstFrame || fast === 0 || Math.abs(diff) > 0.3) d = env.dayFrac;
+      else d += diff * (1 - Math.exp(-dt / (0.02 + 0.1 * Math.min(1, fast * 1.5))));
+      d = ((d % 1) + 1) % 1;
+      this.dayDisp = fast === 0 ? NaN : d;
+      if (fast > 0) { Object.assign(this.envDisp, env); this.envDisp.dayFrac = d; atmoEnv = this.envDisp; }
+    }
+    computeAtmosphere(atmoEnv, sm, u, this.lighting);
+    if (fast > 0) {
+      // the key light's direction is the harshest part of a fast-forward: it laps the sky (and swings through the zenith where the
+      // moon takes over) faster than a shadow can read. The sky and the sun disc keep their true motion; the light that casts the
+      // shadows settles toward a steady, fairly high afternoon direction as the speed rises.
+      HOLD_DIR.set(Math.sin(HOLD_AZ) * Math.cos(HOLD_EL), Math.sin(HOLD_EL), Math.cos(HOLD_AZ) * Math.cos(HOLD_EL));
+      u.lightDir.value.lerp(HOLD_DIR, 0.88 * fast).normalize();
+    }
     this.applySeason(env.season);
     const winter = smoothstep(2.4, 3.1, u.season.value) * (1 - smoothstep(3.55, 3.95, u.season.value));
     const frostTime = 1 - smoothstep(0.36, 0.5, env.dayFrac) * (1 - smoothstep(0.62, 0.74, env.dayFrac));
@@ -535,8 +594,8 @@ export class Engine {
     // (the pack follows the calendar directly; it is a slow curve, so it needs no easing of its own)
     u.snow.value = Math.max(sm.snow, keyCurve(PACK_KEYS, u.season.value));
     u.rain.value = this.rainSm;
-    // the streaks are drawn on the screen falling downward, which only reads as rain from a side-on view: looking steeply down
-    // (the map view) they would look like scratches on glass, so they fade out there and the wet ground carries the rain alone
+    // the streak volume (rain.ts) reads as rain from a side-on view; looking steeply down (the map view) it would be a scatter of
+    // dashes in front of the lens, so it fades out there and the wet ground carries the rain alone (it also thins with altitude)
     const down = -this.camera.getWorldDirection(this.rainDir).y;
     this.lighting.rain = this.rainSm * (1 - smoothstep(0.62, 0.9, down));
     u.wet.value = sm.wet;
@@ -545,15 +604,19 @@ export class Engine {
     const L = this.lighting;
     // lights
     // under cloud the sun is a soft glow: shadows lose their edge and most of their depth
-    this.sun.shadow.intensity = 0.92 * (1 - 0.82 * sm.overcast);
-    this.sun.shadow.radius = 1.8 + 2.4 * sm.overcast;
+    // fast-forward: a softer, more diffuse rig. The key light gives up a share to the sky (so every shadow, hill, cloud or tree, loses
+    // contrast alike), the shadow map's edge widens and its depth drops. All of it is exactly zero at 1x.
+    const softKey = 1 - 0.38 * fast;
+    u.lightColor.value.multiplyScalar(softKey);
+    this.sun.shadow.intensity = 0.92 * (1 - 0.82 * sm.overcast) * (1 - 0.55 * fast);
+    this.sun.shadow.radius = 1.8 + 2.4 * sm.overcast + 3.2 * fast;
     this.sun.position.copy(u.lightDir.value);
     this.sun.color.copy(u.lightColor.value);
     this.sun.intensity = 1;
     this.hemi.color.copy(L.hemiSky);
     this.hemi.groundColor.copy(L.hemiGround);
     // a lightning flash lifts the ambient for a few frames
-    this.hemi.intensity = L.hemiIntensity * (1 + 2.2 * this.storms.flash);
+    this.hemi.intensity = L.hemiIntensity * (1 + 2.2 * this.storms.flash) * (1 + 0.4 * fast);
     this.renderer.toneMappingExposure = L.exposure * this.exposure;
 
     // Shadow range follows how far the camera looks: tight when low and close, whole valley when high. The cascade split and
@@ -606,6 +669,7 @@ export class Engine {
     this.terrain.updateShadow(this.renderer, u.lightDir.value);
     this.cloudShadow.update(this.renderer, dt, this.firstFrame);
     this.post.updateSnow(dt, this.snowfallSm, env, aboveGround, L);
+    this.post.updateRain(dt, L.rain, env, aboveGround, L);
     this.post.apply(L);
   }
 
