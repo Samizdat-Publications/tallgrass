@@ -153,6 +153,8 @@ export interface Params {
   hareR: number;
   /** Jackrabbit loss per base year outside the breeding season. */
   hareWinterLoss: number;
+  /** Weather: each valley year draws a quality 1 +- hareYearVar that multiplies the hares' growth and (reversed) their winter loss (0 = off, every year alike). */
+  hareYearVar: number;
   /** Prairie dogs per suitable coarse cell (scaled by the cell's dogCap and soil). */
   dogK: number;
   /** Prairie dog growth per base year, applied as one spring pulse each valley year. */
@@ -165,6 +167,37 @@ export interface Params {
   dogClip: number;
   /** Bison migration and grazing prefer the edges of towns by this much grass-equivalent (0 = off). */
   dogGrazeBonus: number;
+  // coyotes (S5, src/sim/sp/coyote.ts): they exist only when `coyote.initial` (or a god tool) puts some in the valley.
+  /** Radius (m) of the range a pair hunts around its den. */
+  coyoteTerritory: number;
+  /** Coyote dens sit at least this far (m) from each other. */
+  coyoteDenSpacing: number;
+  /** A new coyote den keeps at least this far (m) from every wolf den. */
+  coyoteWolfAvoid: number;
+  /** Chance, rolled once per 20 ticks per wolf, that a wolf within 3 m of a coyote kills it (when the coyote is at a carcass or in the wolf's core). */
+  coyoteKilledByWolf: number;
+  /** A coyote hunts small prey (mousing) below this energy. */
+  coyoteHuntHunger: number;
+  /** Carcass meat a coyote eats per tick. */
+  coyoteEatRate: number;
+  /** Mousing trickle (x metabolism per tick) when the small-prey web is off. */
+  coyoteSmallGame: number;
+  /** Per think (3 ticks) chance of spotting a hidden fawn within 40 m at perfect contrast. */
+  coyoteFawnFind: number;
+  /** Per tick chance of killing a fawn it has caught up with, before the fawn's toughness and its mother's guard. */
+  coyoteFawnKill: number;
+  /** Intake over the last valley year, in units of metabolism per tick, that counts as a food index of 1. */
+  coyoteFoodRef: number;
+  /** Share of the energy a coyote takes from carcasses that counts toward its food index (live prey counts in full): the lower, the more the litters follow the hares. */
+  coyoteCarrionShare: number;
+  /** Pups younger than this (ticks) shadow their mother and draw energy from her. */
+  coyotePupDenAge: number;
+  /** Energy per tick a pup draws from its mother. */
+  coyotePupFeed: number;
+  /** Base years a coyote with no den wanders before it leaves the valley (needs openPrairie). */
+  coyoteOutAfter: number;
+  /** Rate per base year at which a coyote pair walks in from the wider prairie while fewer than 4 live in the valley (needs openPrairie; 0 = never). */
+  coyoteInRate: number;
   /** Storm cells and lightning (0 = off). On, thunderstorm days send cells across the valley; dry lightning can start
    *  fires, and heavy rain (above 0.5) stops fire spreading. See storms.ts. */
   stormCells: number;
@@ -282,10 +315,11 @@ export function defaultParams(): Params {
     walkSpeed: 1.6, runSpeed: 18, stamina: 45, sight: 45, metabolism: 1 / 1050, thirst: 1 / 1700,
     meat: 2.5, toughness: 1.6, initial: 0, herdRadius: 0, camo: 0.8,
   });
-  // coyote (S4 registers it, S5 sets the real values from the plan's S5 table): wolf-like breeding, smaller body, no founders yet
+  // coyote (S5; the plan's table): wolf-like yearly breeding at the spring tick (gestation and cooldown unused), smaller body, no founders by default.
+  // The den, territory, wolf-avoidance and wolf-kill numbers are top-level params (coyoteTerritory...), like the wolf's.
   species[Sp.Coyote] = base({
     maxAge: 4800, matureAge: 900, gestation: 0, birthCooldown: 0, litter: 5,
-    walkSpeed: 1.3, runSpeed: 11, stamina: 130, sight: 60, metabolism: 1 / 1200, thirst: 1 / 1800,
+    walkSpeed: 1.3, runSpeed: 11, stamina: 130, sight: 60, metabolism: 1 / 1800, thirst: 1 / 5000,
     meat: 0.8, toughness: 0.8, initial: 0, herdRadius: 12,
   });
   // prairie dog: a field species. Only initial (0 = the default colonies) and the smallPrey params apply; the rest keeps the
@@ -333,6 +367,7 @@ export function defaultParams(): Params {
     hareK: 3,
     hareR: 2.2,
     hareWinterLoss: 0.6,
+    hareYearVar: 0.9,
     dogK: 4,
     dogR: 1.0,
     plagueRate: 0.08,
@@ -350,6 +385,21 @@ export function defaultParams(): Params {
     ravenVagrants: 0,
     ravenVagrantK: 0.16,
     ravenVagrantCap: 400,
+    coyoteTerritory: 75,
+    coyoteDenSpacing: 60,
+    coyoteWolfAvoid: 75,
+    coyoteKilledByWolf: 0.3,
+    coyoteHuntHunger: 0.97,
+    coyoteEatRate: 0.01,
+    coyoteSmallGame: 0.5,
+    coyoteFawnFind: 0.3,
+    coyoteFawnKill: 0.15,
+    coyoteFoodRef: 0.5,
+    coyoteCarrionShare: 0,
+    coyotePupDenAge: 450,
+    coyotePupFeed: 0.0025,
+    coyoteOutAfter: 1.0,
+    coyoteInRate: 1,
     stormCells: 0,
     lightningRate: 0.05,
     lightningIgnite: 0.5,

@@ -45,17 +45,17 @@ export type TakeKind = 'wolf' | 'coyote' | 'eagle' | 'hawk';
 export const TAKE_KINDS: readonly TakeKind[] = ['wolf', 'coyote', 'eagle', 'hawk'];
 export const PREF: Record<TakeKind, { hare: number; dog: number }> = {
   wolf: { hare: 1, dog: 0.6 }, // wolves mouse in the open; dogs dive into burrows
-  coyote: { hare: 1, dog: 0.8 }, // S5
+  coyote: { hare: 1, dog: 0.35 }, // S5: at 0.8 the coyotes camped on the towns and the prairie dogs were gone 60% of the time; 0.2 to 0.4 leaves them a refuge
   eagle: { hare: 1, dog: 0.9 }, // S7
   hawk: { hare: 0.4, dog: 0.7 }, // S7: takes leverets, dogs on the town edge
 };
-/** Attack rate per attempt per animal-per-cell. wolf: one attempt per tick while mousing; the others are placeholders until S5 and S7 tune them. */
-export const A: Record<TakeKind, number> = { wolf: 0.0025, coyote: 0.01, eagle: 0.02, hawk: 0.015 };
+/** Attack rate per attempt per animal-per-cell. wolf and coyote: one attempt per tick while mousing; eagle and hawk are placeholders until S7. */
+export const A: Record<TakeKind, number> = { wolf: 0.0025, coyote: 0.1, eagle: 0.02, hawk: 0.015 };
 /** Handling time, in the units of 1 / effort. */
 export const HANDLE: Record<TakeKind, number> = { wolf: 2, coyote: 1.5, eagle: 4, hawk: 3 };
 export const GAIN: Record<TakeKind, { hare: number; dog: number }> = {
   wolf: { hare: 0.07, dog: 0.045 }, // at about 3 hares in the cell this matches the old flat trickle (metabolism x wolfSmallGame per tick)
-  coyote: { hare: 0.25, dog: 0.15 },
+  coyote: { hare: 0.1, dog: 0.1 }, // S5: a hare is a tenth of the coyote's energy bar, so a coyote on 1/1800 metabolism needs about 7 a valley year; at 0.25 the coyotes barely dented the hares (no coupling), at 0.04 to 0.06 they starved
   eagle: { hare: 0.4, dog: 0.25 },
   hawk: { hare: 0.2, dog: 0.15 },
 };
@@ -182,13 +182,15 @@ export class SmallPrey {
   private readonly tmp = new Float32Array(CELLS);
   private ema = 0;
   private emaReady = false;
+  private qualityYear = -1;
+  private quality = 1;
   private lastBoom = -1e9;
   private lastCrash = -1e9;
   private lastDogArrival = 0;
   private drain: SmallPreySample = { plagues: 0, townsFounded: 0, townsLost: 0, booms: 0, crashes: 0, hareTakes: 0, dogTakes: 0, hareArrivals: 0, dogArrivals: 0 };
 
   constructor(
-    seed: number,
+    private readonly seed: number,
     private readonly p: Params,
     private readonly world: World,
     private readonly env: Environment,
@@ -334,7 +336,7 @@ export class SmallPrey {
     const yf = STEP_TICKS / BASE_YEAR_TICKS;
     const season = this.env.state.season;
     const breeding = season < 2 ? 1 : 0.15;
-    this.growHares(yf, breeding);
+    this.growHares(yf, breeding, this.yearQuality(tick));
     this.diffuseHares();
     this.floorHares();
     this.stepDogs(tick, yf);
@@ -346,9 +348,25 @@ export class SmallPrey {
     if (p.openPrairie > 0) this.rescues(tick);
   }
 
-  private growHares(yf: number, breeding: number): void {
+  /**
+   * How good this valley year is for hares, 1 +- hareYearVar (1 when the param is 0). A fixed draw per year from a hash of the seed and the
+   * year number, not from any generator, so it costs no random numbers. Growth is multiplied by it and the winter loss by (2 - it): a
+   * mild year lifts the hares, a hard one cuts them, whatever the predators are doing (weather the coyotes then have to follow).
+   */
+  private yearQuality(tick: number): number {
+    const v = this.p.hareYearVar;
+    if (v <= 0) return 1;
+    const y = Math.floor(tick / YEAR_TICKS);
+    if (y !== this.qualityYear) {
+      this.qualityYear = y;
+      this.quality = 1 + v * (2 * (hashSeed(`${this.seed >>> 0}:hareyear:${y}`) / 4294967296) - 1);
+    }
+    return this.quality;
+  }
+
+  private growHares(yf: number, breeding: number, quality = 1): void {
     const p = this.p, h = this.hare;
-    const grow = p.hareR * breeding * yf, lose = p.hareWinterLoss * (1 - breeding) * yf;
+    const grow = p.hareR * breeding * yf * quality, lose = p.hareWinterLoss * (1 - breeding) * yf * (2 - quality);
     for (let c = 0; c < CELLS; c++) {
       const n = h[c];
       if (n <= 0) continue;

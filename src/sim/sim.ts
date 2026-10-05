@@ -1,6 +1,6 @@
 // The Tallgrass simulation core. Deterministic from the seed, renderer-independent.
 import { Agents, G_BOLD, G_COAT, G_HERD, G_LITTER, G_SIGHT, G_SIZE, G_SPEED, NG, GENE_NAMES } from './agents';
-import { Disease, IS_CANID } from './disease';
+import { COYOTE_GROUP_BASE, Disease, IS_CANID } from './disease';
 import { Environment } from './env';
 import { DEATH_CAUSES, Lineage } from './lineage';
 import { BucketGrid } from './grid';
@@ -9,8 +9,9 @@ import { Rng } from './rng';
 import { StormCells } from './storms';
 import { RegionalPool } from './region';
 import { SmallPrey } from './smallprey';
+import { Coyotes } from './sp/coyote';
 import { AGENT_STRIDE, CARCASS_STRIDE, F_ALPHA, F_INFECTED, F_JUVENILE, F_MALE, F_MANGE, F_MIGRANT, F_PREGNANT, Intervention, SimLike, Snapshot, SPECIES_COUNT, SPECIES_KEYS, Sp, St, YEAR_TICKS, SEASON_TICKS, BASE_YEAR_TICKS, setCalendarScale } from './types';
-import { COAT_BASE, COAT_RANGE, DIET, IS_PREY, isGrazer, SPECIES, THREAT } from './species';
+import { COAT_BASE, COAT_RANGE, DIET, IS_PREY, isGrazer, REACT, SPECIES, THREAT } from './species';
 import { STRIDE, Vegetation } from './vegetation';
 import { generateWorld, World } from './world';
 
@@ -72,6 +73,8 @@ export class Sim implements SimLike {
   readonly a: Agents;
   /** Canid disease (distemper, mange); inert unless cdvRate or mangeRate is set. */
   readonly dis: Disease;
+  /** Coyotes (S5): pairs, dens, the think and live logic. Inert (never called) while no coyote lives in the valley. */
+  readonly coyotes: Coyotes;
   readonly prey: BucketGrid;
   readonly pred: BucketGrid;
   private preyList = new Int32Array(4096);
@@ -185,7 +188,8 @@ export class Sim implements SimLike {
       event: (kind, sp, x, y, a, b) => this.event(kind, sp, x, y, a, b),
       kill: (i) => this.die(i, 'disease'),
       story: (i, kind) => this.logStory(i, kind),
-      packSerial: (pk) => this.packSerial[pk],
+      packSerial: (pk) => (pk >= COYOTE_GROUP_BASE ? pk : this.packSerial[pk]),
+      group: (i) => (this.a.sp[i] === Sp.Coyote ? this.coyotes.groupOf(i) : this.a.pack[i]),
     });
     this.prey = new BucketGrid(this.world.size, BUCKET);
     this.pred = new BucketGrid(this.world.size, BUCKET);
@@ -203,7 +207,47 @@ export class Sim implements SimLike {
         this.waterGY[c] = -gy / l;
       }
     }
+    this.coyotes = new Coyotes(this.a, this.p, this.env, this.seed, {
+      get tick() { return self.tick; },
+      get size() { return self.world.size; },
+      get pred() { return self.pred; },
+      get prey() { return self.prey; },
+      get predList() { return self.predList; },
+      get predN() { return self.predN; },
+      get pop() { return self.pop; },
+      get groundB() { return self.groundB; },
+      get small() { return self.small; },
+      get dis() { return self.dis; },
+      get cN() { return self.cN; },
+      get cX() { return self.cX; },
+      get cY() { return self.cY; },
+      get cMeat() { return self.cMeat; },
+      get packAlive() { return self.packAlive; },
+      get packDenX() { return self.packDenX; },
+      get packDenY() { return self.packDenY; },
+      get yearTick() { return self.env.yearTick(self.tick); },
+      nearestCarcass: (x, y, maxD, maxAge) => this.nearestCarcass(x, y, maxD, maxAge),
+      isWater: (x, y) => this.world.water[this.veg.cellAt(x, y)] !== 0,
+      grassAt: (x, y) => this.veg.grass[this.veg.cellAt(x, y)],
+      water: (x, y, out) => {
+        const c = this.veg.cellAt(x, y);
+        out[0] = this.waterGX[c]; out[1] = this.waterGY[c]; out[2] = this.world.waterDist[c];
+      },
+      vitals: (i) => this.vitals(i, this.p.species[Sp.Coyote]),
+      birth: (mother, father, x, y) => this.birth(mother, father, Sp.Coyote, x, y),
+      kill: (i) => this.die(i, 'killed'),
+      killedByWolf: (i) => {
+        const before = this.cN;
+        this.die(i, 'killed');
+        // a coyote is not wolf food: the carcass it leaves is for the ravens and the other scavengers
+        if (this.cN > before) this.cKill[this.cN - 1] = 0;
+      },
+      beginEmigration: (i) => this.beginEmigration(i),
+      event: (kind, sp, x, y, a, b) => this.event(kind, sp, x, y, a, b),
+      logStory: (i, kind, a) => this.logStory(i, kind, a),
+    });
     this.populate();
+    this.coyotes.seedFounders();
     if (this.p.openPrairie > 0 || this.p.ravenVagrants > 0) {
       this.region = new RegionalPool(this.seed, COAT_BASE);
       this.region.seedFrom(this.a.sp, this.a.alive, this.a.genes, this.a.hi);
@@ -470,10 +514,12 @@ export class Sim implements SimLike {
     if (t % 50 === 0) {
       this.refreshCoarse();
       if (this.small !== null) this.small.step(t); // the web reads the map just refreshed, so it is never stale
+      if (this.small !== null) this.coyotes.tickPrey(t);
     }
     this.prey.build(this.preyList, this.preyN, a.x, a.y);
     this.pred.build(this.predList, this.predN, a.x, a.y);
     this.updatePacks();
+    if (this.pop[Sp.Coyote] > 0) this.coyotes.step(t);
     if (this.region !== null) this.openPrairieStep(t);
     if (this.dis.on) this.dis.step(this.pop[Sp.Wolf]);
 
@@ -497,6 +543,10 @@ export class Sim implements SimLike {
       } else if (s === Sp.Raven) {
         if ((i + t) % 6 === 0) this.thinkRaven(i, P[s]);
         this.liveRaven(i, P[s]);
+      } else if (s === Sp.Coyote) {
+        if ((i + t) % 3 === 0) this.coyotes.think(i);
+        this.moveGround(i, P[s]);
+        this.coyotes.live(i);
       }
     }
 
@@ -1053,8 +1103,17 @@ export class Sim implements SimLike {
         for (let k = pg.start[b], e = pg.start[b + 1]; k < e; k++) {
           const j = pg.items[k];
           if (!a.alive[j]) continue;
+          // how much this species reacts to that predator: wolves and cougars fully, coyotes weakly (bison not at all)
+          const rx = REACT[s][a.sp[j]];
+          if (rx === 0) continue;
           const dx = a.x[j] - x, dy = a.y[j] - y;
           const d = Math.sqrt(dx * dx + dy * dy);
+          if (rx < 1) {
+            // a minor threat (the coyote): only the young, and a doe with a fawn at heel (calved within the hiding age), pay it any mind
+            if (!juvenile && !(P.hideAge > 0 && a.cooldown[i] > P.birthCooldown - P.hideAge)) continue;
+            // a hidden fawn lies still and does not break cover for a coyote until it is almost on top of it
+            if (P.hideAge > 0 && a.age[i] < P.hideAge && a.state[i] === St.Rest && d > 4) continue;
+          }
           // a predator's coat against the grass changes how far away it is noticed
           const contrast = Math.abs((1 - a.genes[j * NG + G_COAT]) * 0.75 + 0.1 - this.groundB);
           let eff = sight * (0.6 + 0.8 * contrast);
@@ -1068,7 +1127,8 @@ export class Sim implements SimLike {
           if (!hunting && !stalking && d > eff * (P.wariness - 0.15 * bold)) continue;
           if (stalking && d > eff * 0.6) continue;
           // in risky ground (high fear) the herd is on edge and notices more
-          const pd = hunting ? 0.95 : Math.min(0.95, p.detectBase * (1 - d / (eff + 1)) * (stalking ? 0.8 * (1 + p.fearVigilance * fearHere) : 1));
+          let pd = hunting ? 0.95 : Math.min(0.95, p.detectBase * (1 - d / (eff + 1)) * (stalking ? 0.8 * (1 + p.fearVigilance * fearHere) : 1));
+          if (rx < 1) pd *= rx;
           const vig = 1 - Math.pow(1 - pd, 1 + p.vigilancePerNeighbor * n * (p.herdEyes > 0 ? Math.max(0, 1 + p.herdEyes * (a.genes[o + G_HERD] - 1)) : 1));
           if (rng.next() < vig && d < threatD) { threat = j; threatD = d; }
         }
@@ -1618,6 +1678,10 @@ export class Sim implements SimLike {
         if (this.rng.next() < pDie) { this.cStrife++; this.die(i, 'killed'); return; }
         break;
       }
+    }
+    // a coyote within 3 m at a carcass, or inside this wolf's core, may be killed (S5; coyoteKilledByWolf per 20 ticks as a per-tick hazard)
+    if (this.pop[Sp.Coyote] > 0) {
+      this.coyotes.wolfKillCheck(i, pk >= 0 ? this.packDenX[pk] : NaN, pk >= 0 ? this.packDenY[pk] : NaN);
     }
     // pups draw on the pack store
     if (pk >= 0 && a.age[i] < p.wolfPupDenAge && this.packStore[pk] > 0 && a.energy[i] < 0.95) {
@@ -2169,7 +2233,10 @@ export class Sim implements SimLike {
     const p = this.p;
     if (p.ravenVagrants > 0 && t % 50 === 0) this.vagrantRavens();
     if (p.openPrairie <= 0) return;
-    if (t > 0 && t % 100 === 0) this.wolfArrivals();
+    if (t > 0 && t % 100 === 0) {
+      this.wolfArrivals();
+      if (p.coyoteInRate > 0 && this.coyotes.seen) this.coyoteArrivals();
+    }
     const yt = this.env.yearTick(t);
     if (yt === Math.round(2.6 * SEASON_TICKS)) this.pronghornExodus();
     else if (yt === Math.round(0.25 * SEASON_TICKS)) this.pronghornReturn();
@@ -2243,6 +2310,7 @@ export class Sim implements SimLike {
     this.moveGround(i, P);
     if (s === Sp.Wolf) this.liveWolf(i, P);
     else if (s === Sp.Cougar) this.liveCougar(i, P);
+    else if (s === Sp.Coyote) this.coyotes.live(i);
     else this.liveHerbivore(i, P);
   }
 
@@ -2316,6 +2384,27 @@ export class Sim implements SimLike {
     const slots = this.spawnArrivals(Sp.Wolf, 2, bx, by, nx, ny, bx + nx * 35, by + ny * 35, 1, 5);
     for (const i of slots) { a.pack[i] = pk; a.energy[i] = 0.85; }
     this.event('immigrated', Sp.Wolf, bx, by, 2, 0);
+  }
+
+  /**
+   * Every 100 ticks a coyote pair may walk in from the prairie to a free den spot (S5; only after coyotes have lived here, and only
+   * with coyoteInRate > 0). The chance follows how rich the hares are against their long mean, so the valley fills faster in a good
+   * year. They found the pair at the spot at once and walk in from the nearest corridor. Draws from the regional generator.
+   */
+  private coyoteArrivals(): void {
+    const a = this.a, r = this.region!.rng;
+    const idx = this.coyotes.preyIndex();
+    // a valley with almost no coyotes is refilled faster (the rescue effect of the open prairie)
+    const rescue = this.pop[Sp.Coyote] < 4 ? 3 : 1;
+    if (r.next() >= ((this.p.coyoteInRate * 100) / BASE_YEAR_TICKS) * idx * idx * rescue) return;
+    const spot = this.coyotes.arrivalSpot();
+    if (!spot) return;
+    const c = this.world.corridors, k = this.nearestCorridor(spot[0], spot[1]);
+    const bx = c[k * 4], by = c[k * 4 + 1], nx = c[k * 4 + 2], ny = c[k * 4 + 3];
+    const slots = this.spawnArrivals(Sp.Coyote, 2, bx, by, nx, ny, spot[0], spot[1], 1, 5);
+    this.coyotes.adoptPair(slots[0], slots[1], spot[0], spot[1]);
+    for (const i of slots) a.energy[i] = 0.8;
+    this.event('immigrated', Sp.Coyote, bx, by, 2, 0);
   }
 
   /** Pronghorn per unit of browse: summed browse over land cells divided by the pronghorn alive. */
@@ -2521,6 +2610,7 @@ export class Sim implements SimLike {
       row.imm_rabbit += sd.hareArrivals;
       row.imm_prairiedog += sd.dogArrivals;
     }
+    this.coyotes.sampleRow(row);
     row.fires_lightning = this.cLightning;
     row.storm_cells = this.storms ? this.storms.cells.length : 0;
     this.cKills = 0;

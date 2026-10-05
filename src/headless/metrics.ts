@@ -384,6 +384,24 @@ export interface WebMetrics {
   meanTowns: number | null;
 }
 
+/** Coyotes against hares (S5), from the pop_coyote and hare_total columns. Null unless the run had both. */
+export interface MesoMetrics {
+  /** CV of the coyote series after burn-in (raw samples) and of its annual means */
+  coyoteCv: number | null;
+  coyoteCvAnnual: number | null;
+  /** CV of the hare series (raw samples, annual means) */
+  hareCv: number | null;
+  hareCvAnnual: number | null;
+  /** corr(hares at t, coyotes at t + lag) on half-year means, at lags of 0.5, 1, 1.5 and 2 years (null when the series is too short or flat) */
+  corrHalfYear: Array<{ lagYears: number; r: number | null }>;
+  /** the lag (years) with the highest of those, and its correlation */
+  bestLagYears: number | null;
+  bestR: number | null;
+  /** the same on annual means at lags of 1 and 2 years (seasonal pulses removed) */
+  corrAnnual: Array<{ lagYears: number; r: number | null }>;
+  bestAnnualR: number | null;
+}
+
 export interface SeedMetrics {
   seed: number;
   samples: number;
@@ -396,6 +414,8 @@ export interface SeedMetrics {
   shock: ShockInfo | null;
   /** small-prey web counts (null when the run had smallPrey off or an older CSV without the columns) */
   web?: WebMetrics | null;
+  /** coyotes against hares (null when the run had no coyotes or no hare field) */
+  meso?: MesoMetrics | null;
 }
 
 export interface AnalyzeInput {
@@ -542,6 +562,89 @@ export function analyzeSeed(input: AnalyzeInput): SeedMetrics {
     maxGen,
     shock,
     web: analyzeWeb(ticks, cols, totalTicks, lastTick),
+    meso: analyzeMeso(ticks, cols, totalTicks),
+  };
+}
+
+/** Means of consecutive blocks of blockTicks ticks (a block needs at least half its samples; a partial last block is dropped). */
+export function blockMeans(ticks: readonly number[], values: readonly number[], blockTicks: number, fromTick = 0): number[] {
+  const out: number[] = [];
+  let b = Math.floor(fromTick / blockTicks), sum = 0, n = 0;
+  const spacing = sampleSpacing(ticks);
+  const need = Math.max(1, Math.floor(0.5 * (blockTicks / spacing)));
+  const last = ticks.length ? ticks[ticks.length - 1] : 0;
+  for (let i = 0; i < ticks.length; i++) {
+    if (ticks[i] < fromTick) continue;
+    const bi = Math.floor(ticks[i] / blockTicks);
+    if (bi !== b) {
+      if (n >= need) out.push(sum / n);
+      b = bi; sum = 0; n = 0;
+    }
+    if (Number.isFinite(values[i])) { sum += values[i]; n++; }
+  }
+  if (n >= need && (b + 1) * blockTicks <= last + spacing) out.push(sum / n);
+  return out;
+}
+
+/** Pearson correlation of two equal-length series; null when shorter than 6 or either is flat. */
+export function pearson(x: readonly number[], y: readonly number[]): number | null {
+  const n = Math.min(x.length, y.length);
+  if (n < 6) return null;
+  const mx = mean(x.slice(0, n)), my = mean(y.slice(0, n));
+  let sxy = 0, sxx = 0, syy = 0;
+  for (let i = 0; i < n; i++) {
+    sxy += (x[i] - mx) * (y[i] - my);
+    sxx += (x[i] - mx) * (x[i] - mx);
+    syy += (y[i] - my) * (y[i] - my);
+  }
+  if (sxx <= 1e-12 || syy <= 1e-12) return null;
+  return sxy / Math.sqrt(sxx * syy);
+}
+
+/** corr(lead[t], follow[t + lag]) over blocks. lag 0 is the plain correlation. */
+export function laggedCorr(lead: readonly number[], follow: readonly number[], lag: number): number | null {
+  if (lag < 0 || lag >= lead.length) return null;
+  const n = Math.min(lead.length - lag, follow.length - lag);
+  return pearson(lead.slice(0, n), follow.slice(lag, lag + n));
+}
+
+const cvOf = (xs: readonly number[]): number | null => {
+  if (xs.length < 2) return null;
+  const m = mean(xs);
+  return m > 0 ? std(xs) / m : null;
+};
+
+/**
+ * Coyotes against hares (S5): the coyote CV, and how well the coyotes follow the hares: corr(hare_total at t, pop_coyote at t + lag)
+ * on half-year means at lags of 0.5 to 2 years (the plan's gate is the best of those, at least 0.4), and on annual means at 1 and 2 years.
+ * Statistics skip the burn-in. Null when the run had no coyotes or no hare field.
+ */
+export function analyzeMeso(ticks: readonly number[], cols: Record<string, readonly number[]>, totalTicks: number): MesoMetrics | null {
+  const coy = cols['pop_coyote'], hare = cols['hare_total'];
+  if (!coy || !hare || !(coy[0] > 0) || !hare.some((v) => v > 0)) return null;
+  const from = BURN_IN_FRAC * totalTicks;
+  const post = (xs: readonly number[]) => xs.filter((_, i) => ticks[i] >= from);
+  const half = YEAR_TICKS / 2;
+  const cH = blockMeans(ticks, coy, half, from), hH = blockMeans(ticks, hare, half, from);
+  const cA = blockMeans(ticks, coy, YEAR_TICKS, from), hA = blockMeans(ticks, hare, YEAR_TICKS, from);
+  const corrHalfYear = [1, 2, 3, 4].map((k) => ({ lagYears: k / 2, r: laggedCorr(hH, cH, k) }));
+  const corrAnnual = [1, 2].map((k) => ({ lagYears: k, r: laggedCorr(hA, cA, k) }));
+  const best = (xs: Array<{ lagYears: number; r: number | null }>) => {
+    let b: { lagYears: number; r: number } | null = null;
+    for (const x of xs) if (x.r !== null && (b === null || x.r > b.r)) b = { lagYears: x.lagYears, r: x.r };
+    return b;
+  };
+  const bh = best(corrHalfYear), ba = best(corrAnnual);
+  return {
+    coyoteCv: cvOf(post(coy)),
+    coyoteCvAnnual: cvOf(cA),
+    hareCv: cvOf(post(hare)),
+    hareCvAnnual: cvOf(hA),
+    corrHalfYear,
+    bestLagYears: bh ? bh.lagYears : null,
+    bestR: bh ? bh.r : null,
+    corrAnnual,
+    bestAnnualR: ba ? ba.r : null,
   };
 }
 
@@ -607,11 +710,25 @@ export interface SpeciesAggregate {
   meanEmigPerCentury: number | null;
 }
 
+/** Coyotes against hares across seeds (S5). Null when no seed had both. */
+export interface MesoAggregate {
+  seeds: number;
+  medianCoyoteCv: number | null;
+  medianHareCv: number | null;
+  medianHareCvAnnual: number | null;
+  medianBestR: number | null;
+  medianBestLagYears: number | null;
+  medianBestAnnualR: number | null;
+  /** share of seeds (with a correlation) whose best half-year-mean correlation at 0.5 to 2 years is at least 0.4 */
+  bestRAtLeast04Pct: number | null;
+}
+
 export interface Aggregate {
   seeds: number;
   species: Record<string, SpeciesAggregate>;
   maxGen: number | null;
   medianGen: number | null;
+  meso?: MesoAggregate | null;
 }
 
 export function aggregate(seeds: readonly SeedMetrics[]): Aggregate {
@@ -655,7 +772,21 @@ export function aggregate(seeds: readonly SeedMetrics[]): Aggregate {
   }
   const gens = seeds.map((s) => s.maxGen);
   const gv = gens.filter((g): g is number => g !== null);
-  return { seeds: seeds.length, species, maxGen: gv.length ? Math.max(...gv) : null, medianGen: medianOf(gens) };
+  const ms = seeds.map((s) => s.meso).filter((m): m is MesoMetrics => !!m);
+  const withR = ms.filter((m) => m.bestR !== null);
+  const meso: MesoAggregate | null = ms.length
+    ? {
+        seeds: ms.length,
+        medianCoyoteCv: medianOf(ms.map((m) => m.coyoteCv)),
+        medianHareCv: medianOf(ms.map((m) => m.hareCv)),
+        medianHareCvAnnual: medianOf(ms.map((m) => m.hareCvAnnual)),
+        medianBestR: medianOf(ms.map((m) => m.bestR)),
+        medianBestLagYears: medianOf(ms.map((m) => m.bestLagYears)),
+        medianBestAnnualR: medianOf(ms.map((m) => m.bestAnnualR)),
+        bestRAtLeast04Pct: withR.length ? (100 * withR.filter((m) => (m.bestR as number) >= 0.4).length) / withR.length : null,
+      }
+    : null;
+  return { seeds: seeds.length, species, maxGen: gv.length ? Math.max(...gv) : null, medianGen: medianOf(gens), meso };
 }
 
 /** Per-species pass/fail against ACCEPT. A criterion that does not apply is null. */
@@ -759,6 +890,26 @@ export function renderMarkdown(meta: MarkdownMeta, seeds: readonly SeedMetrics[]
       out.push(`| ${[String(sd.seed), String(w.plagues), num(w.plaguesPer100y, 1), String(w.townsFounded), String(w.townsLost), String(w.hareBooms), String(w.hareCrashes), num(w.meanTowns, 1)].join(' | ')} |`);
     }
     out.push('', `Median plagues per 100 years across seeds: ${num(medianOf(per), 1)} (target 1 or more).`, '');
+  }
+
+  if (agg.meso) {
+    const m = agg.meso;
+    out.push('## Coyotes and hares', '');
+    out.push(
+      'Correlation of hares at t with coyotes at t + lag (the coyotes follow the hares), on half-year means at lags of 0.5 to 2 years; the best lag per seed. The annual column uses annual means (the seasonal pulse removed) at 1 and 2 years. The plan\'s gate is a best correlation of at least 0.4 and a coyote CV of at least 0.25.',
+      '',
+    );
+    out.push(`- Coyote CV (median over ${m.seeds} seeds): ${num(m.medianCoyoteCv, 2)}. Hare CV: ${num(m.medianHareCv, 2)} (annual means ${num(m.medianHareCvAnnual, 2)}).`);
+    out.push(`- Best half-year-mean correlation (median): ${num(m.medianBestR, 2)} at a lag of ${num(m.medianBestLagYears, 1)} years; ${num(m.bestRAtLeast04Pct, 0)}% of seeds reach 0.4. Annual-mean best (median): ${num(m.medianBestAnnualR, 2)}.`, '');
+    const mh = ['seed', 'coyote CV', 'hare CV', 'r @0.5y', 'r @1y', 'r @1.5y', 'r @2y', 'annual r @1y', 'annual r @2y'];
+    out.push(`| ${mh.join(' | ')} |`, `| ${mh.map((_, i) => (i === 0 ? '---' : '---:')).join(' | ')} |`);
+    for (const sd of seeds) {
+      const s = sd.meso;
+      if (!s) continue;
+      const r = (k: number) => num(s.corrHalfYear[k]?.r ?? null, 2);
+      out.push(`| ${[String(sd.seed), num(s.coyoteCv, 2), num(s.hareCv, 2), r(0), r(1), r(2), r(3), num(s.corrAnnual[0]?.r ?? null, 2), num(s.corrAnnual[1]?.r ?? null, 2)].join(' | ')} |`);
+    }
+    out.push('');
   }
 
   out.push('## Proposed acceptance (thresholds live in metrics.ts ACCEPT)', '');
@@ -914,6 +1065,27 @@ function selfTest(): boolean {
   check('web: off -> null', analyzeSeed({ seed: 1, ticks, cols: { pop_bison: sine, hare_total: ticks.map(() => 0), plague_events: ticks.map(() => 0) }, totalTicks: total }).web === null);
   const mdw = renderMarkdown({ title: 'selftest', lines: ['a'], hasShock: false }, [analyzeSeed({ seed: 1, ticks, cols: { pop_bison: sine, ...webCols }, totalTicks: total })], aggregate([analyzeSeed({ seed: 1, ticks, cols: { pop_bison: sine }, totalTicks: total })]));
   check('web: markdown section', mdw.includes('## Small-prey web') && !mdw.includes(String.fromCharCode(0x2014)));
+
+  // 11. coyotes against hares: coyotes = hares delayed by 1 year, so the best half-year-mean lag is 1 year with a high correlation
+  {
+    const yr = YEAR_TICKS;
+    const dt2 = yr / 8; // 8 samples per year
+    const n2 = 8 * 60;
+    const t2 = Array.from({ length: n2 }, (_, i) => i * dt2);
+    const hareS = t2.map((_, i) => 1500 + 600 * Math.sin((2 * Math.PI * i) / (8 * 6)) + 120 * Math.sin((2 * Math.PI * i) / 8));
+    const coyS = t2.map((_, i) => 12 + 6 * Math.sin((2 * Math.PI * (i - 8)) / (8 * 6)) + 1.2 * Math.sin((2 * Math.PI * (i - 8)) / 8));
+    const mm = analyzeMeso(t2, { pop_coyote: coyS, hare_total: hareS }, n2 * dt2)!;
+    check('meso: best lag is 1 year', mm.bestLagYears === 1 && (mm.bestR ?? 0) > 0.9, `lag ${mm.bestLagYears} r ${mm.bestR}`);
+    check('meso: coyote CV about 0.35', near(mm.coyoteCv, 0.35, 0.06), `got ${mm.coyoteCv}`);
+    check('meso: annual r at 1 year is high', (mm.corrAnnual[0].r ?? 0) > 0.9, JSON.stringify(mm.corrAnnual));
+    const flatC = t2.map(() => 10);
+    const m0 = analyzeMeso(t2, { pop_coyote: flatC, hare_total: hareS }, n2 * dt2)!;
+    check('meso: flat coyotes give no correlation', m0.bestR === null && m0.coyoteCv === 0, `r ${m0.bestR}`);
+    check('meso: no coyotes -> null', analyzeMeso(t2, { pop_coyote: t2.map(() => 0), hare_total: hareS }, n2 * dt2) === null && analyzeMeso(t2, { pop_coyote: coyS }, n2 * dt2) === null);
+    const sm = analyzeSeed({ seed: 1, ticks: t2, cols: { pop_bison: hareS, pop_coyote: coyS, hare_total: hareS }, totalTicks: n2 * dt2 });
+    const mdm = renderMarkdown({ title: 'selftest', lines: ['a'], hasShock: false }, [sm], aggregate([sm]));
+    check('meso: markdown section', mdm.includes('## Coyotes and hares') && !mdm.includes(String.fromCharCode(0x2014)));
+  }
 
   console.log(failed ? `\n${failed} self-test check(s) FAILED` : '\nall self-tests passed');
   return failed === 0;

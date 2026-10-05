@@ -101,7 +101,7 @@ function townSite(sp: SmallPrey, n: number, avoid: Set<number> = new Set()): num
   }
   ok(allMatch, 'take() success rate matches effort x A x dens / (1 + A x HANDLE x dens) at every density');
   // saturation: the curve flattens toward effort / HANDLE, so a 10x density rise from 40 to 400 adds far less than 10x
-  ok(rates[4] / rates[3] < 3 && rates[3] / rates[0] > 20 && rates[4] < 1 / HANDLE.coyote && rates[4] > 0.7 / HANDLE.coyote, 'success rises steeply at low density, then saturates below effort / HANDLE');
+  ok(rates[4] / rates[3] < 3 && rates[3] / rates[0] > 10 && rates[4] < 1 / HANDLE.coyote && rates[4] > 0.7 / HANDLE.coyote, 'success rises steeply at low density, then saturates below effort / HANDLE');
   ok(near(SmallPrey.successChance('coyote', 1e6, 1), 1 / HANDLE.coyote, 1e-3), 'the asymptote is effort / HANDLE');
   // which animal: hares and dogs in proportion to their preference-weighted share; the gain follows the animal
   sp.hare[c] = 3; sp.dog[c] = 3;
@@ -621,6 +621,27 @@ function townSite(sp: SmallPrey, n: number, avoid: Set<number> = new Set()): num
   const { sim } = web();
   sim.step(1200);
   ok(sim.populations().every((v) => Number.isFinite(v) && v >= 0), 'a year runs clean');
+}
+
+// ---- weather: hareYearVar gives each valley year its own quality for the hares
+{
+  // the same hares, one spring each year with the breeding season on: how much do they grow in years 0..9?
+  const growth = (v: number, seed = 3): number[] => {
+    const { sim, sp } = web({ hareYearVar: v }, seed);
+    const out: number[] = [];
+    for (let y = 0; y < 10; y++) {
+      sp.hare.fill(0.2);
+      const before = sp.hareTotal();
+      runWeb(sim, sp, y * YEAR_TICKS + 2 * STEP_TICKS, 4, 0.5);
+      out.push(sp.hareTotal() / before);
+    }
+    return out;
+  };
+  const flat = growth(0), wet = growth(0.9), again = growth(0.9), other = growth(0.9, 4);
+  ok(Math.max(...flat) - Math.min(...flat) < 0.02, 'with hareYearVar 0 every year grows the same');
+  ok(Math.max(...wet) - Math.min(...wet) > 0.1, 'with hareYearVar 0.9 the years differ');
+  ok(wet.every((g, i) => g === again[i]), 'the same seed has the same weather');
+  ok(wet.some((g, i) => g !== other[i]), 'a different seed has different weather');
 }
 
 if (failures) {
