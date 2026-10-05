@@ -2,34 +2,60 @@
 
 *(Updated 11:57 Sunday. I keep working until the deadline in `.claude/hooks/run_until.txt` (Sunday 12:00); this file is refreshed at every milestone.)*
 
-## v2 progress (Track R, local; updated 2026-10-04 ~18:00)
-Everything below this section is the v1 report. v2 work is on `main` and not deployed yet (M1 deploys). Run it locally with `npm run dev`.
+## v2 alpha (M1, deployed 2026-10-05 00:55)
+**Play it:** https://tallgrass.stewartgregerson.workers.dev. The live check passed at 00:56: no errors, 60 fps at 1600x900. The title card shows on first load; click **Watch**. Everything below the v2 sections is the v1 report.
 
-**Done and merged:**
-- R0, the render baseline: GPU bench `tools/gpubench.mjs` (1440p baseline: wide 10.6, low 16.0, herd 11.0, top 9.8, winter 10.1, night 12.8 ms), animals in hill shadow, registry-safe render and UI for new species, JPEG stills.
-- Concept bookmark `__concept()` plus the Gemini judge `tools/concept_compare.py`. The baseline scored 4/10.
-- Tone mapping stays ACES. Neutral tied it on the score and pushed the sky orange; AgX washed everything grey (`review/wip/R0/tonemap_sheet.jpg`).
-- R2 items 0 to 4, the concept look:
-  - a warm sun-side haze and horizon glow
-  - creek and ponds that mirror the sky and read silver from the drone
-  - golden cured uplands with sun-facing bands, with green kept to the creek ribbon
-  - drought ground that goes pale straw
-  - Compare `review/wip/R2/merged_concept.jpg` with `review/wip/R0/concept_baseline.jpg`. The Gemini judge still says 4/10 for every build, so read that score as noise; its remaining complaints are tree groves, shadow contrast and the camera pitch.
-- R1 items 1 to 3, close-range motion: stance feet now lock and legs reach the ground on slopes. Stance slip went from 4 to 31% to under 5% (`npx tsx dev/footslip.ts`; strips in `review/wip/R1/`).
-- R14, music and new sounds: 5 ElevenLabs music cues (dawn, day, tension, night, storm), crossfaded by a tension index from chases, kills and storms. Also new: a bison rut bellow, crane flyover calls, blizzard wind and grasshoppers. **Needs your ear**: I can only check loudness and loop seams, not how it sounds.
-- Track S, merged from the cloud: species registry, golden hash and `npm test`, the lost-events fix, share codes, decade lines, open prairie, and canid disease. The last two are off by default.
+**Look at first:**
+1. The title card, then Watch. The golden-hour valley now has warm sun-side haze, a creek that mirrors the sky, golden cured uplands, drifting cloud shadows and god rays.
+2. Menu, then **Field guide**: photograph behaviours. Menu, then **Settings**: separate volumes for ambience, music and narrator. The **Share** icon (top right) copies a link that replays your valley exactly.
+3. Follow a wolf (click it, then F). Feet now lock to the ground and legs reach it on slopes. Kills show a lunge, a hold and tug, pack mates at different contact points, feeders in slots and ravens hopping in.
+4. Fast-forward to 10x and 100x. Animals bound with a slow long stride and kick up dust, and the light goes soft so the shadows stop strobing.
+5. Wait for dawn after a calm night: mist pools in the creek valley. Winter brings snow that buries the grass. Night keeps the herds readable.
+6. Music: five ElevenLabs cues that crossfade with the tension of the hunt. **Please listen**: I could only check loudness and loop seams, not taste.
 
-**In progress:**
-- Wolf kills, feeding and ravens at carcasses (R1 items 4 to 6).
-- God rays, falling snow and dawn fog (R2 items 6 to 8).
-- The play UI: title card, settings, valley setup, field guide and share button (R12).
-- The four 32-world screens for the v6 ecology adoption (S3), on this machine's CPU.
+**Built but off by default** (each turns on only after 32-world screens and a 1,000-generation acceptance):
+- open prairie with migration in and out, vagrant ravens, distemper and mange
+- jackrabbits, prairie dog towns and plague; coyotes
+- storm cells with lightning fires
+- You can try them now through New valley. Track S flips them on as each config passes.
 
-**Watch:** midday autumn now looks very ochre and hazy. It goes into the next review round.
+**Stability, from actual runs:**
+- **v6E acceptance** (`review/stability/v6E-3bb97a5`, 20 worlds x 1,000 bison generations, about 1,340 years):
+  - every species alive in 20 of 20, never near zero
+  - wolf CV 0.24 (v1: about 0.1), raven CV 0.15
+  - wolves follow bison by 1 year (correlation 0.69)
+- **Still running:** the v6E shock suite and the v6G acceptance (G adds spring-only births and cuts pronghorn starvation from 49% to 33%).
+- The live game still runs v5 ecology until Track S flips the defaults.
 
-**v2 API spend so far:**
-- Gemini: about 12 concept-judge calls, about $0.12.
-- ElevenLabs: 6 music and 4 sound-effect generations, about 3.8k credits. About 22k credits remain on the pay-as-you-go account.
+**Reviews:**
+- Round 13 blind critic: visual 7, life and motion 6.
+- Round 14 Gemini video: **life and motion 4** (v1: 1 to 3), visual 7, UI 8. Its fixes are in: time-lapse gait, night animals, shadow strobe, rain depth, contact shadows.
+- The Gemini concept judge sits at 4/10 whatever changes, so I use its difference list, not its score.
+
+**Decisions you might overrule** (DECISIONS.md):
+- I kept ACES tone mapping.
+- I stayed on Three.js rather than an engine port (your quality-over-shareability ruling is logged; revisit with a side-by-side).
+- Tree bark is now grey-brown (it was crushed to black by ambient occlusion).
+- Copper bluestem fades out in early winter.
+
+**Blocked or deferred:**
+- Camera collision with trees.
+- A family tree panel (waits for its UI).
+- Tree groves and canopy volume (R11).
+- A grey band at the cloud base in storm drone views.
+
+**v2 spend:**
+- Gemini: about 20 concept-judge calls, 1 video critique and about 32 audio checks, about $0.40.
+- ElevenLabs: 6 music generations, 22 sound effects and 14 narrator lines, about 4.3k credits of the pay-as-you-go balance.
+
+**Next 5:**
+1. Coyote model and mange coat (in progress).
+2. Merge the v6 default flip and redeploy.
+3. Tree groves (R11).
+4. Animal fidelity (R7).
+5. Camera collision.
+
+Making-of page: https://claude.ai/artifact/7jPHUFvbzTv6AUz5UCA3Mu (version 10, now with the v2 images).
 
 ## How to run it (one step)
 Open **https://tallgrass.stewartgregerson.workers.dev** in Chrome or Edge. Click once anywhere to turn on sound. (The live build is redeployed after each verified milestone; the time of the last deploy is in the line below.)
