@@ -223,3 +223,16 @@ Folder `review/round-13/` (default-world stills at main 77cfda6, the concept vie
 | 8 | Potato rocks, hard map edge | Defer | Rocks to R7/R11 asset pass. |
 | 9 | Snow does not bury grass; same bare trees | Fix with 6 (snow) / defer trees to R11 | |
 | 10 | Night too dark on animals | Fix (small) | Moonlight rim on animals. |
+
+## Round 14 (Gemini video, M1, 2026-10-04 22:12) -> `review/round-14-video/reel.gemini.md`
+Hunt-heavy v2 timeline (`node tools/video.mjs --set v2`), main at 6c94a83, gemini-3.1-pro-preview. Scores: visual 7, readability 6, **life and motion 4** (v1 rounds: 1 to 3), ecosystem 7, UI 8, keep watching 6.
+
+| # | Issue | Triage | Reason / outcome |
+|---|---|---|---|
+| 1 | Animals slide like pucks at 10x and 100x | Fix (M1) | Known from the rig (time-lapse not gated); a time-lapse gait look (lower cadence, longer strides, motion smear) instead of 12 Hz leg buzz |
+| 2 | Night flattens animals (also round 13 #10) | Fix (M1) | Moonlight rim on animals |
+| 3 | Wolves seem to hover at 1x | Investigate with 1 | IK is on within 45 m; check grass occlusion and the far path |
+| 4 | Camera clips trees, stutter in a pan | Defer (R15/R17) | Camera collision is its own WP |
+| 5 | Hard shadows strobe at 100x | Fix (M1) | Soften sun shadows with time speed |
+| 6 | Chronicle text small | Defer to R12 settings (UI scale exists) | |
+| 7 | Rain looks like a flat overlay | Fix if cheap (M1) | Depth layers for the rain streaks |

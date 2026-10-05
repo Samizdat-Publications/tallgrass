@@ -24,6 +24,19 @@ const SEGMENTS = [
   [12, "window.__overlay?.setMode('none'); window.__speed(1); document.dispatchEvent(new KeyboardEvent('keydown', { key: 'c', bubbles: true }))"],
 ];
 
+// --set v2: a hunt-heavy timeline for the life-and-motion review (R1 gate): close follow of a chasing wolf, a kill, ravens
+const V2 = [
+  [4, 'window.__speed(1); window.__focusHerd(); window.__engine.cam.setView({ distance: 45, pitchDeg: 18 })'],
+  [6, 'window.__speed(10)'],
+  [22, "window.__speed(1); (() => { const c = window.__find(1, 5).concat(window.__find(1, 10)).concat(window.__find(1)); if (c.length) { window.__followId(c[0]); window.__engine.cam.setView({ distance: 28, pitchDeg: 16 }); } })()"],
+  [20, "(() => { const c = window.__find(1, 6).concat(window.__find(1, 5)); if (c.length) { window.__followId(c[0]); window.__engine.cam.setView({ distance: 22, pitchDeg: 20 }); } })()"],
+  [14, "(() => { const r = window.__find(2, 6).concat(window.__find(2)); if (r.length) { window.__followId(r[0]); window.__engine.cam.setView({ distance: 18, pitchDeg: 18 }); } })()"],
+  [14, "window.__followId(null); (() => { const p = window.__find(3); if (p.length) { window.__followId(p[0]); window.__engine.cam.setView({ distance: 35, pitchDeg: 14 }); } })()"],
+  [16, "window.__followId(null); window.__concept && window.__concept(); window.__speed(1)"],
+  [14, "document.dispatchEvent(new KeyboardEvent('keydown', { key: 'c', bubbles: true })); window.__speed(10)"],
+];
+if (arg('set', '') === 'v2') SEGMENTS.splice(0, SEGMENTS.length, ...V2);
+
 const kill = setTimeout(() => { console.error('video: hard timeout'); process.exit(2); }, 12 * 60 * 1000);
 const server = await createServer({ configFile: resolve('vite.config.ts'), server: { port: 5300 + Math.floor(Math.random() * 600), strictPort: false, hmr: false }, logLevel: 'error' });
 await server.listen();
