@@ -66,6 +66,13 @@ export interface AnimParams {
    * the freeze before the rush (aFx2.y, 0..1) the haunches gather and wiggle. 0 or unset: no.
    */
   stalk?: number;
+  /**
+   * R8 behaviour library (bison): the species reads the behaviour weights the animal layer packs into aFx2 (wallow, rub, spar, hop) and the extra
+   * attribute aFx3 (snow dig, bellow, calf play, spar phase), see models/shader.ts. Unset: the shader has none of that code.
+   */
+  behave?: boolean;
+  /** R8 pronghorn: aFx2.x is the rump flare weight on alarm (the white patch spreads and brightens). */
+  flare?: boolean;
   /** 0 quadruped, 1 hopper, 2 bird. */
   kind: 0 | 1 | 2;
   /** Height of the pivot used for body pitch. */

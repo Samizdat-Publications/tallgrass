@@ -5,9 +5,13 @@
 //     and the layer makes its own at dusk when no audio has called for a while), a long note then yips
 //   - the wary head-up glance of a coyote at a carcass, every 2 to 3 s
 //   - migrant columns: F_MIGRANT animals that travel together are drawn in a short file (display offsets only)
+//   - R8: wolves howl at dusk and night the same way (a pack at rest sits up together for exactly as long as the audio's howl, with no yips),
+//     pups romp near their den (a play bow, then loops of the den with pounces) in spring and summer, and an idle adult now and then sniffs
+//     the ground and cocks a hind leg to scent mark
 // All of it is display only: nothing here is seen by the sim, and nothing touches the sim's random streams. State is kept per
 // animal slot (the animal layer's Slots index), reset when a slot is handed to a new animal.
-import { AGENT_STRIDE, F_MANGE, F_MIGRANT, Sp, St } from '../sim/types';
+import { AGENT_STRIDE, F_JUVENILE, F_MANGE, F_MIGRANT, Sp, St } from '../sim/types';
+import { sessionAt } from './behaviours';
 
 const clamp = (x: number, a: number, b: number): number => (x < a ? a : x > b ? b : x);
 const smoothstep = (a: number, b: number, x: number): number => {
@@ -15,6 +19,19 @@ const smoothstep = (a: number, b: number, x: number): number => {
   return t * t * (3 - 2 * t);
 };
 const hash01 = (n: number): number => (Math.imul(n | 0, 0x9e3779b1) >>> 8) / 16777216;
+
+/** R8 pup play: the play bow, then PLAY_LAPS loops of a ring of radius PLAY_R through the spot it stood on, then it settles. */
+export const PLAY_DUR = 8;
+const PLAY_BOW = 1.4;
+const PLAY_ROMP = 6;
+const PLAY_LAPS = 3;
+/** Radius of the ring a pup romps on (drawn scale 1, m): the ring runs through its spot, so it strays 2 R from it at most. */
+const PLAY_R = 1.6;
+/** R8 scent marking: sniff the ground, then cock a hind leg. */
+export const MARK_DUR = 4.4;
+const MARK_SNIFF = 1.5;
+/** A wolf chorus takes in resting wolves within this many metres of its site (a pack lies close); a coyote chorus the radius below. */
+const CHOIR_R_WOLF = 48;
 
 /** The mousing leap: airborne time, and the pin of the forefeet after it (s). */
 export const LEAP_TIME = 1.2;
@@ -55,6 +72,8 @@ export interface CanidIn {
   clock: number;
   /** Drawn scale (model metres to world). */
   vs: number;
+  /** Valley season 0..4 (pups romp in spring and summer, 0 to 2). */
+  season: number;
 }
 
 export interface CanidOut {
@@ -76,15 +95,35 @@ export interface CanidOut {
   pack: number;
   /** Gait speed (m/s on screen) to credit while a display offset melts away, so the feet step with the slide. */
   spd: number;
+  /** R8: a pup is romping (the layer stands it up, head up), it is sniffing the ground before it marks (head down), the cocked-leg weight 0..1. */
+  play: boolean;
+  sniff: boolean;
+  mark: number;
+  /** R8: the heading the pup runs its ring at (rad), valid while `play` and `moving`; and whether it is on the move round the ring. */
+  face: number;
+  moving: boolean;
+  /** R8: a pounce of the play came down this frame (a puff of dust). */
+  pounced: boolean;
 }
 
 export function newOut(): CanidOut {
-  return { ox: 0, oz: 0, lift: 0, pitch: 0, air: 0, landed: false, leapStarted: false, howl: 0, howlWant: false, pack: 0, spd: 0 };
+  return { ox: 0, oz: 0, lift: 0, pitch: 0, air: 0, landed: false, leapStarted: false, howl: 0, howlWant: false, pack: 0, spd: 0, play: false, sniff: false, mark: 0, face: 0, moving: false, pounced: false };
 }
 
 export function newIn(): CanidIn {
-  return { slot: 0, id: 0, sp: 0, state: 0, spd: 0, flags: 0, energy: 1, x: 0, z: 0, h: 0, dt: 0, running: 0, timeScale: 1, clock: 0, vs: 1 };
+  return { slot: 0, id: 0, sp: 0, state: 0, spd: 0, flags: 0, energy: 1, x: 0, z: 0, h: 0, dt: 0, running: 0, timeScale: 1, clock: 0, vs: 1, season: 1.2 };
 }
+
+/** One chorus: where it is, the clock window it runs in, when the audio last asked for one and when the layer may next make one of its own. */
+interface Choir {
+  x: number;
+  z: number;
+  t0: number;
+  t1: number;
+  lastAudio: number;
+  nextSelf: number;
+}
+const newChoir = (nextSelf: number): Choir => ({ x: 0, z: 0, t0: 0, t1: -1, lastAudio: -1e9, nextSelf });
 
 export class CanidState {
   private cap = 0;
@@ -112,16 +151,19 @@ export class CanidState {
   /** Slots with a nonzero column target, so they can be cleared at the next plan. */
   private colSlots: number[] = [];
 
-  // the chorus: where, from when to when (clock seconds), and when the audio last asked for one
-  private choirX = 0;
-  private choirZ = 0;
-  private choirT0 = 0;
-  private choirT1 = -1;
-  private lastAudio = -1e9;
-  private nextSelf = 20;
+  // R8: play and scent marking, eased: the offset of a pup on its ring (it melts away if the session is cut short), and the cocked-leg weight
+  private qx = new Float32Array(0);
+  private qz = new Float32Array(0);
+  private mark = new Float32Array(0);
+  private lastHop = new Float32Array(0);
+
+  // the choruses (coyote and wolf): where, from when to when (clock seconds), and when the audio last asked for one
+  private choirC: Choir = newChoir(20);
+  private choirW: Choir = newChoir(32);
   /** A chorus is on (clock inside its window), for the audio and the field notes. */
-  choirOn(clock: number): boolean {
-    return clock >= this.choirT0 && clock <= this.choirT1 + 1;
+  choirOn(clock: number, wolf = false): boolean {
+    const c = wolf ? this.choirW : this.choirC;
+    return clock >= c.t0 && clock <= c.t1 + 1;
   }
 
   private ensure(n: number): void {
@@ -152,6 +194,10 @@ export class CanidState {
     this.tcz = g(this.tcz, Float32Array);
     this.ax = g(this.ax, Float32Array);
     this.az = g(this.az, Float32Array);
+    this.qx = g(this.qx, Float32Array);
+    this.qz = g(this.qz, Float32Array);
+    this.mark = g(this.mark, Float32Array);
+    this.lastHop = g(this.lastHop, Float32Array, -1);
     this.cap = c;
   }
 
@@ -168,6 +214,9 @@ export class CanidState {
     this.tcx[slot] = this.tcz[slot] = 0;
     this.ax[slot] = this.az[slot] = 0;
     this.landedFlag[slot] = 0;
+    this.qx[slot] = this.qz[slot] = 0;
+    this.mark[slot] = 0;
+    this.lastHop[slot] = -1;
   }
 
   /** The display offset applied to this animal's position last frame (the layer takes it out of its path smoothing). */
@@ -182,22 +231,24 @@ export class CanidState {
   // the chorus
 
   /** Start a chorus at a site for `seconds` of clock time (the audio calls this when a coyote clip starts; the layer calls it itself at dusk). */
-  startChorus(x: number, z: number, seconds: number, clock: number, fromAudio: boolean): void {
-    this.choirX = x;
-    this.choirZ = z;
-    this.choirT0 = clock;
-    this.choirT1 = clock + clamp(seconds, 2.5, 14);
-    if (fromAudio) this.lastAudio = clock;
+  startChorus(x: number, z: number, seconds: number, clock: number, fromAudio: boolean, wolf = false): void {
+    const c = wolf ? this.choirW : this.choirC;
+    c.x = x;
+    c.z = z;
+    c.t0 = clock;
+    c.t1 = clock + clamp(seconds, 2.5, 14);
+    if (fromAudio) c.lastAudio = clock;
   }
 
-  /** At dusk, with no audio calling for a while, the layer makes a chorus of its own now and then. `pick` finds a resting coyote's place. */
-  maybeSelfChorus(clock: number, dusk: boolean, timeScale: number, pick: () => { x: number; z: number } | null): boolean {
-    if (!dusk || !(timeScale > 0) || timeScale > 10 || clock < this.nextSelf || this.choirOn(clock)) return false;
-    if (clock - this.lastAudio < AUDIO_QUIET) return false;
+  /** At dusk, with no audio calling for a while, the layer makes a chorus of its own now and then. `pick` finds a resting canid's place. */
+  maybeSelfChorus(clock: number, dusk: boolean, timeScale: number, pick: () => { x: number; z: number } | null, wolf = false): boolean {
+    const c = wolf ? this.choirW : this.choirC;
+    if (!dusk || !(timeScale > 0) || timeScale > 10 || clock < c.nextSelf || this.choirOn(clock, wolf)) return false;
+    if (clock - c.lastAudio < AUDIO_QUIET) return false;
     const site = pick();
-    this.nextSelf = clock + 30 + 40 * Math.random();
+    c.nextSelf = clock + (wolf ? 40 + 50 * Math.random() : 30 + 40 * Math.random());
     if (!site) return false;
-    this.startChorus(site.x, site.z, 6 + 3 * Math.random(), clock, false);
+    this.startChorus(site.x, site.z, (wolf ? 5 : 6) + 3 * Math.random(), clock, false, wolf);
     return true;
   }
 
@@ -216,6 +267,7 @@ export class CanidState {
     this.ensure(s + 1);
     const dt = i.running, ts = i.timeScale;
     o.lift = 0; o.pitch = 0; o.air = 0; o.landed = false; o.leapStarted = false; o.spd = 0; o.howlWant = false;
+    o.play = false; o.sniff = false; o.moving = false; o.pounced = false;
 
     // mange: severity from how run down it is (the snapshot only carries the flag), eased so it never pops
     const mg = i.flags & F_MANGE ? clamp(0.5 + 0.5 * (1 - i.energy), 0.35, 1) : 0;
@@ -277,42 +329,116 @@ export class CanidState {
         }
       }
 
-      // ---- the chorus: a resting coyote near the site sits up for the length of the call
+    }
+    const wolf = i.sp === Sp.Wolf;
+    if (coyote || wolf) {
+      // ---- the chorus: a resting coyote or wolf near the site sits up for the length of the call (a wolf pack howls on one long note with
+      // no yips, the pack joining over a couple of seconds, the leader first; a coyote chorus is a long note then yips)
       const rest = (i.state === St.Rest || i.state === St.Idle) && i.spd < 0.3;
+      const ch = wolf ? this.choirW : this.choirC;
       let want = false;
       let yipping = false;
-      if (rest && this.choirT1 > this.choirT0) {
-        const dx = i.x - this.choirX, dz = i.z - this.choirZ;
-        if (dx * dx + dz * dz < CHOIR_R * CHOIR_R) {
-          const t0 = this.choirT0 + hash01(i.id * 13 + 5) * 1.1;
-          const t1 = this.choirT1 + (hash01(i.id * 17 + 3) - 0.5) * 0.8;
+      if (rest && ch.t1 > ch.t0) {
+        const dx = i.x - ch.x, dz = i.z - ch.z;
+        const rad = wolf ? CHOIR_R_WOLF : CHOIR_R;
+        if (dx * dx + dz * dz < rad * rad) {
+          const t0 = ch.t0 + hash01(i.id * 13 + 5) * (wolf ? 2.4 : 1.1);
+          const t1 = ch.t1 + (hash01(i.id * 17 + 3) - 0.5) * (wolf ? 1.4 : 0.8);
           if (i.clock >= t0 && i.clock <= t1) {
             want = true;
-            yipping = i.clock > t0 + 0.62 * (t1 - t0);
+            yipping = !wolf && i.clock > t0 + 0.62 * (t1 - t0);
           }
         }
       }
       o.howlWant = want;
-      this.howl[s] += ((want ? 1 : 0) - this.howl[s]) * (1 - Math.exp(-dt / 0.6));
+      this.howl[s] += ((want ? 1 : 0) - this.howl[s]) * (1 - Math.exp(-dt / (wolf ? 0.85 : 0.6)));
       if (this.howl[s] < 0.003) this.howl[s] = 0;
       if (yipping && this.howl[s] > 0.9) yip = 0.6 + 0.4 * hash01(i.id * 19 + 1);
     }
+
+    // ---- R8 pup play and scent marking (both only while the sim has the animal standing about, and not while a chorus has it sitting up)
+    let hopAir = 0;
+    let markT = 0;
+    const standing = (i.state === St.Idle || i.state === St.Rest) && i.spd < 0.3 && ts > 0 && ts <= 3 && !(this.howl[s] > 0.05 || o.howlWant);
+    const pup = (i.flags & F_JUVENILE) !== 0;
+    let qOn = false;
+    if (pup && standing && i.season >= 0 && i.season <= 2.0) {
+      const tau = sessionAt(i.id, 1, i.clock, 16, 34, 0.7, PLAY_DUR);
+      if (tau >= 0) {
+        qOn = true;
+        o.play = true;
+        const vs = i.vs;
+        const rr = Math.min(1.2, PLAY_R * Math.max(0.6, vs / 1.35));
+        const bow = smoothstep(0, 0.35, tau) * (1 - smoothstep(PLAY_BOW - 0.4, PLAY_BOW, tau));
+        o.pitch += -0.34 * bow;
+        // the romp: PLAY_LAPS loops of a ring through the spot, eased in and out, the way round and the side of the ring its own
+        const rt = clamp((tau - PLAY_BOW) / PLAY_ROMP, 0, 1);
+        const e = rt * rt * (3 - 2 * rt);
+        const dir = hash01(i.id * 29 + 7) > 0.5 ? 1 : -1;
+        const th0 = hash01(i.id * 41 + Math.floor(i.clock / 40)) * Math.PI * 2;
+        const phi = dir * PLAY_LAPS * Math.PI * 2 * e;
+        const a = th0 + Math.PI + phi;
+        this.qx[s] = rr * (Math.cos(th0) + Math.cos(a));
+        this.qz[s] = rr * (Math.sin(th0) + Math.sin(a));
+        const running = rt > 0.02 && rt < 0.98;
+        if (running) {
+          const dphi = dir * PLAY_LAPS * Math.PI * 2 * 6 * rt * (1 - rt) / PLAY_ROMP;
+          o.spd = Math.abs(dphi) * rr;
+          o.face = a + dir * Math.PI * 0.5;
+          o.moving = true;
+          // pounces: a hop of 0.4 s every 1.1 s or so, in the air with the feet tucked, nose up at take off and down at the landing
+          const hp = (tau - PLAY_BOW) / 1.1 + hash01(i.id * 53 + 3);
+          const hu = (hp - Math.floor(hp)) * 1.1 / 0.4;
+          if (hu < 1 && rt > 0.08 && rt < 0.9) {
+            const lift = 0.3 * vs * Math.sin(Math.PI * hu);
+            o.lift += lift;
+            o.pitch += 0.3 * Math.cos(Math.PI * hu);
+            hopAir = smoothstep(0.1, 0.4, Math.sin(Math.PI * hu));
+            this.lastHop[s] = hu;
+          } else if (this.lastHop[s] >= 0) { this.lastHop[s] = -1; o.pounced = true; }
+        }
+      }
+    }
+    if (!qOn) {
+      // a session cut short (it walked off): the ring's offset melts away
+      const d = Math.hypot(this.qx[s], this.qz[s]);
+      if (d > 1e-4) {
+        const rate = ts > 3 ? 50 : 1.8;
+        const kq = Math.min(d, rate * (ts > 3 ? i.dt : dt));
+        this.qx[s] -= (this.qx[s] / d) * kq;
+        this.qz[s] -= (this.qz[s] / d) * kq;
+        if (ts <= 3) o.spd = Math.max(o.spd, rate);
+      }
+      this.lastHop[s] = -1;
+    }
+    if (!pup && this.leapT[s] < 0 && standing && i.state === St.Idle && (coyote || wolf) && !qOn) {
+      const tau = sessionAt(i.id, 2, i.clock, 40, 90, 0.5, MARK_DUR);
+      if (tau >= 0) {
+        o.sniff = tau < MARK_SNIFF + 0.2;
+        markT = smoothstep(MARK_SNIFF - 0.1, MARK_SNIFF + 0.35, tau) * (1 - smoothstep(MARK_DUR - 0.7, MARK_DUR - 0.25, tau));
+      }
+    }
+    this.mark[s] += (markT - this.mark[s]) * (1 - Math.exp(-dt / 0.12));
+    if (this.mark[s] < 0.004) this.mark[s] = 0;
+    o.mark = this.mark[s];
+    if (o.air < hopAir) o.air = hopAir;
 
     // ---- migrant column (any species the plan gave a target to) and what ends up applied this frame
     const k = 1 - Math.exp(-i.dt / 1.4);
     this.cx[s] += (this.tcx[s] - this.cx[s]) * k;
     this.cz[s] += (this.tcz[s] - this.cz[s]) * k;
     if (Math.abs(this.cx[s]) + Math.abs(this.cz[s]) < 1e-3 && this.tcx[s] === 0 && this.tcz[s] === 0) { this.cx[s] = 0; this.cz[s] = 0; }
-    o.ox = this.lx[s] + this.cx[s];
-    o.oz = this.lz[s] + this.cz[s];
+    o.ox = this.lx[s] + this.cx[s] + this.qx[s];
+    o.oz = this.lz[s] + this.cz[s] + this.qz[s];
     this.ax[s] = o.ox;
     this.az[s] = o.oz;
 
-    // ---- pack for the shader
-    o.howl = coyote ? this.howl[s] : 0;
+    // ---- pack for the shader: air + 16 * howl + 256 * mark, and the mange severity in the fraction
+    o.howl = coyote || wolf ? this.howl[s] : 0;
     const airQ = Math.round(clamp(o.air, 0, 1) * 15);
     const howlQ = yip > 0 ? 11 + Math.round(4 * yip) : Math.round(clamp(o.howl, 0, 1) * 10);
-    o.pack = airQ + 16 * clamp(howlQ, 0, 15) + mangeFrac;
+    const markQ = Math.round(clamp(o.mark, 0, 1) * 15);
+    o.pack = airQ + 16 * clamp(howlQ, 0, 15) + 256 * markQ + mangeFrac;
   }
 
   // ---------------------------------------------------------------------------------------------------------

@@ -126,6 +126,15 @@ export class AudioDirector {
    */
   coyoteSite: (() => { x: number; z: number } | null) | null = null;
   onCoyoteCall: ((c: { x: number; z: number; seconds: number; howl: boolean }) => void) | null = null;
+  /**
+   * R8: the same for the wolves' howl and the bulls' bellow (the existing wolf and rut clips). `wolfSite` returns where a resting wolf near the
+   * camera lies (or null), `bellowSite` where a bull stands; the clip then comes from there, and `onWolfCall` / `onBellowCall` are told where and
+   * for how many seconds it lasts, so that pack sits up and howls (or that bull raises its head and bellows) for exactly as long as the sound does.
+   */
+  wolfSite: (() => { x: number; z: number } | null) | null = null;
+  onWolfCall: ((c: { x: number; z: number; seconds: number }) => void) | null = null;
+  bellowSite: (() => { x: number; z: number } | null) | null = null;
+  onBellowCall: ((c: { x: number; z: number; seconds: number }) => void) | null = null;
 
   private ctx: AudioContext | null = null;
   private master: GainNode | null = null;
@@ -651,7 +660,23 @@ export class AudioDirector {
     switch (k) {
       case 'wolf': {
         const pack = Math.random() < (s.nearby.wolf >= 3 ? 0.45 : 0.25);
-        this.play(pack ? 'wolfPack' : 'wolfSingle', { gain: rule.gain * jitter, rate, distance, pan });
+        const clip = pack ? 'wolfPack' : 'wolfSingle';
+        // (R8) from where a resting wolf near the camera lies, if there is one: that pack sits up and howls for as long as the clip lasts
+        const site = this.wolfSite ? this.wolfSite() : null;
+        if (site) {
+          const seconds = this.playAt(clip, site.x, 0.8, site.z, { gain: rule.gain * jitter, rate });
+          if (seconds > 0) {
+            if (this.onWolfCall) {
+              try {
+                this.onWolfCall({ x: site.x, z: site.z, seconds });
+              } catch (err) {
+                console.warn('[audio] onWolfCall handler threw: ' + (err instanceof Error ? err.message : String(err)));
+              }
+            }
+            break;
+          }
+        }
+        this.play(clip, { gain: rule.gain * jitter, rate, distance, pan });
         break;
       }
       case 'raven':
@@ -666,7 +691,18 @@ export class AudioDirector {
       case 'rut': {
         // a bull's bellow, now and then answered by a second
         const o = { gain: rule.gain * jitter, distance, pan };
-        const d1 = this.play('rut', { ...o, rate: rand(0.88, 1.04) });
+        // (R8) from a bull standing near the camera, if there is one: it raises its head and bellows for as long as the clip lasts
+        const site = this.bellowSite ? this.bellowSite() : null;
+        const d1 = site
+          ? this.playAt('rut', site.x, 1.5, site.z, { gain: rule.gain * jitter, rate: rand(0.88, 1.04) })
+          : this.play('rut', { ...o, rate: rand(0.88, 1.04) });
+        if (site && d1 > 0 && this.onBellowCall) {
+          try {
+            this.onBellowCall({ x: site.x, z: site.z, seconds: d1 });
+          } catch (err) {
+            console.warn('[audio] onBellowCall handler threw: ' + (err instanceof Error ? err.message : String(err)));
+          }
+        }
         if (d1 > 0 && Math.random() < 0.35) this.play('rut', { ...o, gain: o.gain * 0.6, distance: clamp01(distance + 0.25), pan: -pan, delay: d1 * rand(0.6, 1.1), rate: rand(0.8, 0.95) });
         break;
       }
