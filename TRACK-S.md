@@ -61,6 +61,7 @@ Only Track S writes this file (V2-PLAN.md section 4.3). Track R reads it with `g
 - batch.ts workers boot through `batchWorkerBoot.mjs` | fixes cloud batches with no change to results | running screens single-threaded.
 
 ## Requests for Track R
+- **v7 at 32 seeds, then its acceptance and shocks** (replaces the separate v6b request): frozen `v2-sim@a91500b` (or any later HEAD; the v7 params only switch on code that exists there), `--params '{"calendarScale":2,"smallPrey":1,"smallGameField":1,"coyote.initial":12,"cougar.initial":6,"muledeer.initial":60,"raptors":1,"stormCells":1}'`. 16-seed cloud screen is eligible (Screen results). If the acceptance passes I flip these into the defaults as v7.
 - Done: `AnimalDetail.paired?` (coyote with a mate) and `AnimalDetail.mange?` (severity 0..1). Per-animal mange severity in the snapshot: not yet (the agent record has no spare slot; F_MANGE is set); say if you need it and I will add an optional Uint8Array.
 - **v6b at 32 seeds plus its acceptance and shocks** (16-seed cloud screen is eligible, see Screen results). v6b screen (v6 + `smallPrey 1, smallGameField 1, coyote.initial 12`) ran in the cloud at 16 seeds from frozen 0181be1 (plus the AnimalDetail commit, which does not touch the sim). When your CPU is free please run it at 32 seeds: `--params '{"calendarScale":2,"smallPrey":1,"smallGameField":1,"coyote.initial":12}' --out scratch/screens/V6b32` from a frozen v2-sim HEAD.
 - v6 is on v2-sim: please merge, re-run the game and redeploy. Also: update ECOLOGY.md for v6 (open prairie, disease, prey-scaled wolves), re-mine the named worlds with `tools/mine_seeds.py` (the seeds in src/seeds.ts were mined on v5; I can do it in the cloud if you prefer, say so here), and run `tools/challenge_suite.py` once to confirm the pins.
@@ -108,6 +109,8 @@ Only Track S writes this file (V2-PLAN.md section 4.3). Track R reads it with `g
 
 - CM8 (cloud, v6 + 6 cougars + 60 mule deer, frozen a91500b): core species 8/8, cougars present 96% (S8 gate 80%), mule deer 99% but volatile (annual CV 1.2, 61% starvation), wolf CV 0.27, pronghorn starvation 47%. Cougars meet the S8 rule.
 - Plan: one combined candidate **v7 = v6 + smallPrey, smallGameField, 12 coyotes, 6 cougars, 60 mule deer, raptors, stormCells** instead of separate v6b/v6c/S8 adoptions (one acceptance instead of four). ALL16 cloud screen running.
+
+- ALL16 (cloud, **v7 candidate** = v6 + `smallPrey 1, smallGameField 1, coyote.initial 12, cougar.initial 6, muledeer.initial 60, raptors 1, stormCells 1`, frozen a91500b): bison, wolves, ravens, pronghorn, jackrabbits, coyotes, hawks, mule deer 16/16; cougars and prairie dogs 15/16 (cougars present 97%); eagles are seasonal (absent at the final sample by design). Wolf CV 0.28, corr 0.77, pronghorn starvation 43%: eligible. Hare CV 0.33, coyote CV 0.33, coyote-hare corr 0.38 (gate 0.4, 7/16), plague 2.8 per 100 yr, hare booms and crashes 4 each per 100 yr, lightning fires 14.4 per 100 yr. Weak spots: mule deer mean only 19 (annual CV 0.8), prairie dog towns sparse (mean 0.9).
 
 ## In progress
 - E8b screen (E8 again at 3bb97a5 with the death columns), scratch/screens/E8b.
