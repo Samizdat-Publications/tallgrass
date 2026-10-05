@@ -1196,7 +1196,7 @@ Render-side only, driven by sim state plus an id hash; no sim change.
 - Replay applies each intervention at its exact tick.
 - A version check warns when the build differs.
 
-**R12. Play UI** [R, L] (done 2026-10-04 except the family tree panel, which waits for S15)
+**R12. Play UI** [R, L] (done 2026-10-05, family tree included)
 - **Field guide:**
   - species pages, each with 4 to 6 behaviours to witness or photograph, and a short ecology note
   - a behaviour counts when the camera's focus is within 60 m of an animal in that state

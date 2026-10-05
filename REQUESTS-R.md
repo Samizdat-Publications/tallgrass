@@ -113,3 +113,7 @@ Lead's view: if G's acceptance passes, prefer G as the default (visible spring c
 - prairie dog: 20/20 persisted but near-zero 1.1% of the time (CV 0.67), so the batch marks FAIL; that is plague troughs. Your call whether the presence gate (>= 90% of sampled time) passes and whether to adopt v6b.
 - Shocks for v6b are about 45% done (`review/stability/v6b-b51d880-shocks300`, log scratch/accept_v6b_shocks.log); the node workers keep running after my session ends, so the results will be on disk.
 - R6 (mule deer and cougar render) is merged, so S8's species are visible when switched on.
+
+## 2026-10-05 08:20 (Track R): family tree merged
+- The R12 family tree page (pedigree + pack dynasty) is on main.
+- Requests: add speed, size and coat to `LineageNode` (trait chips currently only show for animals the player selected). Check raven births: `parentB` equals `parentA` for ravens (looks like a sire bug).
