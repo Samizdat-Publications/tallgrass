@@ -111,11 +111,11 @@ try {
       const f = e.cam.getFocus(new e.camera.position.constructor());
       const at = (a, sd) => ({ x: f.x + fx * a + rx * sd, y: f.z + fz * a + rz * sd });
       if (s.rainbow) {
-        // look away from the sun, low
+        // look away from the sun, low (distance 40: at 90 the sun shadow cascade edge of the baseline game paints a dark slab across the right side)
         const sd = e.uniforms.sunDir.value;
         const el = Math.asin(sd.y) * 180 / Math.PI;
         const az = Math.atan2(sd.x, sd.z) * 180 / Math.PI;
-        e.cam.setView({ yawDeg: az, pitchDeg: 2, distance: 90 }, true);
+        e.cam.setView({ yawDeg: az, pitchDeg: 2, distance: 40 }, true);
         e.camera.fov = 70; e.camera.updateProjectionMatrix();
         st.bowCharge = 1; st.bowNow = 1;
         for (let i = 0; i < 12; i++) e.renderOnce(0.016);

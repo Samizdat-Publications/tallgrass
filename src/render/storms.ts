@@ -401,23 +401,35 @@ export class Storms {
     this.meshes.push(this.cloudMesh);
 
     // ---- rain shafts
-    const cyl = new THREE.CylinderGeometry(1, 1, 1, 36, 1, true);
+    // wider at the top (the cloud base) than at the foot; the vertex shader frays the silhouette and shears it downwind
+    const cyl = new THREE.CylinderGeometry(1, 0.6, 1, 48, 8, true);
     for (let k = 0; k < MAX_CELLS; k++) {
       for (let layer = 0; layer < 2; layer++) {
         const mat = new THREE.ShaderMaterial({
           uniforms: {
             uSkyMid: shared.skyMid, uSkyHorizon: shared.skyHorizon, uTime: shared.time,
             uI: { value: 0 }, uSeed: { value: k * 13.7 + layer * 5.1 }, uLayer: { value: layer }, uBolt: this.boltUniform,
-            uWind: shared.wind, uLightColor: shared.lightColor,
+            uWind: shared.wind, uLightColor: shared.lightColor, uSunDir: shared.sunDir, uSunDiskColor: shared.sunDiskColor,
+            uBase: { value: 100 },
             tHeight: shared.heightTex, uCell: { value: world.cell }, uHN: { value: world.hn },
           },
           vertexShader: /* glsl */ `
             varying vec2 vUv;
             varying vec3 vWorld;
             varying vec3 vNw;
+            uniform vec3 uWind;
+            uniform float uSeed;
             void main() {
               vUv = uv;
-              vec4 wp = modelMatrix * vec4(position, 1.0);
+              // ragged edge: the radius wanders with angle and height, more toward the foot
+              float ang = uv.x * 6.2831853;
+              float v = uv.y;
+              float rag = 0.13 * sin(ang * 3.0 + uSeed + v * 4.0) + 0.09 * sin(ang * 5.0 - uSeed * 1.7 - v * 7.0) + 0.05 * sin(ang * 7.0 + uSeed * 2.3 + v * 11.0);
+              vec3 p = position;
+              p.xz *= 1.0 + rag * (1.0 - 0.6 * v);
+              vec4 wp = modelMatrix * vec4(p, 1.0);
+              // slanted downwind: the foot trails behind the cloud base
+              wp.xz += uWind.xy * (1.0 - v) * (8.0 + 38.0 * uWind.z);
               vWorld = wp.xyz;
               vNw = normalize((modelMatrix * vec4(normal, 0.0)).xyz);
               gl_Position = projectionMatrix * viewMatrix * wp;
@@ -431,6 +443,9 @@ export class Storms {
             uniform vec3 uSkyHorizon;
             uniform vec3 uLightColor;
             uniform vec3 uWind;
+            uniform vec3 uSunDir;
+            uniform vec3 uSunDiskColor;
+            uniform float uBase;
             uniform float uTime;
             uniform float uI;
             uniform float uSeed;
@@ -456,14 +471,18 @@ export class Storms {
               float line = smoothstep(0.5, 0.12, abs(fract(q.x) - 0.5));
               float streak = smoothstep(0.35, 0.95, h) * line;
               float detail = mix(0.85, 0.45 + 0.9 * streak, fineFade);
-              float topFade = mix(0.55, 1.0, v);
-              float edge = smoothstep(0.0, 0.06, v);
+              // no top edge: the veil is gone inside the cloud deck and thickens just below its base, then thins toward the ground
+              float topFade = smoothstep(uBase + 26.0, uBase - 10.0, vWorld.y) * mix(0.5, 1.0, v);
+              float edge = 1.0;
               // a column is densest through its middle: fade toward the silhouette, and thin the foot into ground mist
               float facing = smoothstep(0.0, 0.8, abs(dot(normalize(vNw), normalize(cameraPosition - vWorld))));
               float foot = smoothstep(0.0, 30.0, vWorld.y - tgHeightAt(vWorld.xz));
-              float a = clump * detail * topFade * edge * facing * foot * uI * camFade * (0.62 + 0.2 * uLayer);
+              float a = clump * detail * topFade * edge * facing * foot * uI * camFade * (0.7 + 0.18 * uLayer);
               if (a < 0.004) discard;
-              vec3 col = mix(uSkyMid, uSkyHorizon, 0.4) * 0.6 + uLightColor * 0.01 + vec3(0.008, 0.012, 0.018);
+              // a grey-blue veil, darker than the sky behind it; it only brightens when the sun is behind it
+              vec3 vd = normalize(vWorld - cameraPosition);
+              float back = pow(max(dot(vd, uSunDir), 0.0), 4.0) * smoothstep(-0.05, 0.25, uSunDir.y);
+              vec3 col = uSkyMid * 0.3 + uSkyHorizon * 0.1 + vec3(0.006, 0.01, 0.015) + uSunDiskColor * 0.16 * back;
               vec3 tb = vWorld - uBolt.xyz;
               col += vec3(0.5, 0.6, 1.0) * uBolt.w / (1.0 + dot(tb, tb) / 20000.0) * 1.2;
               gl_FragColor = vec4(min(col, vec3(32.0)), a);
@@ -909,10 +928,11 @@ export class Storms {
         // reach the lowest ground under the shaft, so its foot is never in the air
         let low = this.heightAt(c.x, c.z);
         for (let q = 0; q < 4; q++) low = Math.min(low, this.heightAt(c.x + Math.cos(q * 1.571) * rad, c.z + Math.sin(q * 1.571) * rad));
-        const bottom = low - 8, top = c.baseY + 14;
+        const bottom = low - 8, top = c.baseY + 34;
         s.mesh.position.set(c.x, (top + bottom) / 2, c.z);
         s.mesh.scale.set(rad, top - bottom, rad);
         s.mat.uniforms.uI.value = vis * (0.55 + 0.45 * clamp(c.I, 0, 1));
+        s.mat.uniforms.uBase.value = c.baseY;
         s.mesh.visible = true;
       }
     }
