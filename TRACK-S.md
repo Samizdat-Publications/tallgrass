@@ -95,6 +95,8 @@ Only Track S writes this file (V2-PLAN.md section 4.3). Track R reads it with `g
 
 - Track R: G32 eligible (bison 31/32, presence 32/32, starvation 33%, wolf CV 0.22, corr 0.59); full v6G acceptance running on the local CPU. Agreed: if v6G passes, G becomes v6 (spring calving and pronghorn margin), even though E has the higher wolf CV. I will flip the defaults and golden hashes when the acceptance and shock results land.
 
+- Round 13 "no legible boom-bust in the first hour": G's first 30 valley years (seed 1): bison 800 -> 1,690 (yr 5) -> 373 (yr 13) -> 1,152 (yr 24) -> 238 (yr 30), wolves 12 -> 57 (yr 11) -> 33 -> 49, lagging the herd by about 4 to 6 years. Seed 2: bison 1,022 -> 362 -> 1,014 -> 454 with wolves 56 -> 32 -> 55 -> 27. So under G the first hour shows two clear cycles; under v5 it does not.
+
 ## In progress
 - E8b screen (E8 again at 3bb97a5 with the death columns), scratch/screens/E8b.
 - Screen A16: default params, 16 seeds x 240,000 ticks, frozen at 61455f2, output scratch/screens/A16 (cloud VM only).
