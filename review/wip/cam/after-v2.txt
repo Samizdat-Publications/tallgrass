@@ -1,0 +1,6 @@
+camera path:
+frames 5695 over 108.7 s, cuts 7, dt median 17 ms, p99 67 ms
+  position: max speed 111 m/s, max accel 837 (p99 129) m/s2, max jerk 46991 (p99 3362, p50 9.00) m/s3
+  view dir: max rate 0.92 rad/s, max accel 23.88 (p99 2.04) rad/s2, max jerk 1503 (p99 67.81, p50 0.01) rad/s3
+inside a tree crown: 0 of 5710 frames {} in a willow thicket: 0 min height above ground: 2.79 min boom: 0.91 max swing deg: 72 last-resort pushes: 618 
+saved review/wip/cam/reel.mp4 (110 s) 

@@ -2,14 +2,16 @@
 // Usage: node tools/video.mjs --out review/round-02/reel.mp4 [--size 1280x720] [--query "seed=tallgrass"]
 import { chromium } from 'playwright';
 import { createServer } from 'vite';
-import { mkdirSync, renameSync, rmSync } from 'node:fs';
+import { mkdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { execFileSync } from 'node:child_process';
+import { PAGE_INSIDE, analyze, fmt } from './camlog.mjs';
 
 const argv = process.argv.slice(2);
 const arg = (k, d) => { const i = argv.indexOf('--' + k); return i >= 0 ? argv[i + 1] : d; };
 const out = arg('out', 'scratch/reel.mp4');
 const query = arg('query', '');
+const camlog = arg('camlog', '');
 const [W, H] = arg('size', '1280x720').split('x').map(Number);
 
 // Timeline: [seconds to hold, js to run at the start of the segment]
@@ -38,7 +40,7 @@ const V2 = [
 if (arg('set', '') === 'v2') SEGMENTS.splice(0, SEGMENTS.length, ...V2);
 
 const kill = setTimeout(() => { console.error('video: hard timeout'); process.exit(2); }, 12 * 60 * 1000);
-const server = await createServer({ configFile: resolve('vite.config.ts'), server: { port: 5300 + Math.floor(Math.random() * 600), strictPort: false, hmr: false }, logLevel: 'error' });
+const server = await createServer({ configFile: resolve('vite.config.ts'), cacheDir: resolve('scratch/_vitecache'), server: { port: 5300 + Math.floor(Math.random() * 600), strictPort: false, hmr: false }, logLevel: 'error' });
 await server.listen();
 const base = server.resolvedUrls.local[0].replace(/\/$/, '');
 const browser = await chromium.launch({ headless: true, args: ['--disable-backgrounding-occluded-windows', '--disable-renderer-backgrounding', '--disable-background-timer-throttling', '--enable-gpu', '--ignore-gpu-blocklist', '--use-angle=d3d11'] });
@@ -54,9 +56,19 @@ try {
   await page.waitForFunction(() => window.__ready === true, null, { timeout: 180000 });
   await page.waitForTimeout(1000);
   const t0 = Date.now();
+  // --camlog file.json: log the camera path every frame and, at the end, count the frames inside a tree crown and the jerk (tools/camlog.mjs)
+  if (camlog) await page.evaluate('window.__engine.cam.debugLog = []');
   for (const [secs, js] of SEGMENTS) {
     if (js) await page.evaluate(js);
     await page.waitForTimeout(secs * 1000);
+  }
+  if (camlog) {
+    const log = await page.evaluate('window.__engine.cam.debugLog');
+    const inside = await page.evaluate(`(${PAGE_INSIDE})(0.9)`);
+    mkdirSync(dirname(camlog), { recursive: true });
+    writeFileSync(camlog, JSON.stringify({ stride: 11, log, inside }));
+    console.log('camera path:\n' + fmt(analyze(log)));
+    console.log(`inside a tree crown: ${inside.inside} of ${inside.frames} frames`, JSON.stringify(inside.byKind), 'in a willow thicket:', inside.inThicket ?? 0, 'min height above ground:', inside.minClear.toFixed(2), 'min boom:', inside.minBoom.toFixed(2), 'max swing deg:', inside.maxSwing.toFixed(0), 'last-resort pushes:', inside.pushes, inside.insideFrames.slice(0, 12).join(' '));
   }
   const lead = (t0 - Date.now()) / 1000; // unused, kept for clarity
   const video = page.video();

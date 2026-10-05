@@ -1,0 +1,20 @@
+== orbit (groves [[65,271,16],[305,126,15],[328,374,14],[377,271,12],[143,277,12],[151,93,11]])
+frames 6750 over 112.5 s, cuts 6, dt median 17 ms, p99 17 ms
+  position: max speed 42.65 m/s, max accel 1714 (p99 367) m/s2, max jerk 106499 (p99 31437, p50 95.65) m/s3
+  view dir: max rate 7.10 rad/s, max accel 236 (p99 21.58) rad/s2, max jerk 14298 (p99 1318, p50 3.75) rad/s3
+  inside a tree crown: 0 of 6751 frames {}, in a thicket 5, min height above ground 1.60 m, min boom 0.13, max swing 60 deg, last-resort pushes so far 5916
+== follow (groves [[65,271,16],[305,126,15],[328,374,14],[377,271,12],[143,277,12],[151,93,11]])
+frames 8395 over 139.9 s, cuts 1, dt median 17 ms, p99 17 ms
+  position: max speed 34.60 m/s, max accel 1199 (p99 155) m/s2, max jerk 71194 (p99 15704, p50 17.17) m/s3
+  view dir: max rate 1.06 rad/s, max accel 39.57 (p99 4.91) rad/s2, max jerk 2297 (p99 431, p50 0.12) rad/s3
+  inside a tree crown: 0 of 8396 frames {}, in a thicket 197, min height above ground 1.60 m, min boom 0.18, max swing 67 deg, last-resort pushes so far 9385
+== pan (groves [[65,271,16],[305,126,15],[328,374,14],[377,271,12],[143,277,12],[151,93,11]])
+frames 6480 over 108.0 s, cuts 0, dt median 17 ms, p99 17 ms
+  position: max speed 75.31 m/s, max accel 2413 (p99 123) m/s2, max jerk 145032 (p99 1998, p50 0.30) m/s3
+  view dir: max rate 1.04 rad/s, max accel 63.06 (p99 2.46) rad/s2, max jerk 3806 (p99 27.65, p50 0.00) rad/s3
+  inside a tree crown: 0 of 6481 frames {}, in a thicket 0, min height above ground 4.26 m, min boom 0.70, max swing 36 deg, last-resort pushes so far 11772
+== cuts (groves [[65,271,16],[305,126,15],[328,374,14],[377,271,12],[143,277,12],[151,93,11]])
+frames 2820 over 47.0 s, cuts 46, dt median 17 ms, p99 17 ms
+  position: max speed 5.94 m/s, max accel 22.70 (p99 10.78) m/s2, max jerk 419 (p99 47.92, p50 0.00) m/s3
+  view dir: max rate 0.27 rad/s, max accel 1.03 (p99 0.49) rad/s2, max jerk 19.05 (p99 2.18, p50 0.00) rad/s3
+  inside a tree crown: 0 of 2821 frames {}, in a thicket 0, min height above ground 1.60 m, min boom 0.77, max swing 72 deg, last-resort pushes so far 11772

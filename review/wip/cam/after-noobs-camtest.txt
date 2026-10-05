@@ -1,0 +1,20 @@
+== orbit (groves [[65,271,16],[305,126,15],[328,374,14],[377,271,12],[143,277,12],[151,93,11]])
+frames 6750 over 112.5 s, cuts 4, dt median 17 ms, p99 17 ms
+  position: max speed 13.34 m/s, max accel 146 (p99 15.05) m/s2, max jerk 8681 (p99 53.03, p50 3.86) m/s3
+  view dir: max rate 0.55 rad/s, max accel 5.91 (p99 0.63) rad/s2, max jerk 344 (p99 2.21, p50 0.16) rad/s3
+  inside a tree crown: 1839 of 6751 frames {"cottonwood":1839}, in a thicket 0, min height above ground 1.60 m, min boom 1.00, max swing 0 deg, last-resort pushes so far 0
+== follow (groves [[65,271,16],[305,126,15],[328,374,14],[377,271,12],[143,277,12],[151,93,11]])
+frames 8395 over 139.9 s, cuts 0, dt median 17 ms, p99 17 ms
+  position: max speed 12.70 m/s, max accel 148 (p99 11.98) m/s2, max jerk 8755 (p99 110, p50 5.35) m/s3
+  view dir: max rate 0.15 rad/s, max accel 6.27 (p99 0.07) rad/s2, max jerk 376 (p99 0.17, p50 0.00) rad/s3
+  inside a tree crown: 854 of 8396 frames {"cottonwood":854}, in a thicket 0, min height above ground 1.60 m, min boom 1.00, max swing 0 deg, last-resort pushes so far 0
+== pan (groves [[65,271,16],[305,126,15],[328,374,14],[377,271,12],[143,277,12],[151,93,11]])
+frames 6480 over 108.0 s, cuts 0, dt median 17 ms, p99 17 ms
+  position: max speed 49.93 m/s, max accel 85.54 (p99 69.92) m/s2, max jerk 1246 (p99 491, p50 0.01) m/s3
+  view dir: max rate 0.07 rad/s, max accel 0.11 (p99 0.10) rad/s2, max jerk 0.86 (p99 0.38, p50 0.00) rad/s3
+  inside a tree crown: 408 of 6481 frames {"cottonwood":408}, in a thicket 0, min height above ground 5.47 m, min boom 1.00, max swing 0 deg, last-resort pushes so far 0
+== cuts (groves [[65,271,16],[305,126,15],[328,374,14],[377,271,12],[143,277,12],[151,93,11]])
+frames 2820 over 47.0 s, cuts 46, dt median 17 ms, p99 17 ms
+  position: max speed 0.00 m/s, max accel 0.00 (p99 0.00) m/s2, max jerk 0.00 (p99 0.00, p50 0.00) m/s3
+  view dir: max rate 0.00 rad/s, max accel 0.00 (p99 0.00) rad/s2, max jerk 0.00 (p99 0.00, p50 0.00) rad/s3
+  inside a tree crown: 540 of 2821 frames {"cottonwood":540}, in a thicket 0, min height above ground 1.60 m, min boom 1.00, max swing 0 deg, last-resort pushes so far 0
