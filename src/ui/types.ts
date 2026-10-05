@@ -35,7 +35,12 @@ export interface UIActions {
   /** A setting changed (or, with 'quality', 'master' etc. all at once on load). The game applies picture, camera and volume. */
   applySettings?(s: Settings, changed: keyof Settings): void;
   /** Photograph: render once and read the canvas back in the same task. Null when the canvas could not be read. */
-  photograph?(): Promise<Blob | null>;}
+  photograph?(): Promise<Blob | null>;
+  /** Family tree page: ask the worker for the lineage of an animal; the answer comes back through GameUI.setLineage. */
+  requestLineage?(id: number): void;
+  /** Family tree page: ask the worker for a pack's alpha pairs; the answer comes back through GameUI.setDynasty. */
+  requestDynasty?(pack: number): void;
+}
 
 export interface UIFrame {
   tick: number;

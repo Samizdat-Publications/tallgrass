@@ -173,6 +173,8 @@ worker.onmessage = (e: MessageEvent<FromWorker>) => {
     finishShare(m.log);
     return;
   }
+  if (m.type === 'lineage') { ui.setLineage(m.id, m.tree); return; }
+  if (m.type === 'dynasty') { ui.setDynasty(m.pack, m.list); return; }
   if (m.type !== 'snap') return;
   // "Next event": collect what happened during the skip, then cut the camera to it
   if (m.speed === -1) { skipping = true; skipEvents = skipEvents.concat(m.events); }
@@ -292,6 +294,8 @@ const ui = new GameUI(document.getElementById('ui')!, {
     }
   },
   select: (id) => select(id),
+  requestLineage: (id) => send({ type: 'lineage', id }),
+  requestDynasty: (pack) => send({ type: 'dynasty', pack }),
   flyTo: (x, y) => { takeCamera(); engine.cam.flyTo(x, y); },
   setOverlay: (o: OverlayId) => { overlay.setMode(o === 'smallprey' ? 'none' : o); smallOverlay.setMode(o === 'smallprey'); },
   setCinematic: (on) => { following = null; cinematicOn = on; autoCam = false; director.setEnabled(on); takeCamera(); lens.cinematic = on; },

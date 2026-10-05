@@ -157,7 +157,7 @@ export function diedEntry(entries: StoryEntry[]): StoryEntry | null {
 }
 
 /** How the animal met its end, from the death cause code and the last thing that was chasing it. */
-function causePhrase(code: number, who: StorySubject, entries: StoryEntry[], diedTick: number): string {
+export function causePhrase(code: number, who: StorySubject, entries: StoryEntry[], diedTick: number): string {
   switch (code) {
     case 0: return 'Starved';
     case 1: return 'Died of thirst';
