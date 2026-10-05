@@ -5,6 +5,7 @@ import { buildRaven } from './raven';
 import { buildPronghorn } from './pronghorn';
 import { buildRabbit } from './rabbit';
 import { buildCougar } from './cougar';
+import { buildCoyote } from './coyote';
 import type { ModelDef } from './types';
 
 export type { ModelDef, AnimParams } from './types';
@@ -17,6 +18,7 @@ const BUILDERS: Record<string, () => ModelDef> = {
   pronghorn: buildPronghorn,
   rabbit: buildRabbit,
   cougar: buildCougar,
+  coyote: buildCoyote,
 };
 
 const cache = new Map<number, ModelDef>();
