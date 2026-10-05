@@ -107,6 +107,11 @@ audio.onFlyover = (f) => cranes.start({ ...f, delay: f.startAt - audio.now });
 // coyote calls: the audio calls from where a coyote rests and says how long the clip lasts, so those coyotes sit up and sing for exactly that long
 audio.coyoteSite = () => animals.chorusSite();
 audio.onCoyoteCall = (c) => animals.startChorus(c.x, c.z, c.seconds);
+// R8: the wolf howl and the bull's bellow come from where a resting wolf lies or a bull stands, and that pack howls (that bull bellows) as long as the clip lasts
+audio.wolfSite = () => animals.wolfSite();
+audio.onWolfCall = (c) => animals.startWolfChorus(c.x, c.z, c.seconds);
+audio.bellowSite = () => animals.bellowSite();
+audio.onBellowCall = (c) => animals.startBellow(c.x, c.z, c.seconds);
 // field note: a mousing leap close to the camera
 animals.onMousingLeap = () => { ui.fieldNotes.earn('mousingLeap', ui.fieldNotes.yearNow); };
 // R5 raptors: a hawk's scream or an eagle's call (and the scream of a stoop beginning), placed where the bird is (height above the ground)

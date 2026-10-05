@@ -250,6 +250,7 @@ export function buildBison(): ModelDef {
     params: {
       ...DEFAULT_PARAMS,
       kind: 0,
+      behave: true,
       comY: 1.1,
       // gait bands are in on-screen m/s at 1x (sim speed x 1.5): grazing and walking bison (0.3 to 4) walk, a quickened
       // herd trots, a stampede (flee, 7 to 16) gallops

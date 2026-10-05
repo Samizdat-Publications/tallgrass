@@ -1,6 +1,6 @@
 // Unit tests for the render-side canid state (R3): the mousing leap, the chorus pose, mange packing and migrant columns.
 // Run: npx tsx src/render/canids.test.ts
-import { F_MANGE, F_MIGRANT, Sp, St } from '../sim/types';
+import { F_JUVENILE, F_MANGE, F_MIGRANT, Sp, St } from '../sim/types';
 import { CanidState, LEAP_TIME, PIN_TIME, newIn, newOut } from './canids';
 
 let failures = 0;
@@ -175,6 +175,123 @@ function frame(slot: number, over: Partial<typeof inp>, dt = 0.05): void {
   cs.planColumns(new Float32Array(0), 0, new Int32Array(0), () => 1.6, () => false);
   for (let i = 0; i < 400; i++) frame(20, { sp: Sp.Deer, state: St.Walk, spd: 1.2, clock: i * 0.05 });
   ok(Math.abs(out.ox) + Math.abs(out.oz) < 1e-3, 'the file breaks up when the group stops migrating');
+}
+
+// ---- R8: wolves howl with the audio (one long note, no yips), the pack joining over a couple of seconds
+{
+  const w = new CanidState();
+  const o = newOut();
+  const i = newIn();
+  const step = (slot: number, over: Partial<typeof i>, dt = 0.05): void => {
+    Object.assign(i, { slot, id: 300 + slot, sp: Sp.Wolf, state: St.Rest, spd: 0, flags: 0, energy: 1, x: 100, z: 100, h: 0, dt, running: dt, timeScale: 1, vs: 1.35 }, over);
+    w.step(i, o);
+  };
+  for (let s = 0; s < 4; s++) w.reset(50 + s);
+  w.startChorus(100, 100, 6, 10, true, true);
+  ok(w.choirOn(11, true) && !w.choirOn(11, false), 'a wolf chorus is not a coyote chorus');
+  let clock = 10, sat = 0, anyYip = 0;
+  const first: number[] = [-1, -1, -1, -1];
+  for (let n = 0; n < 300; n++) {
+    clock += 0.05;
+    for (let s = 0; s < 4; s++) {
+      step(50 + s, { clock, x: 100 + s * 4 });
+      if (out.howl >= 0) { if (o.howl > sat) sat = o.howl; if (o.howl > 0.5 && first[s] < 0) first[s] = clock; }
+      if (Math.floor(o.pack / 16) % 16 >= 11) anyYip = 1;
+    }
+  }
+  ok(sat > 0.95, `a resting wolf sits up fully for the howl (${sat.toFixed(2)})`);
+  ok(anyYip === 0, 'a wolf howls without yips');
+  ok(first.every((t) => t > 10), 'all four join');
+  ok(Math.max(...first) - Math.min(...first) > 0.2, 'the pack joins one after another, not in step');
+  ok(o.howl === 0, 'and settles after the call');
+  // a wolf that is walking, or far from the site, does not sit; and a coyote chorus does not take wolves
+  w.startChorus(100, 100, 6, 400, true, false);
+  let sit = 0;
+  for (let n = 0; n < 100; n++) { step(50, { clock: 400 + n * 0.05 }); sit = Math.max(sit, o.howl); }
+  ok(sit === 0, 'wolves ignore a coyote chorus');
+  const self = new CanidState();
+  let made = 0;
+  for (let t = 0; t < 600; t += 1) if (self.maybeSelfChorus(t, true, 1, () => ({ x: 1, z: 2 }), true)) made++;
+  ok(made >= 4 && made <= 14, `a wolf pack makes its own howl every 40 to 90 s at dusk (${made} in 600 s)`);
+}
+
+// ---- R8: a pup romps in a ring through its spot, within 2.5 m of it, and a session ends back where it began
+{
+  const w = new CanidState();
+  const o = newOut();
+  const i = newIn();
+  w.reset(70);
+  let clock = 0, maxOff = 0, maxLift = 0, sessions = 0, was = false, endOff = 0, minPitch = 0, hopAir = 0, spdMax = 0, moving = false;
+  for (let n = 0; n < 4000; n++) {
+    clock += 0.05;
+    Object.assign(i, { slot: 70, id: 777, sp: Sp.Wolf, state: St.Idle, spd: 0, flags: F_JUVENILE, energy: 1, x: 100, z: 100, h: 0, dt: 0.05, running: 0.05, timeScale: 1, clock, vs: 0.8, season: 1.0 });
+    w.step(i, o);
+    const off = Math.hypot(o.ox, o.oz);
+    maxOff = Math.max(maxOff, off);
+    maxLift = Math.max(maxLift, o.lift);
+    minPitch = Math.min(minPitch, o.pitch);
+    hopAir = Math.max(hopAir, o.air);
+    spdMax = Math.max(spdMax, o.spd);
+    if (o.moving) moving = true;
+    if (o.play && !was) sessions++;
+    if (!o.play && was) endOff = off;
+    was = o.play;
+  }
+  ok(sessions >= 3, `a pup plays now and then (${sessions} sessions in 200 s)`);
+  ok(maxOff > 1.2 && maxOff <= 2.5, `the ring strays more than a body length but never more than 2.5 m from the spot (${maxOff.toFixed(2)})`);
+  ok(endOff < 0.4, `a session ends back at the spot (${endOff.toFixed(2)})`);
+  ok(maxLift > 0.1 && hopAir > 0.9, `it pounces: off the ground (${maxLift.toFixed(2)} m) with the feet tucked`);
+  ok(minPitch < -0.25, `the play bow dips the nose (${minPitch.toFixed(2)})`);
+  ok(moving && spdMax > 2 && spdMax < 9, `it runs the ring at a pup's pace (${spdMax.toFixed(1)} m/s)`);
+  // the same pup and the same time give the same picture twice
+  const w2 = new CanidState();
+  w2.reset(70);
+  const o2 = newOut();
+  let same = true;
+  clock = 0;
+  const w3 = new CanidState();
+  w3.reset(70);
+  for (let n = 0; n < 600; n++) {
+    clock += 0.05;
+    Object.assign(i, { slot: 70, id: 777, sp: Sp.Wolf, state: St.Idle, spd: 0, flags: F_JUVENILE, energy: 1, x: 100, z: 100, h: 0, dt: 0.05, running: 0.05, timeScale: 1, clock, vs: 0.8, season: 1.0 });
+    w2.step(i, o2);
+    w3.step(i, o);
+    if (o2.ox !== o.ox || o2.oz !== o.oz || o2.pack !== o.pack) same = false;
+  }
+  ok(same, 'deterministic in the id and the clock');
+  // no play in autumn or winter, by an adult, or while it is walking
+  for (const [name, over] of [['in autumn', { season: 2.6 }], ['by an adult', { flags: 0 }], ['while walking', { state: St.Walk, spd: 1 }]] as Array<[string, Partial<typeof i>]>) {
+    const w4 = new CanidState();
+    w4.reset(71);
+    let any = false;
+    for (let n = 0; n < 2000; n++) {
+      Object.assign(i, { slot: 71, id: 777, sp: Sp.Wolf, state: St.Idle, spd: 0, flags: F_JUVENILE, energy: 1, x: 100, z: 100, h: 0, dt: 0.05, running: 0.05, timeScale: 1, clock: n * 0.05, vs: 0.8, season: 1.0, ...over });
+      w4.step(i, o);
+      if (o.play) any = true;
+    }
+    ok(!any, `no pup play ${name}`);
+  }
+}
+
+// ---- R8: an idle adult sniffs the ground, then cocks a hind leg (the mark weight rides in the pack at 256 per step)
+{
+  const w = new CanidState();
+  const o = newOut();
+  const i = newIn();
+  w.reset(80);
+  let maxMark = 0, sniffs = 0, was = false, packOk = true;
+  for (let n = 0; n < 6000; n++) {
+    Object.assign(i, { slot: 80, id: 555, sp: Sp.Wolf, state: St.Idle, spd: 0, flags: 0, energy: 1, x: 100, z: 100, h: 0, dt: 0.05, running: 0.05, timeScale: 1, clock: n * 0.05, vs: 1.35, season: 1.0 });
+    w.step(i, o);
+    maxMark = Math.max(maxMark, o.mark);
+    if (o.sniff && !was) sniffs++;
+    was = o.sniff;
+    const markQ = Math.floor(o.pack / 256), airQ = Math.floor(o.pack) % 16, howlQ = Math.floor(o.pack / 16) % 16;
+    if (Math.abs(markQ / 15 - o.mark) > 0.04 || airQ !== 0 || howlQ !== 0) packOk = false;
+  }
+  ok(maxMark > 0.95, `the leg comes fully up (${maxMark.toFixed(2)})`);
+  ok(sniffs >= 1 && sniffs <= 8, `a marking now and then, roughly every two minutes (${sniffs} in 300 s)`);
+  ok(packOk, 'the mark weight packs clear of the air and howl bits');
 }
 
 console.log(`${checks} checks, ${failures} failed`);

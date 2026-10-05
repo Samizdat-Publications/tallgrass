@@ -22,10 +22,11 @@ import type { AnimParams, ModelDef } from './models';
 import { IK_FAR, IK_NEAR, gaitMix, gaitStride, legRigOf, stanceBodyDy, timelapseGaitSpd, timelapseHz, timelapseK } from './models/legmath';
 import type { LegRig } from './models/legmath';
 import { ContactShadows } from './models/contact';
-import { makeAnimalMaterials } from './models/shader';
+import { R8_SHADER, makeAnimalMaterials } from './models/shader';
 import type { AnimalShared } from './models/shader';
 import { Dust, KillSites, Markers, SceneLit } from './models/fx';
 import { CanidState, newIn, newOut } from './canids';
+import { BEH, BEH_RANGE, BisonBehaviour, newBisonIn, newBisonOut, packBisonA, packBisonB, rutK, sessionAt } from './behaviours';
 import { sunHeight } from '../audio/mix';
 import { injectTerrainShadow } from './common';
 import type { SharedUniforms } from './common';
@@ -44,6 +45,21 @@ const FLIES: boolean[] = SPECIES.map((s) => s.flies);
 const RAPTOR: boolean[] = SPECIES.map((s) => s.guild === 'raptor');
 /** The canids (wolf, coyote): mange, and for the coyote the mousing leap, the dusk chorus and the wary glance (render/canids.ts). */
 const CANID: boolean[] = SPECIES.map((s) => s.key === 'wolf' || s.key === 'coyote');
+/** R8: the bison (wallow, rub, spar, bellow, snow dig, calf play: render/behaviours.ts), the pronghorn (rump flare) and the ravens (rolls in the air). */
+const BISON: boolean[] = SPECIES.map((s) => s.key === 'bison');
+const PRONGHORN: boolean[] = SPECIES.map((s) => s.key === 'pronghorn');
+const RAVEN: boolean[] = SPECIES.map((s) => s.key === 'raven');
+/** Real (clock) seconds without a bellow from the audio before the layer makes bellows of its own. */
+const BELLOW_QUIET = 150;
+/** A bellow is only heard from, and a wolf chorus only sung at, this far from the camera (m). */
+const BELLOW_RANGE = 130;
+const WOLF_CHOIR_RANGE = 320;
+/** A raven in the air rolls over now and then (a hashed schedule of sessions of this length, s). */
+const RAVEN_ROLL = 1.5;
+/** A perched raptor preens now and then (sessions of 5 to 8 s every 20 to 50 s). */
+const PREEN_P0 = 20, PREEN_P1 = 50;
+/** A pronghorn that is fleeing flares its rump patch: it comes up fast (s) and goes down slowly. */
+const FLARE_IN = 0.14, FLARE_OUT = 1.3;
 /** Prey a lunging hunter goes for: grazers that are neither fliers nor the small ones (rabbit, prairie dog, beaver). */
 const SMALL_KEYS = new Set(['rabbit', 'prairiedog', 'beaver']);
 const LUNGE_TARGET: boolean[] = SPECIES.map((s) => s.prey && !HUNTER[s.id] && !s.flies && !SMALL_KEYS.has(s.key));
@@ -528,6 +544,9 @@ class Slots {
   /** R6: the stotting weight of a mule deer and the freeze before a cougar's rush, eased. */
   stot = new Float32Array(this.cap);
   frz = new Float32Array(this.cap);
+  /** R8: the pronghorn's rump flare and a perched raptor's preen, eased. */
+  flare = new Float32Array(this.cap);
+  preen = new Float32Array(this.cap);
   /** Feeding tug and hunting weights, eased. */
   tug = new Float32Array(this.cap);
   hunt = new Float32Array(this.cap);
@@ -613,6 +632,8 @@ class Slots {
     this.lean = g(this.lean, Float32Array);
     this.stot = g(this.stot, Float32Array);
     this.frz = g(this.frz, Float32Array);
+    this.flare = g(this.flare, Float32Array);
+    this.preen = g(this.preen, Float32Array);
     this.tug = g(this.tug, Float32Array);
     this.hunt = g(this.hunt, Float32Array);
     this.hs = g(this.hs, Float32Array);
@@ -667,11 +688,38 @@ export class AnimalLayer {
    * season is separate, and a still of a rutting buck in autumn must not wait for the valley year to come round).
    */
   seasonOverride: number | null = null;
+  /**
+   * R8: the behaviour-library shader code (the bison's poses, the pronghorn's rump flare). Off, the programs are recompiled without it, as they were
+   * before R8: a benchmark and debugging hook (tools/r8_bench.mjs); the layer's own bookkeeping goes on either way.
+   */
+  get r8(): boolean {
+    return R8_SHADER.on;
+  }
+  set r8(v: boolean) {
+    this.r8Parts({ on: v });
+  }
+  /** Which parts of the R8 shader code are compiled in (a benchmark hook: the bison's poses and the pronghorn's flare separately). */
+  r8Parts(p: { on?: boolean; bison?: boolean; flare?: boolean }): void {
+    const was = `${R8_SHADER.on}${R8_SHADER.bison}${R8_SHADER.flare}`;
+    if (p.on !== undefined) R8_SHADER.on = p.on;
+    if (p.bison !== undefined) R8_SHADER.bison = p.bison;
+    if (p.flare !== undefined) R8_SHADER.flare = p.flare;
+    if (was === `${R8_SHADER.on}${R8_SHADER.bison}${R8_SHADER.flare}`) return;
+    for (const b of this.live) {
+      b.material.needsUpdate = true;
+      b.depth.needsUpdate = true;
+      if (b.nearMaterial) b.nearMaterial.needsUpdate = true;
+    }
+  }
   private deerCache: { season: number; v: DeerSeason } = { season: -1, v: { antler: 0, velvet: 0, winter: 0 } };
   private deerNow(snap: Snapshot): DeerSeason {
     const s = this.seasonOverride ?? snap.env.season;
     if (s !== this.deerCache.season) this.deerCache = { season: s, v: deerSeason(s) };
     return this.deerCache.v;
+  }
+  /** The season the behaviours follow (R8): the capture override, else the snapshot's. */
+  private seasonNow(snap: Snapshot): number {
+    return this.seasonOverride ?? snap.env.season;
   }
   /** Scratch for preyNear. */
   private pn = { x: 0, z: 0, d: 0 };
@@ -722,6 +770,16 @@ export class AnimalLayer {
   private cn = new CanidState();
   private cnIn = newIn();
   private cnOut = newOut();
+  /** R8 bison behaviours: wallow, rub, spar, bellow, snow dig, calf play (render/behaviours.ts). */
+  private beh = new BisonBehaviour();
+  private bIn = newBisonIn();
+  private bOut = newBisonOut();
+  /** Called when a bull close to the camera begins a bellow of its own (x, z): for the field notes (the audio's bellows are the audio's). */
+  onBellow: ((x: number, z: number) => void) | null = null;
+  /** Called when two bulls close to the camera lock heads (x, z): the field notes. */
+  onSpar: ((x: number, z: number) => void) | null = null;
+  /** Bellows, spars, wallows and rubs seen near the camera since the layer started (a debug and test counter). */
+  readonly behSeen = { bellow: 0, spar: 0, wallow: 0, rub: 0, play: 0, dig: 0, howl: 0 };
   /** Called when a coyote near the camera starts a mousing leap (x, z): the field notes. */
   onMousingLeap: ((x: number, z: number) => void) | null = null;
   /**
@@ -818,6 +876,7 @@ export class AnimalLayer {
       this.live.push(batch);
     }
     this.kills = new KillSites(world, this.lit);
+    this.beh.setTrees(world.trees);
     this.dust = new Dust(this.lit);
     this.markers = new Markers(world.size);
     this.contact = new ContactShadows(this.shared);
@@ -923,7 +982,10 @@ export class AnimalLayer {
         S.perch[slot] = 0;
         S.pst[slot] = 255;
         S.rnx[slot] = 0;
+        S.flare[slot] = 0;
+        S.preen[slot] = 0;
         this.cn.reset(slot);
+        this.beh.reset(slot);
       }
       S.stamp[slot] = this.gen;
       this.currSlot[i] = slot;
@@ -934,6 +996,11 @@ export class AnimalLayer {
     }
     // migrants that travel together are drawn in a short file (display offsets, R3)
     this.cn.planColumns(ag, n, this.currSlot, (sp) => (this.batches[sp]?.def.params.length ?? 1.5) * this.speciesScale[sp], (sp) => FLIES[sp]);
+    // R8: bulls close enough to spar are paired up (at most 3x: a time-lapse has no time for it)
+    if (this.timeScale > 0 && this.timeScale <= 3) {
+      const cpv = this.shared.uCamPos.value;
+      this.beh.planPairs(ag, snap.ids, n, this.currSlot, cpv.x, cpv.z, this.seasonNow(snap));
+    }
     // free the slots of animals that are gone
     this.goneSlot.clear();
     for (const [id, slot] of S.map) {
@@ -1025,6 +1092,27 @@ export class AnimalLayer {
     return smoothstep(2, 16, w.waterDist[c]) * (1 - 0.7 * smoothstep(0.55, 0.9, w.moisture[c]));
   }
 
+  /**
+   * R8: 0..1, how bare the ground at (x, z) is, for the wallow: the grass cut short (the vegetation texture's biomass) or the soil trodden (the
+   * engine's trail memory of where herds have grazed and trampled). With no engine textures yet (a dev page) it is half bare everywhere.
+   */
+  bareAt(x: number, z: number): number {
+    const tg = this.tg;
+    if (!tg) return 0.6;
+    const w = this.world;
+    const k = Math.min(w.n - 1, Math.max(0, Math.floor(z / w.cell))) * w.n + Math.min(w.n - 1, Math.max(0, Math.floor(x / w.cell)));
+    const veg = (tg.vegTex.value?.image as { data?: ArrayLike<number> } | undefined)?.data;
+    const trail = (tg.trailTex.value?.image as { data?: ArrayLike<number> } | undefined)?.data;
+    const grass = veg ? veg[k * 4] / 255 : 0.5;
+    const trod = trail ? trail[k] / 255 : 0;
+    return Math.max(1 - smoothstep(this.bareGrass0, this.bareGrass1, grass), smoothstep(0.15, 0.55, trod));
+  }
+  /** A capture hook: the dryness of the ground (0..1) the wallow sees, in place of the real one (a still of a wallow must not depend on the soil being dry there). */
+  dryOverride: number | null = null;
+  /** The grass biomass (0..1 of the texture) below which the ground reads as bare, from fully bare (0) to not at all (1): a tuning hook. */
+  bareGrass0 = 0.1;
+  bareGrass1 = 0.45;
+
   /** A small puff of dust where a mousing coyote lands (R3). */
   private landingPuff(x: number, z: number, vs: number): void {
     const w = this.world;
@@ -1048,16 +1136,26 @@ export class AnimalLayer {
 
   /** The place of a resting coyote within about 300 m of the camera, for a call to come from; null when none is resting. */
   chorusSite(): { x: number; z: number } | null {
+    return this.restingSite(Sp.Coyote, 300);
+  }
+
+  /** R8: the place of a resting wolf within about 320 m of the camera, for a pack howl to come from (the audio picks it); null when none rests. */
+  wolfSite(): { x: number; z: number } | null {
+    return this.restingSite(Sp.Wolf, WOLF_CHOIR_RANGE);
+  }
+
+  /** A resting (or idle) animal of species `sp` within `range` metres of the camera: where it is, picked at random from those there are. */
+  private restingSite(sp: number, range: number): { x: number; z: number } | null {
     const snap = this.curr;
     if (!snap) return null;
     const A = snap.agents, cp = this.shared.uCamPos.value;
     const near: number[] = [];
     for (let i = 0; i < snap.count; i++) {
       const o = i * AGENT_STRIDE;
-      if ((A[o] | 0) !== Sp.Coyote) continue;
+      if ((A[o] | 0) !== sp) continue;
       const st = A[o + 7] | 0;
       if ((st !== St.Rest && st !== St.Idle) || A[o + 4] >= 0.3) continue;
-      if (Math.hypot(A[o + 1] - cp.x, A[o + 2] - cp.z) > 300) continue;
+      if (Math.hypot(A[o + 1] - cp.x, A[o + 2] - cp.z) > range) continue;
       near.push(i);
     }
     if (near.length === 0) return null;
@@ -1068,6 +1166,68 @@ export class AnimalLayer {
   /** A call began at (x, z) and lasts `seconds`: the resting coyotes round it sit up and sing (see canids.ts). */
   startChorus(x: number, z: number, seconds: number): void {
     this.cn.startChorus(x, z, seconds, this.clock, true);
+  }
+
+  /** R8: a wolf howl began at (x, z) and lasts `seconds`: the resting wolves of that pack sit up and howl with it (see canids.ts). */
+  startWolfChorus(x: number, z: number, seconds: number): void {
+    this.cn.startChorus(x, z, seconds, this.clock, true, true);
+  }
+
+  /** R8: where a bull would bellow from: a bull of the bison standing about (not lying down at the far side of the herd) within about 130 m of the camera; null when none. */
+  bellowSite(): { x: number; z: number } | null {
+    const snap = this.curr;
+    if (!snap) return null;
+    const A = snap.agents, cp = this.shared.uCamPos.value;
+    const near: number[] = [];
+    for (let i = 0; i < snap.count; i++) {
+      const o = i * AGENT_STRIDE;
+      if ((A[o] | 0) !== Sp.Bison) continue;
+      const fl = A[o + 8] | 0;
+      if (!(fl & F_MALE) || (fl & F_JUVENILE)) continue;
+      const st = A[o + 7] | 0;
+      if ((st !== St.Graze && st !== St.Idle && st !== St.Rest) || A[o + 4] >= 0.5) continue;
+      if (Math.hypot(A[o + 1] - cp.x, A[o + 2] - cp.z) > BELLOW_RANGE) continue;
+      near.push(i);
+    }
+    if (near.length === 0) return null;
+    const i = near[Math.floor(Math.random() * near.length)];
+    return { x: A[i * AGENT_STRIDE + 1], z: A[i * AGENT_STRIDE + 2] };
+  }
+
+  /** R8: the audio's bellow plays at (x, z) for `seconds`: the nearest bull there raises its head and bellows with it (see behaviours.ts). */
+  startBellow(x: number, z: number, seconds: number): void {
+    const snap = this.curr;
+    if (!snap) return;
+    const A = snap.agents;
+    let best = 36, bi = -1;
+    for (let i = 0; i < snap.count; i++) {
+      const o = i * AGENT_STRIDE;
+      if ((A[o] | 0) !== Sp.Bison) continue;
+      const fl = A[o + 8] | 0;
+      if (!(fl & F_MALE) || (fl & F_JUVENILE)) continue;
+      const d = (A[o + 1] - x) ** 2 + (A[o + 2] - z) ** 2;
+      if (d < best) { best = d; bi = i; }
+    }
+    if (bi >= 0) this.beh.startBellow(this.currSlot[bi], seconds, this.clock);
+  }
+
+  /** Capture and dev hook: a bellow now from the bull nearest the camera (or at (x, z)). Returns where, or null. */
+  debugBellow(seconds = 4.6, x?: number, z?: number): { x: number; z: number } | null {
+    const site = x !== undefined && z !== undefined ? { x, z } : this.bellowSite();
+    if (site) this.startBellow(site.x, site.z, seconds);
+    return site;
+  }
+
+  /** Capture and dev hook: a wolf howl now at the resting wolf nearest the camera (or at (x, z)). Returns where, or null. */
+  debugWolfChorus(seconds = 6, x?: number, z?: number): { x: number; z: number } | null {
+    const site = x !== undefined && z !== undefined ? { x, z } : this.wolfSite();
+    if (site) this.cn.startChorus(site.x, site.z, seconds, this.clock, true, true);
+    return site;
+  }
+
+  /** True while a wolf chorus is on. */
+  get wolfChorusOn(): boolean {
+    return this.cn.choirOn(this.clock, true);
   }
 
   /** Capture and dev hook: a chorus now at the resting coyote nearest the camera (or at (x, z)). Returns where, or null. */
@@ -1463,6 +1623,7 @@ export class AnimalLayer {
     const kStotIn = 1 - Math.exp(-dt / 0.12), kStotOut = 1 - Math.exp(-dt / 0.25);
     const kFrzIn = 1 - Math.exp(-dt / 0.5), kFrzOut = 1 - Math.exp(-dt / 0.1);
     const deerS = this.deerNow(snap);
+    const season = this.seasonNow(snap);
     const kBank = 1 - Math.exp(-dt * 3);
     const snapDt = this.snapDt;
     const sel = this.selectedId;
@@ -1482,7 +1643,10 @@ export class AnimalLayer {
     this.clock += running;
     const clock = this.clock;
     // at dusk, with no audio calling for a while, the coyotes sing now and then on their own (render/canids.ts)
-    this.cn.maybeSelfChorus(clock, sunHeight(snap.env.dayFrac) < 0.12, this.timeScale, () => this.chorusSite());
+    const dusk = sunHeight(snap.env.dayFrac) < 0.12;
+    this.cn.maybeSelfChorus(clock, dusk, this.timeScale, () => this.chorusSite());
+    // (R8: the wolves too; a pack that howls with no audio asking for it, or while the audio is quiet, sits up and howls in silence, as the coyotes do)
+    if (this.cn.maybeSelfChorus(clock, dusk, this.timeScale, () => this.wolfSite(), true)) this.behSeen.howl++;
     for (const fi of this.falls.values()) fi.pbest = 0;
     {
       const t = this.hotPrev;
@@ -1662,7 +1826,7 @@ export class AnimalLayer {
       if (CANID[sp] || (!flier && ((A[o + 8] | 0) & F_MIGRANT) !== 0)) {
         const ci = this.cnIn;
         ci.slot = slot; ci.id = id; ci.sp = sp; ci.state = state; ci.spd = spd1; ci.flags = A[o + 8] | 0; ci.energy = A[o + 10];
-        ci.x = x; ci.z = z; ci.h = h; ci.dt = dt; ci.running = running; ci.timeScale = this.timeScale; ci.clock = clock; ci.vs = sc * this.speciesScale[sp];
+        ci.x = x; ci.z = z; ci.h = h; ci.dt = dt; ci.running = running; ci.timeScale = this.timeScale; ci.clock = clock; ci.vs = sc * this.speciesScale[sp]; ci.season = season;
         this.cn.step(ci, cnO);
         x += cnO.ox;
         z += cnO.oz;
@@ -1672,10 +1836,64 @@ export class AnimalLayer {
           if (Math.hypot(x - cpn.x, z - cpn.z) < 140) this.onMousingLeap(x, z);
         }
         if (cnO.landed && dt > 0) this.landingPuff(x, z, sc * this.speciesScale[sp]);
-      } else cnO.pack = cnO.howl = cnO.air = cnO.lift = cnO.pitch = cnO.spd = 0;
+        if (cnO.pounced && dt > 0) this.landingPuff(x, z, 0.7 * sc * this.speciesScale[sp]);
+      } else {
+        cnO.pack = cnO.howl = cnO.air = cnO.lift = cnO.pitch = cnO.spd = cnO.mark = 0;
+        cnO.play = cnO.sniff = cnO.moving = cnO.pounced = false;
+      }
+      // R8 bison: wallow, rub, spar, bellow, snow dig, calf play (render/behaviours.ts); display offsets of at most 2.5 m
+      const bo = this.bOut;
+      let boOn = false;
+      if (BISON[sp]) {
+        const bi = this.bIn;
+        const cpb = this.shared.uCamPos.value;
+        bi.slot = slot; bi.id = id; bi.state = state; bi.spd = spd1; bi.flags = A[o + 8] | 0; bi.x = x; bi.z = z;
+        bi.dt = dt; bi.running = running; bi.timeScale = this.timeScale; bi.clock = clock; bi.season = season;
+        bi.camD = Math.hypot(x - cpb.x, z - cpb.z);
+        bi.vs = sc * this.speciesScale[sp];
+        bi.snow = this.dust.snow;
+        const near = bi.camD < BEH_RANGE;
+        // (the ground under it is only worked out within range and while it is standing about: the wallow is the only thing that asks)
+        bi.dry = near && state !== St.Walk && state !== St.Run && state !== St.Flee ? (this.dryOverride ?? this.groundDry(x, z)) * this.dust.dryness : 0;
+        bi.bare = bi.dry > 0.55 ? this.bareAt(x, z) : 0;
+        bi.selfBellow = this.beh.quietFor(clock) > BELLOW_QUIET && rutK(season) > 0.05;
+        this.beh.step(bi, bo);
+        x += bo.ox;
+        z += bo.oz;
+        boOn = true;
+        if (bo.began && dt > 0 && bi.camD < BEH_RANGE) {
+          if (bo.now === BEH.Wallow) this.behSeen.wallow++;
+          else if (bo.now === BEH.Rub) this.behSeen.rub++;
+          else if (bo.now === BEH.Spar) { this.behSeen.spar++; if (this.onSpar) this.onSpar(x, z); }
+          else if (bo.now === BEH.Play) this.behSeen.play++;
+          else if (bo.now === BEH.Dig) this.behSeen.dig++;
+        }
+        if (bo.bellowStarted && dt > 0) {
+          this.behSeen.bellow++;
+          if (this.onBellow && bi.camD < BEH_RANGE) this.onBellow(x, z);
+        }
+        if (bo.pounced && dt > 0) this.landingPuff(x, z, 0.5 * bi.vs);
+        // a wallow throws up dust off the flanks as the animal rolls (on dry ground only: the dryness is already in `bi.dry`)
+        if (bo.dust > 0 && running > 0 && bi.dry > 0.3) {
+          S.dust[slot] += bo.dust * running;
+          let guard = 3;
+          while (S.dust[slot] >= 1 && guard-- > 0) {
+            S.dust[slot] -= 1;
+            const a = Math.random() * Math.PI * 2, rr = (0.3 + Math.random() * 1.0) * bi.vs;
+            const px = x + Math.cos(a) * rr, pz = z + Math.sin(a) * rr;
+            this.dust.emit(
+              px, sampleHeight(H, hn, cell, px, pz) + 0.15, pz,
+              Math.cos(a) * 0.7 + (Math.random() - 0.5) * 0.4, 0.4 + Math.random() * 0.6, Math.sin(a) * 0.7 + (Math.random() - 0.5) * 0.4,
+              (1.1 + Math.random() * 0.9) * bi.vs, 1.3 + Math.random() * 1.1, 0.3 + Math.random() * 0.15, Math.random(), bi.dry,
+            );
+          }
+        }
+      }
       if (fd.on) h = fd.face; // it faces the carcass from its slot
       else if (rv.on) h = rv.mode > 0 ? Math.atan2(rv.hz, rv.hx) : Math.atan2(rv.cz - z, rv.cx - x);
       else if (stalkD < 1e8) h = stalkAng; // a stalking cat faces its prey
+      else if (boOn && bo.faceOn) h = bo.face; // (bison: the opponent, the tree it rubs against, the way round its ring)
+      else if (cnOn && cnO.moving) h = cnO.face; // (a pup romping on its ring)
 
       // the terrain under the drawn position: the leg cycle runs on the distance along the ground, and the pose below uses it
       const g0 = sampleHeight(H, hn, cell, x, z);
@@ -1683,7 +1901,7 @@ export class AnimalLayer {
       // animation state targets
       // gait style follows the animal's own pace (walk, trot, gallop), not the time-lapse factor
       // (a predator walking to its slot round a carcass moves at the pace of that walk)
-      const spdT = this.timeScale > 0 ? Math.max(spd1 * VIS_PER_SIM, hunter ? offSpd : 0, cnO.spd) : 0;
+      const spdT = this.timeScale > 0 ? Math.max(spd1 * VIS_PER_SIM, hunter ? offSpd : 0, cnO.spd, boOn ? bo.spd : 0) : 0;
       let hdT = 0, lieT = 0, crT = 0;
       let flapT = 0, perchT = 0;
       if (state === St.Graze || state === St.Eat || state === St.Drink) hdT = 1;
@@ -1701,6 +1919,13 @@ export class AnimalLayer {
       const gl = sp === Sp.Coyote && state === St.Eat ? this.cn.glance(id, clock) : 0;
       if (gl > 0.001) hdT *= 1 - gl;
       if (cnOn && (cnO.howlWant || cnO.howl > 0.4)) { lieT = 0; hdT = 0; }
+      // R8: a pup romping stands up, head up; a canid about to scent mark stands and sniffs the ground; the bison's behaviours take the body
+      if (cnOn && cnO.play) { lieT = 0; hdT = 0; }
+      else if (cnOn && cnO.sniff) { lieT = 0; hdT = 1; }
+      if (boOn) {
+        if (bo.lie >= 0) lieT = bo.lie;
+        if (bo.head >= 0) hdT = bo.head;
+      }
       if (flier) {
         const grounded = groundedBird;
         crT = grounded ? 1 : 0; // wing fold
@@ -1779,6 +2004,14 @@ export class AnimalLayer {
       S.crouch[slot] += (crT - S.crouch[slot]) * (sp === Sp.Cougar && state === St.Chase ? kCrouchFast : kCrouch);
       S.frz[slot] += (frzT - S.frz[slot]) * (frzT > S.frz[slot] ? kFrzIn : kFrzOut);
       S.flap[slot] += (flapT - S.flap[slot]) * kHead;
+      // R8: the pronghorn's rump flare (on alarm: it flees or runs: up fast, down slowly) and the preen of a perched raptor (5 to 8 s every 20 to 50 s)
+      if (PRONGHORN[sp]) {
+        const flT = this.timeScale > 0 && (state === St.Flee || state === St.Run) ? 1 : 0;
+        S.flare[slot] += (flT - S.flare[slot]) * (1 - Math.exp(-dt / (flT > S.flare[slot] ? FLARE_IN : FLARE_OUT)));
+      } else if (raptor) {
+        const prT = perched && state !== St.Eat && alt > 0.5 && this.timeScale > 0 && this.timeScale <= 3 && sessionAt(id, 21, clock, PREEN_P0, PREEN_P1, 0.8, 5, 8) >= 0 ? 1 : 0;
+        S.preen[slot] += (prT - S.preen[slot]) * (1 - Math.exp(-dt / (prT > S.preen[slot] ? 0.5 : 0.7)));
+      }
       const sickT = (A[o + 8] | 0) & F_INFECTED ? 0.98 : 0;
       S.sick[slot] += (sickT - S.sick[slot]) * kSick;
       const sickK = S.sick[slot];
@@ -1977,6 +2210,14 @@ export class AnimalLayer {
           y += Math.sin(this.timeSec * 0.31 + wv) * Math.min(1.2, alt * 0.15);
           roll += 0.07 * aloft * Math.sin(this.timeSec * 0.53 + wv * 1.7);
           pitch += 0.05 * aloft * Math.sin(this.timeSec * 0.41 + wv * 2.3);
+          // R8: now and then a raven in the air rolls right over (one turn in 1.5 s, eased in and out), either way round
+          if (RAVEN[sp] && alt > 5 && this.timeScale > 0 && this.timeScale <= 3) {
+            const rt = sessionAt(id, 22, clock, 28, 75, 0.55, RAVEN_ROLL);
+            if (rt >= 0) {
+              const u = rt / RAVEN_ROLL;
+              roll += (hash01(id * 3 + 1) > 0.5 ? 1 : -1) * Math.PI * 2 * u * u * (3 - 2 * u);
+            }
+          }
         }
         y += rvLift * vs;
         pitch += takeoffK * 0.45 * (raptor ? 1 - S.stoop[slot] : 1); // the beak comes up with the first beats
@@ -2021,6 +2262,12 @@ export class AnimalLayer {
         y += cnO.lift + 0.26 * fl * Math.max(0, -sn) + 0.3 * fl * Math.max(0, sn);
         pitch += cnO.pitch;
       }
+      if (boOn && (bo.lift > 0 || bo.pitch !== 0)) {
+        // a calf's buck: off the ground, nose up at the take off and down at the landing
+        const sn = Math.sin(bo.pitch), fl = pr.length * vs;
+        y += bo.lift + 0.12 * fl * Math.max(0, -sn) + 0.14 * fl * Math.max(0, sn);
+        pitch += bo.pitch;
+      }
       // wading: in a water cell the animal stands on the bed while the water is shallower than its belly; in deeper
       // water it rides with the belly at the surface (a gentle bob, level pose) instead of looking like it stands on it
       if (!FLIES[sp] || alt <= 0.3) {
@@ -2042,7 +2289,7 @@ export class AnimalLayer {
         const ikK = 1 - smoothstep(IK_NEAR, IK_FAR, camD);
         let bT = 0;
         if (ikK > 0.001 && S.lie[slot] < 0.98) {
-          bT = stanceBodyDy(pr, this.rigs[sp]!, gaitMix(pr, gaitSpd, stotW), S.phase[slot], { x, y, z, ch, sh, pitch, roll, s: vs }, groundAt) * ikK * (1 - S.lie[slot]) * (1 - cnO.air) * (1 - cnO.howl);
+          bT = stanceBodyDy(pr, this.rigs[sp]!, gaitMix(pr, gaitSpd, stotW), S.phase[slot], { x, y, z, ch, sh, pitch, roll, s: vs }, groundAt) * ikK * (1 - S.lie[slot]) * (1 - cnO.air) * (1 - cnO.howl) * (1 - (boOn ? bo.air : 0));
         }
         S.bdy[slot] += (bT - S.bdy[slot]) * kBdy;
       }
@@ -2144,13 +2391,13 @@ export class AnimalLayer {
       const fx = b.fx.array as Float32Array;
       fx[gp] = flier ? S.tug[slot] * (1 - S.mv[slot]) : S.tug[slot]; // a raven stops pecking while it hops or walks
       fx[gp + 1] = FLIES[sp] ? alt : pr.kind === 0 ? S.bdy[slot] : 0;
-      fx[gp + 2] = S.hunt[slot];
-      fx[gp + 3] = raptor ? S.stoop[slot] : pounceE; // (a raptor: the stoop)
+      fx[gp + 2] = pr.behave ? packBisonB(bo) : S.hunt[slot]; // (a bison: bellow, play and spar, R8, see packBison)
+      fx[gp + 3] = raptor ? S.stoop[slot] : pr.flare ? S.flare[slot] : pounceE; // (a raptor: the stoop; a pronghorn: the rump flare, R8)
       // aFx2: a quadruped (hold on the prey 0..1, feeding cycle phase), a raven (hop 0..1 or -1, walk phase or -1, seconds into a
       // takeoff or -1, flutter 0..1)
       const fx2 = b.fx2.array as Float32Array;
       if (flier) {
-        fx2[gp] = rvHopU; fx2[gp + 1] = rvWalk; fx2[gp + 2] = takeoffK > 0 ? S.rtk[slot] : -1; fx2[gp + 3] = rvFlut;
+        fx2[gp] = rvHopU; fx2[gp + 1] = rvWalk; fx2[gp + 2] = takeoffK > 0 ? S.rtk[slot] : -1; fx2[gp + 3] = raptor ? S.preen[slot] : rvFlut; // (a perched raptor's preen rides in the flutter slot)
       } else if (pr.stot) {
         // a mule deer: antler growth, the stotting weight, velvet, and how far the coat has turned to its winter grey (models/muledeer.ts seasons)
         const fl8 = A[o + 8] | 0;
@@ -2162,7 +2409,7 @@ export class AnimalLayer {
       }
       look[gp] = clamp(coat, 0, 1);
       look[gp + 1] = hash01(id);
-      look[gp + 2] = S.crouch[slot];
+      look[gp + 2] = pr.behave ? packBisonA(bo) : S.crouch[slot]; // (a bison: dig, wallow, rub and the air of a hop, R8, see packBison)
       look[gp + 3] = (id === sel ? 1 : 0) + 2 * fadeQ + sickK;
       // pick sphere
       const c = k * 4;

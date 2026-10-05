@@ -18,6 +18,12 @@
 //   aFx2  = (only for hunters and birds, #define FX2) a predator: (hold on the prey 0..1, feeding cycle phase 0..1, leap 0..1: the
 //            spring onto the prey, which falls away as the hold takes over); a raven: (hop
 //            0..1 or -1, walk phase 0..1 or -1, seconds into a takeoff or -1, flutter 0..1)
+//   R8 behaviour library. A bison (BEHAV) has no use for the crouch (aLook.z) or the hunting weight (aFx.z), and carries seven weights in them
+//            in 6-bit steps (the animal layer's packBison; a bison has no aFx2 either, and a second instance attribute is a cost the herd views
+//            feel): aLook.z = snow dig + 64 wallow roll + 4096 rub on a tree + 262144 air (0..15: the legs follow the body in the air of a calf's
+//            hop), aFx.z = bellow + 64 calf play + 4096 spar shove + 262144 (1 for the bull that shoves half a cycle later). A pronghorn (FLARE)
+//            reads aFx.w, which it never uses for a pounce, as the rump flare. A perched raptor reads aFx2.w as the preen weight. A canid's pack
+//            (aFx2.w) also carries the scent mark.
 import * as THREE from 'three';
 import { IK_CAP, footReach, plantedStride, stotStride } from './types';
 import type { AnimParams, ModelDef } from './types';
@@ -47,6 +53,13 @@ function raptorDefines(p: AnimParams): string[] {
 }
 
 type Variant = 'single' | 'near' | 'far';
+
+/**
+ * R8 switch (a benchmark and debugging hook): off, the bison and pronghorn programs are compiled without the behaviour poses and the rump flare
+ * (which makes them the programs of before R8, give or take the canids' scent mark). Flip it, then set `needsUpdate` on the materials (the animal layer's
+ * `r8` setter does both); the program cache key carries it, so the two programs are each compiled once.
+ */
+export const R8_SHADER = { on: true, bison: true, flare: true };
 
 /** R6 mule deer: the antler anchor and the growth at which the forks and the second tines come out (defaults for every other model). */
 function seasonDefines(def?: ModelDef): string {
@@ -127,6 +140,8 @@ function defines(p: AnimParams, far: ModelDef['far'] | undefined, geometry: Mode
     `#define ANIM_NEAR 20.0`, `#define ANIM_FAR 110.0`,
     `#define BODY_LEN ${f(p.boostLen)}`,
     `#define FX2 ${p.hunts || p.kind === 2 || (p.kind === 0 && p.stot) ? 1 : 0}`,
+    `#define BEHAV ${R8_SHADER.on && R8_SHADER.bison && p.kind === 0 && p.behave ? 1 : 0}`,
+    `#define FLARE ${R8_SHADER.on && R8_SHADER.flare && p.kind === 0 && p.flare ? 1 : 0}`,
     `#define CLASP ${f(p.clasp ?? 0)}`,
     `#define STALK ${p.kind === 0 && p.stalk ? 1 : 0}`,
     ...stotDefines(p),
@@ -173,15 +188,18 @@ float tgNearCopy() {
 // R3 canids: the animal layer packs three things into aFx2.w of a hunter (a quadruped with FX2): floor(w) = air + 16 * howl, each
 // 0..15, and fract(w) = mange severity 0..0.99. air / 15 is how far a leap has taken it off the ground (the legs follow the body
 // instead of reaching for the ground). howl 0..10 is the sit of a howl (haunches down, muzzle up) times ten, 11..15 the same sit
-// with yips ((q - 10) / 5 of full strength).
-void tgUnpack(float w, out float air, out float howl, out float yip, out float mange) {
+// with yips ((q - 10) / 5 of full strength). R8: floor(w) also carries 256 * mark (0..15), how far a hind leg is cocked to scent mark.
+void tgUnpack(float w, out float air, out float howl, out float yip, out float mange, out float mark) {
   float wi = floor(w);
-  float hq = floor(wi / 16.0);
-  float aq = wi - 16.0 * hq;
+  float mk = floor(wi / 256.0);
+  float rest = wi - 256.0 * mk;
+  float hq = floor(rest / 16.0);
+  float aq = rest - 16.0 * hq;
   air = aq / 15.0;
   howl = min(hq, 10.0) / 10.0;
   yip = max(hq - 10.0, 0.0) / 5.0;
   mange = fract(w);
+  mark = mk / 15.0;
 }
 float tgMangeOf() {
 #if FX2 && KIND == 0
@@ -270,6 +288,15 @@ float tgPounce;
 float tgHold;   // 0..1: holding the prey (takedown), braced back on the hind feet
 float tgFeedB;  // 0..1: the haul of the feeding cycle, the forequarters pulled back
 float tgHowl;   // 0..1: sitting up to howl (R3): the body pitches up about the shoulders, the haunches drop
+#if BEHAV
+float tgWallow;  // R8 bison: 0..1 wallowing (rolling on the ground) and the roll angle it is at (rad, about the body axis)
+float tgRollA;
+float tgRub;     // 0..1: rubbing against a tree: rocking along the trunk, leaning into it
+float tgSpar;    // 0..1: sparring: shoving head to head, each bull in turn (tgSparPh is its phase offset 0..1)
+float tgSparPh;
+float tgBT;      // the animal's own clock and seed (the poses run on them)
+float tgBSeed;
+#endif
 vec3 tgGW;
 void tgBodyFwd(inout vec3 p, inout vec3 n) {
   p.y += tgYoff;
@@ -306,6 +333,29 @@ void tgBodyFwd(inout vec3 p, inout vec3 n) {
   if (tgFeedB > 0.001) p.x -= tgFeedB * 0.11 * BODY_LEN * smoothstep(-0.1, 0.5, p.x);
   // sitting to howl: the rump drops about the shoulders (the forefeet stay planted, the hind legs fold up in the leg code)
   if (tgHowl > 0.001) tgRotZ(p, n, vec3(0.22 * BODY_LEN, COM_Y, 0.0), tgHowl * 0.62);
+#if BEHAV
+  // R8 bison. These are body motions, so (like the feeding haul) the leg IK takes them back out of the foot targets and the feet stay planted.
+  if (tgRub + tgSpar + tgWallow > 0.001) {
+  if (tgRub > 0.001) {
+    // rubbing against a tree: the animal stands side-on to the trunk (the tree on its right), leans into it and rocks along the bark
+    float rr = sin(tgBT * 2.5 + tgBSeed * 9.0);
+    p.x += tgRub * 0.22 * rr;
+    tgRotX(p, n, vec3(0.0, 0.3, 0.0), tgRub * (0.09 + 0.025 * sin(tgBT * 2.5 + tgBSeed * 9.0 + 1.0)));
+  }
+  if (tgSpar > 0.001) {
+    // sparring: heads down and locked, the bulls shove in turn (the other is half a cycle behind), the forequarters dipping into the push
+    float sw = sin(TG_TAU * (tgBT * 0.8 + tgSparPh));
+    p.x += tgSpar * 0.3 * sw;
+    tgRotZ(p, n, vec3(-0.5, COM_Y, 0.0), -tgSpar * (0.06 + 0.05 * sw));
+  }
+  if (tgWallow > 0.001) {
+    // wallowing: lying down, the animal rocks over onto its side and back, on and off its hump, legs kicking (the leg code); the pivot is the
+    // middle of the body at lying height, and the body rides up a little as it turns so the hump and the side do not sink into the ground
+    tgRotX(p, n, vec3(0.0, COM_Y + tgYoff, 0.0), tgRollA);
+    p.y += tgWallow * 0.12 * abs(sin(tgRollA));
+  }
+  }
+#endif
 }
 #endif
 
@@ -366,7 +416,11 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
   lie = 0.0;
   stoopW = dead ? 0.0 : clamp(aFx.w, 0.0, 1.0);
 #endif
+#if BEHAV
+  float crouch = 0.0; // (R8: a bison's aLook.z is its snow dig weight)
+#else
   float crouch = dead ? 0.0 : aLook.z;
+#endif
 #if KIND == 2
   float crouchBody = 0.0; // birds reuse aLook.z as wing fold
 #else
@@ -382,8 +436,8 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
   // at drone and map range the legs swing less: their splay makes a ragged outline that reads as crumpled paper
   float calmK = 1.0 - LEG_CALM * smoothstep(150.0, 380.0, camD);
   float pounce = dead ? 0.0 : aFx.w;
-#if RAPTOR
-  pounce = 0.0; // (aFx.w is the stoop weight of a raptor)
+#if RAPTOR || BEHAV || FLARE
+  pounce = 0.0; // (aFx.w is the stoop weight of a raptor and the rump flare of a pronghorn)
 #endif
 
   // gait weights from speed
@@ -446,13 +500,48 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
   // reach of the legs follow it; pounce, the whole engagement, keeps the head driving onto the prey)
   float leapW = 0.0;
   // R3 canids (see tgUnpack): a mousing leap in the air, a howl (sitting) with its yips, mange severity
-  float cnAir = 0.0, cnHowl = 0.0, cnYip = 0.0, cnMange = 0.0;
+  float cnAir = 0.0, cnHowl = 0.0, cnYip = 0.0, cnMange = 0.0, cnMark = 0.0;
 #if KIND == 0 && !STOT
-  if (!dead) tgUnpack(fx2.w, cnAir, cnHowl, cnYip, cnMange);
+  if (!dead) tgUnpack(fx2.w, cnAir, cnHowl, cnYip, cnMange, cnMark);
+#if !BEHAV && !FLARE
   leapW = dead ? 0.0 : clamp(fx2.z, 0.0, 1.0);
   holdW = dead ? 0.0 : clamp(fx2.x, 0.0, 1.0);
   holdSh = holdW * sin(t * 21.0 + seed * 40.0);
   pitch += holdW * 0.04 * sin(t * 8.0 + seed * 5.0);
+#endif
+#endif
+  // R8 behaviour weights of a bison (see the top of the file) and of a pronghorn's rump flare
+  float wallowW = 0.0, rubW = 0.0, sparW = 0.0, digW = 0.0, bellowW = 0.0, playW = 0.0, flareW = 0.0;
+#if BEHAV
+  if (!dead) {
+    // two floats carry seven weights in 6-bit steps (the animal layer's packBison): aLook.z = dig + 64 wallow + 4096 rub + 262144 air (0..15, the
+    // legs follow the body in the air of a hop), aFx.z = bellow + 64 play + 4096 spar + 262144 (1 when this bull shoves half a cycle later)
+    float pa = aLook.z, pb = aFx.z;
+    if (pa + pb > 0.5) {
+      float q = floor(pa / 262144.0);
+      cnAir = max(cnAir, q / 15.0);
+      pa -= q * 262144.0;
+      q = floor(pa / 4096.0);
+      rubW = q / 63.0;
+      pa -= q * 4096.0;
+      q = floor(pa / 64.0);
+      // (the wallow weight waits for the animal to be down: the lie weight eases in first)
+      wallowW = (q / 63.0) * smoothstep(0.7, 0.98, lie);
+      digW = (pa - q * 64.0) / 63.0;
+      q = floor(pb / 262144.0);
+      tgSparPh = 0.5 * q;
+      pb -= q * 262144.0;
+      q = floor(pb / 4096.0);
+      sparW = q / 63.0;
+      pb -= q * 4096.0;
+      q = floor(pb / 64.0);
+      playW = q / 63.0;
+      bellowW = (pb - q * 64.0) / 63.0;
+    } else tgSparPh = 0.0;
+  }
+#endif
+#if FLARE
+  flareW = dead ? 0.0 : clamp(aFx.w, 0.0, 1.0); // (the pronghorn's pounce slot, which it never uses)
 #endif
 #if KIND == 2
   if (fx2.x >= 0.0) pitch += 0.35 * sin(TG_TAU * fx2.x); // a hop: the beak comes up leaving the ground, down landing
@@ -497,7 +586,23 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
   tgHold = holdW;
   tgFeedB = tugPull;
   tgHowl = cnHowl;
+#if BEHAV
+  tgWallow = wallowW;
+  // the roll: rocking between one side and the other over the hump (a bias to the animal's own side), each at its own beat
+  tgRollA = 0.0;
+  if (wallowW > 0.001) tgRollA = wallowW * ((fract(seed * 5.3) > 0.5 ? 0.35 : -0.35) + 1.1 * sin(t * 1.7 + seed * 20.0));
+  tgRub = rubW;
+  tgSpar = sparW;
+  tgBT = t;
+  tgBSeed = seed;
+#endif
   tgGW = vec3(wWalk, wTrot, wGal) * (1.0 - stotK);
+#endif
+#if FLARE
+  if (flareW > 0.001 && (part == 0 || part == 6)) {
+    // R8 rump flare: the hairs of the patch stand up, so it swells outward over the haunches (and the little tail patch with it)
+    p += n * (0.05 * flareW * smoothstep(-0.02, -0.3, p.x));
+  }
 #endif
   if (part >= 1 && part <= 4) {
     bool front = part <= 2;
@@ -595,11 +700,37 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
       knee = mix(knee, LIE_KNEE_H, cnHowl);
       stretch = mix(stretch, 1.0, cnHowl);
     }
+    // R8 scent marking: one hind leg (the side is the animal's own) is cocked out to the side with the hock folded
+    bool markLeg = cnMark > 0.001 && !front && ((part == 3) == (fract(seed * 5.9) > 0.5));
+    if (markLeg) {
+      hip = mix(hip, 0.1, cnMark);
+      knee = mix(knee, 0.95 * HOCK_K, cnMark);
+      stretch = mix(stretch, 1.0, cnMark);
+    }
 #endif
     float lieHip = front ? LIE_HIP_F : LIE_HIP_H;
     float lieKnee = front ? LIE_KNEE_F : LIE_KNEE_H;
     hip = mix(hip, lieHip, lie);
     knee = mix(knee, lieKnee, lie);
+#if BEHAV
+    if (wallowW + digW > 0.001) {
+    if (wallowW > 0.001) {
+      // wallowing: the legs come out as the animal goes over onto its side (the roll angle past about 0.3 rad) and kick in the air, each at its own beat
+      float ext = smoothstep(0.3, 0.85, abs(tgRollA)) * wallowW;
+      float kk = sin(t * 5.3 + float(part) * 1.9 + seed * 8.0);
+      float kh = front ? 0.35 + 0.5 * kk : -0.1 + 0.55 * kk;
+      float kn = front ? -0.25 - 0.35 * (0.5 + 0.5 * kk) : (0.4 + 0.5 * (0.5 + 0.5 * kk)) * HOCK_K;
+      hip = mix(hip, kh, ext);
+      knee = mix(knee, kn, ext);
+    }
+    if (digW > 0.001 && front) {
+      // pawing at the snow: one forefoot (they alternate) scrapes back now and then
+      float pw = smoothstep(0.55, 0.9, sin(t * 1.15 + seed * 11.0 + float(part) * 3.14159265));
+      hip += digW * pw * (0.25 + 0.3 * sin(t * 7.0 + float(part)));
+      knee -= digW * pw * 0.85;
+    }
+    }
+#endif
 #if KIND == 2
     hip = -1.5 * (1.0 - aLook.z); // birds: legs tuck back in flight, hang when perched
     knee = 0.0;
@@ -644,11 +775,16 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
 #if KIND == 0
     // holding the prey: the hind legs are planted wide apart for the haul (left leg out to the left, right to the right)
     if (!front && holdW > 0.001) tgRotX(p, n, aPivot, (part == 3 ? 1.0 : -1.0) * holdW * 0.3);
+    if (markLeg) tgRotX(p, n, aPivot, (part == 3 ? 1.0 : -1.0) * cnMark * 1.05);
     // a straight leg that still falls short (steep or uneven ground) lengthens a little, at most IK_CAP
     p = aPivot + (p - aPivot) * stretch;
 #endif
   } else if (part == 5) {
     float graze = dead ? 0.0 : aGait.z;
+    float preen = 0.0;
+#if RAPTOR
+    preen = dead ? 0.0 : clamp(fx2.w, 0.0, 1.0) * perchW; // (R8: a perched raptor's preen weight rides in the flutter slot of the second effects attribute)
+#endif
     // aPart.y of a head vertex is 1 minus its weight on the head's rotation: a whole head part has 0 (full weight), the neck of a
     // continuous near-LOD loft ramps from 0 (still the body) to full, so the neck bends without a seam
     float hw = 1.0 - aPart.y;
@@ -687,6 +823,7 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
     float lper = 0.45 + 0.3 * fract(seed * 4.3);
     float raise = smoothstep(0.72, 0.93, sin(t * lper + seed * 40.0)) * (1.0 - 0.8 * tug); // a feeding animal keeps its head down
     raise *= 1.0 - clamp(wTrot + wGal, 0.0, 1.0); // (a stampede keeps its head low: the weight above is set by the animal layer)
+    raise *= 1.0 - clamp(digW + sparW + rubW + bellowW, 0.0, 1.0); // (R8: busy with something: no look-about)
     float dn = graze * (1.0 - 0.85 * raise);
     // standing still: between bites the head comes up and goes down again (a slow cycle of 3 to 6 s), clearly enough that a
     // grazing animal reads as alive from 40 to 120 m (stronger with distance, where the head is a few pixels)
@@ -711,11 +848,43 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
 #if RAPTOR
     ang -= perchW * PERCH_PITCH * 0.8; // the body sits upright on its perch: the head tips down to look ahead
     ang += stoopW * 0.55;              // in a stoop the head is held up out of the dive, eyes on the prey
+    // R8 preening: the head dips and nibbles at the feathers (it is turned back over the shoulder by the roll at the end of the head code)
+    ang -= preen * (0.55 + 0.22 * sin(t * 11.0 + seed * 5.0));
 #endif
 #if KIND == 2
     if (fx2.y >= 0.0) ang += 0.22 * sin(TG_TAU * 2.0 * fx2.y); // a walking raven's head pumps with each step
 #endif
     ang -= pounce * 0.55; // the head drives forward and down onto the prey
+#if BEHAV
+    if (digW + sparW + rubW + bellowW + playW > 0.001) {
+    if (digW > 0.001) {
+      // cratering through snow: the head is down and swung from side to side like a plough, dipping into the snow at the end of each sweep
+      yaw += digW * 0.8 * sin(t * 3.6 + seed * 7.0);
+      ang += digW * (-0.12 + 0.12 * sin(t * 7.2 + seed * 7.0 + 1.0));
+    }
+    if (sparW > 0.001) {
+      // sparring: the head goes low and the bulls push foreheads together, each twisting a little against the other
+      ang -= sparW * 0.2;
+      yaw += sparW * 0.14 * sin(t * 9.0 + seed * 3.0);
+    }
+    if (rubW > 0.001) {
+      // rubbing: the head drops and turns in against the trunk (it stands with the tree on its right, so the nose goes right)
+      ang -= rubW * 0.25;
+      yaw -= rubW * (0.5 + 0.1 * sin(t * 2.5 + seed * 9.0));
+    }
+    if (bellowW > 0.001) {
+      // the bellow: the muzzle goes up and the neck stretches out, a tremor in it
+      ang += bellowW * (0.4 + 0.07 * sin(t * 1.7 + seed * 5.0)) + bellowW * 0.025 * sin(t * 19.0 + seed * 3.0);
+      p.x += bellowW * 0.1 * hw;
+      yaw *= 1.0 - 0.8 * bellowW;
+    }
+    if (playW > 0.001) {
+      // calf play: the head tosses and swings
+      ang += playW * 0.2 * sin(t * 6.5 + seed * 5.0);
+      yaw += playW * 0.35 * sin(t * 4.1 + seed * 3.0);
+    }
+    }
+#endif
 #if KIND == 0
     if (cnHowl > 0.001) {
       // sitting to howl: the muzzle points up (the body is already pitched up about the shoulders), a slow tremor in the long note,
@@ -745,6 +914,10 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
     }
     tgRotY(p, n, aPivot, yaw * hw);
     tgRotZ(p, n, aPivot, ang * hw);
+#if RAPTOR
+    // (the bird sits upright, so its body axis is the vertical: a roll about it swings the beak round over the shoulder)
+    if (preen > 0.001) tgRotX(p, n, aPivot, (fract(seed * 4.7) > 0.5 ? 1.0 : -1.0) * preen * 2.2 * hw);
+#endif
   } else if (part == 6) {
 #if KIND == 0
     if (cnMange > 0.01) {
@@ -762,6 +935,10 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
     lift += flick * 0.3 * (0.5 + 0.5 * sin(t * 15.0));
 #if KIND == 0
     lift -= cnHowl * 1.05; // sitting: the body pitches up, so the tail comes up to lie along the ground behind it
+#if BEHAV
+    lift -= bellowW * 1.15 + playW * 1.15; // a bellowing bull and a playing calf carry the tail up
+    if (playW > 0.001) sway += playW * 0.25 * sin(t * 6.0 + seed * 3.0);
+#endif
 #endif
     if (dead) { float lim = 1.0 - smoothstep(0.1, 0.6, fallen); lift *= lim; sway *= lim; }
 #if RAPTOR
@@ -1088,6 +1265,17 @@ void tgShade(vec3 on) {
 #endif
   float v = 0.9 + 0.2 * fract(aLook.y * 7.31);
   col *= mix(1.0, v, c);
+#if FLARE
+  {
+    // R8 rump flare: the white patch spreads forward over the haunches and brightens (about 1.4 times the size and the value)
+    float flr = dead ? 0.0 : clamp(aFx.w, 0.0, 1.0);
+    int fpt = int(aPart.x + 0.5);
+    if (flr > 0.001 && (fpt == 0 || fpt == 6)) {
+      float ext = smoothstep(-0.02, -0.2, position.x);
+      col = mix(col, vec3(0.64, 0.62, 0.58) * 1.45, flr * ext);
+    }
+  }
+#endif
   if (dead) {
     float r = aGait.z;
     col *= 0.5; // a dead body reads darker than the living herd, so a kill is a dark mark in the grass
@@ -1126,7 +1314,11 @@ void tgShade(vec3 on) {
   vTgFade = dead ? 1.0 : tgFadeOf();
   // distance readability: 0 close up, 1 from the wide view (see ModelDef.far)
   vTgFar = smoothstep(FAR_NEAR, FAR_FAR, distance(uCamPos, vec3(instanceMatrix[3])));
+#if BEHAV
+  vTgHunt = 0.0; // (R8: a bison's aFx.z is its bellow weight)
+#else
   vTgHunt = dead ? 0.0 : aFx.z;
+#endif
   // how much this surface faces the sky (world space): the back of the animal, as the drone and map views see it
   vTgUp = clamp(normalize(mat3(instanceMatrix) * on).y, 0.0, 1.0);
   int tgPart = int(aPart.x + 0.5);
@@ -1335,8 +1527,9 @@ export interface AnimalShared {
 export function makeAnimalMaterials(sp: number, def: ModelDef, shared: AnimalShared, variant: Variant = 'single'): AnimalMaterials {
   shared.uTL ??= { value: 0 };
   shared.uNightK ??= { value: 1 };
-  const defs = defines(def.params, def.far, def.geometry, def, variant) + '\n' + seasonDefines(def);
-  const defsDepth = defines(def.params, def.far, def.geometry) + '\n' + seasonDefines(def);
+  // (worked out when the program is compiled, so the R8 switch below can take effect on a recompile)
+  const defsOf = (): string => defines(def.params, def.far, def.geometry, def, variant) + '\n' + seasonDefines(def);
+  const defsDepthOf = (): string => defines(def.params, def.far, def.geometry) + '\n' + seasonDefines(def);
   // R3 mange (canids only): the fragment stage mottles the coat with dark bare skin in patches, more of it with severity (vTgMg).
   const hasMange = def.params.hunts === true && def.params.kind === 0;
   const hasFur = def.fur !== undefined && def.params.kind === 0;
@@ -1347,6 +1540,7 @@ export function makeAnimalMaterials(sp: number, def: ModelDef, shared: AnimalSha
   const mangeFrag = (hasFur ? FUR_COLOR.replace(/aLookSeed/g, 'vTgSeed') : '') + (hasMange ? MANGE_FRAG : '');
   const material = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: def.roughness, metalness: 0 });
   material.onBeforeCompile = (shader) => {
+    const defs = defsOf();
     shader.uniforms.uTime = shared.uTime;
     shader.uniforms.uCamPos = shared.uCamPos;
     shader.uniforms.uPxK = shared.uPxK;
@@ -1440,10 +1634,11 @@ export function makeAnimalMaterials(sp: number, def: ModelDef, shared: AnimalSha
         totalEmissiveRadiance += diffuseColor.rgb * vec3(0.045, 0.06, 0.11) * tgNK * (0.5 + 0.5 * vTgUp) * tgNL;`,
       );
   };
-  material.customProgramCacheKey = () => `tg-animal-${sp}-${variant}`;
+  material.customProgramCacheKey = () => `tg-animal-${sp}-${variant}-${R8_SHADER.on ? 1 : 0}${R8_SHADER.bison ? 1 : 0}${R8_SHADER.flare ? 1 : 0}`;
 
   const depth = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking });
   depth.onBeforeCompile = (shader) => {
+    const defsDepth = defsDepthOf();
     shader.uniforms.uTime = shared.uTime;
     shader.uniforms.uCamPos = shared.uCamPos;
     shader.uniforms.uPxK = shared.uPxK;
@@ -1461,6 +1656,6 @@ export function makeAnimalMaterials(sp: number, def: ModelDef, shared: AnimalSha
       .replace('#include <clipping_planes_fragment>', '#include <clipping_planes_fragment>\n if (tgFadeDiscard(vTgFade)) discard;')
       .replace('#include <common>', `#include <common>\n${FADE_FRAG_DECL}`);
   };
-  depth.customProgramCacheKey = () => `tg-animal-depth-${sp}`;
+  depth.customProgramCacheKey = () => `tg-animal-depth-${sp}-${R8_SHADER.on ? 1 : 0}${R8_SHADER.bison ? 1 : 0}${R8_SHADER.flare ? 1 : 0}`;
   return { material, depth };
 }

@@ -99,6 +99,8 @@ export class Dust {
   private tgTry = 0;
   /** 0 when the ground is wet, under snow or under a heavy overcast, 1 on dry ground in clear weather. Read by the emitters. */
   dryness = 1;
+  /** R8: how much snow lies on the ground now, 0 none .. 1 a full pack (the engine's snow uniform), for the bison that crater through it. */
+  snow = 0;
   private lit: SceneLit;
 
   constructor(lit: SceneLit) {
@@ -192,6 +194,7 @@ export class Dust {
       const wet = u.wet?.value ?? 0, snow = u.snow?.value ?? 0, over = u.overcast?.value ?? 0;
       const sm = (a: number, b: number, x: number): number => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
       this.dryness = (1 - 0.95 * sm(0.1, 0.6, wet)) * (1 - sm(0.04, 0.25, snow)) * (1 - 0.45 * over);
+      this.snow = snow;
       if (u.soil && u.grassDry) {
         const s = u.soil.value, g = u.grassDry.value;
         // 55% soil, 45% cured grass, then half the colour taken out: khaki, not orange
