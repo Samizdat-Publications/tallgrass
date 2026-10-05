@@ -17,8 +17,8 @@ import { hashSeed, Rng } from './rng';
 import { SPECIES, SPECIES_BY_KEY } from './species';
 import { BASE_YEAR_TICKS, DAY_TICKS, SEASON_TICKS } from './types';
 
-/** Which registry species are canids. Adding coyotes in S5 is one line: add 'coyote' here. */
-export const CANID_KEYS: string[] = ['wolf'];
+/** Which registry species are canids. Wolves and coyotes share distemper and mange. */
+export const CANID_KEYS: string[] = ['wolf', 'coyote'];
 export const IS_CANID: Uint8Array = (() => {
   const t = new Uint8Array(SPECIES.length);
   for (const k of CANID_KEYS) {
@@ -30,6 +30,9 @@ export const IS_CANID: Uint8Array = (() => {
 export function isCanid(sp: number): boolean {
   return IS_CANID[sp] === 1;
 }
+
+/** Coyote families get group keys from here up, so they never collide with a wolf pack id (0..63). */
+export const COYOTE_GROUP_BASE = 1000;
 
 /** Energy drain multiplier while distemper-sick. */
 export const CDV_DRAIN = 1.5;
@@ -58,6 +61,8 @@ export interface DiseaseHost {
   kill(i: number): void;
   story(i: number, kind: 'infected' | 'recovered'): void;
   packSerial(pk: number): number;
+  /** The group canid i spreads disease inside: its wolf pack id, or a coyote family key (always >= COYOTE_GROUP_BASE), or -1 for a loner. */
+  group(i: number): number;
 }
 
 export class Disease {
@@ -193,11 +198,11 @@ export class Disease {
   /** An infected pack member's think: each susceptible packmate has a small chance of catching it. */
   packSpread(i: number, list: Int32Array, n: number): void {
     const a = this.a;
-    const pk = a.pack[i];
+    const pk = this.host.group(i);
     if (pk < 0) return;
     for (let k = 0; k < n; k++) {
       const j = list[k];
-      if (j === i || !a.alive[j] || a.pack[j] !== pk || !IS_CANID[a.sp[j]] || a.cdv[j] > 0 || a.immune[j] > 0) continue;
+      if (j === i || !a.alive[j] || this.host.group(j) !== pk || !IS_CANID[a.sp[j]] || a.cdv[j] > 0 || a.immune[j] > 0) continue;
       if (this.rng.chance(CDV_PACK_CHANCE)) this.infect(j);
     }
   }
@@ -307,7 +312,7 @@ export class Disease {
       if (!a.alive[i] || !IS_CANID[a.sp[i]] || a.mange[i] <= 0) continue;
       if (a.energy[i] > 0.7 && this.rng.chance(p.mangeRecover * yr)) { a.mange[i] = 0; continue; }
       a.mange[i] = Math.min(1, a.mange[i] + p.mangeGrowth * yr);
-      const pk = a.pack[i];
+      const pk = this.host.group(i);
       if (pk >= 0) {
         cases.set(pk, (cases.get(pk) ?? 0) + 1);
         if (!first.has(pk)) first.set(pk, i);
@@ -318,7 +323,7 @@ export class Disease {
     const day = SCAN / DAY_TICKS;
     for (let i = 0; i < a.hi; i++) {
       if (!a.alive[i] || !IS_CANID[a.sp[i]] || a.mange[i] > 0) continue;
-      const c = cases.get(a.pack[i]);
+      const c = cases.get(this.host.group(i));
       if (!c) continue;
       if (this.rng.chance(1 - Math.pow(1 - p.mangeSpread, c * day))) a.mange[i] = MANGE_START;
     }

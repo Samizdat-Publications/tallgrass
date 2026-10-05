@@ -1,0 +1,76 @@
+{
+ "args": {
+  "seeds": 8,
+  "seedBase": 1,
+  "ticks": 240000,
+  "generations": null,
+  "sampleEvery": 600,
+  "threads": 2,
+  "scenarios": [
+   "baseline"
+  ],
+  "params": {
+   "calendarScale": 2,
+   "openPrairie": 1,
+   "ravenVagrants": 1,
+   "cdvRate": 0.3,
+   "mangeRate": 0.06,
+   "wolfPreyRef": 1000,
+   "wolfRareHalf": 400,
+   "leanLitter": 0.8,
+   "matingWindow": 0.8,
+   "bison.birthCooldown": 900,
+   "deer.birthCooldown": 800
+  },
+  "mock": false,
+  "maxMinutes": 0,
+  "progressSec": 600,
+  "out": "/home/user/tallgrass/scratch/screens/G8",
+  "argv": [
+   "--seeds",
+   "8",
+   "--ticks",
+   "240000",
+   "--sample",
+   "600",
+   "--threads",
+   "2",
+   "--params",
+   "{\"calendarScale\":2,\"openPrairie\":1,\"ravenVagrants\":1,\"cdvRate\":0.3,\"mangeRate\":0.06,\"wolfPreyRef\":1000,\"wolfRareHalf\":400,\"leanLitter\":0.8,\"matingWindow\":0.8,\"bison.birthCooldown\":900,\"deer.birthCooldown\":800}",
+   "--out",
+   "/home/user/tallgrass/scratch/screens/G8",
+   "--progress-sec",
+   "600"
+  ]
+ },
+ "commit": "3bb97a5 (frozen copy)",
+ "node": "v22.22.0",
+ "platform": "linux x64",
+ "startedAt": "2026-10-04T23:32:44.359Z",
+ "finishedAt": "2026-10-05T00:00:44.940Z",
+ "wallSeconds": 1680.57,
+ "stopReason": null,
+ "tasks": {
+  "total": 8,
+  "completed": 8,
+  "errors": 0,
+  "aborted": 0,
+  "skipped": 0
+ },
+ "msPerTick": 1.745867,
+ "ticksRun": 1920000,
+ "ticksPerSecWall": 1142,
+ "scenarios": {
+  "baseline": {
+   "seeds": 8,
+   "completed": 8,
+   "persistencePct": {
+    "bison": 100,
+    "wolf": 100,
+    "raven": 100,
+    "pronghorn": 100
+   },
+   "maxGen": 89.7525179856115
+  }
+ }
+}

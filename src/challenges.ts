@@ -47,7 +47,25 @@ const CORE = [Sp.Bison, Sp.Wolf, Sp.Raven, Sp.Deer];
 
 const yr = (y: number) => Math.floor(y) + 1;
 /** The calendar the challenges were tuned on. */
-const CLASSIC = { calendarScale: 1 };
+/**
+ * Every v2 mechanism off, at its v5 value (V2-PLAN.md S3 step 4), so the challenges stay identical to the valleys they
+ * were tuned and validated on whatever the game's defaults become. Literal values, not read from defaultParams(): the
+ * point is that they do not move when a checkpoint changes the defaults. Add each new v2 param here when it lands.
+ */
+export const CHALLENGE_PIN: Record<string, number> = {
+  // open prairie (S1)
+  openPrairie: 0, ravenVagrants: 0,
+  // canid disease (S2)
+  cdvRate: 0, mangeRate: 0,
+  // hungry-wolves mechanics, at their v5 defaults (candidates for v6)
+  wolfPreyRef: 0, wolfRareHalf: 150, leanLitter: 0,
+  // small-prey web (S4) and coyotes (S5)
+  smallPrey: 0, smallGameField: 0, dogClip: 0, dogGrazeBonus: 0, 'coyote.initial': 0,
+  // storms (S6)
+  stormCells: 0,
+};
+/** The calendar the challenges were tuned on, with every v2 mechanism pinned off. */
+const CLASSIC = { calendarScale: 1, ...CHALLENGE_PIN };
 /** Challenge times were tuned in 2,400-tick years; this turns a tuned length into the valley's own calendar (calendarScale).
  *  Read at use time, after the game has set the calendar. */
 const Y = (base: number) => Math.round((base * BASE_YEAR_TICKS) / YEAR_TICKS);

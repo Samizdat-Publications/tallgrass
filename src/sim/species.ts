@@ -59,6 +59,20 @@ export const DIET: number[][] = (() => {
   return d;
 })();
 
+/**
+ * REACT[prey][predator] = how strongly a grazer reacts to a predator in the predator grid: a multiplier on its detection chance
+ * (0 = ignores it). Wolves, cougars and everything else frighten every grazer fully (1). Coyotes are a minor threat: bison ignore
+ * them, and the rest react at the coyote's registry threat (0.3), but in thinkHerbivore only the young and a doe with a fawn at heel
+ * do so at all (the pronghorn herd as a whole is not harassed by coyotes). Rows and columns are indexed by species id.
+ */
+export const REACT: number[][] = (() => {
+  const r: number[][] = SPECIES.map(() => SPECIES.map(() => 1));
+  const coy = SPECIES.findIndex((s) => s.key === 'coyote');
+  const bison = SPECIES.findIndex((s) => s.key === 'bison');
+  for (let prey = 0; prey < SPECIES.length; prey++) r[prey][coy] = prey === bison ? 0 : SPECIES[coy].threat;
+  return r;
+})();
+
 export const SPECIES_BY_KEY: Record<string, SpeciesDef> = Object.fromEntries(SPECIES.map((s) => [s.key, s]));
 
 /** Per-id lookup tables for hot loops. */
