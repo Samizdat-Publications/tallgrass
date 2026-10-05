@@ -9,15 +9,15 @@
 - Unmerged: `wip/drink-spots` (pond-ring fix; param drinkSpots, off by default; 0.7 is roughly level with main over 16 worlds). It is WP S10.
 - Nothing is running in the background.
 
-## In flight (Track R; deadline 2026-10-08 12:00; OWNER: wrap up and stop near 85% weekly, a point or two over is fine)
-- Main b9a22e0, live (redeployed 03:05, live check clean). Done: R0, R1, R2, R3, R4, R5, R11, R12 (minus family tree), R14, M1; round 13 + 14 fixes. v6E is the default world (merged 0181be1). Track S done through S7 (raptors off by default).
-- Builders running: R7 animal fidelity (near LOD, bison hump/cape, fur shading; includes a Gemini close-up reel), R15 lens (DoF, grain, photo-mode panel). Merge each after a look at its stills; animals/shader merges may conflict.
-- Wrap-up checklist at ~85%: merge running builders, npm test + build + stills, deploy + live check, MORNING.md v2 section refresh (keep claims tied to runs), journey images + publish making-of artifact (https://claude.ai/artifact/7jPHUFvbzTv6AUz5UCA3Mu, read the url first; publish scratch/artifact_journey/making-of.html with files = only new journey images), commit + push, then write the current local time to .claude/hooks/run_until.local.txt and stop.
-- Next if budget allows: R8 behaviour library, R9 night sky, R6 mule deer render after Track S's S8, camera collision, low_golden headroom (15.5 ms of 16.7).
-- Known: grey band at cloud base in storm drone views; thickets blocky up close; coyote slightly pale; dusk chorus live path untested.
-- Owner rulings today: quality over shareability (engine port allowed, staying on Three.js for now); per-commit bullets by category; keep the making-of artifact updated at milestones.
-- Builders' reports sometimes name the wrong branch: use `git branch --contains <commit>`. node_modules is shared via junctions: never rm -rf a junction; restore with `npm install` (not npm ci). If isolation worktrees are refused under heavy CPU load, create one by hand (git worktree add -b <branch> scratch/wt-<name> main + node junction).
-- Quota at 03:05: weekly 76%.
+## State at stop (Track R stopped 2026-10-05 ~10:20 at about 82% weekly, owner's 85% ruling)
+- Main ca557df, all pushed, live redeployed 10:15 (live check: no errors). Nothing uncommitted. No Track R builders running.
+- Done: R0-R9, R11, R12 (incl. family tree), R14, R15, M1, camera collision, rounds 13 and 14 fixes. v6 default. Track S merged through S8 + AnimalDetail fields.
+- Still running on the CPU (node workers outlive the session): v6b shock suite -> review/stability/v6b-b51d880-shocks300 (log scratch/accept_v6b_shocks.log). Post its result to REQUESTS-R next session.
+- Next Track R WPs: R10 (after S12), R13 (after S17), R16 (after S14), R17 performance presets (low_golden 15.5 ms; dense herd near LOD +2 ms), M2 milestone (blind critic + Gemini video round, deploy, MORNING).
+- Polish backlog: grey band at the storm cloud base in drone views; blocky thickets up close; coyote slightly pale; deer ears; camera view-rate spikes near groves; aurora +0.44 ms.
+- Making-of artifact: version 12 (https://claude.ai/artifact/7jPHUFvbzTv6AUz5UCA3Mu); publish new journey images at each milestone (read the url first).
+- Owner rulings today: quality over shareability (engine port allowed; staying on Three.js); per-commit bullets by category; keep the making-of artifact updated; stop near 85% weekly.
+- Builders' reports sometimes name the wrong branch: use `git branch --contains <commit>`. node_modules is shared via junctions: never rm -rf a junction; restore with `npm install`.
 
 ## Start here
 1. Read CLAUDE.md, then V2-PLAN.md sections 0 to 6. Your kickoff prompt gives your mode (single or two tracks) and your deadline: write the deadline to `.claude/hooks/run_until.local.txt` first.
