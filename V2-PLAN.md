@@ -1296,7 +1296,7 @@ Render-side only, driven by sim state plus an id hash; no sim change.
   - blizzard wind
   - grasshopper buzz
 
-**R15. Lens** [R, M]
+**R15. Lens** [R, M] (done 2026-10-05)
 - Depth of field in director close shots and photo mode (a gather bokeh from the depth texture).
 - Film grain and faint chromatic aberration in cinematic mode.
 - A photo mode panel: exposure, focus on the selected animal, freeze time.
