@@ -1,5 +1,39 @@
 import type * as THREE from 'three';
 
+/**
+ * Wing and pose constants of a bird of prey (shader.ts, `#if RAPTOR`). Angles in radians, lengths in model metres. The wings are authored on the
+ * right (+z); the primaries ("fingers", numbered in the vertex's aPart.w) fan about `handRoot`.
+ */
+export interface RaptorParams {
+  /** Where the primaries' roots meet, right wing. */
+  handRoot: [number, number, number];
+  /** Number of separate primaries per wing (at most 7). */
+  fingers: number;
+  /** Half-angle of the fan of the primaries in a soar, and how far they curl up at the tips. */
+  spread: number;
+  curl: number;
+  /** Dihedral of the whole wing at the shoulder and of the hand above the arm at the wrist, in a glide (a hawk holds a shallow V, an eagle flatter). */
+  dihIn: number;
+  dihOut: number;
+  /** Size of the beat at the shoulder and the wrist. */
+  flapIn: number;
+  flapOut: number;
+  /** Extra back sweep of the wing in a fast glide. */
+  sweepFast: number;
+  /** The stoop: dihedral of the drawn-in wing, its back sweep, how much the wing's length is pulled in (0..1). */
+  stoopDih: number;
+  stoopSweep: number;
+  stoopCmp: number;
+  /** A folded wing is this much shorter (0..1) and the tips droop by `foldDroop`. */
+  foldCmp: number;
+  foldDroop: number;
+  /** Body pitch (nose up) of a bird sitting upright on a perch, about the hip joint at `perchHip` (x, y). */
+  perchPitch: number;
+  perchHip: [number, number];
+  /** How far the tail fans out in a soar (fraction of its width). */
+  tailFan: number;
+}
+
 /** Gait and pose constants for one species. Angles in radians, lengths in meters, speeds in m/s. */
 export interface AnimParams {
   /** 0 quadruped, 1 hopper, 2 bird. */
@@ -106,6 +140,8 @@ export interface AnimParams {
   strideSpeedMax: number;
   /** Wing beat frequency (Hz), birds only. */
   flapHz: number;
+  /** R5 birds of prey (golden eagle, red-tailed hawk): slotted primaries, soaring dihedral, the stoop and the upright perch. Unset: a raven-style bird. */
+  raptor?: RaptorParams;
   /** Footprint for terrain alignment and picking. */
   length: number;
   height: number;

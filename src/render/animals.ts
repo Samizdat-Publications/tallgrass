@@ -38,6 +38,8 @@ const INITIAL_CAPACITY: number[] = byId({ bison: 2048, wolf: 512, raven: 512, pr
 const HUNTER: boolean[] = SPECIES.map((s) => (s.guild === 'predator' || s.guild === 'mesopredator') && !s.flies);
 /** Fliers: drawn at their altitude, banked into turns, folded on the ground (raven; later eagle, hawk). */
 const FLIES: boolean[] = SPECIES.map((s) => s.flies);
+/** Birds of prey (golden eagle, red-tailed hawk; R5): perch upright, stoop with folded wings, cast a shadow below 40 m, and call. */
+const RAPTOR: boolean[] = SPECIES.map((s) => s.guild === 'raptor');
 /** The canids (wolf, coyote): mange, and for the coyote the mousing leap, the dusk chorus and the wary glance (render/canids.ts). */
 const CANID: boolean[] = SPECIES.map((s) => s.key === 'wolf' || s.key === 'coyote');
 /** Prey a lunging hunter goes for: grazers that are neither fliers nor the small ones (rabbit, prairie dog, beaver). */
@@ -187,11 +189,13 @@ const TURN: Array<[number, number]> = byId<[number, number]>(
     pronghorn: [7, 6],
     rabbit: [9, 8],
     cougar: [7, 6],
+    eagle: [2.2, 1.1], // a wide, lazy circle on the thermal
+    hawk: [2.8, 1.5],
   },
   (s) => (s.flies ? [3.5, 2.6] : [7, 6]),
 );
 /** Largest lean (rad) into a turn at speed. */
-const BANK_MAX: number[] = byId({ bison: 0.2, wolf: 0.42, raven: 0.75, pronghorn: 0.42, rabbit: 0.3, cougar: 0.42 }, (s) => (s.flies ? 0.75 : 0.42));
+const BANK_MAX: number[] = byId({ bison: 0.2, wolf: 0.42, raven: 0.75, pronghorn: 0.42, rabbit: 0.3, cougar: 0.42, eagle: 0.62, hawk: 0.7 }, (s) => (s.flies ? 0.75 : 0.42));
 
 /**
  * Weight (R1 item 7): the most the drawn speed may rise per second, in on-screen m/s^2 (0 = uncapped: fliers, the rabbit's
@@ -242,6 +246,10 @@ const FEED_VAR = 1.5;
 const RAVEN_WOLF_R = 2;
 /** A grounded raven takes off with a deep downstroke flare lasting this many seconds. */
 const TAKEOFF_TIME = 1.1;
+/** A raptor calls (or screams at the start of a stoop) only within this many metres of the camera (R5). */
+const RAPTOR_EAR = 200;
+/** A flying raptor lower than this (m) casts a ground shadow (R5). */
+const RAPTOR_SHADOW_ALT = 40;
 
 /** Carcass-pull signal of the feeding cycle (the shader's `pullW`): rises through the haul, then the meat tears free and it drops. */
 const feedPull = (fp: number): number => smoothstep(0.16, 0.5, fp) * (1 - smoothstep(0.5, 0.56, fp));
@@ -480,6 +488,11 @@ class Slots {
   mv = new Float32Array(this.cap);
   rtk = new Float32Array(this.cap).fill(-1);
   wasG = new Uint8Array(this.cap);
+  /** Raptors (R5): the eased stoop and upright-perch weights, the state last frame (255 = none yet), and the clock time of the next call. */
+  stoop = new Float32Array(this.cap);
+  perch = new Float32Array(this.cap);
+  pst = new Uint8Array(this.cap).fill(255);
+  rnx = new Float32Array(this.cap);
   hdn = new Float32Array(this.cap);
   lie = new Float32Array(this.cap);
   crouch = new Float32Array(this.cap);
@@ -550,6 +563,10 @@ class Slots {
     this.mv = g(this.mv, Float32Array);
     { const b = new Float32Array(n).fill(-1); b.set(this.rtk); this.rtk = b; }
     this.wasG = g(this.wasG, Uint8Array);
+    this.stoop = g(this.stoop, Float32Array);
+    this.perch = g(this.perch, Float32Array);
+    { const b = new Uint8Array(n).fill(255); b.set(this.pst); this.pst = b; }
+    this.rnx = g(this.rnx, Float32Array);
     this.hdn = g(this.hdn, Float32Array);
     this.lie = g(this.lie, Float32Array);
     this.crouch = g(this.crouch, Float32Array);
@@ -570,7 +587,7 @@ export class AnimalLayer {
   /** Sim speed multiplier (1 = real time, 0 = paused). Scales gait frequency so legs match visible speed. */
   timeScale = 1;
   /** Per species visual size multiplier by species id (readability boost for small animals: wolf 1.35 (the concept art wolves read at ~0.65 of a bison), raven 1.7 (circling ravens are the "kill here" tell), rabbit 1.2, cougar 1.05). */
-  readonly speciesScale: number[] = byId({ bison: 1, wolf: 1.35, raven: 1.7, pronghorn: 1, rabbit: 1.2, cougar: 1.05, coyote: 1.35 }, () => 1);
+  readonly speciesScale: number[] = byId({ bison: 1, wolf: 1.35, raven: 1.7, pronghorn: 1, rabbit: 1.2, cougar: 1.05, coyote: 1.35, eagle: 1.7, hawk: 1.6 }, () => 1);
 
   private world: World;
   /** Draw batch by species id; null for a species with no model (it is simply not drawn). */
@@ -618,6 +635,13 @@ export class AnimalLayer {
   private cnOut = newOut();
   /** Called when a coyote near the camera starts a mousing leap (x, z): the field notes. */
   onMousingLeap: ((x: number, z: number) => void) | null = null;
+  /**
+   * A raptor within earshot of the camera calls (R5): species id, whether it is the scream of a stoop beginning, and where it is (three
+   * coordinates: x, height in the world, z). The audio layer plays the clip from there.
+   */
+  onRaptorCall: ((sp: number, scream: boolean, x: number, y: number, z: number) => void) | null = null;
+  /** Stoops that have begun since the layer started (a debug and test counter). */
+  stoopsSeen = 0;
   private ws: WeightState = { x: 0, z: 0, vx: 0, vz: 0, tx: 0, tz: 0 };
   private gen = 0;
 
@@ -796,6 +820,10 @@ export class AnimalLayer {
         S.wset[slot] = 0;
         S.acc[slot] = 0;
         S.lean[slot] = 0;
+        S.stoop[slot] = 0;
+        S.perch[slot] = 0;
+        S.pst[slot] = 255;
+        S.rnx[slot] = 0;
         this.cn.reset(slot);
       }
       S.stamp[slot] = this.gen;
@@ -1355,10 +1383,14 @@ export class AnimalLayer {
 
       // interpolate against the previous snapshot
       let x = x1, z = z1, h = h1, alt = alt1, sc = sc1, climb = 0;
+      // (raptors) how steeply the sim path rose or fell between the two snapshots: metres of altitude and of ground covered
+      let dAltS = 0, dHorS = 0;
       const j = this.prevOf[i];
       if (j >= 0 && P) {
         const q = j * AGENT_STRIDE;
         const dx = x1 - P[q + 1], dz = z1 - P[q + 2];
+        dAltS = alt1 - P[q + 9];
+        dHorS = Math.sqrt(dx * dx + dz * dz);
         if (dx * dx + dz * dz < 900) {
           x = P[q + 1] + dx * alpha;
           z = P[q + 2] + dz * alpha;
@@ -1418,8 +1450,10 @@ export class AnimalLayer {
 
       // Display offsets from the sim position (render side only; the sim never sees them): a predator at a carcass takes its slot
       // round it, a raven wanders about it and flutters back from a wolf that lunges or feeds close by.
-      const hunter = HUNTER[sp], flier = FLIES[sp];
-      const groundedBird = flier && alt < 0.3 && state !== St.Fly;
+      const hunter = HUNTER[sp], flier = FLIES[sp], raptor = RAPTOR[sp];
+      // a raptor is "down" while it sits (on a tree top or the ground), eats or mantles; a raven only on the ground
+      const perched = raptor && (state === St.Idle || state === St.Rest || state === St.Eat);
+      const groundedBird = flier && (raptor ? perched : alt < 0.3 && state !== St.Fly);
       const fd = this.feeder, rv = this.raven;
       fd.on = false;
       fd.drag = false;
@@ -1428,7 +1462,7 @@ export class AnimalLayer {
       if (hunter && state === St.Eat && !(S.pounce[slot] >= 0 && S.pounce[slot] < S.pstop[slot] + POUNCE_RELEASE)) {
         this.planFeeder(id, A[o + 8] | 0, x, z, fd);
         if (fd.on) { wantX = fd.tx - x; wantZ = fd.tz - z; capOff = fd.cap; }
-      } else if (groundedBird && state === St.Eat) {
+      } else if (groundedBird && state === St.Eat && !raptor) {
         this.planRaven(id, x, z, rv);
         if (rv.on) {
           S.rgw[slot] += (1 - S.rgw[slot]) * (1 - Math.exp(-running / 1.4));
@@ -1503,7 +1537,7 @@ export class AnimalLayer {
       // (a predator walking to its slot round a carcass moves at the pace of that walk)
       const spdT = this.timeScale > 0 ? Math.max(spd1 * VIS_PER_SIM, hunter ? offSpd : 0, cnO.spd) : 0;
       let hdT = 0, lieT = 0, crT = 0;
-      let flapT = 0;
+      let flapT = 0, perchT = 0;
       if (state === St.Graze || state === St.Eat || state === St.Drink) hdT = 1;
       if (state === St.Rest) lieT = 1;
       if (state === St.Stalk) crT = 1;
@@ -1522,10 +1556,17 @@ export class AnimalLayer {
         const grounded = groundedBird;
         crT = grounded ? 1 : 0; // wing fold
         hdT = grounded && state === St.Eat ? 1 : 0;
-        flapT = grounded ? 0 : alt < 6 ? 1 : 0.1;
+        // (a raptor held at 6 m or more beats only in its own bursts and when climbing hard: a soaring eagle's wings are still)
+        flapT = grounded || (raptor && state === St.Chase) ? 0 : alt < 6 ? 1 : raptor ? 0 : 0.1;
         lieT = 0;
+        // how upright a raptor sits: bolt upright on a tree top, leaning over the carcass or catch it stands on
+        if (raptor && perched) perchT = alt > 1.2 ? 1 : state === St.Eat ? 0.4 : 0.6;
       }
       if (S.fresh[slot]) {
+        S.stoop[slot] = raptor && state === St.Chase ? 1 : 0;
+        S.perch[slot] = perchT;
+        S.pst[slot] = state;
+        S.rnx[slot] = clock + 4 + 25 * hash01(id * 13 + 7);
         S.wasG[slot] = groundedBird ? 1 : 0;
         S.fresh[slot] = 0;
         S.px[slot] = x;
@@ -1558,8 +1599,30 @@ export class AnimalLayer {
       const hunting = HUNTER[sp] && this.timeScale > 0 ? (state === St.Chase || state === St.Stalk ? 1 : state === St.Eat ? 0.6 : 0) : 0;
       S.tug[slot] += ((feeding ? 1 : 0) - S.tug[slot]) * kHead;
       // predators: how hard it is hunting; ravens: how hard they are climbing (they flap steadily then, glide otherwise)
-      const huntT = FLIES[sp] ? (alt > 0.3 ? clamp(climb / 1.2, 0, 1) : 0) : hunting;
+      // (a raptor flaps steadily only when it is climbing hard, or cruising on a migration: its soaring climbs are wings-still)
+      const huntT = raptor
+        ? perched || state === St.Chase ? 0 : state === St.Migrate ? 0.5 : clamp((climb / Math.max(1, this.timeScale) - 1.6) / 2.4, 0, 1)
+        : FLIES[sp] ? (alt > 0.3 ? clamp(climb / 1.2, 0, 1) : 0) : hunting;
       S.hunt[slot] += (huntT - S.hunt[slot]) * kHead;
+      if (raptor) {
+        // the stoop pose comes on fast (it is a dive), the upright perch over half a second
+        S.stoop[slot] += ((state === St.Chase && this.timeScale > 0 ? 1 : 0) - S.stoop[slot]) * (1 - Math.exp(-dt / 0.16));
+        S.perch[slot] += (perchT - S.perch[slot]) * kCrouch;
+        // calls: a stoop beginning screams, and now and then a bird in earshot of the camera calls
+        const stoopStart = state === St.Chase && S.pst[slot] !== St.Chase;
+        if (stoopStart) this.stoopsSeen++;
+        if (running > 0 && this.onRaptorCall) {
+          const cpr = this.shared.uCamPos.value;
+          const near = Math.hypot(x - cpr.x, z - cpr.z) < RAPTOR_EAR && this.timeScale <= 3;
+          if (stoopStart) {
+            if (near && hash01(id * 31 + this.stoopsSeen) < 0.7) this.onRaptorCall(sp, true, x, g0 + alt, z);
+          } else if (clock >= S.rnx[slot]) {
+            S.rnx[slot] = clock + (sp === Sp.Hawk ? 22 : 34) * (0.7 + 0.8 * hash01(id * 17 + Math.floor(clock)));
+            if (near && state !== St.Rest && !(state === St.Eat && alt < 1)) this.onRaptorCall(sp, false, x, g0 + alt, z);
+          }
+        }
+        S.pst[slot] = state;
+      }
       S.spd[slot] += (spdT - S.spd[slot]) * k8;
       S.vis[slot] += (visT - S.vis[slot]) * k8;
       S.hdn[slot] += (hdT - S.hdn[slot]) * kHead;
@@ -1719,14 +1782,26 @@ export class AnimalLayer {
       let pitch = 0, roll = 0, y = ground;
       if (FLIES[sp]) {
         y = ground + alt;
+        if (raptor && state === St.Eat && alt < 1) {
+          // standing on a carcass (an eagle sits on its centre): up on the body, not inside it
+          const ci = this.carcassNear(x, z, 2.5);
+          const cf = ci >= 0 ? this.fallOfCarcass(ci) : undefined;
+          if (cf) {
+            this.carcassRadii(cf, this.radii);
+            y += this.radii.b * 0.95 * clamp(cf.t / FALL_TIME, 0, 1);
+          }
+        }
         const v = Math.max(spdT, 0.5);
         const bankT = clamp(Math.atan((v * turnRate) / 9.81), -BANK_MAX[sp], BANK_MAX[sp]);
         S.bank[slot] += (bankT - S.bank[slot]) * kBank;
         roll = S.bank[slot];
-        const pT = clamp(Math.atan2(climb, v), -0.5, 0.5);
-        S.pitch[slot] += (pT - S.pitch[slot]) * kBank;
-        pitch = alt > 0.3 ? S.pitch[slot] : 0;
-        if (alt <= 0.3) {
+        // (a raptor's pitch is the slope of the sim path itself: a stoop dives at up to 80 degrees, a soar barely tilts)
+        const stooping = raptor && state === St.Chase;
+        const pT = raptor ? clamp(Math.atan2(dAltS, Math.max(dHorS, 0.35)), stooping ? -1.4 : -0.4, stooping ? 0.3 : 0.4) : clamp(Math.atan2(climb, v), -0.5, 0.5);
+        S.pitch[slot] += (pT - S.pitch[slot]) * (stooping ? 1 - Math.exp(-dt * 7) : kBank);
+        const sitting = raptor ? perched : alt <= 0.3;
+        pitch = !sitting ? S.pitch[slot] : 0;
+        if (sitting) {
           pitch = 0;
           roll = 0;
         } else if (alt > 2) {
@@ -1737,7 +1812,7 @@ export class AnimalLayer {
           pitch += 0.05 * aloft * Math.sin(this.timeSec * 0.41 + wv * 2.3);
         }
         y += rvLift * vs;
-        pitch += takeoffK * 0.45; // the beak comes up with the first beats
+        pitch += takeoffK * 0.45 * (raptor ? 1 - S.stoop[slot] : 1); // the beak comes up with the first beats
       } else {
         const hl = pr.length * 0.3 * vs, hw = 0.12 * Math.max(pr.length, 1) * vs + 0.05;
         const hF = sampleHeight(H, hn, cell, x + ch * hl, z + sh * hl);
@@ -1825,6 +1900,20 @@ export class AnimalLayer {
           this.contact.add(x, cw, z, ch, sh, pitch, roll, Math.min(0.32, 0.22 * pr.height * vs) * Math.min(1.5, sizeBoost), 0.55 * bl * (1 - 0.2 * lyK), (1.15 + 0.35 * lyK) * bw + 0.1 * vs, 0.5);
         }
       }
+      // A raptor below 40 m throws a soft wing-shaped shadow on the grass, offset away from the sun by its height (the sun's shadow map is too
+      // coarse to show a bird's shadow on the ground until it is a few metres up). It grows and fades with height, and is gone at night.
+      if (raptor && !perched && alt < RAPTOR_SHADOW_ALT && camD < 170 && fadeQ < 8) {
+        const L = this.tg ? this.tg.lightDir.value : null;
+        const ly = L ? L.y : 0.8;
+        if (ly > 0.12) {
+          const ox = L ? -(L.x / ly) * alt : 0, oz = L ? -(L.z / ly) * alt : 0;
+          const sx = x + ox, sz = z + oz;
+          const swc = sampleHeight(H, hn, cell, sx, sz);
+          const fall = 1 - alt / RAPTOR_SHADOW_ALT;
+          const grow = 1 + alt * 0.03;
+          this.contact.add(sx, swc, sz, ch, sh, 0, 0, 1.0, 0.3 * pr.length * vs * grow, 0.5 * pr.boostLen * vs * grow * 0.85, 0.62 * fall * Math.min(1, ly * 2.5));
+        }
+      }
       if (fadeQ < 8) this.markers.add(sp, x, y + (FLIES[sp] ? 0.3 : pr.height * 0.6 * vs), z, pr.boostLen, vs);
       // from the wide view, a faint ripple where a predator is actually chasing
       if (state === St.Chase && HUNTER[sp]) this.markers.addPing(sp, x, y + 0.3, z);
@@ -1883,13 +1972,13 @@ export class AnimalLayer {
       gait[gp] = S.phase[slot];
       gait[gp + 1] = gaitSpd;
       gait[gp + 2] = FLIES[sp] ? (S.hdn[slot] > 0.5 ? 1 : S.flap[slot]) : S.hdn[slot];
-      gait[gp + 3] = S.lie[slot];
+      gait[gp + 3] = raptor ? S.perch[slot] : S.lie[slot]; // (a raptor: how upright it sits, see shader.ts)
       // feeding tug (head hauls and shakes, ravens peck), altitude (a bird in flight casts no shadow), hunting weight
       const fx = b.fx.array as Float32Array;
       fx[gp] = flier ? S.tug[slot] * (1 - S.mv[slot]) : S.tug[slot]; // a raven stops pecking while it hops or walks
       fx[gp + 1] = FLIES[sp] ? alt : pr.kind === 0 ? S.bdy[slot] : 0;
       fx[gp + 2] = S.hunt[slot];
-      fx[gp + 3] = pounceE;
+      fx[gp + 3] = raptor ? S.stoop[slot] : pounceE; // (a raptor: the stoop)
       // aFx2: a quadruped (hold on the prey 0..1, feeding cycle phase), a raven (hop 0..1 or -1, walk phase or -1, seconds into a
       // takeoff or -1, flutter 0..1)
       const fx2 = b.fx2.array as Float32Array;

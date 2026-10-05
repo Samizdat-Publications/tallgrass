@@ -21,7 +21,12 @@ export interface DirectorFrame {
   events?: Array<{ tick: number; kind: string; sp: number; x: number; y: number }>;
 }
 
-type ShotKind = 'hunt' | 'stampede' | 'ravens' | 'herd' | 'pronghorn' | 'vista' | 'wolves' | 'town' | 'mousing' | 'migration' | 'coyotes';
+type ShotKind = 'hunt' | 'stampede' | 'ravens' | 'herd' | 'pronghorn' | 'vista' | 'wolves' | 'town' | 'mousing' | 'migration' | 'coyotes' | 'stoop' | 'raptor';
+
+/** A raptor in a stoop (St.Chase) this high (m) is worth cutting to: it is a dive of one to six seconds, so the cut has to be quick. */
+const STOOP_MIN_ALT = 7;
+/** A raptor in flight must be at least this high (m) to be worth the soaring shot (lower, it is landing or taking off). */
+const SOAR_MIN_ALT = 14;
 
 /** A prairie dog town seen from the small-prey fields: cells with this much town (B, of 255) and dogs (G) count. */
 const TOWN_MIN = 90;
@@ -46,6 +51,8 @@ interface Shot {
   yaw: number;
   /** Seconds to hold the shot. */
   hold: number;
+  /** The subject is in the air (a raptor): the camera frames it at its own height, not at the ground under it. */
+  air?: boolean;
 }
 
 export class Director {
@@ -53,6 +60,7 @@ export class Director {
   current: Shot | null = null;
   private t = 0;
   private scan = 0;
+  private stoopScan = 0;
   private last: ShotKind[] = [];
   private rngState = 12345;
   private tmp = new THREE.Vector3();
@@ -108,13 +116,19 @@ export class Director {
     if (!this.enabled || !f) return;
     this.t -= dt;
     this.scan -= dt;
+    this.stoopScan -= dt;
     this.clock += dt;
     if (f.events && f.events.length) this.takeEvents(f);
     // a hunt in progress is worth cutting to early (checked twice a second, after 5 s of the current shot)
     let huntNow: Shot | null = null;
-    if (this.current && this.current.kind !== 'hunt' && this.current.hold - this.t > 5 && this.scan <= 0) {
+    if (this.current && this.current.kind !== 'hunt' && this.current.kind !== 'stoop' && this.current.hold - this.t > 5 && this.scan <= 0) {
       this.scan = 0.5;
       huntNow = this.findHunt(f);
+    }
+    // a raptor beginning a stoop is over in a few seconds (R5): cut to it as soon as the current shot has run 3 s, never over a hunt or another stoop
+    if (!huntNow && this.current && this.current.kind !== 'hunt' && this.current.kind !== 'stoop' && this.current.hold - this.t > 3 && this.stoopScan <= 0) {
+      this.stoopScan = 0.25;
+      huntNow = this.findStoop(f);
     }
     // an event worth a cut (R3): once the current shot has run a few seconds, never over a hunt that is still young
     let evNow: Shot | null = null;
@@ -145,13 +159,16 @@ export class Director {
     const turn = Math.abs(((shot.yaw - this.cam.yawDeg) % 360 + 540) % 360 - 180);
     const cut = far || turn > 75 || Math.abs(shot.dist - this.cam.distance) > 0.6 * Math.max(shot.dist, this.cam.distance);
     // a documentary operator lets the subject drift in frame and eases after it, so the background doesn't judder
-    this.cam.followSmoothTime = shot.id !== null ? 1.1 : 0.4;
-    this.cam.followDeadzone = shot.id !== null ? 0.13 : 0.055;
+    // (a stoop is a 30 m/s dive: the operator has to stay with it, so the follow is tight)
+    const diving = shot.kind === 'stoop';
+    this.cam.followSmoothTime = shot.id !== null ? (diving ? 0.4 : 1.1) : 0.4;
+    this.cam.followDeadzone = shot.id !== null ? (diving ? 0.05 : 0.13) : 0.055;
     if (shot.id !== null) {
       const id = shot.id;
       const p = new THREE.Vector3();
-      this.cam.follow(() => (this.getPos(id, p) ? { x: p.x, y: p.z } : null));
-      this.cam.setView({ ...(cut && known ? { x: sx, y: sy } : {}), distance: shot.dist, pitchDeg: shot.pitch, yawDeg: shot.yaw }, cut && known);
+      const air = shot.air === true;
+      this.cam.follow(() => (this.getPos(id, p) ? { x: p.x, y: p.z, h: air ? p.y : undefined } : null));
+      this.cam.setView({ ...(cut && known ? { x: sx, y: sy } : {}), ...(air && ok ? { h: v.y } : {}), distance: shot.dist, pitchDeg: shot.pitch, yawDeg: shot.yaw }, cut && known);
     } else {
       this.cam.follow(null);
       this.cam.setView({ x: shot.x, y: shot.y, distance: shot.dist, pitchDeg: shot.pitch, yawDeg: shot.yaw }, cut);
@@ -162,6 +179,31 @@ export class Director {
 
   private recent(k: ShotKind): boolean {
     return this.last.includes(k);
+  }
+
+  /** A raptor that has just begun a stoop (St.Chase, still high): follow it from the side, low, to the strike and a few seconds beyond it. */
+  private findStoop(f: DirectorFrame): Shot | null {
+    for (let k = 0; k < f.count; k++) {
+      const o = k * AGENT_STRIDE;
+      if (SPECIES[f.agents[o]]?.guild === 'raptor' && f.agents[o + 7] === St.Chase && f.agents[o + 9] > STOOP_MIN_ALT) {
+        return { kind: 'stoop', id: f.ids[k], x: 0, y: 0, dist: 24 + this.rand() * 14, pitch: 5 + this.rand() * 9, yaw: this.rand() * 360, hold: 7, air: true };
+      }
+    }
+    return null;
+  }
+
+  /** A raptor aloft, soaring or crossing: a long look at it from the side, close enough to see the fingered wing tips. */
+  private findRaptor(f: DirectorFrame): Shot | null {
+    let pick = -1, n = 0;
+    for (let k = 0; k < f.count; k++) {
+      const o = k * AGENT_STRIDE;
+      const st = f.agents[o + 7];
+      if (SPECIES[f.agents[o]]?.guild !== 'raptor' || (st !== St.Fly && st !== St.Migrate) || f.agents[o + 9] < SOAR_MIN_ALT) continue;
+      n++;
+      if (pick < 0 || this.rand() < 1 / n) pick = k;
+    }
+    if (pick < 0) return null;
+    return { kind: 'raptor', id: f.ids[pick], x: 0, y: 0, dist: 15 + this.rand() * 12, pitch: 6 + this.rand() * 14, yaw: this.rand() * 360, hold: 13, air: true };
   }
 
   private findHunt(f: DirectorFrame): Shot | null {
@@ -220,6 +262,13 @@ export class Director {
     if (!this.recent('mousing')) {
       const m = this.findMousing(f);
       if (m) cands.push(m, m);
+    }
+    // a raptor mid-stoop, or soaring (R5)
+    const stoop = this.findStoop(f);
+    if (stoop) cands.push(stoop, stoop);
+    if (!this.recent('raptor')) {
+      const rp = this.findRaptor(f);
+      if (rp) cands.push(rp);
     }
     // a group on the move through a corridor
     if (!this.recent('migration')) {

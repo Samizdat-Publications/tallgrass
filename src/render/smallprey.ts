@@ -469,8 +469,10 @@ export class SmallPreyLayer {
       const def = SPECIES[agents[o] | 0];
       if (!def) continue;
       const ground = !def.flies && (def.guild === 'predator' || def.guild === 'mesopredator');
-      // a bird counts while it is flying below ALARM_ALT (one standing at a carcass is no threat to a town)
-      const air = def.flies && (def.guild === 'raptor' || def.key === 'raven') && agents[o + 7] === St.Fly && agents[o + 9] < ALARM_ALT;
+      // a bird counts while it is flying below ALARM_ALT (one standing at a carcass is no threat to a town). A raptor in its stoop
+      // (St.Chase) is the biggest threat of all: the dive onto a town is exactly what sets the wave off (R5)
+      const st = agents[o + 7];
+      const air = def.flies && (def.guild === 'raptor' || def.key === 'raven') && (st === St.Fly || (st === St.Chase && def.guild === 'raptor')) && agents[o + 9] < ALARM_ALT;
       if (!ground && !air) continue;
       this.thrX[n] = agents[o + 1];
       this.thrZ[n] = agents[o + 2];

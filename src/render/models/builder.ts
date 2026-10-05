@@ -38,6 +38,8 @@ export interface TubeOpts {
   paint: PaintFn | Paint;
   /** Reflect across the XY plane (z -> -z) after construction. */
   mirror?: boolean;
+  /** Spare per-vertex tag (aPart.w): the raptor wings number their primary feathers with it. */
+  spare?: number;
 }
 
 export const lin = (hex: number): V3 => {
@@ -285,7 +287,7 @@ export class MeshBuilder {
       this.pos.push(p[0], p[1], p[2]);
       this.nrm.push(n[0], n[1], n[2]);
       this.col.push(paint[0], paint[1], paint[2]);
-      this.prt.push(o.part, w1, paint[3], 0);
+      this.prt.push(o.part, w1, paint[3], o.spare ?? 0);
       this.pv.push(piv[0], piv[1], piv[2]);
       this.pv2.push(piv2[0], piv2[1], piv2[2]);
     }

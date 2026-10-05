@@ -108,6 +108,8 @@ audio.coyoteSite = () => animals.chorusSite();
 audio.onCoyoteCall = (c) => animals.startChorus(c.x, c.z, c.seconds);
 // field note: a mousing leap close to the camera
 animals.onMousingLeap = () => { ui.fieldNotes.earn('mousingLeap', ui.fieldNotes.yearNow); };
+// R5 raptors: a hawk's scream or an eagle's call (and the scream of a stoop beginning), placed where the bird is (height above the ground)
+animals.onRaptorCall = (sp, scream, x, y, z) => { audio.onRaptor(sp === Sp.Hawk ? 'hawk' : 'eagle', scream, x, Math.max(0.5, y - engine.groundHeight(x, z)), z); };
 // R4 strikes -> R3 thunder player (delay is distance / 343 m/s at 1x, 0 at 10x and up)
 engine.storms.onThunder = (distance, delay) => { audio.onThunder(distance, delay); };
 (window as unknown as Record<string, unknown>).__cranes = cranes;
