@@ -516,6 +516,18 @@ export class Water {
           vec2 q = vec2(vFlow.x - uTime * V_REF, vFlow.y);
           float w2 = 1.0 - smoothstep(70.0, 280.0, dist);
           float w3 = 1.0 - smoothstep(22.0, 95.0, dist);
+          // mid-range look (about 25 to 200 m): the creek must read as water, not a road. The channel is clearer toward its edges
+          // (the bed and sand show through the shallows, the middle stays a deep slate), a lane pattern rides the current and varies
+          // the mirror along it, and the bank end of the water is soft. Fades back to the far silver mirror beyond that.
+          float midK = smoothstep(18.0, 55.0, dist) * (1.0 - 0.8 * smoothstep(140.0, 320.0, dist));
+          float fStreak = 0.5;
+          if (isCreek > 0.5 && midK > 0.01) {
+            fStreak = wNoise(vec2(q.x * 0.05, q.y * 0.7) + vec2(13.0, 3.0)).x * 0.55 + wNoise(vec2(q.x * 0.15, q.y * 1.9) + vec2(2.0, 29.0)).x * 0.45;
+            // the fine lanes would shimmer from afar: they relax to the mean there (the far mirror has its own coarse pattern)
+            fStreak = mix(0.5, fStreak, 1.0 - smoothstep(110.0, 240.0, dist));
+          }
+          // dusk and dawn: how dim the key light is (1 at the horizon glow, 0 in the golden hour and brighter), for the mirrored sky
+          float dimK = (1.0 - smoothstep(1.0, 2.6, dot(uLightColor, vec3(0.2126, 0.7152, 0.0722)))) * (1.0 - uNight);
 
           float shadow = texture2D(tShadow, clamp(p / uWorld, 0.0, 1.0)).r;
           // rain: the wet state from the weather while it is overcast (snow is handled as snow)
@@ -541,11 +553,16 @@ export class Water {
             // in height above the water: the pond banks are gentle, so their band stays low or it smears across the grass
             float reach = mix(0.06 + 0.08 * rag, min(0.26, (0.12 + 0.1 * rag) * (1.0 + 0.3 * riffle)), isCreek);
             reach *= 1.0 + 0.5 * rain * isCreek;
+            // mid range: a wider, softer wet-mud band so the water never ends on a drawn contour
+            float midC = midK * isCreek;
+            reach *= 1.0 + 1.5 * midC;
             float band = 1.0 - smoothstep(0.0, reach, hA);
-            float a = pow(band, mix(2.0, 1.0, farK)) * mix(0.42, mix(0.4, 0.6, isCreek), max(farK, rain)) * (1.0 - dry);
+            float a = pow(band, mix(mix(2.0, 1.0, farK), 1.6, midC)) * mix(mix(0.42, mix(0.4, 0.6, isCreek), max(farK, rain)), 0.5, midC) * (1.0 - dry);
             float film = 1.0 - smoothstep(0.0, 0.012, hA);
             float Fw = 0.03 + 0.97 * pow(1.0 - clamp(V.y, 0.0, 1.0), 5.0);
             vec3 src = tgSkyBase(normalize(vec3(-V.x, max(abs(V.y), 0.05), -V.z))) * Fw * film * 0.2 * (1.0 - dry);
+            // the wet band is brown mud, not a black stroke
+            src += vec3(0.085, 0.065, 0.045) * INV_PI * irr * band * band * 0.6 * midC * (1.0 - dry);
             // Riparian fringe: damp ground and sedges crowd the bank, darker than the prairie, so from the drone's height the water
             // is framed by a dark line and the terrain's pale bank mud never shows as a kerb. Drawn as pure darkening, so the bank
             // keeps the terrain's own colour and lighting.
@@ -648,6 +665,9 @@ export class Water {
           float F = 0.02 + 0.98 * pow(1.0 - cosV, 5.0);
           float mirK = smoothstep(74.0, 110.0, dist) * smoothstep(0.62, 0.4, V.y);
           F = max(F, 0.35 * mirK * (1.0 - ice));
+          // mid range: the mirror varies along the channel in lanes that ride the current (calm, sky-bright lanes between rough, darker
+          // ones), instead of one even gloss; a modest floor keeps some sky in the water at steep camera angles
+          F = max(F, midK * isCreek * (0.03 + 0.17 * smoothstep(0.5, 0.86, fStreak)) * (1.0 - ice) * (1.0 - 0.6 * uNight));
           // a rain-roughened surface turns its micro-facets toward the viewer: the grazing mirror dulls
           F *= 1.0 - 0.4 * rain * (1.0 - ice);
           // distant cat's paws scatter the bright sky a little: they read as darker drifting patches
@@ -662,6 +682,13 @@ export class Water {
           sky *= sL > sKnee ? (sKnee + (sL - sKnee) / (1.0 + 1.8 * (sL - sKnee))) / sL : 1.0;
           // silver: from afar the mirror is paler and less saturated than the dome (wavelets and haze scatter white into it)
           sky = mix(sky, vec3(dot(sky, vec3(0.2126, 0.7152, 0.0722))) * 1.25 + 0.015, 0.4 * mirK * (1.0 - uNight));
+          // mid range: a creek mirrors the sky as slate, not as the sky's own saturated blue
+          // (only the blue is taken out: a warm low sun-lit sky is mirrored warm)
+          {
+            float skyL = dot(sky, vec3(0.2126, 0.7152, 0.0722));
+            float blueish = clamp((sky.b - sky.r) / (skyL + 0.02), 0.0, 1.0);
+            sky = mix(sky, vec3(skyL) * vec3(0.96, 1.02, 1.06), 0.4 * midK * isCreek * (1.0 - uNight) * blueish);
+          }
           // under the moon the mirrored sky is a dark grey-blue, not a bright blue stripe
           sky = mix(sky, vec3(min(sL, 1.0)) * vec3(0.8, 0.9, 1.1), 0.55 * uNight);
           // a grey rain sky is mirrored dim and flat, never as a white sheet
@@ -674,6 +701,11 @@ export class Water {
           vec3 refl = mix(sky, hit.rgb, hit.a);
           // from afar the mirror takes a deep teal cast, so the creek reads as water rather than a neutral grey strip
           refl = mix(refl, refl * vec3(0.55, 0.92, 1.2), mix(0.75 * farK, 0.22 * farK, mirK) * (1.0 - uNight));
+          // dusk: the creek mirrors the dusk sky as dark slate with warm lanes where the current is calm, not as one flat pink or lilac
+          // ribbon (the horizon glow is bright, so the lanes carry the variation, and the whole mirror sits darker than the glow)
+          refl = mix(refl, refl * (0.55 + 0.9 * fStreak) * mix(vec3(0.84, 0.91, 1.06), vec3(1.1, 0.95, 0.82), smoothstep(0.42, 0.74, fStreak)), dimK * isCreek * clamp(midK * 1.6 + mirK, 0.0, 1.0) * (1.0 - ice));
+          // the deep middle mirrors darker than the shoals beside it (steeper facets, more of the dark bed and bank in what it reflects)
+          refl *= 1.0 - 0.34 * smoothstep(0.16, 0.46, depth) * midK * isCreek * (1.0 - ice);
           // From afar a stream is never one tone: calm reaches mirror the dark banks, and where the current or a gust roughens
           // the surface it scatters the bright low sky and goes silvery. The pattern drifts slowly downstream.
           float roughD = 0.0;
@@ -712,6 +744,8 @@ export class Water {
             float reach = tgNoise2(vec2(vFlow.x * 0.022, 3.7));
             optK = clamp((1.0 - 1.1 * side) * mix(0.8, 1.5, smoothstep(3.6, 5.2, hwM)) * (1.0 - 0.35 * riffle) * (0.75 + 0.5 * reach), 0.3, 2.6);
             barK = max(smoothstep(0.15, 0.6, side), smoothstep(0.05, 0.25, barRise));
+            // mid range: clearer water, so the bed shows over the shelving margins and only the middle of the channel stays deep
+            optK *= mix(1.0, 0.42, midK);
           }
           float shelfK = (1.0 - isCreek) * farK * (1.0 - smoothstep(0.25, 0.9, depth));
           float dOpt = max(depth - barRise * 0.9, 0.0) * optK * (1.0 - 0.35 * shelfK);
@@ -730,7 +764,7 @@ export class Water {
             float gravel = smoothstep(0.5, 0.9, n3) * smoothstep(0.35, 0.65, n2) * isCreek * w3;
             bedAlb *= 1.0 - 0.22 * gravel;
             // wet mud right at the waterline, so the bed meets the bank without a seam
-            bedAlb = mix(vec3(0.17, 0.14, 0.1), bedAlb, smoothstep(0.0, 0.1, depth));
+            bedAlb = mix(vec3(0.17, 0.14, 0.1), bedAlb, smoothstep(0.0, mix(0.1, 0.26, midK * isCreek), depth));
             // caustics: where two drifting noise fields cross, a web of focused light (near the camera, fading as the water deepens)
             float caus = 0.0;
             if (w3 > 0.01) {
@@ -745,6 +779,8 @@ export class Water {
             bodyC = bedAlb * INV_PI * Ebed * Tr;
           }
           vec3 scatC = isCreek > 0.5 ? vec3(0.03, 0.042, 0.032) : vec3(0.021, 0.043, 0.04);
+          // mid range: the deep middle is a slate teal with a little life in it, not near-black
+          if (isCreek > 0.5) scatC = mix(scatC, vec3(0.032, 0.05, 0.048), 0.8 * midK) * (1.0 + 0.35 * midK) * (0.62 + 0.85 * fStreak * midK + 0.38 * (1.0 - midK));
           if (isCreek > 0.5) {
             // silt streaks carried by the current
             float st = wNoise(vec2(q.x * 0.07, q.y * 0.7) + 23.0).x * 0.7 + wNoise(vec2(q.x * 0.22, q.y * 1.6) + 5.0).x * 0.3;
@@ -752,14 +788,23 @@ export class Water {
           }
           // a pond seen from high above shows a little more of its clear teal depth (not a black hole)
           scatC *= 1.0 + 0.6 * farK * (1.0 - isCreek);
-          bodyC += scatC * INV_PI * irr * (1.0 - Tr);
+          // (mid range: the water's own light is less blue than the sky's, so the middle reads slate-olive, not ultramarine)
+          vec3 irrBody = mix(irr, vec3(dot(irr, vec3(0.2126, 0.7152, 0.0722))) * vec3(1.0, 1.0, 0.95), 0.35 * midK * isCreek);
+          bodyC += scatC * INV_PI * irrBody * (1.0 - Tr);
           // rain stirs silt into the water and darkens it a little
           bodyC *= 1.0 - 0.25 * rain;
 
           // the water hides the terrain except in the last few centimetres, where it thins to a wet film over the mud
-          float edgeA = smoothstep(0.0, 0.06, depth);
+          float edgeA = smoothstep(0.0, mix(0.06, 0.2, midK * isCreek), depth);
           vec3 src = refl * F + bodyC * (1.0 - F) * edgeA;
           float a = F + (1.0 - F) * edgeA;
+          // mid range: the shelving margins of the creek are lighter than its deep middle, an olive-tan band where the bed shows through
+          // the clear shallows (broken up by the lanes), so the water has a visible cross-section: dark channel, pale shoals
+          if (isCreek > 0.5 && midK > 0.01) {
+            float shelf = (1.0 - smoothstep(0.03, 0.34, depth)) * smoothstep(0.0, 0.06, depth) * midK;
+            vec3 shoal = vec3(0.3, 0.26, 0.17) * (0.8 + 0.5 * fStreak) * INV_PI * irrBody * 0.62;
+            src = mix(src, shoal + refl * F * 0.5, shelf * 0.6 * (1.0 - 0.8 * ice));
+          }
           float lipW = (1.0 - edgeA) * mix(0.5, 0.8, isCreek) * (1.0 - dry);
           src = src * (1.0 - lipW) + refl * F * lipW;
           a = mix(a, 1.0, lipW);
@@ -789,6 +834,18 @@ export class Water {
             // jittered within the cell and only in some cells, so the sparkles never line up into a grid of dots
             float spot = (1.0 - smoothstep(0.08, 0.3, length(fract(gp) - 0.3 - 0.4 * gr.yx))) * step(0.45, tgHash21(gi + 5.0));
             glint += uLightColor * fl * spot * 1.6 * glitW;
+          }
+          // mid range: bigger facets (about a metre) flash in the sun's path where the lanes are rough, so the creek sparkles at 60 to
+          // 200 m when the sun is in front, and not as a continuous ribbon
+          float glitM = midK * isCreek * (1.0 - uNight) * (1.0 - w3) * smoothstep(0.25, 0.6, fStreak);
+          if (glitM > 0.01 && rd > 0.8) {
+            vec2 gp2 = q * vec2(0.9, 1.6);
+            vec2 gi2 = floor(gp2);
+            vec2 gr2 = tgHash22(gi2 + floor(uTime * 2.5) * vec2(0.37, 1.13) + 91.0);
+            vec3 fN2 = normalize(N + vec3(gr2.x - 0.5, 0.0, gr2.y - 0.5) * 0.36);
+            float fl2 = pow(max(dot(reflect(-V, fN2), uLightDir), 0.0), 420.0);
+            float spot2 = (1.0 - smoothstep(0.06, 0.3, length(fract(gp2) - 0.5 - 0.3 * (gr2.yx - 0.5)))) * step(0.3, tgHash21(gi2 + 17.0));
+            glint += uLightColor * fl2 * spot2 * 2.2 * glitM;
           }
           glint *= shadow * (1.0 - uOvercast * 0.8) * (1.0 - 0.8 * ice) * (1.0 - 0.7 * rain);
           glint *= smoothstep(0.02, 0.3, depth);
@@ -829,7 +886,9 @@ export class Water {
             sn *= 1.0 - smoothstep(0.35, 0.9, edgeK + (tgNoise2(p * 0.5 + 3.0) - 0.5) * 0.5);
             // moonlit snow on the ice greys down the way the snow on the land does, so a frozen pond has no glowing rim at night
             iceAlb = mix(iceAlb, vec3(0.93, 0.94, 0.96) * (1.0 - 0.45 * uNight), sn);
-            vec3 iceCol = iceAlb * INV_PI * irr + refl * F * 0.6 * (1.0 - sn);
+            // at dusk the lit ice takes the sky's blue softly (the ambient there is a saturated blue; unadapted it goes violet)
+            vec3 irrI = mix(irr, vec3(dot(irr, vec3(0.2126, 0.7152, 0.0722))) * vec3(1.04, 1.0, 0.93), 0.6 * dimK);
+            vec3 iceCol = iceAlb * INV_PI * irrI + refl * F * 0.6 * (1.0 - sn);
             src = mix(src, iceCol, ice);
             a = mix(a, 0.97, ice * smoothstep(-0.005, 0.03, depth));
           }
