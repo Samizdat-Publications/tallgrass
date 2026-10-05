@@ -1072,7 +1072,7 @@ Merge S6 first.
 - **Events:** `eaglesArrive`, `hawksReturn`.
 - **Gate:** persistence moves by ≤ 1 of 32.
 
-**R5. Raptor render** [R, M]
+**R5. Raptor render** [R, M] (done 2026-10-05)
 - **Models:** eagle and hawk, bird kind. Wingspans 2.0 m and 1.2 m, slotted primaries, slow flaps, soaring dihedral, a folded-wing stoop pose, a perched pose.
 - **Ground shadow:** raptors below 40 m cast one. It triggers the dog-town alarm.
 - **Sound and shots:** hawk scream and eagle calls; a "stoop" director shot.
