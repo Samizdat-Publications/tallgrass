@@ -13,11 +13,13 @@
 //   R7 near/far LOD (quadrupeds with `nearGeometry`): two meshes share the animal layer's per-instance data. The far mesh draws every
 //   instance; the near mesh draws only those within the near range (a copy of their rows). aLook.w carries 32 * (this instance has a near
 //   copy) on top of the flags above. Within the fade range (ModelDef.lod) the two cross-fade by a complementary dithered discard.
+//   R6 mule deer (STOT): aFx2 = (antler growth 0..1, stotting weight 0..1, velvet 0..1, winter coat 0..1). A cougar (STALK) reads the freeze before
+//            the rush (0..1) from aFx2.y while it is not feeding.
 //   aFx2  = (only for hunters and birds, #define FX2) a predator: (hold on the prey 0..1, feeding cycle phase 0..1, leap 0..1: the
 //            spring onto the prey, which falls away as the hold takes over); a raven: (hop
 //            0..1 or -1, walk phase 0..1 or -1, seconds into a takeoff or -1, flutter 0..1)
 import * as THREE from 'three';
-import { IK_CAP, footReach, plantedStride } from './types';
+import { IK_CAP, footReach, plantedStride, stotStride } from './types';
 import type { AnimParams, ModelDef } from './types';
 import { HEIGHT_GLSL } from '../common';
 import { IK_FAR, IK_NEAR, LEG_FLEX, LIFT_K, legLength, legRigOf } from './legmath';
@@ -45,6 +47,26 @@ function raptorDefines(p: AnimParams): string[] {
 }
 
 type Variant = 'single' | 'near' | 'far';
+
+/** R6 mule deer: the antler anchor and the growth at which the forks and the second tines come out (defaults for every other model). */
+function seasonDefines(def?: ModelDef): string {
+  const s = def?.seasonal;
+  return [
+    `#define ANT_BASE vec3(${(s?.antlerBase ?? [0, 0, 0]).map(f).join(',')})`,
+    `#define ANT_FORK ${f(s?.forkAt ?? 0.3)}`, `#define ANT_TINE ${f(s?.tineAt ?? 0.7)}`,
+  ].join('\n');
+}
+
+/** R6 stotting constants as defines (`STOT 0` and nothing else for every species that does not stot). */
+function stotDefines(p: AnimParams): string[] {
+  const s = p.stot;
+  if (p.kind !== 0 || !s) return ['#define STOT 0'];
+  return [
+    '#define STOT 1',
+    `#define STOT_DUTY ${f(s.duty)}`, `#define STOT_STRIDE ${f(stotStride(p))}`, `#define STOT_LIFT ${f(LIFT_K * legLength(p) * s.knee)}`,
+    `#define STOT_BOB ${f(s.bob)}`, `#define STOT_SINK ${f(s.sink)}`, `#define STOT_PITCH ${f(s.pitch)}`, `#define STOT_OFF ${v4(s.off)}`,
+  ];
+}
 
 /** R7 constants as defines: which LOD this program draws, the cross-fade range, and the fur and shell shading. */
 function lodDefines(def: ModelDef | undefined, variant: Variant): string[] {
@@ -104,8 +126,10 @@ function defines(p: AnimParams, far: ModelDef['far'] | undefined, geometry: Mode
     `#define FAR_NEAR ${f(far?.d0 ?? 140)}`, `#define FAR_FAR ${f(far?.d1 ?? 400)}`,
     `#define ANIM_NEAR 20.0`, `#define ANIM_FAR 110.0`,
     `#define BODY_LEN ${f(p.boostLen)}`,
-    `#define FX2 ${p.hunts || p.kind === 2 ? 1 : 0}`,
+    `#define FX2 ${p.hunts || p.kind === 2 || (p.kind === 0 && p.stot) ? 1 : 0}`,
     `#define CLASP ${f(p.clasp ?? 0)}`,
+    `#define STALK ${p.kind === 0 && p.stalk ? 1 : 0}`,
+    ...stotDefines(p),
     `#define MANGE ${p.hunts && p.kind === 0 ? 1 : 0}`, // canids can have mange: a patchy coat (the fragment stage mottles it)
     ...lodDefines(def, variant),
   ].join('\n');
@@ -327,6 +351,11 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
   float down = dead ? smoothstep(0.42, 1.0, fallen) : 1.0;
   float spdG = dead ? aFx.z : spd;
   float seed = aLook.y;
+  // R6 mule deer: how far into the stotting gait it is (the antlers, velvet and winter coat are read where they are used)
+  float stotK = 0.0;
+#if STOT
+  stotK = dead ? 0.0 : clamp(fx2.y, 0.0, 1.0);
+#endif
   float sick = dead ? 0.0 : fract(aLook.w);
   float lie = dead ? 0.0 : aGait.w;
   // R5 raptors: a bird has no lie weight, so aGait.w carries how upright it sits on its perch (0..1) and aFx.w the stoop (0..1)
@@ -380,12 +409,36 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
   bob = wWalk * BOB_W * cos(2.0 * cyc) + wTrot * BOB_T * cos(2.0 * cyc) + wGal * BOB_G * cos(cyc - 0.5);
   pitch = wTrot * PITCH_T * sin(2.0 * cyc + 0.5) + wGal * PITCH_G * sin(cyc + 1.0);
 #endif
+#if STOT
+  if (stotK > 0.001) {
+    // (legmath.ts bodyMotion) stotting: in the stance the body sinks and pitches up from landing to take-off, in the air it rises on a
+    // sine arc (the feet tuck up with it, see the foot path below) and pitches from nose up to nose down
+    float us = fract(ph);
+    float stB, stP;
+    if (us < STOT_DUTY) {
+      float sa = us / STOT_DUTY;
+      stB = -STOT_SINK * sin(3.14159265 * sa);
+      stP = STOT_PITCH * (2.0 * sa - 1.0);
+    } else {
+      float ss = (us - STOT_DUTY) / (1.0 - STOT_DUTY);
+      stB = STOT_BOB * sin(3.14159265 * ss);
+      stP = STOT_PITCH * cos(3.14159265 * ss);
+    }
+    bob = mix(bob, stB, stotK);
+    pitch = mix(pitch, stP, stotK);
+  }
+#endif
   // gentle breathing and walk roll
   float breathe = 0.004 * sin(t * 1.9 + seed * 30.0) * COM_Y;
 
   // feeding at a carcass. Predators tear: the head hauls up and back slowly with the meat in its teeth, shakes it, then
   // snaps back down for the next bite, with the whole body heaving back a little. Ravens peck in quick bursts.
   float tug = dead ? 0.0 : aFx.x;
+  // R6 cat stalk: the freeze before the rush rides in aFx2.y while the cat is not feeding (feeding keeps its cycle phase there)
+  float frzW = 0.0;
+#if STALK
+  frzW = dead ? 0.0 : clamp(fx2.y, 0.0, 1.0) * (1.0 - smoothstep(0.0, 0.05, tug));
+#endif
   float tugPull = 0.0, tugShake = 0.0, tugSwallow = 0.0, tugBite = 0.0, peck = 0.0, peckUp = 0.0;
   // takedown: the hold on the prey (0..1) and the head shaking it
   float holdW = 0.0, holdSh = 0.0;
@@ -394,7 +447,7 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
   float leapW = 0.0;
   // R3 canids (see tgUnpack): a mousing leap in the air, a howl (sitting) with its yips, mange severity
   float cnAir = 0.0, cnHowl = 0.0, cnYip = 0.0, cnMange = 0.0;
-#if KIND == 0
+#if KIND == 0 && !STOT
   if (!dead) tgUnpack(fx2.w, cnAir, cnHowl, cnYip, cnMange);
   leapW = dead ? 0.0 : clamp(fx2.z, 0.0, 1.0);
   holdW = dead ? 0.0 : clamp(fx2.x, 0.0, 1.0);
@@ -432,6 +485,11 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
   // (legmath.ts bodyMotion) the body also sinks a little while it moves, so the knees stay bent (flex)
   float flex = LEGL * dot(gN, FLEX.xyz) * gAmt * moveK;
   tgYoff = bob - flex + breathe - lie * LIE_DROP - crouchBody * CROUCH_DROP - sick * 0.035 * COM_Y + (dead ? 0.0 : aFx.y) - holdW * LEGL * (0.3 + 0.05 * CLASP); // a sick animal sags a little, a predator holding prey sits back on its haunches
+#if STALK
+  // the freeze before the rush: the belly goes right down and the shoulders sink forward, the haunches high and gathered
+  tgYoff -= frzW * crouchBody * CROUCH_DROP * 0.14;
+  pitch -= frzW * crouchBody * 0.1;
+#endif
   tgPitchB = pitch;
   tgFarK = dead ? 0.0 : farK;
   tgCyc = cyc;
@@ -439,7 +497,7 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
   tgHold = holdW;
   tgFeedB = tugPull;
   tgHowl = cnHowl;
-  tgGW = vec3(wWalk, wTrot, wGal);
+  tgGW = vec3(wWalk, wTrot, wGal) * (1.0 - stotK);
 #endif
   if (part >= 1 && part <= 4) {
     bool front = part <= 2;
@@ -454,6 +512,13 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
       float gStride = gN.x * STRIDE_W + gN.y * STRIDE_T + gN.z * (2.0 * LEGL * REACH_G / dutyGal);
       float gLift = LIFT_K * LEGL * (gN.x * KNEE_W + gN.y * KNEE_T + gN.z * KNEE_G);
       vec4 oB = gN.x * OFF_W + gN.y * OFF_T + gN.z * OFF_G;
+#if STOT
+      // R6 stotting (legmath.ts gaitMix): the foot path of the bounds, blended in by the weight. The four feet stand and leave together.
+      gBeta = mix(gBeta, STOT_DUTY, stotK);
+      gStride = mix(gStride, STOT_STRIDE, stotK);
+      gLift = mix(gLift, STOT_LIFT, stotK);
+      oB = mix(oB, STOT_OFF, stotK);
+#endif
       float ofs = part == 1 ? oB.x : (part == 2 ? oB.y : (part == 3 ? oB.z : oB.w));
       // legmath.ts footPath: the foot's offset along the body from its rest position, and its swing lift
       vec2 lw = tgLegWave(ph + ofs, gBeta);
@@ -587,6 +652,27 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
     // aPart.y of a head vertex is 1 minus its weight on the head's rotation: a whole head part has 0 (full weight), the neck of a
     // continuous near-LOD loft ramps from 0 (still the body) to full, so the neck bends without a seam
     float hw = 1.0 - aPart.y;
+#if STOT
+    if (aPart.w > 0.5) {
+      // R6 antlers (aPart.w: 1 main beam, 2 fork, 3 tine; aPivot2 = where the branch starts). They grow about the pedicle by the growth
+      // weight (aFx2.x, 0 = none: a doe, a fawn, or a buck that has shed), the forks come out from ANT_FORK, the second tines from ANT_TINE.
+      // (done before the head turns, so they ride on the head)
+      float antK = clamp(fx2.x, 0.0, 1.0);
+      float lvl = floor(aPart.w + 0.5);
+      vec3 ab = vec3(ANT_BASE.x, ANT_BASE.y, ANT_BASE.z * (aPivot2.z < 0.0 ? -1.0 : 1.0));
+      p += n * 0.004 * clamp(fx2.z, 0.0, 1.0); // velvet swells the beams
+      float lv = 1.0;
+      if (lvl > 1.5) {
+        lv = lvl < 2.5 ? smoothstep(ANT_FORK - 0.18, ANT_FORK + 0.18, antK) : smoothstep(ANT_TINE - 0.18, ANT_TINE + 0.18, antK);
+        p = aPivot2 + (p - aPivot2) * lv;
+      }
+      float as = smoothstep(0.0, 0.05, antK) * mix(0.3, 1.0, antK);
+      p = ab + (p - ab) * as;
+      // young antlers are short but stout (velvet knobs a couple of centimetres across), not hair-thin: a growing antler is inflated back to a
+      // minimum girth; the branches that have not come out yet stay hidden
+      p += n * 0.011 * smoothstep(0.0, 0.05, antK) * (1.0 - as) * lv;
+    }
+#endif
 #if KIND == 0
     if (cnMange > 0.01) {
       // mange: the ruff round the neck goes thin (inset along the normal where the neck meets the shoulders)
@@ -690,6 +776,16 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
       p.z = aPivot.z + (p.z - aPivot.z) * fan;
       lift += strikeT * 0.45 - stoopW * 0.12 * (1.0 - strikeT);
       sway *= 0.5 + 0.5 * (1.0 - aLook.z);
+    }
+#endif
+#if STALK
+    {
+      // a stalking cat lowers the tail close to the ground, swaying slowly, and the tip twitches (the more so in the freeze)
+      lift += crouchBody * 0.42;
+      sway += crouchBody * 0.18 * sin(t * 1.7 + seed * 13.0);
+      float tipK = smoothstep(0.35, 0.9, (aPivot.x - p.x) / (0.85 * BODY_LEN / 1.8));
+      float twi = crouchBody * (0.25 + 0.55 * frzW) * sin(t * (4.2 + 5.0 * frzW) + seed * 7.0);
+      tgRotY(p, n, vec3(aPivot.x - 0.3, aPivot.y, 0.0), twi * tipK);
     }
 #endif
     tgRotZ(p, n, aPivot, lift);
@@ -820,6 +916,20 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
   }
 #endif
 
+#if STALK
+  if (crouchBody > 0.001 && !dead && (part == 0 || part == 5 || part == 6)) {
+    // R6 stalk: the shoulder blades ride up above the dropped back line (the forelegs are folded, elbows high), the back dips between them
+    // and the hips, and in the freeze the haunches gather and wiggle from side to side
+    float sx = (p.x - 0.34 * BODY_LEN / 1.8) / (0.17 * BODY_LEN / 1.8);
+    float dx = (p.x + 0.08 * BODY_LEN / 1.8) / (0.26 * BODY_LEN / 1.8);
+    p.y += crouchBody * COM_Y * (0.1 * exp(-sx * sx) - 0.03 * exp(-dx * dx));
+    if (frzW > 0.001) {
+      float rear = smoothstep(0.1, -0.45, p.x);
+      tgRotY(p, n, vec3(0.1, 0.0, 0.0), frzW * rear * 0.075 * sin(t * 12.0 + seed * 9.0));
+      p.y += frzW * rear * COM_Y * 0.07;
+    }
+  }
+#endif
 #if KIND == 0
   // the body's own motion on top of the legs (the same function the legs aimed through): bob and terrain offset, pitch, the
   // distance cues and the pounce leap
@@ -919,6 +1029,11 @@ const VERT_SHADE_DECL = /* glsl */ `
 uniform vec3 uCoatPale;
 uniform vec3 uCoatDark;
 uniform vec3 uBone;
+#if STOT
+uniform vec3 uWinterPale;
+uniform vec3 uWinterDark;
+uniform vec3 uVelvet;
+#endif
 varying vec3 vTgColor;
 varying float vTgSel;
 varying float vTgFar;
@@ -959,8 +1074,18 @@ uniform float uLegTone;
 void tgShade(vec3 on) {
   bool dead = aGait.y < -0.5;
   vec3 coat = mix(uCoatPale, uCoatDark, aLook.x);
+#if STOT
+  // R6 the coat greys toward the winter coat (aFx2.w, from the season)
+  coat = mix(coat, mix(uWinterPale, uWinterDark, aLook.x), clamp(aFx2.w, 0.0, 1.0));
+#endif
   float c = aPart.z;
   vec3 col = aColor * ((1.0 - c) + c * coat);
+#if STOT
+  if (aPart.w > 0.5 && int(aPart.x + 0.5) == 5) {
+    // antlers: hard bone-brown (the paint) or dark velvet (aFx2.z)
+    col = mix(aColor, uVelvet * (0.7 + 0.6 * aColor.g * 3.0), clamp(aFx2.z, 0.0, 1.0));
+  }
+#endif
   float v = 0.9 + 0.2 * fract(aLook.y * 7.31);
   col *= mix(1.0, v, c);
   if (dead) {
@@ -1030,7 +1155,7 @@ void tgShade(vec3 on) {
 
 /** The animation GLSL (defines for a model, and the shared declarations with tgAnimate), for tools that run it outside three: dev/footslip-gpu.ts checks it against legmath.ts. */
 export function animationShaderParts(def: ModelDef): { defs: string; decl: string } {
-  return { defs: defines(def.params, def.far, def.geometry), decl: COMMON_DECL };
+  return { defs: defines(def.params, def.far, def.geometry) + '\n' + seasonDefines(def), decl: COMMON_DECL };
 }
 
 /** Value noise shared by mange and fur (fragment side), and the position varying. */
@@ -1210,8 +1335,8 @@ export interface AnimalShared {
 export function makeAnimalMaterials(sp: number, def: ModelDef, shared: AnimalShared, variant: Variant = 'single'): AnimalMaterials {
   shared.uTL ??= { value: 0 };
   shared.uNightK ??= { value: 1 };
-  const defs = defines(def.params, def.far, def.geometry, def, variant);
-  const defsDepth = defines(def.params, def.far, def.geometry);
+  const defs = defines(def.params, def.far, def.geometry, def, variant) + '\n' + seasonDefines(def);
+  const defsDepth = defines(def.params, def.far, def.geometry) + '\n' + seasonDefines(def);
   // R3 mange (canids only): the fragment stage mottles the coat with dark bare skin in patches, more of it with severity (vTgMg).
   const hasMange = def.params.hunts === true && def.params.kind === 0;
   const hasFur = def.fur !== undefined && def.params.kind === 0;
@@ -1232,6 +1357,9 @@ export function makeAnimalMaterials(sp: number, def: ModelDef, shared: AnimalSha
     shader.uniforms.uCoatPale = { value: new THREE.Vector3(...def.coatPale) };
     shader.uniforms.uCoatDark = { value: new THREE.Vector3(...def.coatDark) };
     shader.uniforms.uBone = { value: new THREE.Vector3(...def.bone) };
+    shader.uniforms.uWinterPale = { value: new THREE.Vector3(...(def.seasonal?.winterPale ?? def.coatPale)) };
+    shader.uniforms.uWinterDark = { value: new THREE.Vector3(...(def.seasonal?.winterDark ?? def.coatDark)) };
+    shader.uniforms.uVelvet = { value: new THREE.Vector3(...(def.seasonal?.velvet ?? [0.1, 0.075, 0.055])) };
     shader.uniforms.uFill = { value: def.fill };
     shader.uniforms.uWarm = { value: new THREE.Vector3(...def.warm) };
     shader.uniforms.uNeutral = { value: def.neutral };

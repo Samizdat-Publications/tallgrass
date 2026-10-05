@@ -10,12 +10,14 @@
 // Within 45 m of the camera the legs also read the ground under each foot (two-bone IK in the vertex shader) and the body
 // height follows the mean height of the stance feet (stanceBodyDy below, eased here because a shader keeps no state).
 import * as THREE from 'three';
-import { AGENT_STRIDE, CARCASS_STRIDE, F_ALPHA, F_INFECTED, F_MIGRANT, SPECIES_COUNT, Sp, St } from '../sim/types';
+import { AGENT_STRIDE, CARCASS_STRIDE, F_ALPHA, F_INFECTED, F_JUVENILE, F_MALE, F_MIGRANT, F_STOT, SPECIES_COUNT, Sp, St } from '../sim/types';
 import type { Snapshot } from '../sim/types';
 import { SPECIES } from '../sim/species';
 import { sampleHeight } from '../sim/world';
 import type { World } from '../sim/world';
 import { getModel } from './models';
+import { antlerOf, deerSeason } from './models/muledeer';
+import type { DeerSeason } from './models/muledeer';
 import type { AnimParams, ModelDef } from './models';
 import { IK_FAR, IK_NEAR, gaitMix, gaitStride, legRigOf, stanceBodyDy, timelapseGaitSpd, timelapseHz, timelapseK } from './models/legmath';
 import type { LegRig } from './models/legmath';
@@ -32,7 +34,7 @@ import type { SharedUniforms } from './common';
 // to SPECIES (src/sim/species.ts) gets a sane default here until it earns its own entry.
 const byId = <T>(authored: Record<string, T>, fallback: (s: (typeof SPECIES)[number]) => T): T[] => SPECIES.map((s) => authored[s.key] ?? fallback(s));
 
-const INITIAL_CAPACITY: number[] = byId({ bison: 2048, wolf: 512, raven: 512, pronghorn: 1024, rabbit: 1024, cougar: 128 }, () => 256);
+const INITIAL_CAPACITY: number[] = byId({ bison: 2048, wolf: 512, raven: 512, pronghorn: 1024, rabbit: 1024, cougar: 128, muledeer: 512 }, () => 256);
 
 /** Land hunters: the predators that pounce and are chased by the kill-site reactions (wolf, cougar; later coyote). Fliers hunt differently. */
 const HUNTER: boolean[] = SPECIES.map((s) => (s.guild === 'predator' || s.guild === 'mesopredator') && !s.flies);
@@ -68,6 +70,7 @@ const DUST: Array<[number, number, number, number, number, number] | null> = byI
     rabbit: null,
     cougar: [5.5, 0.4, 0.8, 0.2, 0.7, 1.1],
     coyote: [5, 0.35, 0.6, 0.18, 0.6, 1.0],
+    muledeer: [6, 0.4, 0.95, 0.2, 0.8, 1.2],
   },
   () => null, // no dust until a species is given a table
 );
@@ -142,12 +145,12 @@ export function weightStep(st: WeightState, cx: number, cz: number, dt: number, 
  * 1x). Quadrupeds use the stride of the blended gait that the vertex shader's foot path uses (legmath.ts gaitMix), which is
  * what leaves a planted foot standing still on the ground; hoppers and birds interpolate their authored strides.
  */
-function strideFor(p: AnimParams, gaitSpd: number): number {
+function strideFor(p: AnimParams, gaitSpd: number, stot = 0): number {
   if (p.kind !== 0) {
     const u = clamp(gaitSpd / p.strideSpeedMax, 0, 1);
     return p.strideW + (p.strideG - p.strideW) * u * u * (3 - 2 * u);
   }
-  return gaitStride(p, gaitSpd);
+  return gaitStride(p, gaitSpd, stot);
 }
 
 /**
@@ -202,7 +205,7 @@ const BANK_MAX: number[] = byId({ bison: 0.2, wolf: 0.42, raven: 0.75, pronghorn
  * hops). The sim speeds up in a tick or two; the drawn animal picks its speed up at this rate instead (see `weightStep`), so a
  * bison lumbers into a run while a pronghorn is away at once. The drawn path stays within WEIGHT_LAG of the sim path.
  */
-const ACCEL: number[] = byId({ bison: 2.5, pronghorn: 6, wolf: 5, coyote: 6, cougar: 6, raven: 0, rabbit: 0 }, (s) => (s.flies ? 0 : 5));
+const ACCEL: number[] = byId({ bison: 2.5, pronghorn: 6, wolf: 5, coyote: 6, cougar: 18, muledeer: 6, raven: 0, rabbit: 0 }, (s) => (s.flies ? 0 : 5)); // (cougar: the rush from the ambush is explosive, R6)
 /** The drawn path may trail the sim path by up to this (m): the cap lifts smoothly from WEIGHT_LAG0 to WEIGHT_LAG (x12 by then), and nothing drifts further than WEIGHT_HARD. */
 const WEIGHT_LAG0 = 0.45;
 const WEIGHT_LAG = 1.5;
@@ -244,6 +247,15 @@ const FEED_MIN = 2.5;
 const FEED_VAR = 1.5;
 /** A raven on the ground flutters back from a wolf that lunges or feeds within this many metres. */
 const RAVEN_WOLF_R = 2;
+/**
+ * R6 cat ambush. A cougar lying in wait (the sim's Stalk) creeps up on prey within CREEP_R m, at CREEP_SPEED m/s in slow placed steps, as far as
+ * CREEP_MAX m from where the sim has it (display only: the sim never moves); within FREEZE_D m it freezes, belly down, haunches gathered, until
+ * the sim springs. The rush then starts from that pose, with a puff of dust from the hind feet.
+ */
+const CREEP_R = 60;
+const CREEP_MAX = 5;
+const CREEP_SPEED = 0.55;
+const FREEZE_D = 38;
 /** A grounded raven takes off with a deep downstroke flare lasting this many seconds. */
 const TAKEOFF_TIME = 1.1;
 /** A raptor calls (or screams at the start of a stoop) only within this many metres of the camera (R5). */
@@ -309,6 +321,8 @@ interface FallInfo {
   dt1: number;
   dgx: number;
   dgz: number;
+  /** R6: the antler growth weight of the deer that died here (0 for none), so its carcass keeps its antlers. */
+  ant: number;
 }
 
 /** Where a feeding predator should stand round its carcass, and what it does there (planFeeder). */
@@ -432,7 +446,12 @@ class Batch {
         sh.uPxK.value = 900 / (2 * Math.tan(((camera as THREE.PerspectiveCamera).fov * Math.PI) / 360));
       }
     };
-    mesh.onBeforeRender = (_r, _s, camera) => beforeRender(_r as THREE.WebGLRenderer, _s as THREE.Scene, camera);
+    const aoCount = this.def.aoCount;
+    mesh.onBeforeRender = (_r, _s, camera) => {
+      if (aoCount !== undefined && (_s as THREE.Scene).overrideMaterial) g.setDrawRange(0, aoCount); // (the AO pre-pass draws the rest pose: leave out the antlers)
+      beforeRender(_r as THREE.WebGLRenderer, _s as THREE.Scene, camera);
+    };
+    if (aoCount !== undefined) mesh.onAfterRender = () => g.setDrawRange(0, Infinity);
     this.geometry = g;
     this.mesh = mesh;
     if (this.nearMaterial && this.def.nearGeometry) {
@@ -506,6 +525,9 @@ class Slots {
   /** Rate its drawn speed is changing at (m/s^2, eased) and the body pitch that comes of it (rad). */
   acc = new Float32Array(this.cap);
   lean = new Float32Array(this.cap);
+  /** R6: the stotting weight of a mule deer and the freeze before a cougar's rush, eased. */
+  stot = new Float32Array(this.cap);
+  frz = new Float32Array(this.cap);
   /** Feeding tug and hunting weights, eased. */
   tug = new Float32Array(this.cap);
   hunt = new Float32Array(this.cap);
@@ -589,6 +611,8 @@ class Slots {
     this.wset = g(this.wset, Uint8Array);
     this.acc = g(this.acc, Float32Array);
     this.lean = g(this.lean, Float32Array);
+    this.stot = g(this.stot, Float32Array);
+    this.frz = g(this.frz, Float32Array);
     this.tug = g(this.tug, Float32Array);
     this.hunt = g(this.hunt, Float32Array);
     this.hs = g(this.hs, Float32Array);
@@ -637,7 +661,20 @@ export class AnimalLayer {
   /** Sim speed multiplier (1 = real time, 0 = paused). Scales gait frequency so legs match visible speed. */
   timeScale = 1;
   /** Per species visual size multiplier by species id (readability boost for small animals: wolf 1.35 (the concept art wolves read at ~0.65 of a bison), raven 1.7 (circling ravens are the "kill here" tell), rabbit 1.2, cougar 1.05). */
-  readonly speciesScale: number[] = byId({ bison: 1, wolf: 1.35, raven: 1.7, pronghorn: 1, rabbit: 1.2, cougar: 1.05, coyote: 1.35, eagle: 1.7, hawk: 1.6 }, () => 1);
+  readonly speciesScale: number[] = byId({ bison: 1, wolf: 1.35, raven: 1.7, pronghorn: 1, rabbit: 1.2, cougar: 1.05, coyote: 1.35, eagle: 1.7, hawk: 1.6, muledeer: 1.05 }, () => 1);
+  /**
+   * The season (0 early spring .. 4) the deer's antlers and coat follow; null: the snapshot's own. A capture hook (the engine's rendered
+   * season is separate, and a still of a rutting buck in autumn must not wait for the valley year to come round).
+   */
+  seasonOverride: number | null = null;
+  private deerCache: { season: number; v: DeerSeason } = { season: -1, v: { antler: 0, velvet: 0, winter: 0 } };
+  private deerNow(snap: Snapshot): DeerSeason {
+    const s = this.seasonOverride ?? snap.env.season;
+    if (s !== this.deerCache.season) this.deerCache = { season: s, v: deerSeason(s) };
+    return this.deerCache.v;
+  }
+  /** Scratch for preyNear. */
+  private pn = { x: 0, z: 0, d: 0 };
 
   private world: World;
   /** R7: draw the near LOD of the species that have one (false: the far mesh draws everything; an A/B and debugging hook). */
@@ -938,8 +975,13 @@ export class AnimalLayer {
           t: 1e3, age: 0, key, sp, rem: snap.carcasses[o + 2], cx, cz, crew: [], crewAt: [], slotTh: [], crewSide: [], sub: 0, th0: hash01(Math.floor(hseed * 4096) + 53) * Math.PI * 2,
           pbest: 0, pdx: 0, pdz: 0, pull: 0, pcx: 0, pcz: 0,
           h: hseed * Math.PI * 2, v: 0, vs: 1, ph: 0, pace: 0, ox: 0, oz: 0, g: gen,
-          dragger: 0, h0: 0, dux: 1, duz: 0, dlen: 0, dt0: 0, dt1: 0, dgx: 0, dgz: 0,
+          dragger: 0, h0: 0, dux: 1, duz: 0, dlen: 0, dt0: 0, dt1: 0, dgx: 0, dgz: 0, ant: 0,
         };
+        // a deer's carcass keeps the antlers of the buck that died (a body that was already lying there: one in five is a buck)
+        if (this.batches[sp]?.def.params.stot) {
+          const dg = this.deerNow(snap).antler;
+          fi.ant = hseed < 0.2 ? antlerOf(dg, true, false, 0.3, hash01(Math.floor(hseed * 4096) + 7)) : 0;
+        }
         this.falls.set(key, fi);
         if (!fast && P) {
           let bj = -1, bd = 36;
@@ -954,6 +996,10 @@ export class AnimalLayer {
             const q = bj * AGENT_STRIDE;
             fi.h = P[q + 3]; fi.v = P[q + 4] * VIS_PER_SIM; fi.pace = fi.v;
             fi.vs = P[q + 5] * this.speciesScale[sp];
+            if (this.batches[sp]?.def.params.stot) {
+              const pf = P[q + 8] | 0;
+              fi.ant = antlerOf(this.deerNow(snap).antler, (pf & F_MALE) !== 0, (pf & F_JUVENILE) !== 0, P[q + 11], hash01(this.prev!.ids[bj]));
+            }
             const gs = this.goneSlot.get(this.prev!.ids[bj]);
             if (gs !== undefined) {
               fi.ph = this.slots.phase[gs];
@@ -1188,6 +1234,24 @@ export class AnimalLayer {
   }
 
   // ---------------------------------------------------------------------------------------------------------
+  /** R6: the nearest living grazer a cat would go for (a lunge target) within `r` m of (x, z): its place and distance in `out`; false when there is none. */
+  private preyNear(snap: Snapshot, x: number, z: number, r: number, out: { x: number; z: number; d: number }): boolean {
+    const A = snap.agents;
+    let best = r * r, bi = -1;
+    for (let j = 0; j < snap.count; j++) {
+      const q = j * AGENT_STRIDE;
+      if (!LUNGE_TARGET[A[q] | 0]) continue;
+      const dx = A[q + 1] - x, dz = A[q + 2] - z;
+      const d2 = dx * dx + dz * dz;
+      if (d2 < best) { best = d2; bi = q; }
+    }
+    if (bi < 0) return false;
+    out.x = A[bi + 1];
+    out.z = A[bi + 2];
+    out.d = Math.sqrt(best);
+    return true;
+  }
+
   /** Index of the carcass nearest (x, z) within r metres in the current snapshot, or -1. */
   private carcassNear(x: number, z: number, r: number): number {
     const snap = this.curr;
@@ -1395,6 +1459,10 @@ export class AnimalLayer {
     const kHead = 1 - Math.exp(-dt / 0.3);
     const kLie = 1 - Math.exp(-dt / 0.9);
     const kCrouch = 1 - Math.exp(-dt / 0.5);
+    const kCrouchFast = 1 - Math.exp(-dt / 0.12);
+    const kStotIn = 1 - Math.exp(-dt / 0.12), kStotOut = 1 - Math.exp(-dt / 0.25);
+    const kFrzIn = 1 - Math.exp(-dt / 0.5), kFrzOut = 1 - Math.exp(-dt / 0.1);
+    const deerS = this.deerNow(snap);
     const kBank = 1 - Math.exp(-dt * 3);
     const snapDt = this.snapDt;
     const sel = this.selectedId;
@@ -1521,6 +1589,8 @@ export class AnimalLayer {
       fd.drag = false;
       rv.on = false;
       let wantX = 0, wantZ = 0, capOff = SLOT_CAP, direct = false, rvFlut = 0;
+      // R6 a cougar lying in wait: the rate it creeps at (0 = not creeping), and where the prey it watches is (bearing, distance)
+      let creepRate = 0, stalkAng = 0, stalkD = 1e9;
       if (hunter && state === St.Eat && !(S.pounce[slot] >= 0 && S.pounce[slot] < S.pstop[slot] + POUNCE_RELEASE)) {
         this.planFeeder(id, A[o + 8] | 0, x, z, fd);
         if (fd.on) { wantX = fd.tx - x; wantZ = fd.tz - z; capOff = fd.cap; }
@@ -1550,6 +1620,21 @@ export class AnimalLayer {
           wantZ = S.rgw[slot] * (rv.pz - z) + S.stw[slot] * S.stz[slot];
           direct = true;
         }
+      } else if (sp === Sp.Cougar && state === St.Stalk) {
+        // lying in wait: it keeps where it is drawn, and creeps up on prey that comes within sight, then freezes
+        const dx0 = S.fox[slot], dz0 = S.foz[slot];
+        wantX = dx0;
+        wantZ = dz0;
+        capOff = CREEP_MAX;
+        if (this.timeScale > 0 && this.timeScale <= 3 && this.preyNear(snap, x + dx0, z + dz0, CREEP_R, this.pn)) {
+          stalkD = this.pn.d;
+          stalkAng = Math.atan2(this.pn.z - (z + dz0), this.pn.x - (x + dx0));
+          if (stalkD > FREEZE_D) {
+            wantX = dx0 + Math.cos(stalkAng) * CREEP_MAX;
+            wantZ = dz0 + Math.sin(stalkAng) * CREEP_MAX;
+            creepRate = CREEP_SPEED;
+          }
+        }
       }
       if (!rv.on) { S.rgw[slot] *= Math.exp(-running * 2); S.stw[slot] *= Math.exp(-running * 2); }
       let offX = wantX, offZ = wantZ, offSpd = 0, offRem = 0;
@@ -1562,7 +1647,7 @@ export class AnimalLayer {
         // walk to it at a walking pace (a predator), or return quickly when there is nothing to do there any more
         const dx = wantX - S.fox[slot], dz = wantZ - S.foz[slot];
         const dl = Math.hypot(dx, dz);
-        const step = Math.min(dl, (fd.drag ? Math.min(2.4, 0.9 + dl * 2.5) : hunter ? Math.min(1.9, 0.5 + dl * 1.2) : 3) * running);
+        const step = Math.min(dl, (creepRate > 0 ? creepRate : fd.drag ? Math.min(2.4, 0.9 + dl * 2.5) : hunter ? Math.min(1.9, 0.5 + dl * 1.2) : 3) * running);
         if (dl > 1e-5) { offX = S.fox[slot] + (dx / dl) * step; offZ = S.foz[slot] + (dz / dl) * step; } else { offX = S.fox[slot]; offZ = S.foz[slot]; }
         offSpd = running > 0 ? step / running : 0;
         offRem = dl - step;
@@ -1590,6 +1675,7 @@ export class AnimalLayer {
       } else cnO.pack = cnO.howl = cnO.air = cnO.lift = cnO.pitch = cnO.spd = 0;
       if (fd.on) h = fd.face; // it faces the carcass from its slot
       else if (rv.on) h = rv.mode > 0 ? Math.atan2(rv.hz, rv.hx) : Math.atan2(rv.cz - z, rv.cx - x);
+      else if (stalkD < 1e8) h = stalkAng; // a stalking cat faces its prey
 
       // the terrain under the drawn position: the leg cycle runs on the distance along the ground, and the pose below uses it
       const g0 = sampleHeight(H, hn, cell, x, z);
@@ -1603,6 +1689,7 @@ export class AnimalLayer {
       if (state === St.Graze || state === St.Eat || state === St.Drink) hdT = 1;
       if (state === St.Rest) lieT = 1;
       if (state === St.Stalk) crT = 1;
+      const frzT = stalkD <= FREEZE_D ? 1 : 0; // (R6: the freeze before the rush)
       // a stampede runs head-low (R1 item 7)
       if (sp === Sp.Bison && (state === St.Flee || state === St.Run)) hdT = 0.55 * smoothstep(5.5, 9, spdT);
       if (fd.on) {
@@ -1689,7 +1776,8 @@ export class AnimalLayer {
       S.vis[slot] += (visT - S.vis[slot]) * k8;
       S.hdn[slot] += (hdT - S.hdn[slot]) * kHead;
       S.lie[slot] += (lieT - S.lie[slot]) * kLie;
-      S.crouch[slot] += (crT - S.crouch[slot]) * kCrouch;
+      S.crouch[slot] += (crT - S.crouch[slot]) * (sp === Sp.Cougar && state === St.Chase ? kCrouchFast : kCrouch);
+      S.frz[slot] += (frzT - S.frz[slot]) * (frzT > S.frz[slot] ? kFrzIn : kFrzOut);
       S.flap[slot] += (flapT - S.flap[slot]) * kHead;
       const sickT = (A[o + 8] | 0) & F_INFECTED ? 0.98 : 0;
       S.sick[slot] += (sickT - S.sick[slot]) * kSick;
@@ -1811,14 +1899,31 @@ export class AnimalLayer {
       const camP = this.shared.uCamPos.value;
       const camD = Math.hypot(x - camP.x, g0 - camP.y, z - camP.z);
       const sizeBoost = pr.kind === 0 ? legBoost(pr, vs, camD, this.shared.uPxK.value) : 1;
-      let dph = Math.min(dsGround / (strideFor(pr, gaitSpd) * vs * sizeBoost), MAX_CADENCE * dt);
+      // R6 stotting: a mule deer that flees or runs bounds on all four feet at once; the stride (and so the foot lock) follows the weight
+      let stotW = 0;
+      if (pr.stot) {
+        const fl8 = A[o + 8] | 0;
+        const stT = this.timeScale > 0 && ((fl8 & F_STOT) !== 0 || state === St.Flee || state === St.Run) ? smoothstep(4.5, 8, gaitSpd) : 0;
+        S.stot[slot] += (stT - S.stot[slot]) * (stT > S.stot[slot] ? kStotIn : kStotOut);
+        stotW = S.stot[slot];
+      }
+      let dph = Math.min(dsGround / (strideFor(pr, gaitSpd, stotW) * vs * sizeBoost), MAX_CADENCE * dt);
       if (tlK > 0) {
         // the bound rate replaces the distance lock as the time-lapse takes over: a readable few Hz (each animal a little off the
         // others so a herd does not bound in step) that runs only while the animal is actually travelling
         const hz = this.tlHz[sp] * (0.88 + 0.24 * hash01(id * 7 + 3));
         dph += (hz * dt * smoothstep(1.5, 5, S.vis[slot]) - dph) * tlK;
       }
+      const phPrev = S.phase[slot];
       S.phase[slot] = (S.phase[slot] + dph) % 1;
+      // a stot lands once per cycle (the phase wraps): a small puff of dust where the four feet come down
+      if (stotW > 0.6 && S.phase[slot] < phPrev && dt > 1e-4 && this.timeScale <= 3 && camD < 160) this.landingPuff(x, z, vs * 1.1);
+
+      // R6 the rush: the spring from the ambush throws up a puff of dust behind the hind feet
+      if (sp === Sp.Cougar) {
+        if (state === St.Chase && S.pst[slot] === St.Stalk && running > 0 && camD < 200) this.landingPuff(x - Math.cos(h) * 0.5, z - Math.sin(h) * 0.5, vs * 1.7);
+        S.pst[slot] = state;
+      }
 
       // The drawn heading is a critically damped follower of the sim heading, rate limited, so a turn is a curve with some
       // momentum behind it rather than a snap on a central pivot.
@@ -1937,7 +2042,7 @@ export class AnimalLayer {
         const ikK = 1 - smoothstep(IK_NEAR, IK_FAR, camD);
         let bT = 0;
         if (ikK > 0.001 && S.lie[slot] < 0.98) {
-          bT = stanceBodyDy(pr, this.rigs[sp]!, gaitMix(pr, gaitSpd), S.phase[slot], { x, y, z, ch, sh, pitch, roll, s: vs }, groundAt) * ikK * (1 - S.lie[slot]) * (1 - cnO.air) * (1 - cnO.howl);
+          bT = stanceBodyDy(pr, this.rigs[sp]!, gaitMix(pr, gaitSpd, stotW), S.phase[slot], { x, y, z, ch, sh, pitch, roll, s: vs }, groundAt) * ikK * (1 - S.lie[slot]) * (1 - cnO.air) * (1 - cnO.howl);
         }
         S.bdy[slot] += (bT - S.bdy[slot]) * kBdy;
       }
@@ -2046,8 +2151,14 @@ export class AnimalLayer {
       const fx2 = b.fx2.array as Float32Array;
       if (flier) {
         fx2[gp] = rvHopU; fx2[gp + 1] = rvWalk; fx2[gp + 2] = takeoffK > 0 ? S.rtk[slot] : -1; fx2[gp + 3] = rvFlut;
+      } else if (pr.stot) {
+        // a mule deer: antler growth, the stotting weight, velvet, and how far the coat has turned to its winter grey (models/muledeer.ts seasons)
+        const fl8 = A[o + 8] | 0;
+        const ant = antlerOf(deerS.antler, (fl8 & F_MALE) !== 0, (fl8 & F_JUVENILE) !== 0, A[o + 11], hash01(id));
+        fx2[gp] = ant; fx2[gp + 1] = stotW; fx2[gp + 2] = ant > 0 ? deerS.velvet : 0; fx2[gp + 3] = clamp(deerS.winter + (hash01(id * 5 + 1) - 0.5) * 0.14, 0, 1);
       } else {
-        fx2[gp] = holdE; fx2[gp + 1] = S.fph[slot]; fx2[gp + 2] = leapE; fx2[gp + 3] = cnO.pack; // (canids: leap in the air, sitting to howl, mange; see tgUnpack)
+        // (a cat's freeze before the rush rides in the slot of the feeding phase while it is not feeding, see shader.ts)
+        fx2[gp] = holdE; fx2[gp + 1] = pr.stalk && S.tug[slot] < 0.02 ? S.frz[slot] : S.fph[slot]; fx2[gp + 2] = leapE; fx2[gp + 3] = cnO.pack; // (canids: leap in the air, sitting to howl, mange; see tgUnpack)
       }
       look[gp] = clamp(coat, 0, 1);
       look[gp + 1] = hash01(id);
@@ -2170,6 +2281,7 @@ export class AnimalLayer {
       fxc[gp] = fi ? fi.pull : 0; fxc[gp + 1] = fi ? fi.pcx : 0; gait[gp + 3] = fi ? fi.pcz : 0;
       const fxc2 = b.fx2.array as Float32Array;
       fxc2[gp] = 0; fxc2[gp + 1] = 0; fxc2[gp + 2] = 0; fxc2[gp + 3] = 0;
+      if (b.def.params.stot) { fxc2[gp] = fi ? fi.ant : 0; fxc2[gp + 2] = fi && fi.ant > 0 ? deerS.velvet : 0; fxc2[gp + 3] = deerS.winter; } // (a deer: its antlers and the coat of the season)
       b.ids[k] = 0;
       b.centers[k * 4 + 3] = 0; // not pickable
     }
