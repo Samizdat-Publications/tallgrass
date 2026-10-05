@@ -23,6 +23,7 @@ import { Chronicle, type ChronicleEntry } from './chronicle';
 import { CHALLENGES } from '../challenges';
 import { FieldGuide, PhotoStore } from './fieldguide';
 import { GuidePanel } from './guidepanel';
+import { PhotoPanel } from './photomode';
 import type { ModalPanel } from './panel';
 import { DEFAULT_SETTINGS, SettingsPanel, loadSettings, type Settings } from './settings';
 import { SetupPanel } from './setup';
@@ -120,6 +121,8 @@ export class GameUI {
   private settingsPanel: SettingsPanel;
   private setupPanel: SetupPanel;
   private guidePanel: GuidePanel;
+  /** Photo mode (R15): the P key opens it. The game wires its callbacks (lens, freeze, save). */
+  readonly photo = new PhotoPanel();
   private guide = new FieldGuide();
   private photos = new PhotoStore();
   private toast = new Toast();
@@ -266,6 +269,7 @@ export class GameUI {
       this.settingsPanel.el,
       this.setupPanel.el,
       this.guidePanel.el,
+      this.photo.el,
       this.toast.el,
       this.hint,
       bars,
@@ -279,6 +283,22 @@ export class GameUI {
     this.onSettingsChange(this.settingsPanel.value, 'uiScale');
     this.onSettingsChange(this.settingsPanel.value, 'idleDim');
     root.append(this.ui);
+
+    // photo mode: the other pages step aside, the right-hand column gives the panel its room, and "hide the interface" fades the rest
+    this.photo.onOpenChange((open) => {
+      this.ui.classList.toggle('is-photo', open);
+      this.ui.classList.toggle('is-photoclean', open && this.photo.state.hideUi);
+      if (open) {
+        this.notesPanel.hide();
+        this.closePanes();
+        this.toast.hide();
+        this.top.close();
+        this.time.closeMenu();
+      }
+    });
+    this.photo.onChange((s, k) => {
+      if (k === 'hideUi') this.ui.classList.toggle('is-photoclean', this.photo.isOpen && s.hideUi);
+    });
 
     this.keyDown = (e) => this.onKeyDown(e);
     this.keyUp = (e) => {
@@ -720,6 +740,12 @@ export class GameUI {
     this.actions.setCinematic(on);
   }
 
+  /** P: open or close the photo mode page (not over the title card). */
+  togglePhoto(): void {
+    if (this.titleOpen && !this.photo.isOpen) return;
+    this.photo.toggle();
+  }
+
   get isHidden(): boolean {
     return this.hidden;
   }
@@ -1029,7 +1055,9 @@ export class GameUI {
 
   /** Esc backs out one layer at a time: popovers, then the armed tool, then the selection, then cinematic mode. */
   private onEscape(): void {
-    if (this.paneOpen) {
+    if (this.photo.isOpen) {
+      this.photo.close();
+    } else if (this.paneOpen) {
       this.closePanes();
     } else if (this.notesPanel.isOpen) {
       this.notesPanel.hide();

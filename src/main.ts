@@ -17,6 +17,7 @@ import { hashSeed } from './sim/rng';
 import { scenarioById } from './scenarios';
 import { challengeById } from './challenges';
 import { Director } from './director';
+import { JPEG_QUALITY, LensController, type PhotoFormat } from './ui/photomode';
 import { AudioDirector } from './audio/audio';
 import { Narrator } from './audio/narrator';
 import { countNearby, nearWater01, scanTension } from './audio/inputs';
@@ -116,24 +117,31 @@ const narrator = new Narrator(audio);
 void narrator.load();
 window.addEventListener('keydown', (e) => { if (e.key === 'm' || e.key === 'M') audio.setMuted(!audio.muted); });
 
-// Photo mode: P saves the current frame as a PNG. The UI is HTML over the canvas, so the picture is clean.
-window.addEventListener('keydown', (e) => {
-  if ((e.key !== 'p' && e.key !== 'P') || e.repeat || e.ctrlKey || e.metaKey || (e.target as HTMLElement)?.closest?.('input, textarea')) return;
+// Photo mode (R15 Lens): P opens the panel (exposure, aperture and focus, grain, freeze time, hide the interface, Save). Save writes
+// the canvas as a PNG or JPEG; the UI is HTML over the canvas, so the picture is always clean. The panel itself is wired below.
+function savePhoto(format: PhotoFormat): void {
+  ui.photo.setSaving(true);
   engine.renderOnce(0); // the drawing buffer is only readable in the same task as the render
   const year = pending ? Math.floor(pending.tick / YEAR_TICKS) + 1 : 1;
+  const jpeg = format === 'jpeg';
   engine.renderer.domElement.toBlob((blob) => {
+    ui.photo.setSaving(false);
     if (!blob) return;
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = `tallgrass-${seedStr.replace(/[^\w-]+/g, '_')}-year${year}.png`;
+    a.download = `tallgrass-${seedStr.replace(/[^\w-]+/g, '_')}-year${year}.${jpeg ? 'jpg' : 'png'}`;
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 2000);
-  }, 'image/png');
+  }, jpeg ? 'image/jpeg' : 'image/png', jpeg ? JPEG_QUALITY : undefined);
   const flash = document.createElement('div');
   flash.style.cssText = 'position:fixed;inset:0;background:#fff;opacity:0.55;pointer-events:none;z-index:50;transition:opacity 0.35s ease-out';
   document.body.append(flash);
   requestAnimationFrame(() => { flash.style.opacity = '0'; });
   setTimeout(() => flash.remove(), 450);
+}
+window.addEventListener('keydown', (e) => {
+  if ((e.key !== 'p' && e.key !== 'P') || e.repeat || e.ctrlKey || e.metaKey || (e.target as HTMLElement)?.closest?.('input, textarea')) return;
+  ui.togglePhoto();
 });
 
 // ------------------------------------------------------------------ worker
@@ -284,7 +292,7 @@ const ui = new GameUI(document.getElementById('ui')!, {
   select: (id) => select(id),
   flyTo: (x, y) => { takeCamera(); engine.cam.flyTo(x, y); },
   setOverlay: (o: OverlayId) => { overlay.setMode(o === 'smallprey' ? 'none' : o); smallOverlay.setMode(o === 'smallprey'); },
-  setCinematic: (on) => { following = null; cinematicOn = on; autoCam = false; director.setEnabled(on); takeCamera(); },
+  setCinematic: (on) => { following = null; cinematicOn = on; autoCam = false; director.setEnabled(on); takeCamera(); lens.cinematic = on; },
   takeCamera: () => takeCamera(),
   setNarrator: (on) => { narrator.enabled = on; },
   newWorld: (s, sc) => {
@@ -321,6 +329,57 @@ const ui = new GameUI(document.getElementById('ui')!, {
     return new Promise<Blob | null>((resolve) => engine.renderer.domElement.toBlob((b) => resolve(b), 'image/jpeg', 0.9));
   },
 });
+
+// ------------------------------------------------------------------ lens: depth of field, grain, photo mode (R15)
+
+/** The species of an animal id in the latest snapshot. */
+function speciesOfId(id: number): number | null {
+  if (!pending) return null;
+  for (let k = 0; k < pending.count; k++) if (pending.ids[k] === id) return pending.agents[k * 12];
+  return null;
+}
+let selectedAnimal: number | null = null;
+const selectionRing = engine.scene.getObjectByName('selection-ring') ?? null;
+const lens = new LensController({
+  camera: engine.camera,
+  post: engine.post,
+  animalPos: (id, out) => animals.getPosition(id, out),
+  speciesOf: speciesOfId,
+  pivot: (out) => engine.cam.getFocus(out),
+  selectedId: () => selectedAnimal,
+  director: director,
+  setExposure: (m) => { engine.exposure = m; },
+});
+// ?dof=0 keeps the documentary camera's close shots sharp, ?lens=0 keeps cinematic mode free of grain and colour fringe (captures)
+lens.directorDof = q.get('dof') !== '0';
+lens.cinematicLook = q.get('lens') !== '0';
+/** Freeze time: the sim speed before the panel paused it (null when it did not). */
+let frozenSpeed: number | null = null;
+function applyFreeze(): void {
+  const want = ui.photo.isOpen && ui.photo.state.freeze;
+  if (want && frozenSpeed === null) {
+    frozenSpeed = speed;
+    speed = 0;
+    send({ type: 'speed', speed: 0 });
+  } else if (!want && frozenSpeed !== null) {
+    speed = frozenSpeed;
+    frozenSpeed = null;
+    send({ type: 'speed', speed });
+  }
+}
+ui.photo.onOpenChange((open) => {
+  lens.photoOpen = open;
+  if (open) takeCamera(); // the documentary camera hands the view over while the panel is open
+  applyFreeze();
+});
+ui.photo.onChange((s, k) => {
+  lens.state = s;
+  if (k === 'freeze') applyFreeze();
+});
+ui.photo.onSave = (f) => savePhoto(f);
+ui.photo.onFocusMode = (m) => lens.setMode(m);
+lens.onLabel = (text, sp) => ui.photo.setFocusLabel(text, sp);
+lens.state = ui.photo.state;
 
 // ------------------------------------------------------------------ share, settings, title
 
@@ -450,6 +509,7 @@ engine.cam.onUserInput = takeCamera;
 
 function select(id: number | null): void {
   if (id !== null) takeCamera();
+  selectedAnimal = id;
   animals.setSelected(id);
   send({ type: 'select', id });
   if (id === null && following !== null) { following = null; engine.cam.follow(null); }
@@ -467,6 +527,16 @@ canvas.addEventListener('pointerup', (e) => {
   const r = canvas.getBoundingClientRect();
   ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
   ray.setFromCamera(ndc, engine.camera);
+  if (ui.photo.isOpen) {
+    // photo mode: a click picks what is in focus, an animal or else the ground under the pointer
+    const a = animals.pick(ray);
+    const hit = a === null ? groundHit(ray) : null;
+    if (a !== null) lens.focusAnimal(a);
+    else if (hit) lens.focusPoint(hit.x, hit.y, hit.z);
+    else return;
+    ui.photo.setFocusMode('picked');
+    return;
+  }
   if (armed) {
     const hit = groundHit(ray);
     if (hit) {
@@ -533,14 +603,17 @@ engine.onFrame((dt, t) => {
   engine.cam.getFocus(focusV);
   smallprey.update(dt, engine.camera, { x: focusV.x, z: focusV.z });
   smallOverlay.update(dt);
-  if (autoCamAllowed && autoCamEnabled && !autoCam && !cinematicOn && following === null && performance.now() - lastCamInput > 25000) {
+  if (autoCamAllowed && autoCamEnabled && !autoCam && !cinematicOn && following === null && !ui.photo.isOpen && performance.now() - lastCamInput > 25000) {
     autoCam = true;
     director.setEnabled(true);
   }
-  director.update(dt, pending ? { count: pending.count, ids: pending.ids, agents: pending.agents, carcassCount: pending.carcassCount, carcasses: pending.carcasses, dayFrac: pending.env.dayFrac, small: lastSmall, events: pendingEvents } : null);
+  // (photo mode holds the camera where the photographer put it, so the director stands down while the panel is open)
+  if (!ui.photo.isOpen) director.update(dt, pending ? { count: pending.count, ids: pending.ids, agents: pending.agents, carcassCount: pending.carcassCount, carcasses: pending.carcasses, dayFrac: pending.env.dayFrac, small: lastSmall, events: pendingEvents } : null);
   grass.viewportHeight = engine.renderer.domElement.height;
   overlay.update(dt, engine.camera, engine.renderer.domElement);
   grass.update(engine.camera, t, engine.env, sun);
+  lens.update(dt);
+  if (ui.photo.isOpen && selectionRing) selectionRing.visible = false; // a photograph never carries the selection ring
   if (pending) {
     ui.update({
       tick: pending.tick, env: pending.env, pop: pending.pop, history: pendingHistory, events: pendingEvents,
@@ -645,6 +718,7 @@ w.__smallprey = smallprey;
 w.__grass = grass;
 w.__snap = () => pending;
 w.__director = director;
+w.__lens = lens; // dev hook: the lens controller (depth of field, grain, exposure) and, with __ui.photo, the photo mode panel
 w.__lastSmall = () => lastSmall; // dev hook: the latest small-prey fields (the director's town shot reads them)
 w.__apply = (iv: Intervention) => send({ type: 'apply', iv });
 w.__audio = audio;

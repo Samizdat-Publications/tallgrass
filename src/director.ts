@@ -86,6 +86,16 @@ export class Director {
     return best % 360;
   }
 
+  /**
+   * The subject of the shot being filmed, when it is a close one (R15 Lens racks focus on it): the animal id (null for a fixed point),
+   * the point (sim x, y) and the orbit distance. Null when the director is off or the shot is wider than `maxDist` metres. Read only.
+   */
+  closeShot(maxDist = 72): { id: number | null; x: number; y: number; dist: number } | null {
+    const s = this.current;
+    if (!this.enabled || !s || s.dist > maxDist) return null;
+    return { id: s.id, x: s.x, y: s.y, dist: s.dist };
+  }
+
   setEnabled(on: boolean): void {
     this.enabled = on;
     this.t = 0;

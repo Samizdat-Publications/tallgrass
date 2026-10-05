@@ -3164,3 +3164,64 @@ button.tg-ent-b:hover {
     transition-duration: 0.01s;
   }
 }
+
+/* ---- photo mode (R15) --------------------------------------------------------------------------------------------- */
+/* A docked page on the right (a click on the view picks the focus, so it is not a centred, click-outside-closes modal). The right
+   column steps aside while it is open, and "hide the interface" fades every other leaf. */
+.tg-pane.tg-photo {
+  left: auto;
+  right: var(--m);
+  width: min(calc(300 * var(--u)), calc(100vw - 2 * var(--m)));
+  transform: translate(0, calc(-50% + 8 * var(--u)));
+}
+.tg-pane.tg-photo.is-open {
+  transform: translate(0, -50%);
+}
+.tg-ui.is-photo .tg-right {
+  visibility: hidden;
+  pointer-events: none;
+}
+.tg-ui.is-photoclean .tg-leaf {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.35s var(--ease), visibility 0s linear 0.35s;
+}
+.tg-ui.is-photoclean::before,
+.tg-ui.is-photoclean::after {
+  opacity: 0;
+}
+.tg-ui.is-photoclean .tg-bars,
+.tg-ui.is-photoclean .tg-chapter {
+  display: none;
+}
+.tg-photo-focus {
+  display: flex;
+  align-items: center;
+  gap: calc(9 * var(--u));
+  min-height: calc(22 * var(--u));
+  margin: calc(8 * var(--u)) calc(2 * var(--u)) 0;
+  font: italic 400 calc(16 * var(--u)) / 1.2 var(--serif);
+  color: var(--paper);
+}
+.tg-photo-dot {
+  flex: none;
+  width: calc(9 * var(--u));
+  height: calc(9 * var(--u));
+  border-radius: 50%;
+  background: var(--paper-dim);
+  box-shadow: 0 0 0 1px rgba(240, 228, 200, 0.25);
+}
+.tg-photo-foot {
+  justify-content: space-between;
+}
+.tg-photo-foot .tg-seg {
+  width: calc(124 * var(--u));
+}
+.tg-photo-save {
+  min-width: calc(96 * var(--u));
+}
+.tg-photo-save:disabled {
+  opacity: 0.55;
+  cursor: progress;
+}
