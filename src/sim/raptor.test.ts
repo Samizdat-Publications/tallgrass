@@ -23,7 +23,7 @@ type Any = any;
 function quiet(params: Record<string, number> = {}, seed = 5): Sim {
   return createSim({
     seed,
-    params: { calendarScale: 2, smallPrey: 1, plagueRate: 0, 'bison.initial': 0, 'deer.initial': 0, 'wolf.initial': 0, 'raven.initial': 0, ...params },
+    params: { calendarScale: 2, smallPrey: 1, plagueRate: 0, ravenVagrants: 0, cdvRate: 0, mangeRate: 0, 'bison.initial': 0, 'deer.initial': 0, 'wolf.initial': 0, 'raven.initial': 0, ...params },
   });
 }
 /** Hold the time of day (0.5 = noon, 0.9 = night) whatever the tick. */

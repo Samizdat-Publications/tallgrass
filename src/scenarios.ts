@@ -12,22 +12,34 @@ export interface Scenario {
   schedule: { tick: number; iv: Intervention }[];
 }
 
+/**
+ * A closed valley (V2-PLAN owner ruling 2): no animals arrive or leave over the rim. Island and Yellowstone stay closed,
+ * because their stories are about what the valley does without outside help (bringing the wolves back is the player's
+ * job there), and Hungry wolves keeps the closed v5 world its blurb describes.
+ */
+const CLOSED = { openPrairie: 0, ravenVagrants: 0 };
+
 export const SCENARIOS: Scenario[] = [
   {
     id: 'prairie', name: 'Open prairie',
-    blurb: 'Bison, pronghorn, wolves and ravens in balance. Watch it find its own rhythm.',
+    blurb: 'Bison, pronghorn, wolves and ravens on an open prairie: herds boom, wolves follow a few years behind, pronghorn come and go with the seasons, and distemper and mange keep the packs in check.',
     params: {}, schedule: [],
+  },
+  {
+    id: 'sealed', name: 'The sealed valley',
+    blurb: 'The valley as an island: nothing comes in over the rim and nothing leaves. Every animal here is all there will ever be.',
+    params: CLOSED, schedule: [],
   },
   {
     id: 'yellowstone', name: 'Yellowstone return',
     get blurb() { return `No wolves for ${yrs(3)} years, so the herds and the grazing pressure build. Then a few wolves arrive.`; },
-    params: { 'wolf.initial': 0 },
+    params: { 'wolf.initial': 0, ...CLOSED },
     schedule: [{ tick: Y * 3, iv: { kind: 'introduce', species: Sp.Wolf, count: 12 } }],
   },
   {
     id: 'island', name: 'Island of plenty',
     blurb: 'No predators at all. The herds boom until the grass gives out.',
-    params: { 'wolf.initial': 0 }, schedule: [],
+    params: { 'wolf.initial': 0, ...CLOSED }, schedule: [],
   },
   {
     id: 'drought', name: 'The long drought',
@@ -55,7 +67,7 @@ export const SCENARIOS: Scenario[] = [
     // the best predator-response screen of Sunday morning (scratch/L1, 32 worlds x 200 valley-years): bison, wolves and
     // ravens 32/32, wolves follow bison at correlation 0.77, pronghorn 25/32. Over 1,000 generations (review/stability/hungrywolves-44a2bfe)
     // the pronghorn die out in all 20 worlds, between years 88 and 585, while bison, wolves and ravens hold in 19
-    params: { wolfPreyRef: 1000, wolfRareHalf: 400, leanLitter: 0.8 }, schedule: [],
+    params: { wolfPreyRef: 1000, wolfRareHalf: 400, leanLitter: 0.8, ...CLOSED, cdvRate: 0, mangeRate: 0 }, schedule: [],
   },
   {
     id: 'collapse', name: 'Collapse',

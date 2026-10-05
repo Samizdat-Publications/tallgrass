@@ -245,7 +245,8 @@ export class Coyotes {
   }
 
   /** The coyote's mate (slot), or -1. */
-  private mateOf(i: number): number {
+  /** The slot of i's mate, or -1 (public for the inspector's Pair chip). */
+  mateOf(i: number): number {
     const m = this.partner[i];
     const a = this.a;
     if (m < 0 || !a.same(m, this.partnerId[i]) || a.sp[m] !== this.sp) return -1;

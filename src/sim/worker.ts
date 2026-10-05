@@ -4,7 +4,7 @@ import type { DynastyEntry, LineageTree } from './lineage';
 import type { LoggedIntervention } from './sharecode';
 import { Sim, SimEvent, StoryEntry } from './sim';
 import { SPECIES as REGISTRY } from './species';
-import { Intervention, SPECIES_COUNT, TICKS_PER_SECOND } from './types';
+import { Intervention, SPECIES_COUNT, Sp, TICKS_PER_SECOND } from './types';
 
 export type ToWorker =
   | {
@@ -45,6 +45,10 @@ export interface AnimalDetail {
   alpha: boolean;
   infected: boolean;
   pregnant: boolean;
+  /** Coyote with a mate (the inspector's Pair chip); false for other species. */
+  paired?: boolean;
+  /** Mange severity 0..1 (canids; 0 for everything else). */
+  mange?: number;
   born: number;
   parentA: number;
   parentB: number;
@@ -147,7 +151,7 @@ function detail(id: number): AnimalDetail | null {
       energy: a.energy[i], hydration: a.hydration[i], stamina: a.stamina[i], state: a.state[i], male: a.male[i] === 1,
       gen: a.gen[i], kills: a.kills[i], children: a.children[i], pack: pk >= 0 ? sim.packSerial[pk] : -1,
       packSize: pk >= 0 ? sim.packSize[pk] : 0, alpha: pk >= 0 && (sim.packAlphaF[pk] === i || sim.packAlphaM[pk] === i),
-      infected: a.infected[i] > 0, pregnant: a.pregnant[i] > 0, born: a.born[i], parentA: a.parentA[i], parentB: a.parentB[i], genes,
+      infected: a.infected[i] > 0, pregnant: a.pregnant[i] > 0, paired: a.sp[i] === Sp.Coyote && sim.coyotes.mateOf(i) >= 0, mange: a.mange[i], born: a.born[i], parentA: a.parentA[i], parentB: a.parentB[i], genes,
     };
   }
   return null;

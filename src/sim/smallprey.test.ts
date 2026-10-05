@@ -407,7 +407,7 @@ function townSite(sp: SmallPrey, n: number, avoid: Set<number> = new Set()): num
 
 // ---- rescues need the open prairie
 {
-  const closed = web();
+  const closed = web({ openPrairie: 0 });
   closed.sp.hare.fill(0);
   runWeb(closed.sim, closed.sp, 0, 3, 0.5);
   ok(closed.sp.hareTotal() === 0, 'closed valley: no hare rescue');

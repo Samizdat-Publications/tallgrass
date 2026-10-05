@@ -399,12 +399,12 @@ export function defaultParams(): Params {
     herdSpacing: 2.7,
     herdSepRange: Math.sqrt(7),
     herdCohesion: 6,
-    wolfRareHalf: 150,
+    wolfRareHalf: 400, // v6 (was 150)
     founderDesync: 1,
     wolfBreedStore: 0,
     wolfLitterBase: 0.6,
     wolfLitterSpan: 0.5,
-    wolfPreyRef: 0,
+    wolfPreyRef: 1000, // v6 (was 0)
     loneIndividual: 0,
     matingWindow: 0,
     herdNearest: 0,
@@ -413,10 +413,10 @@ export function defaultParams(): Params {
     droughtRefuge: 0,
     sprintCost: 0,
     herdEyes: 0,
-    leanLitter: 0,
+    leanLitter: 0.8, // v6 (was 0)
     cougarImmigration: 0,
     fleeMomentum: 0,
-    openPrairie: 0,
+    openPrairie: 1, // v6 (was 0)
     smallPrey: 0,
     hareK: 3,
     hareR: 2.2,
@@ -436,7 +436,7 @@ export function defaultParams(): Params {
     deerRescue: 12,
     deerBref: 35,
     deerKb: 367,
-    ravenVagrants: 0,
+    ravenVagrants: 1, // v6 (was 0)
     ravenVagrantK: 0.16,
     ravenVagrantCap: 400,
     coyoteTerritory: 75,
@@ -512,12 +512,12 @@ export function defaultParams(): Params {
     diseaseSpark: 0.0004,
     diseaseTicks: 450,
     diseaseMetab: 1.7,
-    cdvRate: 0,
+    cdvRate: 0.3, // v6 (was 0)
     cdvPupDeath: 0.6,
     cdvAdultDeath: 0.1,
     cdvTicks: 300,
     cdvImmuneYears: 5,
-    mangeRate: 0,
+    mangeRate: 0.06, // v6 (was 0)
     mangeSpread: 0.02,
     mangeGrowth: 0.5,
     mangeColdK: 1.5,
