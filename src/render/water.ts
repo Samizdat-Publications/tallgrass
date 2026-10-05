@@ -20,6 +20,7 @@
 import * as THREE from 'three';
 import type { World } from '../sim/world';
 import { HEIGHT_GLSL, NOISE_GLSL, SKY_GLSL, SharedUniforms } from './common';
+import { NIGHT } from './sky';
 
 /** Mean surface speed of the creek (m/s) at an average channel width; narrower stretches run faster. */
 const V_REF = 0.55;
@@ -313,6 +314,8 @@ export class Water {
         uWind: shared.wind,
         uWindOff: windOffU,
         uNight: shared.night,
+        uMoonDir: shared.moonDir,
+        uMoonCol: NIGHT.moonCol,
         uOvercast: shared.overcast,
         uWet: shared.wet,
         uSnow: shared.snow,
@@ -363,6 +366,8 @@ export class Water {
         uniform vec3 uWind;
         uniform vec2 uWindOff;
         uniform float uNight;
+        uniform vec3 uMoonDir;
+        uniform vec3 uMoonCol;
         uniform float uOvercast;
         uniform float uWet;
         uniform float uSnow;
@@ -818,10 +823,29 @@ export class Water {
           // (a pond is calm unless a gust is on it, so its sun image is a small dancing spot plus the sparkles at any distance)
           float calmFar = mix(1.0 - 0.6 * gust * uWind.z, max(farK, 0.8 * (1.0 - w3)), isCreek) * (1.0 - roughD);
           float nCore = mix(260.0, 1500.0, calmFar);
-          vec3 glint = uLightColor * (pow(rd, nCore) * 1.2 * (1.0 - 0.5 * uNight) + pow(rd, 60.0) * 0.07 * (1.0 - 0.6 * uNight) * (1.0 - 0.8 * calmFar)) * (0.3 + 0.7 * F);
+          vec3 glint = uLightColor * (pow(rd, nCore) * 1.2 * (1.0 - uNight) + pow(rd, 60.0) * 0.07 * (1.0 - uNight) * (1.0 - 0.8 * calmFar)) * (0.3 + 0.7 * F);
           // roughened water far off: the sun's glitter spreads into a broad path, a bright line where the stream crosses it
           glint += uLightColor * pow(rd, 14.0) * 0.06 * roughD * (1.0 - 0.7 * uNight);
           glint += uLightColor * pow(rd, 30.0) * 0.006 * uNight;
+          // the moon's image (R9): a tight spot where the water is calm, a silver path that the ripples break up from afar, and the
+          // odd facet flashing near the camera. Phase, height and cloud are already in uMoonCol, so a new moon leaves the water dark.
+          float rm = max(dot(R, uMoonDir), 0.0);
+          if (rm > 0.88 && uMoonCol.g > 0.002) {
+            float nM = mix(170.0, 1400.0, calmFar);
+            float pathBreak = 0.55 + 0.9 * wNoise(vec2(q.x * 0.5 + uTime * 0.05, q.y * 3.0)).x * (1.0 - 0.5 * calmFar);
+            vec3 mg = uMoonCol * (pow(rm, nM) * 0.85 + pow(rm, 80.0) * 0.07 * (1.0 - 0.7 * calmFar) * pathBreak + pow(rm, 18.0) * 0.04 * (0.25 + roughD) * pathBreak);
+            glint += mg * (0.3 + 0.7 * F);
+            float glitMn = w3 * uNight;
+            if (glitMn > 0.01 && rm > 0.9) {
+              vec2 mp2 = (isCreek > 0.5 ? q : p - uWindOff) * 4.0;
+              vec2 mi = floor(mp2);
+              vec2 mr = tgHash22(mi + floor(uTime * 3.0) * vec2(0.41, 1.07) + 53.0);
+              vec3 mN = normalize(N + vec3(mr.x - 0.5, 0.0, mr.y - 0.5) * 0.28);
+              float mf = pow(max(dot(reflect(-V, mN), uMoonDir), 0.0), 420.0);
+              float mspot = (1.0 - smoothstep(0.08, 0.3, length(fract(mp2) - 0.3 - 0.4 * mr.yx))) * step(0.5, tgHash21(mi + 9.0));
+              glint += uMoonCol * mf * mspot * 1.8 * glitMn;
+            }
+          }
           // glitter: tiny facets on the ripples flash in the sun's path, re-rolled a few times a second (near the camera, by day;
           // under the moon only a faint few)
           float glitW = w3 * (1.0 - uNight);
