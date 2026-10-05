@@ -24,7 +24,8 @@
   - every species alive in 20 of 20, never near zero
   - wolf CV 0.24 (v1: about 0.1), raven CV 0.15
   - wolves follow bison by 1 year (correlation 0.69)
-- **Still running:** the v6E shock suite and the v6G acceptance (G adds spring-only births and cuts pronghorn starvation from 49% to 33%).
+- **v6E shock suite** (cull 70%, drought, wolf wipeout over 300 years): every species persists in all 20 worlds, and bison recover every time. After a wipeout, wolves come back in 75% of worlds.
+- **v6G** (spring-only births) failed its acceptance: bison lasted in only 17 of 20 worlds. So **E is v6**.
 - The live game still runs v5 ecology until Track S flips the defaults.
 
 **Reviews:**
