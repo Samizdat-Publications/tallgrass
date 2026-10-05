@@ -122,6 +122,8 @@ export class Sim implements SimLike {
   private packEnergy = new Float32Array(MAX_PACKS);
   /** Search image: how keen each pack is on each prey species (learned from recent kills). */
   packPref = new Float32Array(MAX_PACKS * SPECIES_COUNT);
+  /** Coat search image (S9, coatSearch): per pack and prey species, the coat darkness it last killed, drifting toward each new kill; -1 = none yet. */
+  packCoat = new Float32Array(MAX_PACKS * SPECIES_COUNT).fill(-1);
   private packCandF = new Int32Array(MAX_PACKS);
   private packCandM = new Int32Array(MAX_PACKS);
   private packCx = new Float32Array(MAX_PACKS);
@@ -499,6 +501,12 @@ export class Sim implements SimLike {
     return null;
   }
 
+  /** A pack kills prey of species `prey` with coat `coat`: its search image for that species moves toward it (the first kill sets it). */
+  learnCoat(pk: number, prey: number, coat: number): void {
+    const k = pk * SPECIES_COUNT + prey;
+    this.packCoat[k] = this.packCoat[k] < 0 ? coat : this.packCoat[k] + this.p.coatSearchRate * (coat - this.packCoat[k]);
+  }
+
   private newPack(x: number, y: number): number {
     for (let pk = 0; pk < MAX_PACKS; pk++) {
       if (!this.packAlive[pk]) {
@@ -512,7 +520,7 @@ export class Sim implements SimLike {
         this.packFounded[pk] = this.tick;
         this.packSerial[pk] = this.nextPackSerial++;
         this.packSize[pk] = 0;
-        for (let s = 0; s < SPECIES_COUNT; s++) this.packPref[pk * SPECIES_COUNT + s] = 0.7;
+        for (let s = 0; s < SPECIES_COUNT; s++) { this.packPref[pk * SPECIES_COUNT + s] = 0.7; this.packCoat[pk * SPECIES_COUNT + s] = -1; }
         if (this.tick > 0) this.event('packFounded', Sp.Wolf, x, y, this.packSerial[pk], 0);
         return pk;
       }
@@ -1046,7 +1054,8 @@ export class Sim implements SimLike {
     const running = v > P.walkSpeed * 2.2;
     const activity = a.state[i] === St.Rest ? 0.7 : running ? 1.8 : v > 0.3 ? 1.05 : 0.9;
     let m = P.metabolism * Math.pow(size, -0.25) * (0.98 + 0.02 * spd * spd) * activity;
-    if (running && this.p.sprintCost > 0) m *= Math.max(0.3, 1 + this.p.sprintCost * (spd * spd - 1));
+    const sprintCost = P.sprintCost > 0 ? P.sprintCost : this.p.sprintCost;
+    if (running && sprintCost > 0) m *= Math.max(0.3, 1 + sprintCost * (spd * spd - 1));
     if (a.infected[i] > 0) m *= this.p.diseaseMetab;
     if (this.dis.on && IS_CANID[a.sp[i]]) m *= this.dis.metabMult(i, this.env.state.warmth);
     if (a.age[i] < P.matureAge) m *= 0.75;
@@ -1488,7 +1497,10 @@ export class Sim implements SimLike {
       const sight = P.sight * a.genes[o + G_SIGHT] * (night ? 0.75 : 1);
       const g = this.prey, nb = g.nb, bs = g.bs;
       const bx = Math.min(nb - 1, Math.max(0, (x / bs) | 0)), by = Math.min(nb - 1, Math.max(0, (y / bs) | 0));
-      const rr = Math.ceil(sight / bs);
+      // coat search image (S9): a matching coat is noticed from further off, so the scan reaches that far too
+      const imgOn = p.coatSearch > 0 && pk >= 0;
+      const reach = imgOn ? sight * Math.max(1, p.coatSearchBoost) : sight;
+      const rr = Math.ceil(reach / bs);
       let best = -1, bestS = 0;
       for (let yy = by - rr; yy <= by + rr; yy++) {
         if (yy < 0 || yy >= nb) continue;
@@ -1501,14 +1513,21 @@ export class Sim implements SimLike {
             if (!a.alive[j]) continue;
             const dx = a.x[j] - x, dy = a.y[j] - y;
             const dd = Math.sqrt(dx * dx + dy * dy);
-            if (dd > sight) continue;
+            if (dd > reach) continue;
             const dietW = DIET[Sp.Wolf][a.sp[j]];
             if (dietW <= 0) continue;
             const Pj = this.p.species[a.sp[j]];
             if (Pj.hideAge > 0 && a.age[j] < Pj.hideAge && a.state[j] === St.Rest && dd > 5) continue;
             const camo = Pj.camo;
             const contrast = Math.abs((1 - a.genes[j * NG + G_COAT]) * 0.75 + 0.1 - this.groundB);
-            if (dd > sight * (1 - camo * (1 - (0.6 + 0.8 * contrast)))) continue;
+            let seen = sight * (1 - camo * (1 - (0.6 + 0.8 * contrast)));
+            // a coat the pack has been killing is noticed from further off and stands out among the herd (x boost on its score too)
+            let imgW = 1;
+            if (imgOn) {
+              const img = this.packCoat[pk * SPECIES_COUNT + a.sp[j]];
+              if (img >= 0 && Math.abs(a.genes[j * NG + G_COAT] - img) < p.coatSearchWindow) { seen *= p.coatSearchBoost; imgW = p.coatSearchBoost; }
+            }
+            if (dd > seen) continue;
             const young = a.age[j] < Pj.matureAge ? 2.6 : 1;
             const old = a.age[j] > Pj.maxAge * 0.7 ? 1.8 : 1;
             // a sated wolf only bothers with easy, close prey
@@ -1523,7 +1542,7 @@ export class Sim implements SimLike {
             // prey switching (type III): hunting effort follows the common prey, so a crashed species gets a refuge
             const np = this.pop[a.sp[j]];
             const rare = p.wolfRareHalf > 0 ? np / (np + p.wolfRareHalf) : 1;
-            const score = (pref * dietW * young * old * weak * lone * catchable * catchable * rare) / (Pj.toughness * a.genes[j * NG + G_SIZE]) / (dd + 15);
+            const score = (imgW * pref * dietW * young * old * weak * lone * catchable * catchable * rare) / (Pj.toughness * a.genes[j * NG + G_SIZE]) / (dd + 15);
             if (score > bestS) { bestS = score; best = j; }
           }
         }
@@ -1712,6 +1731,10 @@ export class Sim implements SimLike {
             this.veg.stamp(this.veg.fear, a.x[t], a.y[t], p.fearKillRadius, p.fearKill, 1);
             if (a.sp[t] === Sp.Deer) this.cKillsDeer++;
             if (pk >= 0) {
+              if (p.coatSearch > 0) {
+                // the coat search image drifts toward the coat just killed (the first kill sets it)
+                this.learnCoat(pk, a.sp[t], a.genes[t * NG + G_COAT]);
+              }
               // a successful kill sharpens the search image for that prey and dulls the others
               const o2 = pk * SPECIES_COUNT;
               for (let s = 0; s < SPECIES_COUNT; s++) {
@@ -2620,12 +2643,14 @@ export class Sim implements SimLike {
     // generation depth and trait means
     const gsum = new Float64Array(SPECIES_COUNT);
     const tsum = new Float64Array(SPECIES_COUNT * NG);
+    const csq = new Float64Array(SPECIES_COUNT);
     let juvBison = 0, infBison = 0, cdvWolf = 0, mangeWolf = 0, mangeSev = 0;
     for (let i = 0; i < a.hi; i++) {
       if (!a.alive[i]) continue;
       const s = a.sp[i];
       gsum[s] += a.gen[i];
       for (let g = 0; g < NG; g++) tsum[s * NG + g] += a.genes[i * NG + g];
+      csq[s] += a.genes[i * NG + G_COAT] * a.genes[i * NG + G_COAT];
       if (a.cdv[i] > 0 && IS_CANID[s]) cdvWolf++;
       if (a.mange[i] > 0 && IS_CANID[s]) { mangeWolf++; mangeSev += a.mange[i]; }
       if (s === Sp.Bison) {
@@ -2640,6 +2665,17 @@ export class Sim implements SimLike {
     for (const [s, g] of traits) {
       row[`trait_${SPECIES_KEYS[s]}_${GENE_NAMES[g]}`] = pops[s] ? tsum[s * NG + g] / pops[s] : NaN;
     }
+    // coat variance per species (S9: does selection keep the colours varied?) and the wolves' mean bison coat search image
+    for (const [s, key] of [[Sp.Bison, 'bison'], [Sp.Deer, 'pronghorn'], [Sp.Wolf, 'wolf']] as [number, string][]) {
+      const n = pops[s], m = n ? tsum[s * NG + G_COAT] / n : 0;
+      row['coatvar_' + key] = n > 1 ? Math.max(0, csq[s] / n - m * m) : NaN;
+    }
+    let imgSum = 0, imgN = 0;
+    for (let pk = 0; pk < MAX_PACKS; pk++) {
+      const v = this.packCoat[pk * SPECIES_COUNT + Sp.Bison];
+      if (this.packAlive[pk] && v >= 0) { imgSum += v; imgN++; }
+    }
+    row.search_wolf = imgN ? imgSum / imgN : NaN;
     row.juv_bison = juvBison;
     row.infected_bison = infBison;
     // canid disease: wolves sick with distemper now, wolves with mange now (and their mean severity),

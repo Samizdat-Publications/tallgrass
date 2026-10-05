@@ -45,13 +45,16 @@ export interface SpeciesParams {
   hideAge: number;
   /** Most young per birth, however the litter gene evolves (bison almost never twin). */
   maxLitter: number;
+  /** Extra metabolism while running for a fast build (0 = off), for this species: x (1 + sprintCost * (speed^2 - 1)).
+   *  Where this is 0 the global `sprintCost` below applies (S9). */
+  sprintCost: number;
 }
 
 const base = (o: Partial<SpeciesParams>): SpeciesParams => ({
   maxAge: 3000, matureAge: 500, gestation: 150, birthCooldown: 400, litter: 1,
   walkSpeed: 1.4, runSpeed: 9, stamina: 120, sight: 35, metabolism: 1 / 1200, thirst: 1 / 900,
   bite: 0.006, foodValue: 0.42, meat: 1, toughness: 1, initial: 0, herdRadius: 12,
-  wariness: 0.4, defense: 0, camo: 0.5, diet: 0, hideAge: 0, maxLitter: 99,
+  wariness: 0.4, defense: 0, camo: 0.5, diet: 0, hideAge: 0, maxLitter: 99, sprintCost: 0,
   ...o,
 });
 
@@ -108,6 +111,17 @@ export interface Params {
   /** Extra metabolism while running for a fast build (0 = off): x (1 + sprintCost * (speed^2 - 1)), so a fast gene pays in
    *  every chase and a slow one saves. Meant to stop speed running to its limit within a century. */
   sprintCost: number;
+  /** Master switch for Evolution v2 (S9; 0 = off). When 1, every evolution param below that the caller did not set takes
+   *  the plan's value: per-species sprintCost (bison 0.2, pronghorn 0.05, wolf 0.15, coyote 0.1), bison maxLitter 1,
+   *  herdEyes 1.5 and the wolf coat search image (coatSearch 1). Explicit overrides win, so single parts can be screened. */
+  evolution2: number;
+  /** Wolf coat search image (S9; 0 = off). Each pack keeps, for every prey species, an image of the coat it last killed. */
+  coatSearch: number;
+  /** How far the image moves toward the coat of each kill: image += rate x (coat - image). The first kill sets it. */
+  coatSearchRate: number;
+  /** A prey animal whose coat is within coatSearchWindow of its pack's image is noticed from coatSearchBoost x as far. */
+  coatSearchBoost: number;
+  coatSearchWindow: number;
   /** Herd-minded animals heed their neighbours' alarm more (0 = off): the many-eyes vigilance from neighbours is scaled by
    *  1 + herdEyes * (herding gene - 1), so herding pays against wolves instead of fading. */
   herdEyes: number;
@@ -413,6 +427,11 @@ export function defaultParams(): Params {
     droughtRefuge: 0,
     sprintCost: 0,
     herdEyes: 0,
+    evolution2: 0,
+    coatSearch: 0,
+    coatSearchRate: 0.15,
+    coatSearchBoost: 1.3,
+    coatSearchWindow: 0.1,
     leanLitter: 0.8, // v6 (was 0)
     cougarImmigration: 0,
     fleeMomentum: 0,
@@ -546,5 +565,15 @@ export function applyOverrides(p: Params, o: Record<string, number> | undefined)
       (p as unknown as Record<string, number>)[k] = v;
     }
   }
+  if (p.evolution2 > 0) applyEvolution2(p, o);
   return p;
+}
+
+/** The Evolution v2 values (S9). Anything the caller set explicitly (even to 0) is left alone. */
+function applyEvolution2(p: Params, o: Record<string, number>): void {
+  const sprint: [number, number][] = [[Sp.Bison, 0.2], [Sp.Deer, 0.05], [Sp.Wolf, 0.15], [Sp.Coyote, 0.1]];
+  for (const [si, v] of sprint) if (!(`${PARAM_PREFIX[si]}.sprintCost` in o)) p.species[si].sprintCost = v;
+  if (!(`${PARAM_PREFIX[Sp.Bison]}.maxLitter` in o)) p.species[Sp.Bison].maxLitter = 1;
+  if (!('herdEyes' in o)) p.herdEyes = 1.5;
+  if (!('coatSearch' in o)) p.coatSearch = 1;
 }
