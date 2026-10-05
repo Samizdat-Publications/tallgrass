@@ -438,7 +438,9 @@ function townSite(sp: SmallPrey, n: number, avoid: Set<number> = new Set()): num
 
 // ---- sim integration: populations, god tools, founders
 {
-  const off = createSim({ seed: 3 });
+  const dflt = createSim({ seed: 3 });
+  ok(dflt.p.smallPrey === 1 && dflt.p.smallGameField === 1 && dflt.small !== null && dflt.populations()[Sp.Coyote] === 12, 'v6b defaults: smallPrey 1, smallGameField 1, 12 coyotes');
+  const off = createSim({ seed: 3, params: { smallPrey: 0, smallGameField: 0, 'coyote.initial': 0 } });
   ok(off.small === null, 'smallPrey off: no web');
   const popsOff = off.populations();
   ok(popsOff.length === SPECIES_COUNT && popsOff[Sp.Rabbit] === 0 && popsOff[Sp.PrairieDog] === 0 && popsOff[Sp.Coyote] === 0, 'off: no rabbits, dogs or coyotes at the start');
@@ -453,14 +455,14 @@ function townSite(sp: SmallPrey, n: number, avoid: Set<number> = new Set()): num
   const p0 = sim.populations();
   ok(p0[Sp.Rabbit] === Math.round(sp.hareTotal()) && p0[Sp.Rabbit] > 500, `on: populations() reports the hare field (${p0[Sp.Rabbit]})`);
   ok(p0[Sp.PrairieDog] === Math.round(sp.dogTotal()) && p0[Sp.PrairieDog] > 10, `on: and the dog field (${p0[Sp.PrairieDog]})`);
-  ok(sim.a.count === p0[Sp.Bison] + p0[Sp.Wolf] + p0[Sp.Raven] + p0[Sp.Deer] + p0[Sp.Cougar], 'on: no rabbit agents');
+  ok(sim.a.count === p0[Sp.Bison] + p0[Sp.Wolf] + p0[Sp.Raven] + p0[Sp.Deer] + p0[Sp.Cougar] + p0[Sp.Coyote], 'on: no rabbit agents');
   const site = townSite(sp, 3)!;
   const cx = ((site[0] % COARSE_N) + 0.5) * 16, cy = (((site[0] / COARSE_N) | 0) + 0.5) * 16;
   const h0 = sp.hareTotal(), d0 = sp.dogTotal();
   sim.apply({ kind: 'introduce', species: Sp.Rabbit, count: 40, x: cx, y: cy });
   sim.apply({ kind: 'introduce', species: Sp.PrairieDog, count: 12, x: cx, y: cy });
   ok(near(sp.hareTotal() - h0, 40, 0.01) && near(sp.dogTotal() - d0, 12, 0.01), 'introduce adds to the fields around the point');
-  ok(sim.a.count === p0[Sp.Bison] + p0[Sp.Wolf] + p0[Sp.Raven] + p0[Sp.Deer] + p0[Sp.Cougar], 'introduce spawns no agents');
+  ok(sim.a.count === p0[Sp.Bison] + p0[Sp.Wolf] + p0[Sp.Raven] + p0[Sp.Deer] + p0[Sp.Cougar] + p0[Sp.Coyote], 'introduce spawns no agents');
   const intro = sim.events.filter((e) => e.kind === 'introduced');
   ok(intro.length === 2 && intro[0].sp === Sp.Rabbit && intro[0].a === 40, 'introduced events');
   sim.apply({ kind: 'cull', species: Sp.Rabbit, fraction: 0.5 });
@@ -480,16 +482,16 @@ function townSite(sp: SmallPrey, n: number, avoid: Set<number> = new Set()): num
   ok(placed === 0 && sp.dogTotal() === 0, 'prairie dogs cannot be placed where no town can sit');
 
   // founders: registry driven
-  const r20 = createSim({ seed: 3, params: { 'rabbit.initial': 20 } });
+  const r20 = createSim({ seed: 3, params: { smallPrey: 0, smallGameField: 0, 'coyote.initial': 0, 'rabbit.initial': 20 } });
   ok(r20.populations()[Sp.Rabbit] === 20 && r20.a.count === off.a.count + 20 - 5 - 0, 'rabbit.initial spawns agents with smallPrey off');
-  const c12 = createSim({ seed: 3, params: { 'coyote.initial': 12 } });
+  const c12 = createSim({ seed: 3, params: { smallPrey: 0, smallGameField: 0, 'coyote.initial': 12 } });
   ok(c12.populations()[Sp.Coyote] === 12, 'coyote.initial spawns coyote founders');
   const f20 = createSim({ seed: 3, params: { smallPrey: 1, 'rabbit.initial': 200, 'prairiedog.initial': 60 } });
   ok(near(f20.small!.hareTotal(), 200, 0.01) && near(f20.small!.dogTotal(), 60, 0.01) && f20.a.count === web().sim.a.count, 'with smallPrey on, initial seeds the fields and spawns no agents');
-  ok(web({}, 3).sim.a.count === createSim({ seed: 3 }).a.count, 'the web adds no agents');
+  ok(web({}, 3).sim.a.count === createSim({ seed: 3, params: { smallPrey: 0, smallGameField: 0 } }).a.count, 'the web adds no agents');
   // the other species are laid out exactly as before: same founders, same positions
-  const base = createSim({ seed: 3 });
-  const withC = createSim({ seed: 3, params: { 'coyote.initial': 12 } });
+  const base = createSim({ seed: 3, params: { smallPrey: 0, smallGameField: 0, 'coyote.initial': 0 } });
+  const withC = createSim({ seed: 3, params: { smallPrey: 0, smallGameField: 0, 'coyote.initial': 12 } });
   let same = true;
   for (let i = 0; i < base.a.hi; i++) if (base.a.x[i] !== withC.a.x[i] || base.a.y[i] !== withC.a.y[i] || base.a.sp[i] !== withC.a.sp[i]) same = false;
   ok(same, 'generic founders come after the existing species and leave their layout alone');
@@ -515,7 +517,7 @@ function townSite(sp: SmallPrey, n: number, avoid: Set<number> = new Set()): num
   const sat = new Uint8Array(CELLS * 4);
   sp.fillTexture(sat);
   ok(sat[c * 4] === 255 && sat[c * 4 + 1] === SMALL_SCALE.dogFull && sat[(c + 1) * 4] === 0, 'R saturates at 255 and empty cells are 0');
-  ok(createSim({ seed: 3 }).snapshot(true).small === undefined, 'off: no texture');
+  ok(createSim({ seed: 3, params: { smallPrey: 0, smallGameField: 0 } }).snapshot(true).small === undefined, 'off: no texture');
 }
 
 // ---- smallGameField: wolf mousing draws on the fields

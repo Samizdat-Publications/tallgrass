@@ -365,7 +365,7 @@ export function defaultParams(): Params {
   species[Sp.Coyote] = base({
     maxAge: 4800, matureAge: 900, gestation: 0, birthCooldown: 0, litter: 5,
     walkSpeed: 1.3, runSpeed: 11, stamina: 130, sight: 60, metabolism: 1 / 1800, thirst: 1 / 5000,
-    meat: 0.8, toughness: 0.8, initial: 0, herdRadius: 12,
+    meat: 0.8, toughness: 0.8, initial: 12, herdRadius: 12, // v6b: six pairs (was 0)
   });
   // prairie dog: a field species. Only initial (0 = the default colonies) and the smallPrey params apply; the rest keeps the
   // lookup safe for any code that indexes the species table by id
@@ -436,7 +436,7 @@ export function defaultParams(): Params {
     cougarImmigration: 0,
     fleeMomentum: 0,
     openPrairie: 1, // v6 (was 0)
-    smallPrey: 0,
+    smallPrey: 1, // v6b (was 0)
     hareK: 3,
     hareR: 2.2,
     hareWinterLoss: 0.6,
@@ -444,7 +444,7 @@ export function defaultParams(): Params {
     dogK: 4,
     dogR: 1.0,
     plagueRate: 0.08,
-    smallGameField: 0,
+    smallGameField: 1, // v6b (was 0)
     dogClip: 0,
     dogGrazeBonus: 0,
     wolfInRate: 0.2,

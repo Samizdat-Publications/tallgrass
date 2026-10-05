@@ -1,5 +1,9 @@
 {
-  "note": "Golden hashes (V2-PLAN.md S0): default params, src/headless/hash.ts. Checkpoint v6 (screen E, adopted 2026-10-05): open prairie, vagrant ravens, distemper 0.3, mange 0.06, hungry-wolves mechanics. v5 hashes were e6b99005, 19759373, 7bc34541. Update only when a WP's adoption rule changes the default world, and say so in TRACK-S.md.",
+  "note": "Golden hashes (V2-PLAN.md S0): default params, src/headless/hash.ts. Checkpoint v6b (adopted 2026-10-05): v6 (open prairie, vagrant ravens, distemper 0.3, mange 0.06, prey-scaled wolves) + small-prey web (jackrabbit and prairie dog fields, smallGameField) + 12 coyotes. v6 hashes were 79f7ab0f, ef09535f, 032d866a; v5 e6b99005, 19759373, 7bc34541. Update only when a WP's adoption rule changes the default world, and say so in TRACK-S.md.",
   "ticks": 24000,
-  "seeds": { "3": "79f7ab0f", "7": "ef09535f", "11": "032d866a" }
+  "seeds": {
+    "3": "340c052c",
+    "7": "714770ae",
+    "11": "617dea6c"
+  }
 }

@@ -42,9 +42,9 @@ ok(PARAM_PREFIX.join() === 'bison,wolf,raven,deer,rabbit,cougar,coyote,prairiedo
 const params = defaultParams();
 ok(params.species.length === SPECIES_COUNT, 'default params cover every species');
 ok(params.species.every((s) => s !== undefined && s.matureAge > 0), 'every species id has a params block (no matureAge of undefined)');
-ok(params.species[Sp.Coyote].maxAge === 4800 && params.species[Sp.Coyote].initial === 0 && params.species[Sp.PrairieDog].initial === 0, 'coyote and prairie dog start empty');
+ok(params.species[Sp.Coyote].maxAge === 4800 && params.species[Sp.Coyote].initial === 12 && params.species[Sp.PrairieDog].initial === 0, 'v6b: 12 coyote founders, prairie dogs start empty (their founders are the web fields)');
 ok(params.raptors === 0 && params.species[Sp.Eagle].initial === 0 && params.species[Sp.Hawk].initial === 0, 'S7 params are off by default and no raptor founders');
-ok(params.smallPrey === 0 && params.smallGameField === 0 && params.dogClip === 0 && params.dogGrazeBonus === 0, 'S4 params are off by default');
+ok(params.smallPrey === 1 && params.smallGameField === 1 && params.dogClip === 0 && params.dogGrazeBonus === 0, 'v6b: smallPrey and smallGameField are on by default, dogClip and dogGrazeBonus stay off');
 
 // roles
 ok([Sp.Bison, Sp.Deer, Sp.Rabbit].every((s) => isGrazer(s) && isPrey(s)), 'grazers are prey');
