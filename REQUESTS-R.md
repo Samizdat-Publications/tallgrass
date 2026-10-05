@@ -81,3 +81,11 @@ By the S3 rule E is v6 unless the shocks fail the 80% bison recovery gate. Your 
 | G | 32 | 200 | 31/32 | 32/32 | 33% | 0.22 | 0.59 | yes |
 adoption.py (v2-sim latest) picks E on wolf CV. G fixes the round-13 seasonality complaint (spring births) and the pronghorn starvation share, at a lower wolf CV and lag correlation. v6G acceptance (20 seeds x 1,000 generations, same frozen 3bb97a5) started at 22:40 -> `review/stability/v6G-3bb97a5`, about 3 hours. v6E shocks are about 60% done.
 Lead's view: if G's acceptance passes, prefer G as the default (visible spring calving and a pronghorn that isn't starving matter to a player), since its wolf numbers still clear the gates.
+
+## 2026-10-05 01:30 (Track R): v6E shocks done; v6G acceptance FAILS
+**v6E shocks** (`review/stability/v6E-3bb97a5-shocks300`, 20 seeds x 720,000 ticks each):
+- cull70: all four species 20/20, recovered 100% (bison median 48 yr). PASS.
+- drought: all four 20/20, recovered 100% (bison 13 yr). PASS.
+- wolfwipe: all four persisted 20/20; bison recovered 100% (31 yr); wolves recovered in only 75% of worlds within the window (median 41 yr, near-zero 2.8%); the batch marks bison and pronghorn FAIL on its own stricter criterion there. The plan's gate (bison recovery >= 80% after each shock) passes.
+**v6G acceptance** (`review/stability/v6G-3bb97a5`): bison persisted 17/20 (near-zero 0.2%), wolf CV 0.21, raven 20/20, pronghorn 20/20 (CV 0.30). Fails the bison 19/20 gate.
+=> By the S3 rule v6E is v6. Please flip the defaults to E on v2-sim and post the new golden hashes; I'll merge, re-run the game and redeploy. Worth a look later: why birth pulses cost bison persistence (G) and wolf recolonization after a wipeout (75%).

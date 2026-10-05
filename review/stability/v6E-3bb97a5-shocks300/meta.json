@@ -1,0 +1,97 @@
+{
+ "args": {
+  "seeds": 20,
+  "seedBase": 1,
+  "ticks": 720000,
+  "generations": null,
+  "sampleEvery": 1500,
+  "threads": 6,
+  "scenarios": [
+   "cull70",
+   "drought",
+   "wolfwipe"
+  ],
+  "params": {
+   "calendarScale": 2,
+   "openPrairie": 1,
+   "ravenVagrants": 1,
+   "cdvRate": 0.3,
+   "mangeRate": 0.06,
+   "wolfPreyRef": 1000,
+   "wolfRareHalf": 400,
+   "leanLitter": 0.8
+  },
+  "mock": false,
+  "maxMinutes": 0,
+  "progressSec": 15,
+  "out": "C:\\Users\\stewa\\Documents\\Claude\\ecosystem-sim\\review\\stability\\v6E-3bb97a5-shocks300",
+  "argv": [
+   "--seeds",
+   "20",
+   "--ticks",
+   "720000",
+   "--sample",
+   "1500",
+   "--threads",
+   "6",
+   "--scenario",
+   "cull70,drought,wolfwipe",
+   "--params",
+   "{\"calendarScale\":2,\"openPrairie\":1,\"ravenVagrants\":1,\"cdvRate\":0.3,\"mangeRate\":0.06,\"wolfPreyRef\":1000,\"wolfRareHalf\":400,\"leanLitter\":0.8}",
+   "--out",
+   "C:/Users/stewa/Documents/Claude/ecosystem-sim/review/stability/v6E-3bb97a5-shocks300"
+  ]
+ },
+ "commit": "3bb97a5 (frozen copy)",
+ "node": "v24.19.0",
+ "platform": "win32 x64",
+ "startedAt": "2026-10-04T22:57:13.493Z",
+ "finishedAt": "2026-10-05T04:57:49.503Z",
+ "wallSeconds": 21635.98,
+ "stopReason": null,
+ "tasks": {
+  "total": 60,
+  "completed": 60,
+  "errors": 0,
+  "aborted": 0,
+  "skipped": 0
+ },
+ "msPerTick": 2.926398,
+ "ticksRun": 43200000,
+ "ticksPerSecWall": 1997,
+ "scenarios": {
+  "cull70": {
+   "seeds": 20,
+   "completed": 20,
+   "persistencePct": {
+    "bison": 100,
+    "wolf": 100,
+    "raven": 100,
+    "pronghorn": 100
+   },
+   "maxGen": 483.29333333333335
+  },
+  "drought": {
+   "seeds": 20,
+   "completed": 20,
+   "persistencePct": {
+    "bison": 100,
+    "wolf": 100,
+    "raven": 100,
+    "pronghorn": 100
+   },
+   "maxGen": 487.7180722891566
+  },
+  "wolfwipe": {
+   "seeds": 20,
+   "completed": 20,
+   "persistencePct": {
+    "bison": 100,
+    "wolf": 100,
+    "raven": 100,
+    "pronghorn": 100
+   },
+   "maxGen": 469.390368852459
+  }
+ }
+}
