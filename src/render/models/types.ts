@@ -194,8 +194,36 @@ export function gallopDuty(p: AnimParams, pace: number): number {
   return p.dutyG + (p.dutyGF - p.dutyG) * t * t * (3 - 2 * t);
 }
 
+/**
+ * R7 fur shading of a quadruped (the fragment stage, both LODs so the cross-fade between them stays matched). Everything is optional
+ * and small; 0 or unset switches a term off.
+ */
+export interface FurDef {
+  /** Kajiya-Kay highlight along the hair (the body axis): strength, exponent, tint (multiplies the coat colour's own, linear). */
+  sheen: number;
+  sheenPow?: number;
+  sheenTint?: [number, number, number];
+  /** Backlit rim of fur glowing in a low sun (near range only; the far rim and the night rim are separate and are not doubled). */
+  rim: number;
+  /** Coat pattern: darker along the topline (dorsal), lighter underside (belly), tone mottling (amplitude, cells per metre), per-animal hue jitter. */
+  dorsal?: number;
+  belly?: number;
+  mottle?: number;
+  /** Hair streaks along the body (amplitude, near range only). */
+  streak?: number;
+  mottleScale?: number;
+  indiv?: number;
+  /** Shaggy wool shells (near LOD only): tuft cell size (cells per m, across and along the hair), fringe sparseness 0..1, fade-out range (m). */
+  shell?: { scale: number; along: number; sparse: number; d0: number; d1: number; /** Tone of the inner and the outer layer (multiplies the coat; default 0.8 and 1.04). */ tone?: [number, number] };
+}
+
 export interface ModelDef {
   geometry: THREE.BufferGeometry;
+  /** R7 near LOD: a denser, continuous body, neck and head loft (same rig as `geometry`, which is the far LOD). Drawn within `lod.d1` metres. */
+  nearGeometry?: THREE.BufferGeometry;
+  /** Camera distance range (m) of the dithered cross-fade from the near to the far LOD. */
+  lod?: { d0: number; d1: number };
+  fur?: FurDef;
   params: AnimParams;
   /** Linear RGB coat palette: pale end and dark end. */
   coatPale: [number, number, number];

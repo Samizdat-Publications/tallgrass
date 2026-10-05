@@ -1,9 +1,31 @@
 // Grey wolf, ~1.5 m nose to rump, 0.85 m at the shoulder, bushy tail. Built facing +X, +Z is the animal's right.
-import { MeshBuilder, PART, lin, mix, smooth, pathRings, torsoRings } from './builder';
-import type { PaintFn, V3 } from './builder';
+// R7: `make(false)` is the original mesh (the far LOD); `make(true)` is the near LOD: a denser loft with one continuous body, neck and
+// head (no part seams), a shaggy ruff and a short pelage as shells, eyes, and finer legs and tail.
+import { MeshBuilder, PART, lin, mix, smooth, pathRings, torsoRings, blobRings, spineRings, spineAt } from './builder';
+import type { PaintFn, SpineRow, TubeOpts, V3 } from './builder';
 import { DEFAULT_PARAMS, type ModelDef } from './types';
 
-export function buildWolf(): ModelDef {
+/** Near LOD spine rows (wolf units): the torso, neck and head as one loft: [x, yCenter, up, down, side]. Shared with the coyote. */
+export const WOLF_SPINE: SpineRow[] = [
+  [-0.64, 0.65, 0, 0, 0],
+  [-0.58, 0.65, 0.09, 0.08, 0.075],
+  [-0.4, 0.66, 0.15, 0.13, 0.12],
+  [-0.14, 0.65, 0.14, 0.12, 0.105],
+  [0.1, 0.66, 0.2, 0.25, 0.145],
+  [0.32, 0.68, 0.21, 0.26, 0.155],
+  [0.46, 0.72, 0.2, 0.23, 0.145],
+  [0.58, 0.8, 0.155, 0.17, 0.125],
+  [0.7, 0.85, 0.115, 0.105, 0.105],
+  [0.78, 0.84, 0.1, 0.085, 0.095],
+  [0.84, 0.8, 0.058, 0.05, 0.055],
+  [0.9, 0.77, 0.04, 0.034, 0.038],
+  [0.95, 0.755, 0.02, 0.018, 0.02],
+  [0.975, 0.75, 0, 0, 0],
+];
+/** How much of the head's rotation a point of the spine takes (wolf units). */
+export const wolfHeadW = (x: number): number => smooth(0.28, 0.66, x);
+
+function make(near: boolean): MeshBuilder {
   const b = new MeshBuilder();
   const nose = lin(0x0a0908);
   const pawCol = lin(0x2a2622);
@@ -15,24 +37,6 @@ export function buildWolf(): ModelDef {
     const k = 1 - 0.55 * saddle;
     return [mix(k, 1.22, belly), mix(k, 1.2, belly), mix(k, 1.16, belly), 1];
   };
-
-  // Lean torso with a deep chest and tucked waist: [x, yCenter, up, down, side]
-  b.addTube({
-    part: PART.BODY, sides: 12, paint: bodyPaint,
-    rings: torsoRings([
-      [-0.64, 0.65, 0, 0, 0],
-      [-0.58, 0.65, 0.09, 0.08, 0.075],
-      [-0.4, 0.66, 0.15, 0.13, 0.12],
-      [-0.14, 0.65, 0.14, 0.12, 0.105],
-      [0.1, 0.66, 0.2, 0.25, 0.145],
-      [0.32, 0.68, 0.21, 0.26, 0.155],
-      [0.48, 0.7, 0.2, 0.22, 0.14],
-      [0.6, 0.72, 0.16, 0.17, 0.12],
-      [0.66, 0.7, 0, 0, 0],
-    ]),
-  });
-
-  // Neck with a shaggy ruff, wedge skull, long muzzle (rotating head part).
   const neckPiv: V3 = [0.4, 0.74, 0];
   const headPaint: PaintFn = (p, n) => {
     const ruff = 1 - smooth(0.5, 0.72, p[0]);
@@ -43,19 +47,71 @@ export function buildWolf(): ModelDef {
     if (nosePt > 0.01) return [mix(k, nose[0], nosePt), mix(k, nose[1], nosePt), mix(k, nose[2], nosePt), nosePt > 0.7 ? 0 : 1];
     return [k + 0.1 * ruff, k + 0.06 * ruff, k, 1];
   };
-  b.addTube({
-    part: PART.HEAD, piv: neckPiv, sides: 10, paint: headPaint,
-    rings: pathRings(
-      [[0.34, 0.74, 0], [0.54, 0.84, 0], [0.72, 0.85, 0], [0.83, 0.8, 0], [0.91, 0.76, 0]],
-      [[0.17, 0.15], [0.14, 0.115], [0.108, 0.1], [0.056, 0.05], [0.036, 0.032]],
-      { sub: 3, capStart: false, capLen: 0.7 },
-    ),
-  });
+
+  if (!near) {
+    // Lean torso with a deep chest and tucked waist: [x, yCenter, up, down, side]
+    b.addTube({
+      part: PART.BODY, sides: 12, paint: bodyPaint,
+      rings: torsoRings([
+        [-0.64, 0.65, 0, 0, 0],
+        [-0.58, 0.65, 0.09, 0.08, 0.075],
+        [-0.4, 0.66, 0.15, 0.13, 0.12],
+        [-0.14, 0.65, 0.14, 0.12, 0.105],
+        [0.1, 0.66, 0.2, 0.25, 0.145],
+        [0.32, 0.68, 0.21, 0.26, 0.155],
+        [0.48, 0.7, 0.2, 0.22, 0.14],
+        [0.6, 0.72, 0.16, 0.17, 0.12],
+        [0.66, 0.7, 0, 0, 0],
+      ]),
+    });
+    // Neck with a shaggy ruff, wedge skull, long muzzle (rotating head part).
+    b.addTube({
+      part: PART.HEAD, piv: neckPiv, sides: 10, paint: headPaint,
+      rings: pathRings(
+        [[0.34, 0.74, 0], [0.54, 0.84, 0], [0.72, 0.85, 0], [0.83, 0.8, 0], [0.91, 0.76, 0]],
+        [[0.17, 0.15], [0.14, 0.115], [0.108, 0.1], [0.056, 0.05], [0.036, 0.032]],
+        { sub: 3, capStart: false, capLen: 0.7 },
+      ),
+    });
+  } else {
+    const spinePaint: PaintFn = (p, n, t) => {
+      const w = smooth(0.36, 0.52, p[0]);
+      const a = bodyPaint(p, n, t), c = headPaint(p, n, t);
+      return [mix(a[0], c[0], w), mix(a[1], c[1], w), mix(a[2], c[2], w), w > 0.5 ? c[3] : a[3]];
+    };
+    const partOf = (p: V3): number => (wolfHeadW(p[0]) > 0.002 ? PART.HEAD : PART.BODY);
+    b.addTube({
+      part: PART.BODY, piv: neckPiv, sides: 18, paint: spinePaint, group: 1,
+      partOf, w1: (p) => 1 - wolfHeadW(p[0]),
+      rings: spineRings(WOLF_SPINE, 3),
+    });
+    // The pelage as two thin shells over the whole body, with a long ruff at the throat, the cheeks and the shoulders
+    for (const [layer, h] of [[0.5, 0.012], [1.0, 0.026]] as Array<[number, number]>) {
+      b.addTube({
+        part: PART.BODY, piv: neckPiv, sides: 14, paint: spinePaint, group: 1, shell: layer,
+        partOf, w1: (p) => 1 - wolfHeadW(p[0]),
+        rings: spineRings(WOLF_SPINE.slice(1), 2),
+        inflate: (p, n) => {
+          const x = p[0];
+          const zone = smooth(-0.55, -0.3, x) * (1 - smooth(0.8, 0.88, x));
+          const ruff = 2.4 * smooth(0.12, 0.42, x) * (1 - smooth(0.66, 0.8, x)) * (0.5 + 0.5 * smooth(0.6, -0.5, n[1]));
+          return 0.003 + h * zone * (1 + ruff);
+        },
+      });
+    }
+    {
+      const [yc, up, , side] = spineAt(WOLF_SPINE, 0.78);
+      b.addPair({
+        part: PART.HEAD, piv: neckPiv, sides: 8, paint: [0.45, 0.24, 0.04, 0],
+        rings: blobRings([0.78, yc + up * 0.28, side * 0.97], 0.017, 0.012, 0.009, 6),
+      });
+    }
+  }
   // Pointed ears
   b.addPair({
-    part: PART.HEAD, piv: neckPiv, sides: 6,
+    part: PART.HEAD, piv: neckPiv, sides: near ? 8 : 6,
     paint: (_p, _n, t) => [0.7 - 0.25 * t, 0.68 - 0.25 * t, 0.65 - 0.25 * t, 1],
-    rings: pathRings([[0.69, 0.87, 0.06], [0.675, 0.95, 0.07], [0.67, 1.03, 0.075]], [[0.04, 0.016], [0.034, 0.013], [0.012, 0.006]], { ref: [1, 0, 0], sub: 2, capStart: false, capLen: 0.5 }),
+    rings: pathRings([[0.69, 0.87, 0.06], [0.675, 0.95, 0.07], [0.67, 1.03, 0.075]], [[0.04, 0.016], [0.034, 0.013], [0.012, 0.006]], { ref: [1, 0, 0], sub: near ? 3 : 2, capStart: false, capLen: 0.5 }),
   });
 
   // Long legs (+z right); gloves of lighter fur, dark paws.
@@ -63,34 +119,37 @@ export function buildWolf(): ModelDef {
     if (p[1] < 0.045) return [pawCol[0], pawCol[1], pawCol[2], 0.3];
     return [1.1, 1.1, 1.1, 1];
   };
-  b.addPair(
-    {
-      part: PART.FR, piv: [0.34, 0.66, 0.1], piv2: [0.37, 0.27, 0.085], sides: 8, paint: legPaint,
-      w1: (p) => smooth(0.36, 0.2, p[1]),
-      rings: pathRings(
-        [[0.34, 0.66, 0.1], [0.36, 0.42, 0.095], [0.37, 0.27, 0.085], [0.385, 0.12, 0.08], [0.405, 0.04, 0.08]],
-        [[0.1, 0.085], [0.07, 0.058], [0.046, 0.04], [0.037, 0.034], [0.05, 0.04]],
-        { ref: [1, 0, 0], sub: 2, capStart: false, capLen: 0.5 },
-      ),
-    },
-    PART.FL,
-  );
-  b.addPair(
-    {
-      part: PART.HR, piv: [-0.44, 0.66, 0.1], piv2: [-0.5, 0.27, 0.1], sides: 8, paint: legPaint,
-      w1: (p) => smooth(0.36, 0.2, p[1]),
-      rings: pathRings(
-        [[-0.44, 0.66, 0.1], [-0.33, 0.46, 0.12], [-0.5, 0.27, 0.1], [-0.47, 0.12, 0.085], [-0.45, 0.04, 0.08]],
-        [[0.13, 0.095], [0.1, 0.07], [0.048, 0.04], [0.036, 0.034], [0.05, 0.04]],
-        { ref: [1, 0, 0], sub: 2, capStart: false, capLen: 0.5 },
-      ),
-    },
-    PART.HL,
-  );
+  const legSub = near ? 4 : 2;
+  const legSides = near ? 12 : 8;
+  const frontLeg: TubeOpts = {
+    part: PART.FR, piv: [0.34, 0.66, 0.1], piv2: [0.37, 0.27, 0.085], sides: legSides, paint: legPaint,
+    w1: (p) => smooth(0.36, 0.2, p[1]),
+    rings: pathRings(
+      [[0.34, 0.66, 0.1], [0.36, 0.42, 0.095], [0.37, 0.27, 0.085], [0.385, 0.12, 0.08], [0.405, 0.04, 0.08]],
+      [[0.1, 0.085], [0.07, 0.058], [0.046, 0.04], [0.037, 0.034], [0.05, 0.04]],
+      { ref: [1, 0, 0], sub: legSub, capStart: false, capLen: 0.5 },
+    ),
+  };
+  const hindLeg: TubeOpts = {
+    part: PART.HR, piv: [-0.44, 0.66, 0.1], piv2: [-0.5, 0.27, 0.1], sides: legSides, paint: legPaint,
+    w1: (p) => smooth(0.36, 0.2, p[1]),
+    rings: pathRings(
+      [[-0.44, 0.66, 0.1], [-0.33, 0.46, 0.12], [-0.5, 0.27, 0.1], [-0.47, 0.12, 0.085], [-0.45, 0.04, 0.08]],
+      [[0.13, 0.095], [0.1, 0.07], [0.048, 0.04], [0.036, 0.034], [0.05, 0.04]],
+      { ref: [1, 0, 0], sub: legSub, capStart: false, capLen: 0.5 },
+    ),
+  };
+  b.addPair(frontLeg, PART.FL);
+  b.addPair(hindLeg, PART.HL);
+  if (near) {
+    // a thin coat on the legs too (heavier at the elbows and the thighs), so they match the body's
+    b.addPair({ ...frontLeg, group: 30, shell: 1, inflate: (p) => 0.003 + 0.011 * smooth(0.12, 0.5, p[1]) }, PART.FL);
+    b.addPair({ ...hindLeg, group: 31, shell: 1, inflate: (p) => 0.003 + 0.013 * smooth(0.12, 0.55, p[1]) }, PART.HL);
+  }
 
   // Bushy tail with a dark tip
-  b.addTube({
-    part: PART.TAIL, piv: [-0.58, 0.66, 0], sides: 9,
+  const tail: TubeOpts = {
+    part: PART.TAIL, piv: [-0.58, 0.66, 0], sides: near ? 14 : 9,
     paint: (p, n, t) => {
       const tip = smooth(0.72, 0.9, t);
       const top = smooth(0.2, 0.8, n[1]) * 0.35;
@@ -100,14 +159,28 @@ export function buildWolf(): ModelDef {
     rings: pathRings(
       [[-0.56, 0.66, 0], [-0.76, 0.6, 0], [-0.97, 0.47, 0], [-1.08, 0.33, 0]],
       [[0.04, 0.04], [0.075, 0.075], [0.085, 0.082], [0.05, 0.045]],
-      { sub: 3, capLen: 1.2 },
+      { sub: near ? 5 : 3, capLen: 1.2 },
     ),
-  });
+  };
+  b.addTube(tail);
+  if (near) {
+    for (const [layer, h] of [[0.5, 0.012], [1.0, 0.03]] as Array<[number, number]>) {
+      b.addTube({ ...tail, group: 32, shell: layer, inflate: (_p, _n, t) => 0.003 + h * smooth(0.0, 0.25, t) * (1 - 0.6 * smooth(0.8, 1.0, t)) });
+    }
+  }
+  return b;
+}
 
-  const geometry = b.build();
+export function buildWolf(): ModelDef {
+  const far = make(false);
+  const nearB = make(true);
   return {
-    geometry,
-    triangles: b.triangleCount,
+    geometry: far.build({ ground: 0.64 }),
+    nearGeometry: nearB.build({ ground: 0.64 }),
+    lod: { d0: 20, d1: 30 },
+    fur: { sheen: 0.4, sheenPow: 46, sheenTint: [1.0, 0.98, 0.94], rim: 1.7, dorsal: 0.14, belly: 0.1, mottle: 0.12, mottleScale: 9, streak: 0.16, indiv: 0.06,
+      shell: { scale: 70, along: 0.5, sparse: 0.2, d0: 11, d1: 22 } },
+    triangles: far.triangleCount,
     coatPale: lin(0x9d9a94),
     coatDark: lin(0x45423d),
     bone: lin(0xd8d0bc),

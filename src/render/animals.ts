@@ -355,6 +355,17 @@ class Batch {
   alive = 0; // living instances (pickable)
   mesh!: THREE.InstancedMesh;
   geometry!: THREE.BufferGeometry;
+  /**
+   * R7 near LOD (species with `def.nearGeometry`): a second mesh drawing, with its own copy of the instance rows, only the instances within
+   * the near range. `mesh` (the far LOD) keeps drawing every instance and hides the ones the near mesh has (models/shader.ts, aLook.w bit 32).
+   */
+  nearMaterial: THREE.MeshStandardMaterial | null = null;
+  nearMesh: THREE.InstancedMesh | null = null;
+  nearGeometry: THREE.BufferGeometry | null = null;
+  nGait!: THREE.InstancedBufferAttribute;
+  nLook!: THREE.InstancedBufferAttribute;
+  nFx!: THREE.InstancedBufferAttribute;
+  nFx2!: THREE.InstancedBufferAttribute;
   gait!: THREE.InstancedBufferAttribute;
   look!: THREE.InstancedBufferAttribute;
   fx!: THREE.InstancedBufferAttribute;
@@ -365,12 +376,13 @@ class Batch {
 
   private shared: AnimalShared;
 
-  constructor(sp: number, def: ModelDef, material: THREE.MeshStandardMaterial, depth: THREE.MeshDepthMaterial, parent: THREE.Object3D, cap: number, shared: AnimalShared) {
+  constructor(sp: number, def: ModelDef, material: THREE.MeshStandardMaterial, depth: THREE.MeshDepthMaterial, parent: THREE.Object3D, cap: number, shared: AnimalShared, nearMaterial: THREE.MeshStandardMaterial | null = null) {
     this.shared = shared;
     this.sp = sp;
     this.def = def;
     this.material = material;
     this.depth = depth;
+    this.nearMaterial = nearMaterial;
     this.build(cap, parent);
   }
 
@@ -379,6 +391,12 @@ class Batch {
       parent.remove(this.mesh);
       this.mesh.dispose();
       this.geometry.dispose();
+    }
+    if (this.nearMesh) {
+      parent.remove(this.nearMesh);
+      this.nearMesh.dispose();
+      this.nearGeometry?.dispose();
+      this.nearMesh = null;
     }
     const g = new THREE.BufferGeometry();
     const src = this.def.geometry;
@@ -405,8 +423,8 @@ class Batch {
     mesh.count = 0;
     mesh.name = 'animals-' + this.sp;
     const sh = this.shared;
-    mesh.onBeforeRender = (_r, _s, camera) => {
-      const expo = (_r as THREE.WebGLRenderer).toneMappingExposure ?? 1;
+    const beforeRender = (_r: THREE.WebGLRenderer, _s: THREE.Scene, camera: THREE.Camera): void => {
+      const expo = _r.toneMappingExposure ?? 1;
       // the min-screen-size boost in the vertex shader needs the viewing camera (not the shadow camera)
       if ((camera as THREE.PerspectiveCamera).isPerspectiveCamera) {
         sh.probe?.(_s, expo);
@@ -414,8 +432,40 @@ class Batch {
         sh.uPxK.value = 900 / (2 * Math.tan(((camera as THREE.PerspectiveCamera).fov * Math.PI) / 360));
       }
     };
+    mesh.onBeforeRender = (_r, _s, camera) => beforeRender(_r as THREE.WebGLRenderer, _s as THREE.Scene, camera);
     this.geometry = g;
     this.mesh = mesh;
+    if (this.nearMaterial && this.def.nearGeometry) {
+      const gn = new THREE.BufferGeometry();
+      const srcN = this.def.nearGeometry;
+      for (const name of Object.keys(srcN.attributes)) gn.setAttribute(name, srcN.getAttribute(name));
+      gn.setIndex(srcN.getIndex());
+      this.nGait = new THREE.InstancedBufferAttribute(new Float32Array(cap * 4), 4);
+      this.nLook = new THREE.InstancedBufferAttribute(new Float32Array(cap * 4), 4);
+      this.nFx = new THREE.InstancedBufferAttribute(new Float32Array(cap * 4), 4);
+      this.nFx2 = new THREE.InstancedBufferAttribute(new Float32Array(cap * 4), 4);
+      for (const a of [this.nGait, this.nLook, this.nFx, this.nFx2]) a.setUsage(THREE.DynamicDrawUsage);
+      gn.setAttribute('aGait', this.nGait);
+      gn.setAttribute('aLook', this.nLook);
+      gn.setAttribute('aFx', this.nFx);
+      gn.setAttribute('aFx2', this.nFx2);
+      const nm = new THREE.InstancedMesh(gn, this.nearMaterial, cap);
+      nm.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+      nm.castShadow = false; // the shadow is cast by the far mesh at every distance
+      nm.receiveShadow = true;
+      nm.frustumCulled = false;
+      nm.count = 0;
+      nm.name = 'animals-near-' + this.sp;
+      // the ambient-occlusion pre-pass draws everything with one override material and no animation: the near mesh sits it out
+      nm.onBeforeRender = (_r, _s, camera) => {
+        if ((_s as THREE.Scene).overrideMaterial) gn.setDrawRange(0, 0);
+        else beforeRender(_r as THREE.WebGLRenderer, _s as THREE.Scene, camera);
+      };
+      nm.onAfterRender = () => gn.setDrawRange(0, Infinity);
+      this.nearGeometry = gn;
+      this.nearMesh = nm;
+      parent.add(nm);
+    }
     this.capacity = cap;
     this.ids = new Uint32Array(cap);
     this.centers = new Float32Array(cap * 4);
@@ -590,6 +640,8 @@ export class AnimalLayer {
   readonly speciesScale: number[] = byId({ bison: 1, wolf: 1.35, raven: 1.7, pronghorn: 1, rabbit: 1.2, cougar: 1.05, coyote: 1.35, eagle: 1.7, hawk: 1.6 }, () => 1);
 
   private world: World;
+  /** R7: draw the near LOD of the species that have one (false: the far mesh draws everything; an A/B and debugging hook). */
+  nearLod = true;
   /** Draw batch by species id; null for a species with no model (it is simply not drawn). */
   private batches: Array<Batch | null> = [];
   /** The non-null batches, for loops over every drawn species. */
@@ -686,7 +738,7 @@ export class AnimalLayer {
     const tu = scene.userData?.tgUniforms as SharedUniforms | undefined;
     if (!tu) return;
     this.tg = tu;
-    if (this.tgMissed) for (const b of this.live) b.material.needsUpdate = true;
+    if (this.tgMissed) for (const b of this.live) { b.material.needsUpdate = true; if (b.nearMaterial) b.nearMaterial.needsUpdate = true; }
   }
 
   constructor(world: World) {
@@ -706,15 +758,25 @@ export class AnimalLayer {
       }
       this.rigs.push(def.params.kind === 0 ? legRigOf(def.geometry) : null);
       this.tlHz[sp] = def.params.kind === 0 ? timelapseHz(def.params) : 2.6;
-      const { material, depth } = makeAnimalMaterials(sp, def, this.shared);
+      const { material, depth } = makeAnimalMaterials(sp, def, this.shared, def.nearGeometry ? 'far' : 'single');
       // animals sit in hill shadow like the terrain and trees do (the depth material casts only, so it needs nothing)
-      const baseCompile = material.onBeforeCompile;
-      material.onBeforeCompile = (shader, renderer) => {
-        baseCompile.call(material, shader, renderer);
-        if (this.tg) injectTerrainShadow(shader, this.tg);
-        else this.tgMissed = true;
+      const hillShadow = (m: THREE.MeshStandardMaterial): void => {
+        const baseCompile = m.onBeforeCompile;
+        m.onBeforeCompile = (shader, renderer) => {
+          baseCompile.call(m, shader, renderer);
+          if (this.tg) injectTerrainShadow(shader, this.tg);
+          else this.tgMissed = true;
+        };
       };
-      const batch = new Batch(sp, def, material, depth, this.object3D, INITIAL_CAPACITY[sp] ?? 256, this.shared);
+      hillShadow(material);
+      let nearMaterial: THREE.MeshStandardMaterial | null = null;
+      if (def.nearGeometry) {
+        const nm = makeAnimalMaterials(sp, def, this.shared, 'near');
+        nm.depth.dispose(); // (shadows come from the far mesh)
+        nearMaterial = nm.material;
+        hillShadow(nearMaterial);
+      }
+      const batch = new Batch(sp, def, material, depth, this.object3D, INITIAL_CAPACITY[sp] ?? 256, this.shared, nearMaterial);
       this.batches.push(batch);
       this.live.push(batch);
     }
@@ -2114,6 +2176,7 @@ export class AnimalLayer {
 
     for (const b of this.live) {
       const m = b.mesh;
+      if (b.nearMesh) this.fillNear(b);
       m.count = b.count;
       m.visible = b.count > 0;
       const used = b.count;
@@ -2127,6 +2190,43 @@ export class AnimalLayer {
     this.markers.end();
     this.contact.end();
     this.updateRing();
+  }
+
+  /**
+   * R7: copy the instances within the near-LOD range (plus a margin, so the cross-fade has them before it starts) into the near mesh's
+   * own rows and mark them in the far mesh's rows (aLook.w bit 32), so the far mesh hides exactly the instances the near mesh draws. The
+   * camera position is the one of the last draw: after a cut an instance may be drawn one frame by the far mesh alone (never by neither).
+   */
+  private fillNear(b: Batch): void {
+    const nm = b.nearMesh!;
+    const cp = this.shared.uCamPos.value;
+    const lim = this.nearLod ? (b.def.lod!.d1 + 8) ** 2 : -1;
+    const te = b.mesh.instanceMatrix.array as Float32Array;
+    const ne = nm.instanceMatrix.array as Float32Array;
+    const g = b.gait.array as Float32Array, l = b.look.array as Float32Array, f = b.fx.array as Float32Array, f2 = b.fx2.array as Float32Array;
+    const ng = b.nGait.array as Float32Array, nl = b.nLook.array as Float32Array, nf = b.nFx.array as Float32Array, nf2 = b.nFx2.array as Float32Array;
+    let n = 0;
+    for (let k = 0; k < b.count; k++) {
+      const o = k * 16, q = k * 4;
+      const w = l[q + 3];
+      const base = w - 32 * Math.floor((Math.floor(w + 0.001)) / 32); // the flag word without the near-copy bit
+      const dx = te[o + 12] - cp.x, dy = te[o + 13] - cp.y, dz = te[o + 14] - cp.z;
+      if (dx * dx + dy * dy + dz * dz > lim) { l[q + 3] = base; continue; }
+      l[q + 3] = base + 32;
+      const r = n * 16, p = n * 4;
+      for (let i = 0; i < 16; i++) ne[r + i] = te[o + i];
+      for (let i = 0; i < 4; i++) { ng[p + i] = g[q + i]; nl[p + i] = i === 3 ? base : l[q + i]; nf[p + i] = f[q + i]; nf2[p + i] = f2[q + i]; }
+      n++;
+    }
+    nm.count = n;
+    nm.visible = n > 0;
+    if (n === 0) return;
+    const attrs: THREE.BufferAttribute[] = [nm.instanceMatrix, b.nGait, b.nLook, b.nFx, b.nFx2];
+    for (const a of attrs) {
+      a.clearUpdateRanges();
+      a.addUpdateRange(0, n * a.itemSize);
+      a.needsUpdate = true;
+    }
   }
 
   /** Append one instance to a batch and write its matrix. Matrix = Ry(-heading) * Rz(pitch) * Rx(roll) * scale. */
@@ -2251,6 +2351,9 @@ export class AnimalLayer {
       b.geometry.dispose();
       b.material.dispose();
       b.depth.dispose();
+      b.nearMesh?.dispose();
+      b.nearGeometry?.dispose();
+      b.nearMaterial?.dispose();
     }
     this.heightTex.dispose();
     this.markers.dispose();
