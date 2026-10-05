@@ -1,5 +1,6 @@
 // Post stack: MSAA HDR scene pass (keeps a depth texture) -> GTAO -> aerial-perspective haze (distance + valley
-// mist, tinted by the sky so it meets the horizon seamlessly) -> bloom -> color grade -> tone map/sRGB -> AA -> dither.
+// mist, tinted by the sky so it meets the horizon seamlessly) -> depth of field (optional) -> bloom -> color grade -> tone
+// map/sRGB -> AA -> dither (+ optional film grain and colour fringe).
 import * as THREE from 'three';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { Pass, FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
@@ -541,7 +542,326 @@ class GradePass extends Pass {
   override dispose(): void { this.material.dispose(); this.quad.dispose(); }
 }
 
-/** Last pass: tiny dither so smooth skies never band in 8-bit output. */
+/**
+ * Depth of field (R15): a gather bokeh from the scene depth texture. Off by default: the pass is disabled (the composer skips
+ * it, and its render targets are not even allocated) until `blur` is above zero. Five small passes:
+ *   1. half resolution: colour (Karis-weighted, so a lone bright pixel cannot flare) and the signed circle of confusion (a = pixels
+ *      at half size, positive = behind the focus plane, negative = in front); a texel on a silhouette takes the blurrier side;
+ *   2. a tile pass: the largest near-field blur in each 16 x 16 block, so a blurred foreground can spill onto sharp neighbours;
+ *   3. the gather: `taps` samples on a golden-angle spiral (rotated per pixel) over the larger of the pixel's own far blur and the
+ *      dilated near blur. Far samples may not bleed onto anything nearer than themselves (so the subject stays crisp against a soft
+ *      background), near samples spill over everything; the result carries the near coverage in alpha;
+ *   4. a 3 x 3 clean-up of the gather's per-pixel noise, weighted by how alike the circles of confusion are (so it never smears
+ *      across a silhouette);
+ *   5. full resolution: a pixel takes the blurred value in proportion to its own far blur, or to the near coverage, else stays sharp.
+ * The circle of confusion is the thin-lens shape blur * (1 - focus / z), with `blur` the far blur as a fraction of the image height.
+ */
+const DOF_COMMON = /* glsl */ `
+  uniform sampler2D tDepth;
+  uniform vec4 uCoc;   // x: far blur in full-res pixels, y: focus distance (m along the view axis), z: near plane, w: far plane
+  float tgLinZ(float d) { return uCoc.z * uCoc.w / (uCoc.w - d * (uCoc.w - uCoc.z)); }
+  uniform vec4 uStyle; // x: 1 = long lens (gentle), 0 = thin lens; y: sharp slab around the focus (m); z: z / focus where the far blur is full; w: z / focus where near blur starts
+  float tgCoc(float d) {
+    float z = tgLinZ(d);
+    if (uStyle.x < 0.5) return clamp(uCoc.x * (1.0 - uCoc.y / z), -uCoc.x, uCoc.x);
+    // long lens, for the documentary camera: the subject and the metres around its depth stay sharp, the far background softens
+    // slowly out to twice the subject distance, and only something very close to the lens goes soft in front
+    float f = uCoc.y;
+    float far = smoothstep(0.0, 1.0, max(z - f - uStyle.y, 0.0) / max(f * (uStyle.z - 1.0) - uStyle.y, 1.0));
+    float near = 1.0 - smoothstep(uStyle.w * 0.3, uStyle.w, z / f);
+    return uCoc.x * (far - near);
+  }
+`;
+const DOF_TILE = 16;
+
+class DofPass extends Pass {
+  /** Far blur as a fraction of the image height (0 = off). */
+  blur = 0;
+  /** Distance to the plane in focus, metres along the view axis. */
+  focus = 20;
+  /** Gather taps (16 to 32). */
+  taps = 24;
+  /** The circle of confusion's shape (see DOF_COMMON): x 1 = long lens (the documentary camera), 0 = thin lens (photo mode). Shared with both shaders. */
+  readonly style = new THREE.Vector4(0, 4, 2, 0.5);
+  private w = 2;
+  private h = 2;
+  private halfRT: THREE.WebGLRenderTarget | null = null;
+  private gatherRT: THREE.WebGLRenderTarget | null = null;
+  private cleanRT: THREE.WebGLRenderTarget | null = null;
+  private tile1RT: THREE.WebGLRenderTarget | null = null;
+  private tileRT: THREE.WebGLRenderTarget | null = null;
+  private downMat: THREE.ShaderMaterial;
+  private tileMat: THREE.ShaderMaterial;
+  private gatherMat: THREE.ShaderMaterial;
+  private cleanMat: THREE.ShaderMaterial;
+  private compMat: THREE.ShaderMaterial;
+  private downQuad: FullScreenQuad;
+  private tileQuad: FullScreenQuad;
+  private gatherQuad: FullScreenQuad;
+  private cleanQuad: FullScreenQuad;
+  private compQuad: FullScreenQuad;
+
+  constructor(private camera: THREE.PerspectiveCamera, private scenePass: ScenePass) {
+    super();
+    this.needsSwap = true;
+    this.enabled = false;
+    const cocU = () => ({ value: new THREE.Vector4(10, 20, 0.5, 9000) });
+    const styleU = { value: this.style };
+    this.downMat = new THREE.ShaderMaterial({
+      uniforms: { tDiffuse: { value: null }, tDepth: { value: null }, uCoc: cocU(), uStyle: styleU, uTexel: { value: new THREE.Vector2(1 / 1600, 1 / 900) } },
+      vertexShader: FS_VERT,
+      fragmentShader: /* glsl */ `
+        precision highp float;
+        varying vec2 vUv;
+        uniform sampler2D tDiffuse;
+        uniform vec2 uTexel;
+        ${DOF_COMMON}
+        void main() {
+          vec2 o = uTexel * 0.5;
+          vec2 offs[4] = vec2[4](vec2(-o.x, -o.y), vec2(o.x, -o.y), vec2(-o.x, o.y), vec2(o.x, o.y));
+          vec3 col[4];
+          float coc[4];
+          // a texel that straddles a silhouette takes the blurrier side's circle of confusion (a sharp subject keeps its own full
+          // resolution pixels in the composite, so what matters here is that the background beside it is blurred, not smeared with it)
+          float best = -1.0, cSel = 0.0;
+          for (int i = 0; i < 4; i++) {
+            vec2 uv = vUv + offs[i];
+            col[i] = min(texture2D(tDiffuse, uv).rgb, vec3(24.0));
+            coc[i] = tgCoc(texture2D(tDepth, uv).x);
+            if (abs(coc[i]) > best) { best = abs(coc[i]); cSel = coc[i]; }
+          }
+          vec3 sum = vec3(0.0);
+          float wsum = 0.0;
+          for (int i = 0; i < 4; i++) {
+            float w = (1.0 / (1.0 + dot(col[i], vec3(0.2126, 0.7152, 0.0722)))) / (1.0 + 0.5 * abs(coc[i] - cSel));
+            sum += col[i] * w;
+            wsum += w;
+          }
+          gl_FragColor = vec4(sum / wsum, cSel * 0.5);
+        }`,
+      depthTest: false, depthWrite: false,
+    });
+    this.tileMat = new THREE.ShaderMaterial({
+      uniforms: { tSrc: { value: null }, uSrcTexel: { value: new THREE.Vector2(1 / 800, 1 / 450) }, uFromCoc: { value: 1 } },
+      vertexShader: FS_VERT,
+      fragmentShader: /* glsl */ `
+        precision highp float;
+        varying vec2 vUv;
+        uniform sampler2D tSrc;
+        uniform vec2 uSrcTexel;
+        uniform float uFromCoc;
+        // the largest near-field blur over a 4 x 4 block of the source: the circle of confusion's alpha first (negative = near), then
+        // the red channel of the first result. Two of these make a 16 x 16 tile, with enough threads to keep the GPU busy.
+        void main() {
+          vec2 origin = floor(gl_FragCoord.xy) * 4.0;
+          float nearest = 0.0;
+          for (int y = 0; y < 4; y++) {
+            for (int x = 0; x < 4; x++) {
+              vec4 s = textureLod(tSrc, (origin + vec2(float(x), float(y)) + 0.5) * uSrcTexel, 0.0);
+              nearest = max(nearest, uFromCoc > 0.5 ? -s.a : s.r);
+            }
+          }
+          gl_FragColor = vec4(nearest, 0.0, 0.0, 1.0);
+        }`,
+      depthTest: false, depthWrite: false,
+    });
+    this.gatherMat = new THREE.ShaderMaterial({
+      uniforms: {
+        tSrc: { value: null }, tTile: { value: null },
+        uHalfTexel: { value: new THREE.Vector2(1 / 800, 1 / 450) }, uTileSize: { value: new THREE.Vector2(50, 29) },
+        uTaps: { value: 24 },
+      },
+      vertexShader: FS_VERT,
+      fragmentShader: /* glsl */ `
+        precision highp float;
+        varying vec2 vUv;
+        uniform sampler2D tSrc;
+        uniform sampler2D tTile;
+        uniform vec2 uHalfTexel;
+        uniform vec2 uTileSize;
+        uniform float uTaps;
+        void main() {
+          vec4 c0 = textureLod(tSrc, vUv, 0.0);
+          float cc = c0.a;
+          float ccFar = max(cc, 0.0);
+          // the largest near-field blur within a tile of this pixel (3 x 3 tiles, so it spills onto sharp neighbours)
+          vec2 tc = floor(gl_FragCoord.xy / ${DOF_TILE}.0) + 0.5;
+          float nearR = 0.0;
+          for (int j = -1; j <= 1; j++) for (int i = -1; i <= 1; i++) nearR = max(nearR, textureLod(tTile, (tc + vec2(float(i), float(j))) / uTileSize, 0.0).r);
+          float R = max(ccFar, nearR);
+          if (R < 0.6) { gl_FragColor = vec4(c0.rgb, 0.0); return; }
+          float jit = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715)))) * 6.2831853;
+          float spacing = R * sqrt(3.14159265 / uTaps);   // the mean gap between taps, in half-resolution pixels
+          vec3 farSum = c0.rgb;
+          float farW = 1.0;
+          vec3 nearSum = vec3(0.0);
+          float nearW = 0.0;
+          // the golden-angle spiral, turned a step at a time (a rotation each tap, not a cos and a sin each tap)
+          vec2 dir = vec2(cos(jit), sin(jit));
+          const vec2 golden = vec2(-0.7373688, 0.6754903);   // cos and sin of 2.3999632
+          for (int i = 0; i < 32; i++) {
+            if (float(i) >= uTaps) break;
+            float fi = float(i) + 0.5;
+            float r = R * sqrt(fi / uTaps);
+            dir = vec2(dir.x * golden.x - dir.y * golden.y, dir.x * golden.y + dir.y * golden.x);
+            // wide kernels read the half-resolution image's mip chain: a tap away from the centre stands for the patch of the disc
+            // it covers (cheaper in the cache, and it takes the noise out), the taps nearest the pixel stay exact
+            float lod = clamp(log2(max(1.0, spacing * (0.3 + 0.7 * r / R))) - 0.5, 0.0, 3.0);
+            vec4 s = textureLod(tSrc, vUv + dir * (r * uHalfTexel), lod);
+            float cs = s.a;
+            // behind the pixel, a sample may not blur it further than the pixel itself is blurred
+            float effFar = cs > cc ? min(max(cs, 0.0), ccFar) : max(cs, 0.0);
+            float wF = clamp(effFar - r + 1.0, 0.0, 1.0);
+            float wN = clamp(max(-cs, 0.0) - r + 1.0, 0.0, 1.0);
+            float lum = 1.0 + 0.25 * min(dot(s.rgb, vec3(0.2126, 0.7152, 0.0722)), 6.0);
+            farSum += s.rgb * (wF * lum);
+            farW += wF * lum;
+            nearSum += s.rgb * wN;
+            nearW += wN;
+          }
+          vec3 farC = farSum / farW;
+          float cov = clamp(nearW / (uTaps * 0.5), 0.0, 1.0);
+          vec3 nearC = nearW > 0.0 ? nearSum / nearW : farC;
+          gl_FragColor = vec4(mix(farC, nearC, cov), cov);
+        }`,
+      depthTest: false, depthWrite: false,
+    });
+    this.cleanMat = new THREE.ShaderMaterial({
+      uniforms: { tSrc: { value: null }, tCoc: { value: null }, uHalfTexel: { value: new THREE.Vector2(1 / 800, 1 / 450) } },
+      vertexShader: FS_VERT,
+      fragmentShader: /* glsl */ `
+        precision highp float;
+        varying vec2 vUv;
+        uniform sampler2D tSrc;
+        uniform sampler2D tCoc;
+        uniform vec2 uHalfTexel;
+        void main() {
+          // four bilinear taps at the corners of the pixel's own texel: a 3 x 3 tent for the price of four fetches
+          float cc = texture2D(tCoc, vUv).a;
+          vec4 sum = vec4(0.0);
+          float wsum = 0.0;
+          for (int k = 0; k < 4; k++) {
+            vec2 uv = vUv + vec2(k < 2 ? -0.5 : 0.5, (k & 1) == 0 ? -0.5 : 0.5) * uHalfTexel;
+            float w = exp(-abs(texture2D(tCoc, uv).a - cc) * 0.45);
+            sum += texture2D(tSrc, uv) * w;
+            wsum += w;
+          }
+          gl_FragColor = sum / wsum;
+        }`,
+      depthTest: false, depthWrite: false,
+    });
+    this.compMat = new THREE.ShaderMaterial({
+      uniforms: { tDiffuse: { value: null }, tDepth: { value: null }, tBlur: { value: null }, uCoc: cocU(), uStyle: styleU },
+      vertexShader: FS_VERT,
+      fragmentShader: /* glsl */ `
+        precision highp float;
+        varying vec2 vUv;
+        uniform sampler2D tDiffuse;
+        uniform sampler2D tBlur;
+        ${DOF_COMMON}
+        void main() {
+          vec4 sharp = texture2D(tDiffuse, vUv);
+          float far = max(tgCoc(texture2D(tDepth, vUv).x), 0.0);
+          vec4 b = texture2D(tBlur, vUv);
+          float k = max(clamp(far * 0.5, 0.0, 1.0), b.a);
+          gl_FragColor = vec4(mix(sharp.rgb, b.rgb, k), sharp.a);
+        }`,
+      depthTest: false, depthWrite: false,
+    });
+    this.downQuad = new FullScreenQuad(this.downMat);
+    this.tileQuad = new FullScreenQuad(this.tileMat);
+    this.gatherQuad = new FullScreenQuad(this.gatherMat);
+    this.cleanQuad = new FullScreenQuad(this.cleanMat);
+    this.compQuad = new FullScreenQuad(this.compMat);
+  }
+
+  /** Allocated on first use, so a game that never opens photo mode or a close shot pays nothing, in time or in memory. */
+  private ensure(): void {
+    if (this.halfRT) return;
+    const hw = Math.max(2, this.w >> 1), hh = Math.max(2, this.h >> 1);
+    const mk = (w: number, h: number, filter: THREE.MagnificationTextureFilter) => new THREE.WebGLRenderTarget(w, h, {
+      type: THREE.HalfFloatType, depthBuffer: false, minFilter: filter, magFilter: filter,
+    });
+    // the half-resolution image keeps a mip chain (three builds it after the pass renders) for the wide taps of the gather
+    this.halfRT = new THREE.WebGLRenderTarget(hw, hh, {
+      type: THREE.HalfFloatType, depthBuffer: false, generateMipmaps: true, minFilter: THREE.LinearMipmapNearestFilter, magFilter: THREE.LinearFilter,
+    });
+    this.gatherRT = mk(hw, hh, THREE.LinearFilter);
+    this.cleanRT = mk(hw, hh, THREE.LinearFilter);
+    this.tile1RT = mk(Math.ceil(hw / 4), Math.ceil(hh / 4), THREE.NearestFilter);
+    this.tileRT = mk(Math.ceil(hw / DOF_TILE), Math.ceil(hh / DOF_TILE), THREE.NearestFilter);
+    this.halfRT.texture.name = 'dof.half';
+    this.gatherRT.texture.name = 'dof.gather';
+  }
+
+  private freeTargets(): void {
+    this.halfRT?.dispose(); this.gatherRT?.dispose(); this.cleanRT?.dispose(); this.tile1RT?.dispose(); this.tileRT?.dispose();
+    this.halfRT = this.gatherRT = this.cleanRT = this.tile1RT = this.tileRT = null;
+  }
+
+  /** Whether the pass has anything to do (the engine turns `enabled` on and off from this). */
+  get active(): boolean { return this.blur > 0.0005; }
+
+  override setSize(w: number, h: number): void {
+    this.w = Math.max(2, w); this.h = Math.max(2, h);
+    this.freeTargets();
+    if (this.enabled) this.ensure();
+  }
+
+  override render(renderer: THREE.WebGLRenderer, writeBuffer: THREE.WebGLRenderTarget, readBuffer: THREE.WebGLRenderTarget): void {
+    this.ensure();
+    const half = this.halfRT!, gather = this.gatherRT!, clean = this.cleanRT!, tile1 = this.tile1RT!, tile = this.tileRT!;
+    const cam = this.camera;
+    const coc = new THREE.Vector4(this.blur * this.h, Math.max(cam.near * 2, this.focus), cam.near, cam.far);
+    const depth = this.scenePass.depthTexture;
+
+    const dm = this.downMat.uniforms;
+    dm.tDiffuse.value = readBuffer.texture; dm.tDepth.value = depth; (dm.uCoc.value as THREE.Vector4).copy(coc);
+    (dm.uTexel.value as THREE.Vector2).set(1 / this.w, 1 / this.h);
+    renderer.setRenderTarget(half);
+    this.downQuad.render(renderer);
+
+    const tm = this.tileMat.uniforms;
+    tm.tSrc.value = half.texture; (tm.uSrcTexel.value as THREE.Vector2).set(1 / half.width, 1 / half.height); tm.uFromCoc.value = 1;
+    renderer.setRenderTarget(tile1);
+    this.tileQuad.render(renderer);
+    tm.tSrc.value = tile1.texture; (tm.uSrcTexel.value as THREE.Vector2).set(1 / tile1.width, 1 / tile1.height); tm.uFromCoc.value = 0;
+    renderer.setRenderTarget(tile);
+    this.tileQuad.render(renderer);
+
+    const gm = this.gatherMat.uniforms;
+    gm.tSrc.value = half.texture; gm.tTile.value = tile.texture;
+    (gm.uHalfTexel.value as THREE.Vector2).set(1 / half.width, 1 / half.height);
+    (gm.uTileSize.value as THREE.Vector2).set(tile.width, tile.height);
+    gm.uTaps.value = Math.min(32, Math.max(8, this.taps));
+    renderer.setRenderTarget(gather);
+    this.gatherQuad.render(renderer);
+
+    const km = this.cleanMat.uniforms;
+    km.tSrc.value = gather.texture; km.tCoc.value = half.texture;
+    (km.uHalfTexel.value as THREE.Vector2).set(1 / half.width, 1 / half.height);
+    renderer.setRenderTarget(clean);
+    this.cleanQuad.render(renderer);
+
+    const cm = this.compMat.uniforms;
+    cm.tDiffuse.value = readBuffer.texture; cm.tDepth.value = depth; cm.tBlur.value = clean.texture;
+    (cm.uCoc.value as THREE.Vector4).copy(coc);
+    renderer.setRenderTarget(this.renderToScreen ? null : writeBuffer);
+    this.compQuad.render(renderer);
+  }
+
+  override dispose(): void {
+    this.freeTargets();
+    this.downMat.dispose(); this.tileMat.dispose(); this.gatherMat.dispose(); this.cleanMat.dispose(); this.compMat.dispose();
+    this.downQuad.dispose(); this.tileQuad.dispose(); this.gatherQuad.dispose(); this.cleanQuad.dispose(); this.compQuad.dispose();
+  }
+}
+
+/**
+ * Last pass: tiny dither so smooth skies never band in 8-bit output. It also carries the lens look (R15): film grain, weighted
+ * toward the mid tones, and a faint radial colour fringe (red out, blue in, under a pixel at the corners). Both are zero by
+ * default, and then the extra branch is skipped (it is one uniform test).
+ */
 class FinishPass extends Pass {
   material: THREE.ShaderMaterial;
   private quad: FullScreenQuad;
@@ -550,14 +870,46 @@ class FinishPass extends Pass {
     super();
     this.needsSwap = false;
     this.material = new THREE.ShaderMaterial({
-      uniforms: { tDiffuse: { value: null } },
+      uniforms: {
+        tDiffuse: { value: null },
+        uGrain: { value: 0 },
+        uCA: { value: 0 },
+        uSeed: { value: 0 },
+        uRes: { value: new THREE.Vector2(1600, 900) },
+      },
       vertexShader: FS_VERT,
       fragmentShader: /* glsl */ `
         precision highp float;
         varying vec2 vUv;
         uniform sampler2D tDiffuse;
+        uniform float uGrain;   // amplitude in display units (0.03 is plain to see up close, quiet at a glance)
+        uniform float uCA;      // fringe at the corners, in pixels each way
+        uniform float uSeed;
+        uniform vec2 uRes;
+        float hash12(vec2 p) {
+          vec3 p3 = fract(vec3(p.xyx) * 0.1031);
+          p3 += dot(p3, p3.yzx + 33.33);
+          return fract((p3.x + p3.y) * p3.z);
+        }
         void main() {
           vec4 c = texture2D(tDiffuse, vUv);
+          if (uCA > 0.0) {
+            // pixels of shift grow with the distance from the centre and reach uCA at the corners
+            vec2 q = (vUv - 0.5) * uRes;
+            vec2 sh = q * (uCA / (0.5 * length(uRes))) / uRes;
+            c.r = texture2D(tDiffuse, vUv + sh).r;
+            c.b = texture2D(tDiffuse, vUv - sh).b;
+          }
+          if (uGrain > 0.0) {
+            // film grain: a touch bigger than a pixel on big screens, re-rolled every frame, triangular so it has no hard peaks,
+            // strongest in the mid tones and quiet in deep shadow and in highlights
+            vec2 gp = floor(gl_FragCoord.xy / max(1.0, uRes.y / 1100.0));
+            float n = hash12(gp + uSeed * 17.0) + hash12(gp + 91.7 + uSeed * 31.0) - 1.0;
+            float cn = hash12(gp * 1.7 + 13.1 + uSeed * 5.0) - 0.5;
+            float l = clamp(dot(c.rgb, vec3(0.2126, 0.7152, 0.0722)), 0.0, 1.0);
+            float wgt = 0.3 + 2.8 * l * (1.0 - l);
+            c.rgb += (vec3(n) + vec3(cn * 0.5, -cn * 0.3, cn * 0.4)) * uGrain * wgt;
+          }
           float n = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
           c.rgb += (n - 0.5) / 255.0;
           gl_FragColor = c;
@@ -566,6 +918,8 @@ class FinishPass extends Pass {
     });
     this.quad = new FullScreenQuad(this.material);
   }
+
+  override setSize(w: number, h: number): void { (this.material.uniforms.uRes.value as THREE.Vector2).set(w, h); }
 
   override render(renderer: THREE.WebGLRenderer, _writeBuffer: THREE.WebGLRenderTarget, readBuffer: THREE.WebGLRenderTarget): void {
     this.material.uniforms.tDiffuse.value = readBuffer.texture;
@@ -586,6 +940,7 @@ export class PostFX {
   readonly snowPass: SnowPass;
   readonly rain = new Rain();
   readonly rainPass: RainPass;
+  readonly dof: DofPass;
   readonly bloom: UnrealBloomPass;
   readonly grade: GradePass;
   readonly output: OutputPass;
@@ -629,6 +984,10 @@ export class PostFX {
     this.rainPass = new RainPass(this.rain, camera, () => this.scenePass.depthTexture);
     this.composer.addPass(this.rainPass);
 
+    // depth of field (R15) sits before bloom, so a bright out-of-focus highlight still glows; disabled (skipped) until asked for
+    this.dof = new DofPass(camera, this.scenePass);
+    this.composer.addPass(this.dof);
+
     this.bloom = new UnrealBloomPass(new THREE.Vector2(w, h), 0.3, 0.7, 1.15);
     this.composer.addPass(this.bloom);
 
@@ -655,6 +1014,30 @@ export class PostFX {
     this.scenePass.setSamples(high ? 4 : 0);
     this.fxaa.enabled = !high;
     this.bloom.strength = high ? 0.3 : 0.25;
+  }
+
+  /**
+   * Depth of field (R15). `blur` is the far blur as a fraction of the image height (0 turns the pass off completely: it is skipped
+   * and holds no memory), `focus` the distance in metres along the view axis to the plane in focus, `taps` the gather count.
+   * `longLens` gives the documentary camera's shape: a sharp slab around the subject, the far background softening out to twice its
+   * distance, near blur only for something very close to the lens (photo mode uses the plain thin lens).
+   */
+  setDof(blur: number, focus: number, taps = 24, longLens = false): void {
+    const d = this.dof;
+    d.blur = Math.max(0, blur);
+    d.focus = focus;
+    d.taps = taps;
+    d.style.x = longLens ? 1 : 0;
+    d.enabled = d.active;
+  }
+
+  /** Lens look (R15): film grain amplitude (display units, about 0.03 at most) and the colour fringe at the corners in pixels. Zero is off. */
+  setLens(grain: number, fringePx: number): void {
+    const u = this.finish.material.uniforms;
+    u.uGrain.value = Math.max(0, grain);
+    u.uCA.value = Math.max(0, fringePx);
+    // film re-rolls its grain 24 times a second
+    u.uSeed.value = grain > 0 ? Math.floor(performance.now() / 41.667) % 4096 : 0;
   }
 
   /** Size in CSS pixels; the renderer's pixel ratio is applied by the composer. */
@@ -865,6 +1248,7 @@ export class PostFX {
     this.godrays.dispose();
     this.snow.dispose();
     this.rain.dispose();
+    this.dof.dispose();
     this.grade.dispose();
     this.finish.dispose();
     this.gtao.dispose();
