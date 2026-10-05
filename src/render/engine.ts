@@ -322,6 +322,7 @@ export class Engine {
     }
     this.vegTexture.needsUpdate = true;
     this.smoke.setVeg(dst);
+    this.trees.setBurn(dst, this.world.n); // R11: cottonwoods caught in a fire stand on as charred snags
     // trail memory: a quick drop in biomass (grazing, trampling) marks the cell; slow seasonal die-back does not
     const tr = this.trail, pb = this.prevBio;
     for (let k = 0, o = 0; k < tr.length; k++, o += 4) {
@@ -654,6 +655,7 @@ export class Engine {
       }
     }
     this.sky.follow(this.camera);
+    this.trees.setShadowRange(this.shadowRange); // R11: far trees stop casting shadows past the sun-shadow range
     this.trees.update(this.camera.position);
 
     // canopy occlusion fade: keep the watched point visible when close in (follow cam, herd framing, low views)
