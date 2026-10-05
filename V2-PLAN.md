@@ -1115,7 +1115,7 @@ Merge S6 first.
 - **LOD:** today's mesh becomes the far LOD.
 - **Gates:** ≤ +0.5 ms (herd view); a Gemini close-up round.
 
-**R8. Behaviour library** [R, M]
+**R8. Behaviour library** [R, M] (done 2026-10-05)
 Render-side only, driven by sim state plus an id hash; no sim change.
 - **Bison:**
   - wallow on bare dry ground (a roll plus dust)
