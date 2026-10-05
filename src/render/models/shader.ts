@@ -9,7 +9,8 @@
 //            for a carcass: how far it has fallen over, 0 standing .. 1 down)
 //   A carcass (aGait.y < 0) carries its flank dent in the slots a body that is down does not use: the pull strength 0..1 in aFx.x,
 //   and the point it pulls from, in the body frame (m), in aFx.y (along the body) and aGait.w (across it).
-//   aFx2  = (only for hunters and birds, #define FX2) a predator: (hold on the prey 0..1, feeding cycle phase 0..1); a raven: (hop
+//   aFx2  = (only for hunters and birds, #define FX2) a predator: (hold on the prey 0..1, feeding cycle phase 0..1, leap 0..1: the
+//            spring onto the prey, which falls away as the hold takes over); a raven: (hop
 //            0..1 or -1, walk phase 0..1 or -1, seconds into a takeoff or -1, flutter 0..1)
 import * as THREE from 'three';
 import { IK_CAP, footReach, plantedStride } from './types';
@@ -58,6 +59,7 @@ function defines(p: AnimParams, far: ModelDef['far'] | undefined, geometry: Mode
     `#define ANIM_NEAR 20.0`, `#define ANIM_FAR 110.0`,
     `#define BODY_LEN ${f(p.boostLen)}`,
     `#define FX2 ${p.hunts || p.kind === 2 ? 1 : 0}`,
+    `#define CLASP ${f(p.clasp ?? 0)}`,
   ].join('\n');
 }
 
@@ -77,6 +79,14 @@ attribute vec4 aFx2;
 uniform float uTime;
 uniform vec3 uCamPos;
 uniform float uPxK;
+
+// Border fade (animals with the migrant flag within 15 m of the world edge): the animal layer packs the fade into aLook.w as
+// floor() = selected (0 or 1) + 2 * q, q = 0 (fully there) .. 15 (gone), fract() = sickness. A stippled discard in the fragment
+// stage (the same pattern in the shadow pass) takes the animal in and out without a pop.
+float tgFadeOf() {
+  float fl = floor(aLook.w + 0.001);
+  return 1.0 - floor(fl * 0.5) / 15.0;
+}
 
 void tgRotZ(inout vec3 p, inout vec3 n, vec3 c, float a) {
   float cs = cos(a), sn = sin(a);
@@ -176,14 +186,18 @@ void tgBodyFwd(inout vec3 p, inout vec3 n) {
     // rolling from side to side with the stride (a walk sways, a trot rolls, a gallop rocks), and a little weight settling in the stance
     tgRotX(p, n, vec3(0.0, COM_Y, 0.0), tgFarK * (tgGW.x * 0.03 + tgGW.y * 0.055 + tgGW.z * 0.06) * sin(c + 0.9));
   }
-  // the leap of a pounce: the forequarters rise about the hind end and the whole animal lifts; once it has hold of the prey the
-  // airborne part settles (the hind feet are on the ground again, the forelegs on the prey)
+  // the leap of a pounce: the forequarters rise about the hind end and the whole animal lifts (23 degrees nose-up at the peak);
+  // once it has hold of the prey the airborne part settles (the hind feet are on the ground again)
+  // (tgPounce is the LEAP weight here: the animal layer lets it fall away as the hold takes over, and it does not come back when the
+  // hold lets go, so a wolf never rears up a second time while it settles)
   if (tgPounce > 0.001) {
-    p.y += tgPounce * (1.0 - 0.85 * tgHold) * COM_Y * 0.25;
-    tgRotZ(p, n, vec3(-0.3 * BODY_LEN, COM_Y * 0.6, 0.0), tgPounce * (0.42 - 0.26 * tgHold));
+    p.y += tgPounce * COM_Y * 0.25;
+    tgRotZ(p, n, vec3(-0.3 * BODY_LEN, COM_Y * 0.6, 0.0), tgPounce * 0.4);
   }
-  // holding the prey: braced back 8 degrees on the planted hind feet, rocking a little with each haul
-  if (tgHold > 0.001) tgRotZ(p, n, vec3(HIND_FOOT.x, 0.0, 0.0), tgHold * (0.14 + 0.02 * sin(uTime * 8.0)));
+  // holding the prey. A wolf hangs on with the forefeet on the ground (or pawing at the flank), sat back on bent, spread hind legs
+  // (the body is lowered, tgYoff) and 13 degrees nose-up (bracing back on the planted hind feet, rocking a little with each haul);
+  // a cougar clings with the forelegs round the shoulders and pitches up to about 33 degrees (CLASP)
+  if (tgHold > 0.001) tgRotZ(p, n, vec3(HIND_FOOT.x, 0.0, 0.0), tgHold * (0.2 + 0.02 * sin(uTime * 8.0)) + tgHold * CLASP * 0.34);
   // feeding: the forequarters haul back with the neck (the forefeet stay planted, the leg IK takes this motion out)
   if (tgFeedB > 0.001) p.x -= tgFeedB * 0.11 * BODY_LEN * smoothstep(-0.1, 0.5, p.x);
 }
@@ -275,7 +289,11 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
   float tugPull = 0.0, tugShake = 0.0, tugSwallow = 0.0, tugBite = 0.0, peck = 0.0, peckUp = 0.0;
   // takedown: the hold on the prey (0..1) and the head shaking it
   float holdW = 0.0, holdSh = 0.0;
+  // the leap weight of a pounce (aFx2.z): the spring up at the prey, gone once the hold has taken over (the body pitch and the
+  // reach of the legs follow it; pounce, the whole engagement, keeps the head driving onto the prey)
+  float leapW = 0.0;
 #if KIND == 0
+  leapW = dead ? 0.0 : clamp(fx2.z, 0.0, 1.0);
   holdW = dead ? 0.0 : clamp(fx2.x, 0.0, 1.0);
   holdSh = holdW * sin(t * 21.0 + seed * 40.0);
   pitch += holdW * 0.04 * sin(t * 8.0 + seed * 5.0);
@@ -310,11 +328,11 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
   // quadruped is the body-height offset the animal layer works out from the ground under the stance feet (m, model units).
   // (legmath.ts bodyMotion) the body also sinks a little while it moves, so the knees stay bent (flex)
   float flex = LEGL * dot(gN, FLEX.xyz) * gAmt * moveK;
-  tgYoff = bob - flex + breathe - lie * LIE_DROP - crouchBody * CROUCH_DROP - sick * 0.035 * COM_Y + (dead ? 0.0 : aFx.y) - holdW * LEGL * 0.05; // a sick animal sags a little, a predator holding prey sits back
+  tgYoff = bob - flex + breathe - lie * LIE_DROP - crouchBody * CROUCH_DROP - sick * 0.035 * COM_Y + (dead ? 0.0 : aFx.y) - holdW * LEGL * (0.3 + 0.05 * CLASP); // a sick animal sags a little, a predator holding prey sits back on its haunches
   tgPitchB = pitch;
   tgFarK = dead ? 0.0 : farK;
   tgCyc = cyc;
-  tgPounce = pounce;
+  tgPounce = leapW;
   tgHold = holdW;
   tgFeedB = tugPull;
   tgGW = vec3(wWalk, wTrot, wGal);
@@ -372,7 +390,26 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
 #endif
     // pounce: forelegs reach out ahead, hindlegs drive
     // (holding the prey, the hind legs are planted: the leg IK has put the feet on the ground, so they are left as solved)
-    hip += pounce * (front ? 0.85 + holdW * 0.12 * sin(t * 9.0 + float(part) * 2.0) : -0.55 * (1.0 - holdW));
+    // (in the lunge the forelegs reach out; holding on, the IK has put the forefeet on the ground and they stay there, except that
+    // one paws up at the prey's flank now and then. The cougar's forelegs wrap round the shoulders instead.)
+    float pawPulse = 0.0;
+#if KIND == 0
+    if (front && holdW > 0.001) pawPulse = smoothstep(0.3, 0.85, sin(t * 3.7 + seed * 20.0 + float(part) * 3.1));
+#endif
+#if KIND == 0
+    float reachW = leapW;
+#else
+    float reachW = pounce;
+#endif
+    hip += front ? 0.85 * reachW + pounce * holdW * (0.04 * sin(t * 9.0 + float(part) * 2.0) + 0.42 * pawPulse) : -0.55 * reachW * (1.0 - holdW);
+    knee -= front ? holdW * pawPulse * 0.7 : 0.0;
+#if KIND == 0
+    if (CLASP > 0.0 && front && holdW > 0.001) {
+      // clinging: the forelegs reach up and forward and wrap the shoulders (a flex now and then as the grip shifts)
+      hip = mix(hip, 1.0 + 0.1 * sin(t * 9.0 + float(part) * 2.0), holdW * CLASP);
+      knee = mix(knee, -0.6 - 0.15 * sin(t * 7.0 + float(part) * 1.7), holdW * CLASP);
+    }
+#endif
 #if KIND != 0
     // stalking: bent legs (a quadruped's legs bend through the IK instead, as the body drops by CROUCH_DROP)
     hip += crouchBody * (front ? 0.25 : -0.2);
@@ -413,6 +450,8 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
     tgRotZ(p, n, aPivot2, knee * aPart.y);
     tgRotZ(p, n, aPivot, hip);
 #if KIND == 0
+    // holding the prey: the hind legs are planted wide apart for the haul (left leg out to the left, right to the right)
+    if (!front && holdW > 0.001) tgRotX(p, n, aPivot, (part == 3 ? 1.0 : -1.0) * holdW * 0.3);
     // a straight leg that still falls short (steep or uneven ground) lengthens a little, at most IK_CAP
     p = aPivot + (p - aPivot) * stretch;
 #endif
@@ -424,6 +463,7 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
     // a head lift to look about: every 8 to 14 s (its own period and phase), about 2 s long
     float lper = 0.45 + 0.3 * fract(seed * 4.3);
     float raise = smoothstep(0.72, 0.93, sin(t * lper + seed * 40.0)) * (1.0 - 0.8 * tug); // a feeding animal keeps its head down
+    raise *= 1.0 - clamp(wTrot + wGal, 0.0, 1.0); // (a stampede keeps its head low: the weight above is set by the animal layer)
     float dn = graze * (1.0 - 0.85 * raise);
     // standing still: between bites the head comes up and goes down again (a slow cycle of 3 to 6 s), clearly enough that a
     // grazing animal reads as alive from 40 to 120 m (stronger with distance, where the head is a few pixels)
@@ -437,8 +477,9 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
     ang += tugPull * 0.75 + tugSwallow * 1.5 - tugBite * 0.3 - peck * 1.0 + peckUp + biteUp;
     yaw += tugShake * 0.55;
     // holding the prey by the throat or flank: the head shakes it hard from side to side
-    ang += holdW * (0.5 + 0.2 * sin(t * 13.0 + seed * 5.0));
-    yaw += holdSh * 0.6;
+    // (a cougar's head goes down onto the neck instead and shakes less)
+    ang += holdW * ((0.5 + 0.2 * sin(t * 13.0 + seed * 5.0)) * (1.0 - CLASP) - CLASP * (0.55 - 0.08 * sin(t * 11.0 + seed * 5.0)));
+    yaw += holdSh * (0.6 - 0.35 * CLASP);
     // after lifting the head it turns to look, then back
     yaw += idleK * raise * (fract(seed * 6.1) - 0.5) * 1.0 * sin(t * 0.9 + seed * 7.0);
     // from the drone view the head pumps harder so a trot or a gallop reads as a body moving, not sliding
@@ -604,6 +645,16 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
 }
 `;
 
+/** Fragment side of the border fade: an interleaved-gradient-noise stipple against the fade level (1 = visible, 0 = gone). */
+const FADE_FRAG_DECL = /* glsl */ `
+varying float vTgFade;
+bool tgFadeDiscard(float f) {
+  if (f > 0.999) return false;
+  float n = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
+  return f <= n;
+}
+`;
+
 const VERT_SHADE_DECL = /* glsl */ `
 uniform vec3 uCoatPale;
 uniform vec3 uCoatDark;
@@ -613,6 +664,7 @@ varying float vTgSel;
 varying float vTgFar;
 varying float vTgHunt;
 varying float vTgUp;
+varying float vTgFade;
 uniform float uLegTone;
 
 void tgShade(vec3 on) {
@@ -641,7 +693,9 @@ void tgShade(vec3 on) {
   float luma = dot(col, vec3(0.2126, 0.7152, 0.0722));
   col = mix(col, vec3(luma * 0.92) * vec3(0.97, 0.97, 0.96), 0.6 * sick) * (1.0 - 0.1 * sick);
   vTgColor = col;
-  vTgSel = floor(aLook.w + 0.001);
+  float tgFl = floor(aLook.w + 0.001);
+  vTgSel = tgFl - 2.0 * floor(tgFl * 0.5);
+  vTgFade = dead ? 1.0 : tgFadeOf();
   // distance readability: 0 close up, 1 from the wide view (see ModelDef.far)
   vTgFar = smoothstep(FAR_NEAR, FAR_FAR, distance(uCamPos, vec3(instanceMatrix[3])));
   vTgHunt = dead ? 0.0 : aFx.z;
@@ -723,7 +777,8 @@ export function makeAnimalMaterials(sp: number, def: ModelDef, shared: AnimalSha
       )
       .replace('#include <begin_vertex>', 'vec3 transformed = tgP;');
     shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', `#include <common>\nvarying vec3 vTgColor;\nvarying float vTgSel;\nvarying float vTgFar;\nvarying float vTgHunt;\nuniform float uFill;\nuniform vec3 uWarm;\nuniform float uNeutral;\nuniform float uFarGain;\nuniform vec3 uRimCol;\nuniform float uRimK;\nuniform float uHuntK;\nuniform float uLow;\nuniform vec3 uAmb;\nuniform vec3 uFarTint;\nuniform float uFarMix;\nuniform float uFloor;\nuniform float uLowFill;\nvarying float vTgUp;\nuniform vec3 uTopCol;\nuniform float uTopMix;\nuniform float uSideDark;`)
+      .replace('#include <clipping_planes_fragment>', '#include <clipping_planes_fragment>\n if (tgFadeDiscard(vTgFade)) discard;')
+      .replace('#include <common>', `#include <common>\n${FADE_FRAG_DECL}\nvarying vec3 vTgColor;\nvarying float vTgSel;\nvarying float vTgFar;\nvarying float vTgHunt;\nuniform float uFill;\nuniform vec3 uWarm;\nuniform float uNeutral;\nuniform float uFarGain;\nuniform vec3 uRimCol;\nuniform float uRimK;\nuniform float uHuntK;\nuniform float uLow;\nuniform vec3 uAmb;\nuniform vec3 uFarTint;\nuniform float uFarMix;\nuniform float uFloor;\nuniform float uLowFill;\nvarying float vTgUp;\nuniform vec3 uTopCol;\nuniform float uTopMix;\nuniform float uSideDark;`)
       // Bright parts of the coat (the white bands and rump) are pulled toward a mid value as the light drops, so they
       // darken with the scene instead of glowing against the dark herds at dusk and night.
       .replace('#include <color_fragment>', `vec3 tgC = vTgColor * mix(1.0, uFarGain, vTgFar);
@@ -769,10 +824,14 @@ export function makeAnimalMaterials(sp: number, def: ModelDef, shared: AnimalSha
     shader.uniforms.uCell = shared.uCell;
     shader.uniforms.uHN = shared.uHN;
     shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', `#include <common>\n${defs}\n${COMMON_DECL}`)
+      .replace('#include <common>', `#include <common>\n${defs}\n${COMMON_DECL}\nvarying float vTgFade;`)
       // a bird in flight casts no shadow (collapse it to a point): at the boost the wide view needs, it would sweep a huge
       // blocky smudge across the ground
-      .replace('#include <begin_vertex>', `vec3 tgP = position;\n vec3 tgN = vec3(0.0, 1.0, 0.0);\n tgAnimate(tgP, tgN);\n#if KIND == 2\n if (aFx.y > 1.0) tgP = vec3(0.0);\n#endif\n vec3 transformed = tgP;`);
+      .replace('#include <begin_vertex>', `vec3 tgP = position;\n vec3 tgN = vec3(0.0, 1.0, 0.0);\n tgAnimate(tgP, tgN);\n vTgFade = aGait.y < -0.5 ? 1.0 : tgFadeOf();\n#if KIND == 2\n if (aFx.y > 1.0) tgP = vec3(0.0);\n#endif\n vec3 transformed = tgP;`);
+    // the stippled border fade casts a stippled shadow too
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <clipping_planes_fragment>', '#include <clipping_planes_fragment>\n if (tgFadeDiscard(vTgFade)) discard;')
+      .replace('#include <common>', `#include <common>\n${FADE_FRAG_DECL}`);
   };
   depth.customProgramCacheKey = () => `tg-animal-depth-${sp}`;
   return { material, depth };

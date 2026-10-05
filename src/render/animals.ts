@@ -10,7 +10,7 @@
 // Within 45 m of the camera the legs also read the ground under each foot (two-bone IK in the vertex shader) and the body
 // height follows the mean height of the stance feet (stanceBodyDy below, eased here because a shader keeps no state).
 import * as THREE from 'three';
-import { AGENT_STRIDE, CARCASS_STRIDE, F_ALPHA, F_INFECTED, SPECIES_COUNT, Sp, St } from '../sim/types';
+import { AGENT_STRIDE, CARCASS_STRIDE, F_ALPHA, F_INFECTED, F_MIGRANT, SPECIES_COUNT, Sp, St } from '../sim/types';
 import type { Snapshot } from '../sim/types';
 import { SPECIES } from '../sim/species';
 import { sampleHeight } from '../sim/world';
@@ -54,7 +54,7 @@ const hash01 = (n: number): number => (Math.imul(n | 0, 0x9e3779b1) >>> 8) / 167
  */
 const DUST: Array<[number, number, number, number, number, number] | null> = byId<[number, number, number, number, number, number] | null>(
   {
-    bison: [4.5, 1.5, 2.6, 0.3, 1.3, 2.1],
+    bison: [4.5, 2.7, 3.3, 0.38, 1.5, 2.6], // a stampede kicks up a real cloud (R1 item 7)
     wolf: [5.5, 0.5, 0.75, 0.2, 0.7, 1.1],
     raven: null,
     pronghorn: [6, 0.4, 0.95, 0.2, 0.8, 1.2],
@@ -71,6 +71,63 @@ const smoothstep = (a: number, b: number, x: number): number => {
   const t = clamp((x - a) / (b - a), 0, 1);
   return t * t * (3 - 2 * t);
 };
+
+/** The weight follower of one animal: where it is drawn, how fast, and where its (smoothed) sim path was last frame. */
+export interface WeightState {
+  x: number;
+  z: number;
+  vx: number;
+  vz: number;
+  tx: number;
+  tz: number;
+}
+
+/**
+ * Weight: the drawn path (st.x, st.z) pursues the smoothed sim path (cx, cz) but may only pick its SPEED up at `cap` m/s^2 (braking
+ * and turning are free, so it never overshoots). The shortfall shows as a lag behind the sim position; as the lag grows past
+ * `lag0` the cap lifts smoothly (x13 by `lag1`) so the animal still catches the sim, and `hard` bounds the drift outright. A gap
+ * wider than 4 x `hard` (a teleport) snaps. Returns the rate the drawn speed changed at (m/s^2, + speeding up, - braking).
+ */
+export function weightStep(st: WeightState, cx: number, cz: number, dt: number, cap: number, lag0: number, lag1: number, hard: number): number {
+  const vsx = (cx - st.tx) / dt, vsz = (cz - st.tz) / dt;
+  // the error is last frame's (where the target was against where the draw was), so a steady pursuit settles to zero lag
+  const ex0 = st.tx - st.x, ez0 = st.tz - st.z;
+  st.tx = cx;
+  st.tz = cz;
+  const g0 = Math.hypot(ex0, ez0);
+  if (g0 > 4 * hard || Math.hypot(vsx, vsz) > 400) {
+    st.x = cx; st.z = cz; st.vx = vsx; st.vz = vsz;
+    return 0;
+  }
+  let vdx = vsx + 3 * ex0, vdz = vsz + 3 * ez0;
+  // (catching up never runs more than 15% faster than the sim path itself, so the end of a lag is not a surge)
+  const vmax = Math.hypot(vsx, vsz) * 1.15 + 0.4;
+  let des = Math.hypot(vdx, vdz);
+  if (des > vmax) {
+    vdx *= vmax / des;
+    vdz *= vmax / des;
+    des = vmax;
+  }
+  const cur = Math.hypot(st.vx, st.vz);
+  const aEff = cap * (1 + 12 * smoothstep(lag0, lag1, g0));
+  const lim = cur + aEff * dt;
+  if (des > lim) {
+    const s = lim / des;
+    vdx *= s;
+    vdz *= s;
+  }
+  st.vx = vdx;
+  st.vz = vdz;
+  st.x += vdx * dt;
+  st.z += vdz * dt;
+  const ex = cx - st.x, ez = cz - st.z;
+  const g = Math.hypot(ex, ez);
+  if (g > hard) {
+    st.x = cx - (ex / g) * hard;
+    st.z = cz - (ez / g) * hard;
+  }
+  return (Math.hypot(st.vx, st.vz) - cur) / dt;
+}
 
 /**
  * Metres of ground covered per leg cycle at a gait pace (the pace the animal moves at in its own world, on-screen m/s at
@@ -108,7 +165,7 @@ const MAX_CADENCE = 12;
  */
 const TURN: Array<[number, number]> = byId<[number, number]>(
   {
-    bison: [4.2, 2.3],
+    bison: [3.0, 1.5], // heavy: a wide turning circle (about 4 m of radius at a trot, 7 m at a stampede)
     wolf: [7, 6],
     raven: [3.5, 2.6], // banks through wide circles
     pronghorn: [7, 6],
@@ -119,6 +176,27 @@ const TURN: Array<[number, number]> = byId<[number, number]>(
 );
 /** Largest lean (rad) into a turn at speed. */
 const BANK_MAX: number[] = byId({ bison: 0.2, wolf: 0.42, raven: 0.75, pronghorn: 0.42, rabbit: 0.3, cougar: 0.42 }, (s) => (s.flies ? 0.75 : 0.42));
+
+/**
+ * Weight (R1 item 7): the most the drawn speed may rise per second, in on-screen m/s^2 (0 = uncapped: fliers, the rabbit's
+ * hops). The sim speeds up in a tick or two; the drawn animal picks its speed up at this rate instead (see `weightStep`), so a
+ * bison lumbers into a run while a pronghorn is away at once. The drawn path stays within WEIGHT_LAG of the sim path.
+ */
+const ACCEL: number[] = byId({ bison: 2.5, pronghorn: 6, wolf: 5, coyote: 6, cougar: 6, raven: 0, rabbit: 0 }, (s) => (s.flies ? 0 : 5));
+/** The drawn path may trail the sim path by up to this (m): the cap lifts smoothly from WEIGHT_LAG0 to WEIGHT_LAG (x12 by then), and nothing drifts further than WEIGHT_HARD. */
+const WEIGHT_LAG0 = 0.45;
+const WEIGHT_LAG = 1.5;
+const WEIGHT_HARD = 2.0;
+/** Body pitch (rad) while speeding up (nose down) and while braking (nose up), full strength at 1.6 x the species cap. */
+const LEAN_UP = -(4 * Math.PI) / 180;
+const LEAN_BRAKE = (5 * Math.PI) / 180;
+/** The border fade (R1 item 9): migrants fade in and out between this many metres from the world edge (gone) and FADE_FULL (fully there). */
+const FADE_GONE = 3;
+const FADE_FULL = 15;
+/** Cougar drag (R1 item 8): the carcass is hauled up to this far toward cover, from FALL_TIME + DRAG_WAIT after the kill, at DRAG_SPEED m/s. */
+const DRAG_MAX = 3;
+const DRAG_WAIT = 0.8;
+const DRAG_SPEED = 0.85;
 
 /** How the whole fall of a carcass plays out, in seconds. */
 const FALL_TIME = 2.4;
@@ -192,6 +270,21 @@ interface FallInfo {
   oz: number;
   /** Snapshot generation that last saw this carcass (so stale entries can be dropped). */
   g: number;
+  /**
+   * Cougar drag (R1 item 8): the cougar that took this kill (animal id, 0 = none), the unit direction of the haul and its full
+   * length (m, 0 = not dragged), the carcass ages at which it starts and ends, and how far the body has been hauled so far
+   * (a display offset from the sim position, world xz).
+   */
+  dragger: number;
+  /** The heading the animal fell with (fi.h swings round while it is hauled; the skid of its fall keeps this direction). */
+  h0: number;
+  dux: number;
+  duz: number;
+  dlen: number;
+  dt0: number;
+  dt1: number;
+  dgx: number;
+  dgz: number;
 }
 
 /** Where a feeding predator should stand round its carcass, and what it does there (planFeeder). */
@@ -209,6 +302,8 @@ interface FeederPlan {
   fi: FallInfo | null;
   /** Angle of the slot in the carcass frame. */
   th: number;
+  /** A cougar hauling its kill toward cover: walking ahead of the body, head down on the neck. */
+  drag: boolean;
 }
 
 /** What a raven at a carcass does now: where it wanders to (world xz), whether it is hopping (1) or walking (2) and how far along, and which way it faces. */
@@ -326,6 +421,17 @@ class Slots {
   bdy = new Float32Array(this.cap);
   svx = new Float32Array(this.cap);
   svz = new Float32Array(this.cap);
+  /** Weight follower (weightStep): where the animal is drawn (before display offsets), its velocity, where the smoothed sim path was last frame, and whether it is running. */
+  wx = new Float32Array(this.cap);
+  wz = new Float32Array(this.cap);
+  wvx = new Float32Array(this.cap);
+  wvz = new Float32Array(this.cap);
+  wtx = new Float32Array(this.cap);
+  wtz = new Float32Array(this.cap);
+  wset = new Uint8Array(this.cap);
+  /** Rate its drawn speed is changing at (m/s^2, eased) and the body pitch that comes of it (rad). */
+  acc = new Float32Array(this.cap);
+  lean = new Float32Array(this.cap);
   /** Feeding tug and hunting weights, eased. */
   tug = new Float32Array(this.cap);
   hunt = new Float32Array(this.cap);
@@ -393,6 +499,15 @@ class Slots {
     this.bdy = g(this.bdy, Float32Array);
     this.svx = g(this.svx, Float32Array);
     this.svz = g(this.svz, Float32Array);
+    this.wx = g(this.wx, Float32Array);
+    this.wz = g(this.wz, Float32Array);
+    this.wvx = g(this.wvx, Float32Array);
+    this.wvz = g(this.wvz, Float32Array);
+    this.wtx = g(this.wtx, Float32Array);
+    this.wtz = g(this.wtz, Float32Array);
+    this.wset = g(this.wset, Uint8Array);
+    this.acc = g(this.acc, Float32Array);
+    this.lean = g(this.lean, Float32Array);
     this.tug = g(this.tug, Float32Array);
     this.hunt = g(this.hunt, Float32Array);
     this.hs = g(this.hs, Float32Array);
@@ -472,6 +587,7 @@ export class AnimalLayer {
   private kills: KillSites;
   private markers: Markers;
   private slots = new Slots();
+  private ws: WeightState = { x: 0, z: 0, vx: 0, vz: 0, tx: 0, tz: 0 };
   private gen = 0;
 
   private curr: Snapshot | null = null;
@@ -497,7 +613,7 @@ export class AnimalLayer {
   private timeSec = 0;
   /** Seconds of simulated time the layer has run (stops when the sim is paused): drives the raven wander and other display-only schedules. */
   private clock = 0;
-  private feeder: FeederPlan = { on: false, tx: 0, tz: 0, cap: SLOT_CAP, face: 0, lie: false, feed: false, fi: null, th: 0 };
+  private feeder: FeederPlan = { on: false, tx: 0, tz: 0, cap: SLOT_CAP, face: 0, lie: false, feed: false, fi: null, th: 0, drag: false };
   private raven: RavenPlan = { on: false, px: 0, pz: 0, mode: 0, u: 0, hx: 1, hz: 0, cx: 0, cz: 0 };
   private lastSnapT = -1;
   private snapDt = 0.1;
@@ -644,6 +760,9 @@ export class AnimalLayer {
         S.rph[slot] = 0;
         S.mv[slot] = 0;
         S.rtk[slot] = -1;
+        S.wset[slot] = 0;
+        S.acc[slot] = 0;
+        S.lean[slot] = 0;
       }
       S.stamp[slot] = this.gen;
       this.currSlot[i] = slot;
@@ -693,6 +812,7 @@ export class AnimalLayer {
           t: 1e3, age: 0, key, sp, rem: snap.carcasses[o + 2], cx, cz, crew: [], crewAt: [], slotTh: [], crewSide: [], sub: 0, th0: hash01(Math.floor(hseed * 4096) + 53) * Math.PI * 2,
           pbest: 0, pdx: 0, pdz: 0, pull: 0, pcx: 0, pcz: 0,
           h: hseed * Math.PI * 2, v: 0, vs: 1, ph: 0, pace: 0, ox: 0, oz: 0, g: gen,
+          dragger: 0, h0: 0, dux: 1, duz: 0, dlen: 0, dt0: 0, dt1: 0, dgx: 0, dgz: 0,
         };
         this.falls.set(key, fi);
         if (!fast && P) {
@@ -716,8 +836,9 @@ export class AnimalLayer {
             }
           }
           fi.t = 0;
+          fi.h0 = fi.h;
           if (budget-- > 0) this.killBurst(snap, cx, cz, sp, fi);
-        }
+        } else fi.h0 = fi.h;
       }
       fi.g = gen;
     }
@@ -764,14 +885,57 @@ export class AnimalLayer {
       who.push([d2, i]);
     }
     who.sort((p, q) => p[0] - q[0]);
-    for (const [, i] of who) this.joinTakedown(fi, snap.ids[i], this.currSlot[i], 0, A[i * AGENT_STRIDE + 1], A[i * AGENT_STRIDE + 2]);
+    for (const [, i] of who) this.joinTakedown(fi, snap.ids[i], this.currSlot[i], 0, A[i * AGENT_STRIDE + 1], A[i * AGENT_STRIDE + 2], A[i * AGENT_STRIDE] | 0);
+  }
+
+  /**
+   * Where a cougar hauls its kill (R1 item 8): toward the nearest cover within 30 m (a tree's crown, a shrub clump), or else up the
+   * steepest ground round it, at most DRAG_MAX m. Pure function of the carcass and the world, so it is the same on every run.
+   * Sets fi.dux, duz, dlen (0 = none) and the ages the haul starts and ends.
+   */
+  private pickDrag(fi: FallInfo): void {
+    const w = this.world;
+    const x = fi.cx, z = fi.cz;
+    fi.dlen = 0;
+    let best = Infinity, bx = 0, bz = 0, bleft = 0;
+    const T = w.trees, Sh = w.shrubs;
+    for (let k = 0; k < T.length; k += 4) {
+      const dx = T[k] - x, dz = T[k + 1] - z;
+      const d = Math.hypot(dx, dz);
+      const left = d - T[k + 3] * 0.6 - 1.2; // metres to get in under the crown
+      if (d < 30 && left < best) { best = left; bx = dx / d; bz = dz / d; bleft = left; }
+    }
+    for (let k = 0; k < Sh.length; k += 3) {
+      const dx = Sh[k] - x, dz = Sh[k + 1] - z;
+      const d = Math.hypot(dx, dz);
+      const left = d - Sh[k + 2] * 0.5 - 1.0;
+      if (d < 30 && left < best) { best = left; bx = dx / d; bz = dz / d; bleft = left; }
+    }
+    let len = 0;
+    if (best < Infinity && bleft > 0.3) len = Math.min(DRAG_MAX, bleft);
+    else if (best === Infinity) {
+      // no cover about: up the steepest ground within 6 m, if there is any worth the effort
+      const h0 = sampleHeight(w.height, w.hn, w.cell, x, z);
+      let bc = 0.25;
+      for (let k = 0; k < 12; k++) {
+        const a = (k / 12) * Math.PI * 2, ux = Math.cos(a), uz = Math.sin(a);
+        const climb = sampleHeight(w.height, w.hn, w.cell, x + ux * 6, z + uz * 6) - h0;
+        if (climb > bc) { bc = climb; bx = ux; bz = uz; len = Math.min(DRAG_MAX, 1.2 + 4 * climb); }
+      }
+    }
+    if (len < 0.3) return;
+    fi.dux = bx;
+    fi.duz = bz;
+    fi.dlen = len;
+    fi.dt0 = FALL_TIME + DRAG_WAIT;
+    fi.dt1 = fi.dt0 + len / DRAG_SPEED;
   }
 
   /**
    * A predator joins the takedown of `fi` (the prey is going down): it lunges at its own contact point, by arrival order, and
    * holds on until the prey's struggle ends (`fallT` s into the fall now; a late arrival holds for what is left of it).
    */
-  private joinTakedown(fi: FallInfo, id: number, slot: number, fallT: number, x: number, z: number): void {
+  private joinTakedown(fi: FallInfo, id: number, slot: number, fallT: number, x: number, z: number, sp: number): void {
     const S = this.slots;
     const p = S.pounce[slot];
     const ending = S.pstop[slot] + POUNCE_RELEASE;
@@ -794,6 +958,15 @@ export class AnimalLayer {
     S.pkey[slot] = fi.key;
     S.pcon[slot] = idx % CONTACT_AX.length;
     S.pstop[slot] = Math.max(POUNCE_SPRING + 0.35, STRUGGLE_END - fallT);
+    if (sp === Sp.Cougar) {
+      // a cougar goes for the shoulders and the neck (the throat contact) and its hold is short; the first to take the kill drags it off
+      S.pcon[slot] = 0;
+      S.pstop[slot] = Math.max(POUNCE_SPRING + 0.35, Math.min(1.0, STRUGGLE_END - fallT));
+      if (fi.dragger === 0 && fi.t < 1e2) {
+        fi.dragger = id;
+        this.pickDrag(fi);
+      }
+    }
     S.ptid[slot] = 0;
     S.ptx[slot] = fi.cx;
     S.ptz[slot] = fi.cz;
@@ -906,11 +1079,25 @@ export class AnimalLayer {
    * turn standing at their slot, and one subordinate, chosen by an id hash, lies 4 to 6 m out for 5 to 15 s before it joins.
    */
   private planFeeder(id: number, flags: number, x: number, z: number, out: FeederPlan): void {
-    out.on = false; out.lie = false; out.feed = false; out.fi = null;
+    out.on = false; out.lie = false; out.feed = false; out.fi = null; out.drag = false;
     const ci = this.carcassNear(x, z, 3.6);
     if (ci < 0) return;
     const fi = this.fallOfCarcass(ci);
     if (!fi) return;
+    if (fi.dragger === id && fi.dlen > 0 && fi.age < fi.dt1 + 0.3) {
+      // the cougar hauls its kill toward cover: it walks ahead of the body, facing the way it goes, head down on the neck
+      this.carcassRadii(fi, this.radii);
+      const lead = this.radii.a * 0.85 + 0.35;
+      out.tx = fi.cx + fi.dux * lead;
+      out.tz = fi.cz + fi.duz * lead;
+      out.cap = SLOT_CAP + fi.dlen + 1.5;
+      out.face = Math.atan2(fi.duz, fi.dux);
+      out.fi = fi;
+      out.th = 0;
+      out.drag = true;
+      out.on = true;
+      return;
+    }
     let idx = fi.crew.indexOf(id);
     if (idx < 0) {
       // while the prey is still fighting a newcomer lunges instead (update: the arrival scan)
@@ -927,6 +1114,7 @@ export class AnimalLayer {
     // when it starts to eat: the lead after the prey is down, the rest in turn, a late arrival soon after it gets there
     const lead = alpha || idx === 0;
     let start = fresh ? (lead ? FALL_TIME + 0.4 : FALL_TIME + 1.4 + 0.9 * Math.min(idx, 5) + 2 * hs) : arrive + 0.4 + (lead ? 0 : 0.8 + hs);
+    if (fi.dlen > 0 && fresh) start = Math.max(start, fi.dt1 + 0.5); // nobody feeds until the cougar has hauled the kill into cover
     let far = false;
     if (id === fi.sub) {
       // lies out and waits 5 to 15 s from when it got there (never before the prey is down)
@@ -948,7 +1136,7 @@ export class AnimalLayer {
     const ch = Math.cos(fi.h), sh = Math.sin(fi.h);
     out.tx = fi.cx + ch * lx - sh * lz;
     out.tz = fi.cz + sh * lx + ch * lz;
-    out.cap = far ? SUB_CAP : SLOT_CAP;
+    out.cap = (far ? SUB_CAP : SLOT_CAP) + (fi.dlen > 0 ? fi.dlen + 1 : 0); // (the body may have been hauled up to DRAG_MAX m from where the sim has it)
     out.face = Math.atan2(fi.cz - out.tz, fi.cx - out.tx);
     out.lie = far;
     out.feed = !far && fi.age >= start;
@@ -1088,7 +1276,9 @@ export class AnimalLayer {
       // (S.px is where it was drawn, display offset included, so the offset applied last frame is taken out first)
       if (!S.fresh[slot]) {
         const om = 22 * Math.min(12, Math.max(1, this.timeScale));
-        const ax = S.px[slot] - S.fox[slot] - x, az = S.pz[slot] - S.foz[slot] - z;
+        // (an animal on the weight follower below springs from where this smoothing left it last frame, not from where the follower drew it)
+        const own = ACCEL[sp] > 0 && S.wset[slot] === 1;
+        const ax = (own ? S.wtx[slot] : S.px[slot] - S.fox[slot]) - x, az = (own ? S.wtz[slot] : S.pz[slot] - S.foz[slot]) - z;
         if (ax * ax + az * az < 900) {
           const bx = S.svx[slot] + om * ax, bz = S.svz[slot] + om * az;
           const e = Math.exp(-om * dt);
@@ -1099,12 +1289,39 @@ export class AnimalLayer {
         } else { S.svx[slot] = 0; S.svz[slot] = 0; }
       }
 
+      // Weight (R1 item 7): the smoothed path above is what the sim says; the animal is drawn on a follower that may only pick its
+      // speed up at the species' acceleration cap, so it lumbers (a bison) or springs (a pronghorn) into a run and leans into it.
+      // It trails the sim path by at most WEIGHT_HARD m and catches up as the lag grows. Paused and in a time-lapse the cap is off.
+      const accCap = ACCEL[sp];
+      if (accCap > 0) {
+        const ts = this.timeScale;
+        if (dt < 1e-4 && S.wset[slot] === 1 && !S.fresh[slot] && ts > 0 && ts <= 2.5) {
+          // a redraw with no time passing (a capture): keep the follower where it is
+          x = S.wx[slot];
+          z = S.wz[slot];
+        } else if (S.wset[slot] === 0 || S.fresh[slot] || ts <= 0 || ts > 2.5 || dt < 1e-4) {
+          S.wx[slot] = x; S.wz[slot] = z; S.wtx[slot] = x; S.wtz[slot] = z; S.wvx[slot] = 0; S.wvz[slot] = 0;
+          S.wset[slot] = ts > 0 && ts <= 2.5 && !S.fresh[slot] ? 1 : 0;
+          S.acc[slot] *= Math.exp(-dt * 4);
+        } else {
+          const ws = this.ws;
+          ws.x = S.wx[slot]; ws.z = S.wz[slot]; ws.vx = S.wvx[slot]; ws.vz = S.wvz[slot]; ws.tx = S.wtx[slot]; ws.tz = S.wtz[slot];
+          const lsc = Math.max(1, ts);
+          const rate = weightStep(ws, x, z, dt, accCap * ts * ts, WEIGHT_LAG0 * lsc, WEIGHT_LAG * lsc, WEIGHT_HARD * lsc);
+          S.wx[slot] = ws.x; S.wz[slot] = ws.z; S.wvx[slot] = ws.vx; S.wvz[slot] = ws.vz; S.wtx[slot] = ws.tx; S.wtz[slot] = ws.tz;
+          S.acc[slot] += (rate / (ts * ts) - S.acc[slot]) * (1 - Math.exp(-dt / 0.18));
+          x = ws.x;
+          z = ws.z;
+        }
+      }
+
       // Display offsets from the sim position (render side only; the sim never sees them): a predator at a carcass takes its slot
       // round it, a raven wanders about it and flutters back from a wolf that lunges or feeds close by.
       const hunter = HUNTER[sp], flier = FLIES[sp];
       const groundedBird = flier && alt < 0.3 && state !== St.Fly;
       const fd = this.feeder, rv = this.raven;
       fd.on = false;
+      fd.drag = false;
       rv.on = false;
       let wantX = 0, wantZ = 0, capOff = SLOT_CAP, direct = false, rvFlut = 0;
       if (hunter && state === St.Eat && !(S.pounce[slot] >= 0 && S.pounce[slot] < S.pstop[slot] + POUNCE_RELEASE)) {
@@ -1148,7 +1365,7 @@ export class AnimalLayer {
         // walk to it at a walking pace (a predator), or return quickly when there is nothing to do there any more
         const dx = wantX - S.fox[slot], dz = wantZ - S.foz[slot];
         const dl = Math.hypot(dx, dz);
-        const step = Math.min(dl, (hunter ? Math.min(1.9, 0.5 + dl * 1.2) : 3) * running);
+        const step = Math.min(dl, (fd.drag ? Math.min(2.4, 0.9 + dl * 2.5) : hunter ? Math.min(1.9, 0.5 + dl * 1.2) : 3) * running);
         if (dl > 1e-5) { offX = S.fox[slot] + (dx / dl) * step; offZ = S.foz[slot] + (dz / dl) * step; } else { offX = S.fox[slot]; offZ = S.foz[slot]; }
         offSpd = running > 0 ? step / running : 0;
         offRem = dl - step;
@@ -1172,9 +1389,11 @@ export class AnimalLayer {
       if (state === St.Graze || state === St.Eat || state === St.Drink) hdT = 1;
       if (state === St.Rest) lieT = 1;
       if (state === St.Stalk) crT = 1;
+      // a stampede runs head-low (R1 item 7)
+      if (sp === Sp.Bison && (state === St.Flee || state === St.Run)) hdT = 0.55 * smoothstep(5.5, 9, spdT);
       if (fd.on) {
         // waiting its turn at its slot: head up, watching; the subordinate lies down once it has reached its place 4 to 6 m out
-        hdT = fd.feed ? 1 : 0;
+        hdT = fd.feed ? 1 : fd.drag ? 0.9 : 0; // (hauling a kill: the head down, the neck in its jaws)
         lieT = fd.lie && offRem < 0.3 ? 1 : 0;
       }
       if (flier) {
@@ -1249,13 +1468,16 @@ export class AnimalLayer {
 
       // Takedown: the predator springs onto the prey (over POUNCE_SPRING), holds on until the prey's struggle ends, then lets go.
       // `pounceE` is the whole envelope (the leap), `holdE` the part where it has hold and shakes it. Then a short cooldown.
-      let pounceE = 0;
+      let pounceE = 0, leapE = 0;
       if (S.pounce[slot] >= 0) {
         S.pounce[slot] += running;
         const p = S.pounce[slot], ps = S.pstop[slot];
         if (p < ps + POUNCE_RELEASE) {
           pounceE = smoothstep(0, POUNCE_SPRING, p) * (1 - smoothstep(ps, ps + POUNCE_RELEASE, p));
           holdE = smoothstep(POUNCE_SPRING * 0.8, POUNCE_SPRING * 1.25, p) * (1 - smoothstep(ps - 0.2, ps, p));
+          // the leap itself (the rear-up and the reach of the forelegs) is only the spring onto the prey: it falls away as the hold
+          // takes over and never returns when the hold lets go
+          leapE = smoothstep(0, POUNCE_SPRING, p) * (1 - smoothstep(POUNCE_SPRING, POUNCE_SPRING + 0.35, p));
         }
         if (p > ps + POUNCE_RELEASE + POUNCE_COOL) S.pounce[slot] = -1;
       }
@@ -1264,7 +1486,7 @@ export class AnimalLayer {
         // a pack mate arriving while the prey is still fighting lunges at it too, at a contact point of its own
         for (const fa of this.activeFalls) {
           const dx = fa.cx - x, dz = fa.cz - z;
-          if (dx * dx + dz * dz < POUNCE_R * POUNCE_R && fa.crew.indexOf(id) < 0) { this.joinTakedown(fa, id, slot, fa.t, x, z); break; }
+          if (dx * dx + dz * dz < POUNCE_R * POUNCE_R && fa.crew.indexOf(id) < 0) { this.joinTakedown(fa, id, slot, fa.t, x, z, sp); break; }
         }
       }
       if (pounceE > 0.001) {
@@ -1279,10 +1501,13 @@ export class AnimalLayer {
           const pls = pf.t < 1e2 ? pf.vs * (1 - fl) + fl : 1;
           // (spread at least a wolf's body length apart even on a calf, or the pack mates stack up on one spot)
           const ci = S.pcon[slot] % CONTACT_AX.length;
-          const along = CONTACT_AX[ci] * Math.max(0.5 * (pp ? pp.length : 1.5) * pls, 1.5);
+          const cougar = sp === Sp.Cougar;
+          const along = cougar ? 0.5 * 0.5 * (pp ? pp.length : 1.5) * pls : CONTACT_AX[ci] * Math.max(0.5 * (pp ? pp.length : 1.5) * pls, 1.5);
           // it stands beside the prey on its side (the throat from the front quarter), muzzle on the contact point
+          // (a cougar stands close in at the shoulder, forelegs up on it, head down on the neck)
           const side = S.pside[slot];
-          const sx = along + (ci === 0 ? 0.6 : 0), sz = side * ((ci === 0 ? 0.55 : 1) * (0.3 * (pp ? pp.height : 1) * pls) + (ci === 0 ? 0.8 : 1.0));
+          const sx = cougar ? along - 0.15 : along + (ci === 0 ? 0.6 : 0);
+          const sz = side * (cougar ? 0.18 * (pp ? pp.height : 1) * pls + 0.6 : (ci === 0 ? 0.55 : 1) * (0.3 * (pp ? pp.height : 1) * pls) + (ci === 0 ? 0.8 : 1.0));
           const pch = Math.cos(pf.h), psh = Math.sin(pf.h);
           tx = pf.cx + pch * sx - psh * sz;
           tz = pf.cz + psh * sx + pch * sz;
@@ -1401,6 +1626,19 @@ export class AnimalLayer {
         const lean = clamp(Math.atan((vv * turnRate) / 9.81) * 0.85, -BANK_MAX[sp], BANK_MAX[sp]) * smoothstep(1.5, 5, vv);
         S.bank[slot] += (lean - S.bank[slot]) * kBank;
         roll += S.bank[slot];
+        // weight: the body dips 4 degrees as it picks up speed and rocks back 5 as it brakes (full at 1.6 x the cap)
+        if (accCap > 0) {
+          const accRef = accCap * 1.6;
+          const a = S.acc[slot];
+          const leanP = a > 0 ? LEAN_UP * Math.min(1, a / accRef) : LEAN_BRAKE * Math.min(1, -a / accRef) * smoothstep(0.3, 1.5, vv);
+          S.lean[slot] += (leanP - S.lean[slot]) * kBank;
+          pitch += S.lean[slot];
+        }
+        // a predator on its prey keeps its terrain pitch small: the body pose (shader) already pitches it up
+        if (pounceE > 0.3) {
+          pitch = clamp(pitch, -0.12, 0.12);
+          roll = clamp(roll, -0.15, 0.15);
+        }
       }
       // wading: in a water cell the animal stands on the bed while the water is shallower than its belly; in deeper
       // water it rides with the belly at the surface (a gentle bob, level pose) instead of looking like it stands on it
@@ -1428,7 +1666,14 @@ export class AnimalLayer {
         S.bdy[slot] += (bT - S.bdy[slot]) * kBdy;
       }
 
-      this.markers.add(sp, x, y + (FLIES[sp] ? 0.3 : pr.height * 0.6 * vs), z, pr.boostLen, vs);
+      // Border fade (R1 item 9): a migrant (the F_MIGRANT flag) arriving or leaving fades in or out over the last 15 m before the edge
+      // of the world (a stippled discard in the shader, 0 = there .. 15 = gone), so it never pops in or out.
+      let fadeQ = 0;
+      if (((A[o + 8] | 0) & F_MIGRANT) !== 0) {
+        const edge = Math.min(x, z, world.size - x, world.size - z);
+        fadeQ = Math.round((1 - smoothstep(FADE_GONE, FADE_FULL, edge)) * 15);
+      }
+      if (fadeQ < 8) this.markers.add(sp, x, y + (FLIES[sp] ? 0.3 : pr.height * 0.6 * vs), z, pr.boostLen, vs);
       // from the wide view, a faint ripple where a predator is actually chasing
       if (state === St.Chase && HUNTER[sp]) this.markers.addPing(sp, x, y + 0.3, z);
 
@@ -1452,7 +1697,7 @@ export class AnimalLayer {
           this.dust.emit(
             px, sampleHeight(H, hn, cell, px, pz) + 0.15, pz,
             ch * drift * 0.6 + (Math.random() - 0.5) * 0.6, 0.15 + Math.random() * 0.3, sh * drift * 0.6 + (Math.random() - 0.5) * 0.6,
-            dp[2] * vs * (0.8 + 0.4 * Math.random()) * Math.pow(dsK, 0.6), (dp[4] + Math.random() * (dp[5] - dp[4])) * (1 + 0.3 * (dsK - 1)), Math.min(0.34, dp[3] * (0.75 + 0.5 * Math.random()) * (1 + 0.1 * (dsK - 1))), Math.random(), gd,
+            dp[2] * vs * (0.8 + 0.4 * Math.random()) * Math.pow(dsK, 0.6), (dp[4] + Math.random() * (dp[5] - dp[4])) * (1 + 0.3 * (dsK - 1)), Math.min(0.4, dp[3] * (0.75 + 0.5 * Math.random()) * (1 + 0.1 * (dsK - 1))), Math.random(), gd,
           );
         }
         if (S.dust[slot] > 1) S.dust[slot] = 1;
@@ -1479,12 +1724,12 @@ export class AnimalLayer {
       if (flier) {
         fx2[gp] = rvHopU; fx2[gp + 1] = rvWalk; fx2[gp + 2] = takeoffK > 0 ? S.rtk[slot] : -1; fx2[gp + 3] = rvFlut;
       } else {
-        fx2[gp] = holdE; fx2[gp + 1] = S.fph[slot]; fx2[gp + 2] = 0; fx2[gp + 3] = 0;
+        fx2[gp] = holdE; fx2[gp + 1] = S.fph[slot]; fx2[gp + 2] = leapE; fx2[gp + 3] = 0;
       }
       look[gp] = clamp(coat, 0, 1);
       look[gp + 1] = hash01(id);
       look[gp + 2] = S.crouch[slot];
-      look[gp + 3] = (id === sel ? 1 : 0) + sickK;
+      look[gp + 3] = (id === sel ? 1 : 0) + 2 * fadeQ + sickK;
       // pick sphere
       const c = k * 4;
       const cy = y + (FLIES[sp] ? 0.15 * vs : pr.height * 0.5 * vs);
@@ -1514,6 +1759,14 @@ export class AnimalLayer {
       const seed = hash01((Math.floor(x * 13) * 73856093) ^ (Math.floor(z * 13) * 19349663));
       const fi = this.falls.get(Math.floor(x * 8) * 65536 + Math.floor(z * 8));
       if (fi && fi.t < FALL_TIME + 2) fi.t += running;
+      if (fi && fi.dlen > 0) {
+        // the cougar's haul: the body slides toward cover (an eased 0..dlen m, display only) and swings round to trail behind the cougar
+        const u = clamp((fi.age - fi.dt0) / Math.max(fi.dt1 - fi.dt0, 0.1), 0, 1);
+        const e = u * u * (3 - 2 * u);
+        fi.dgx = fi.dux * fi.dlen * e;
+        fi.dgz = fi.duz * fi.dlen * e;
+        if (u > 0 && running > 0) fi.h += wrapPi(Math.atan2(fi.duz, fi.dux) - fi.h) * (1 - Math.exp(-dt * 2.2));
+      }
       const h = fi ? fi.h : seed * Math.PI * 2;
       const fall = fi ? clamp(fi.t / FALL_TIME, 0, 1) : 1;
       // the struggle: earth and dust kicked up round the animal while it fights the takedown (about the first 0.7 s)
@@ -1545,7 +1798,7 @@ export class AnimalLayer {
       const slide = fi && fi.t < 1e2 ? Math.min(fi.v * 0.1, 1.4) * (1 - Math.exp(-fi.t * 3.2)) : 0;
       // it falls where it was drawn, and settles onto the sim's position as it goes down
       const off = fi && fi.t < 1e2 ? Math.exp(-fi.t * 4) : 0;
-      const cx = x + ch * slide + (fi ? fi.ox * off : 0), cz = z + sh * slide + (fi ? fi.oz * off : 0);
+      const cx = x + (fi ? Math.cos(fi.h0) : ch) * slide + (fi ? fi.ox * off + fi.dgx : 0), cz = z + (fi ? Math.sin(fi.h0) : sh) * slide + (fi ? fi.oz * off + fi.dgz : 0);
       if (fi) {
         // where the body is drawn, for takedown contacts and feeding slots; a takedown in its struggle is open to pack mates arriving
         fi.cx = cx; fi.cz = cz; fi.rem = rem; fi.age += running;
