@@ -179,7 +179,8 @@ export function buildCougar(): ModelDef {
       headDown: 1.0, lookYaw: 0.4,
       tailRest: 0.0, tailRun: -0.3, tailSway: 0.35,
       lieDrop: 0.4, lieHipF: 1.25, lieKneeF: -2.3, lieHipH: -0.8, lieKneeH: 1.6,
-      crouchDrop: 0.26, hunts: true, clasp: 1,
+      // R6: a deep stalk crouch (belly near the ground), the shoulder blades up, a low tail with a twitching tip, a freeze before the rush
+      crouchDrop: 0.36, hunts: true, clasp: 1, stalk: 1,
       curl: 0.7, curlAng: 1.2, curlX: 0.05, curlLen: 1.1,
       deadDrop: 0.36, deadHipF: 0.9, deadHipH: -0.6,
       length: 1.3, height: 0.8, ring: 1.3, minPx: 10, boostLen: 1.8,

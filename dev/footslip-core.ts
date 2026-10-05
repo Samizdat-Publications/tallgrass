@@ -17,18 +17,19 @@ import {
 import type { InstancePose, LegRig } from '../src/render/models/legmath';
 import { LEGACY_MAX_CADENCE, legacyLeg, legacyStride } from './footslip-legacy';
 
-export type GaitName = 'walk' | 'trot' | 'gallop';
+export type GaitName = 'walk' | 'trot' | 'gallop' | 'stot';
 export type ModelKind = 'new' | 'legacy';
 export type TerrainKind = 'plane' | 'bumps';
 
 /** AnimalLayer.speciesScale: the drawn size of each species. */
-export const SPECIES_SCALE = [1, 1.35, 1.7, 1, 1.2, 1.05, 1.35, 1];
+export const SPECIES_SCALE = [1, 1.35, 1.7, 1, 1.2, 1.05, 1.35, 1, 1.7, 1.6, 1.05];
 export const LEGGED: Array<{ sp: number; name: string }> = [
   { sp: Sp.Bison, name: 'bison' },
   { sp: Sp.Wolf, name: 'wolf' },
   { sp: Sp.Deer, name: 'pronghorn' },
   { sp: Sp.Cougar, name: 'cougar' },
   { sp: Sp.Coyote, name: 'coyote' },
+  { sp: Sp.MuleDeer, name: 'mule deer' },
 ];
 /** Rabbit (a hopper) and raven (a bird) have no planted-foot gait: they use the old hop and flight paths and are not part of the rig. */
 export const NOT_RIGGED = ['rabbit', 'raven'];
@@ -50,6 +51,9 @@ export function speciesRig(sp: number): { p: AnimParams; rig: LegRig } {
 export function paceFor(p: AnimParams, g: GaitName): number {
   return g === 'walk' ? 0.5 * (0.4 + p.trot0) : g === 'trot' ? 0.5 * (p.trot1 + p.gal0) : p.gal1 * 1.15;
 }
+
+/** The stotting weight a gait row runs at (R6: the 'stot' row is the bounds of a mule deer, at the pace of a gallop). */
+export const stotOf = (g: GaitName): number => (g === 'stot' ? 1 : 0);
 
 export interface CaseOpts {
   sp: number;
@@ -133,6 +137,7 @@ export function runCase(o: CaseOpts, frame?: (s: FrameSample) => void): CaseResu
   const legacy = o.model === 'legacy';
   const maxCad = legacy ? LEGACY_MAX_CADENCE : MAX_CADENCE_NEW;
   const boost = boostFor(p, vs, camD);
+  const stotW = legacy ? 0 : stotOf(o.gait);
 
   let x = 10, ph = 0.31, bdy = 0;
   let prevG = T.h(x, 0);
@@ -149,7 +154,7 @@ export function runCase(o: CaseOpts, frame?: (s: FrameSample) => void): CaseResu
     const xNew = x + ds;
     const gNew = T.h(xNew, 0);
     const dsG = Math.hypot(ds, gNew - prevG);
-    const stride = (legacy ? legacyStride(p, pace) : gaitStride(p, pace)) * vs * (legacy ? 1 : boost);
+    const stride = (legacy ? legacyStride(p, pace) : gaitStride(p, pace, stotW)) * vs * (legacy ? 1 : boost);
     const dph = (legacy ? ds : dsG) / stride;
     const lim = maxCad * dt;
     if (dph > lim) capN++;
@@ -161,13 +166,13 @@ export function runCase(o: CaseOpts, frame?: (s: FrameSample) => void): CaseResu
 
     const inst = placeInstance(p, T, x, 0, vs, camD);
     const R = instanceRotation(inst);
-    const gm = gaitMix(p, pace);
+    const gm = gaitMix(p, pace, stotW);
     // eased body-height offset from the ground under the stance feet (new model)
     if (!legacy) {
       const bT = ikK > 0.001 ? stanceBodyDy(p, rig, gm, ph, inst, (gx, gz) => T.h(gx, gz)) * ikK : 0;
       bdy += (bT - bdy) * kBdy;
     }
-    const bm = bodyMotion(p, gm, ph, farK, legacy ? 0 : bdy);
+    const bm = bodyMotion(p, gm, ph, farK, legacy ? 0 : bdy, stotW);
     if (legacy) bm.yoff += gm.flex; // the old leg math had no body sink
     const feet: FrameSample['feet'] = [];
     for (let i = 0; i < 4; i++) {
@@ -248,9 +253,9 @@ export interface Row {
   after: CaseResult;
 }
 
-/** Slip gate: <= 5% at walk and trot, <= 8% at gallop. Ground gate: <= 5 cm on a 20 degree slope within 45 m. Both at 1x only. */
+/** Slip gate: <= 5% at walk and trot, <= 8% at gallop and in the stot's bounds. Ground gate: <= 5 cm on a 20 degree slope within 45 m. Both at 1x only. */
 export function gateOf(r: CaseResult): { slipOk: boolean; gndOk: boolean } {
-  const lim = r.opts.gait === 'gallop' ? 0.08 : 0.05;
+  const lim = r.opts.gait === 'gallop' || r.opts.gait === 'stot' ? 0.08 : 0.05;
   return { slipOk: r.slip <= lim, gndOk: r.opts.slopeDeg === 0 || r.gndMax <= 5 };
 }
 
@@ -258,7 +263,7 @@ export function runTable(cams: number[] = [20, 44], terrain: TerrainKind = 'plan
   const rows: Row[] = [];
   for (const camD of cams) {
     for (const { sp, name } of LEGGED) {
-      for (const gait of ['walk', 'trot', 'gallop'] as GaitName[]) {
+      for (const gait of ['walk', 'trot', 'gallop', ...(speciesRig(sp).p.stot ? ['stot'] : [])] as GaitName[]) {
         for (const speed of [1, 10] as const) {
           for (const slope of [0, 20]) {
             const base = { sp, gait, speedMul: speed, slopeDeg: slope, terrain, camD };
