@@ -60,6 +60,7 @@ function defines(p: AnimParams, far: ModelDef['far'] | undefined, geometry: Mode
     `#define BODY_LEN ${f(p.boostLen)}`,
     `#define FX2 ${p.hunts || p.kind === 2 ? 1 : 0}`,
     `#define CLASP ${f(p.clasp ?? 0)}`,
+    `#define MANGE ${p.hunts && p.kind === 0 ? 1 : 0}`, // canids can have mange: a patchy coat (the fragment stage mottles it)
   ].join('\n');
 }
 
@@ -86,6 +87,27 @@ uniform float uPxK;
 float tgFadeOf() {
   float fl = floor(aLook.w + 0.001);
   return 1.0 - floor(fl * 0.5) / 15.0;
+}
+
+// R3 canids: the animal layer packs three things into aFx2.w of a hunter (a quadruped with FX2): floor(w) = air + 16 * howl, each
+// 0..15, and fract(w) = mange severity 0..0.99. air / 15 is how far a leap has taken it off the ground (the legs follow the body
+// instead of reaching for the ground). howl 0..10 is the sit of a howl (haunches down, muzzle up) times ten, 11..15 the same sit
+// with yips ((q - 10) / 5 of full strength).
+void tgUnpack(float w, out float air, out float howl, out float yip, out float mange) {
+  float wi = floor(w);
+  float hq = floor(wi / 16.0);
+  float aq = wi - 16.0 * hq;
+  air = aq / 15.0;
+  howl = min(hq, 10.0) / 10.0;
+  yip = max(hq - 10.0, 0.0) / 5.0;
+  mange = fract(w);
+}
+float tgMangeOf() {
+#if FX2 && KIND == 0
+  return aGait.y < -0.5 ? 0.0 : fract(aFx2.w);
+#else
+  return 0.0;
+#endif
 }
 
 void tgRotZ(inout vec3 p, inout vec3 n, vec3 c, float a) {
@@ -166,6 +188,7 @@ float tgCyc;
 float tgPounce;
 float tgHold;   // 0..1: holding the prey (takedown), braced back on the hind feet
 float tgFeedB;  // 0..1: the haul of the feeding cycle, the forequarters pulled back
+float tgHowl;   // 0..1: sitting up to howl (R3): the body pitches up about the shoulders, the haunches drop
 vec3 tgGW;
 void tgBodyFwd(inout vec3 p, inout vec3 n) {
   p.y += tgYoff;
@@ -200,6 +223,8 @@ void tgBodyFwd(inout vec3 p, inout vec3 n) {
   if (tgHold > 0.001) tgRotZ(p, n, vec3(HIND_FOOT.x, 0.0, 0.0), tgHold * (0.2 + 0.02 * sin(uTime * 8.0)) + tgHold * CLASP * 0.34);
   // feeding: the forequarters haul back with the neck (the forefeet stay planted, the leg IK takes this motion out)
   if (tgFeedB > 0.001) p.x -= tgFeedB * 0.11 * BODY_LEN * smoothstep(-0.1, 0.5, p.x);
+  // sitting to howl: the rump drops about the shoulders (the forefeet stay planted, the hind legs fold up in the leg code)
+  if (tgHowl > 0.001) tgRotZ(p, n, vec3(0.22 * BODY_LEN, COM_Y, 0.0), tgHowl * 0.62);
 }
 #endif
 
@@ -292,7 +317,10 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
   // the leap weight of a pounce (aFx2.z): the spring up at the prey, gone once the hold has taken over (the body pitch and the
   // reach of the legs follow it; pounce, the whole engagement, keeps the head driving onto the prey)
   float leapW = 0.0;
+  // R3 canids (see tgUnpack): a mousing leap in the air, a howl (sitting) with its yips, mange severity
+  float cnAir = 0.0, cnHowl = 0.0, cnYip = 0.0, cnMange = 0.0;
 #if KIND == 0
+  if (!dead) tgUnpack(fx2.w, cnAir, cnHowl, cnYip, cnMange);
   leapW = dead ? 0.0 : clamp(fx2.z, 0.0, 1.0);
   holdW = dead ? 0.0 : clamp(fx2.x, 0.0, 1.0);
   holdSh = holdW * sin(t * 21.0 + seed * 40.0);
@@ -335,6 +363,7 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
   tgPounce = leapW;
   tgHold = holdW;
   tgFeedB = tugPull;
+  tgHowl = cnHowl;
   tgGW = vec3(wWalk, wTrot, wGal);
 #endif
   if (part >= 1 && part <= 4) {
@@ -362,7 +391,7 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
       float tx = footP.x + footX;
       float zf = aPivot.z;
       // legmath.ts aimLeg: within 45 m the foot aims at the real ground under it (faded out 40 to 45 m, beyond it the ground is flat)
-      float ikK = dead ? 0.0 : 1.0 - smoothstep(IK_NEAR, IK_FAR, camD);
+      float ikK = dead ? 0.0 : (1.0 - smoothstep(IK_NEAR, IK_FAR, camD)) * (1.0 - cnAir); // (in the air of a leap the legs follow the body)
       float gy = 0.0;
       if (ikK > 0.001) gy = ikK * tgGroundModelY(tx, footP.y, zf);
       vec3 tg = vec3(tx, footP.y + gy + footLift, zf);
@@ -414,6 +443,19 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
     // stalking: bent legs (a quadruped's legs bend through the IK instead, as the body drops by CROUCH_DROP)
     hip += crouchBody * (front ? 0.25 : -0.2);
 #endif
+#if KIND == 0
+    // R3 canids. In the air of a mousing leap the forelegs reach ahead and the hind legs trail; sitting to howl, the hind legs fold under.
+    if (cnAir > 0.001) {
+      hip = mix(hip, front ? 0.62 : -0.5, cnAir);
+      knee = mix(knee, front ? -0.45 : 0.75 * HOCK_K, cnAir);
+      stretch = mix(stretch, 1.0, cnAir);
+    }
+    if (cnHowl > 0.001 && !front) {
+      hip = mix(hip, LIE_HIP_H, cnHowl);
+      knee = mix(knee, LIE_KNEE_H, cnHowl);
+      stretch = mix(stretch, 1.0, cnHowl);
+    }
+#endif
     float lieHip = front ? LIE_HIP_F : LIE_HIP_H;
     float lieKnee = front ? LIE_KNEE_F : LIE_KNEE_H;
     hip = mix(hip, lieHip, lie);
@@ -457,6 +499,13 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
 #endif
   } else if (part == 5) {
     float graze = dead ? 0.0 : aGait.z;
+#if KIND == 0
+    if (cnMange > 0.01) {
+      // mange: the ruff round the neck goes thin (inset along the normal where the neck meets the shoulders)
+      float rf = 1.0 - smoothstep(0.28, 0.42, p.x / BODY_LEN);
+      p -= n * BODY_LEN * 0.03 * cnMange * rf;
+    }
+#endif
 #if KIND == 2
     graze *= aLook.z; // birds: head pecks only while perched (fold = 1)
 #endif
@@ -489,6 +538,15 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
     if (fx2.y >= 0.0) ang += 0.22 * sin(TG_TAU * 2.0 * fx2.y); // a walking raven's head pumps with each step
 #endif
     ang -= pounce * 0.55; // the head drives forward and down onto the prey
+#if KIND == 0
+    if (cnHowl > 0.001) {
+      // sitting to howl: the muzzle points up (the body is already pitched up about the shoulders), a slow tremor in the long note,
+      // and in the yips quick jerks of the head up and back, each dog at its own beat
+      ang += cnHowl * (0.5 + 0.05 * sin(t * 1.1 + seed * 9.0) + 0.012 * sin(t * 9.0 + seed * 5.0));
+      ang += cnYip * 0.2 * max(sin(t * 14.0 + seed * 6.0), 0.0);
+      yaw *= 1.0 - 0.85 * cnHowl;
+    }
+#endif
     ang = mix(ang, 0.15, lie * 0.7);
 #if KIND == 0
     if (CURL > 0.0) {
@@ -510,12 +568,23 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
     tgRotY(p, n, aPivot, yaw);
     tgRotZ(p, n, aPivot, ang);
   } else if (part == 6) {
+#if KIND == 0
+    if (cnMange > 0.01) {
+      // mange: the tail goes thin and rat-like as the hair falls out (the tube shrinks toward its own axis along its normals)
+      float tl = clamp((aPivot.x - p.x) / (0.4 * BODY_LEN), 0.0, 1.0);
+      float rr = BODY_LEN * 0.05 * (0.55 + 0.45 * sin(3.14159265 * min(tl * 1.2, 1.0)));
+      p -= n * rr * 0.75 * cnMange * smoothstep(0.0, 0.12, tl);
+    }
+#endif
     float sway = TAIL_SWAY * sin(t * 2.1 + seed * 17.0) + wWalk * 0.15 * sin(cyc);
     float lift = mix(TAIL_REST, TAIL_RUN, clamp(wGal + 0.4 * wTrot, 0.0, 1.0)) + 0.05 * sin(t * 1.3 + seed * 9.0);
     // a flick now and then (flies): a quick burst of side to side with a lift, a few times a minute
     float flick = smoothstep(0.88, 0.98, sin(t * (0.38 + 0.2 * fract(seed * 2.7)) + seed * 31.0)) * (1.0 - lie * 0.7);
     sway += flick * (0.5 + 0.3 * farK) * sin(t * 17.0 + seed * 5.0);
     lift += flick * 0.3 * (0.5 + 0.5 * sin(t * 15.0));
+#if KIND == 0
+    lift -= cnHowl * 1.05; // sitting: the body pitches up, so the tail comes up to lie along the ground behind it
+#endif
     if (dead) { float lim = 1.0 - smoothstep(0.1, 0.6, fallen); lift *= lim; sway *= lim; }
     tgRotZ(p, n, aPivot, lift);
     tgRotY(p, n, aPivot, sway);
@@ -665,6 +734,10 @@ varying float vTgFar;
 varying float vTgHunt;
 varying float vTgUp;
 varying float vTgFade;
+#if MANGE
+varying float vTgMg;
+varying vec3 vTgPos;
+#endif
 uniform float uLegTone;
 
 void tgShade(vec3 on) {
@@ -703,6 +776,10 @@ void tgShade(vec3 on) {
   vTgUp = clamp(normalize(mat3(instanceMatrix) * on).y, 0.0, 1.0);
   int tgPart = int(aPart.x + 0.5);
   if (tgPart >= 1 && tgPart <= 4 && !dead) vTgColor *= mix(1.0, uLegTone, vTgFar);
+#if MANGE
+  vTgMg = tgMangeOf();
+  vTgPos = position;
+#endif
 }
 `;
 
@@ -710,6 +787,35 @@ void tgShade(vec3 on) {
 export function animationShaderParts(def: ModelDef): { defs: string; decl: string } {
   return { defs: defines(def.params, def.far, def.geometry), decl: COMMON_DECL };
 }
+
+/** Mange, fragment side: declarations and the mottling applied after the coat colour (only models with MANGE). */
+const MANGE_DECL = /* glsl */ `
+varying float vTgMg;
+varying vec3 vTgPos;
+float tgH3(vec3 q) { return fract(sin(dot(q, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
+float tgVN(vec3 q) {
+  vec3 i = floor(q), f = fract(q);
+  f = f * f * (3.0 - 2.0 * f);
+  return mix(
+    mix(mix(tgH3(i), tgH3(i + vec3(1.0, 0.0, 0.0)), f.x), mix(tgH3(i + vec3(0.0, 1.0, 0.0)), tgH3(i + vec3(1.0, 1.0, 0.0)), f.x), f.y),
+    mix(mix(tgH3(i + vec3(0.0, 0.0, 1.0)), tgH3(i + vec3(1.0, 0.0, 1.0)), f.x), mix(tgH3(i + vec3(0.0, 1.0, 1.0)), tgH3(i + vec3(1.0, 1.0, 1.0)), f.x), f.y),
+    f.z);
+}
+`;
+const MANGE_FRAG = /* glsl */ `
+        if (vTgMg > 0.01) {
+          // patchy hair loss: dark mottled skin shows through in blotches (about 10 to 20 cm), over the haunches and tail root first,
+          // with thinning hair (a darker, flatter coat) round the edge of each bare patch
+          vec3 mq = vTgPos * 17.0;
+          float mnz = 0.62 * tgVN(mq) + 0.38 * tgVN(mq * 2.3 + 7.1);
+          float mrear = smoothstep(0.2, -0.5, vTgPos.x);
+          float mthr = 1.0 - vTgMg * 0.42 - 0.2 * mrear;
+          float mloss = smoothstep(mthr, mthr + 0.09, mnz);
+          float medge = smoothstep(mthr - 0.14, mthr, mnz) * (1.0 - mloss);
+          vec3 mskin = vec3(0.075, 0.05, 0.042) * (0.55 + 0.9 * tgVN(mq * 3.7 + 3.0));
+          diffuseColor.rgb = mix(diffuseColor.rgb * (1.0 - 0.32 * medge), mskin, mloss * 0.94);
+        }
+`;
 
 const NO_FAR: NonNullable<ModelDef['far']> = { gain: 1, rim: 0, hunt: 0, rimCol: [1, 1, 1] };
 
@@ -739,6 +845,10 @@ export interface AnimalShared {
 
 export function makeAnimalMaterials(sp: number, def: ModelDef, shared: AnimalShared): AnimalMaterials {
   const defs = defines(def.params, def.far, def.geometry);
+  // R3 mange (canids only): the fragment stage mottles the coat with dark bare skin in patches, more of it with severity (vTgMg).
+  const hasMange = def.params.hunts === true && def.params.kind === 0;
+  const mangeDecl = hasMange ? MANGE_DECL : '';
+  const mangeFrag = hasMange ? MANGE_FRAG : '';
   const material = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: def.roughness, metalness: 0 });
   material.onBeforeCompile = (shader) => {
     shader.uniforms.uTime = shared.uTime;
@@ -778,7 +888,7 @@ export function makeAnimalMaterials(sp: number, def: ModelDef, shared: AnimalSha
       .replace('#include <begin_vertex>', 'vec3 transformed = tgP;');
     shader.fragmentShader = shader.fragmentShader
       .replace('#include <clipping_planes_fragment>', '#include <clipping_planes_fragment>\n if (tgFadeDiscard(vTgFade)) discard;')
-      .replace('#include <common>', `#include <common>\n${FADE_FRAG_DECL}\nvarying vec3 vTgColor;\nvarying float vTgSel;\nvarying float vTgFar;\nvarying float vTgHunt;\nuniform float uFill;\nuniform vec3 uWarm;\nuniform float uNeutral;\nuniform float uFarGain;\nuniform vec3 uRimCol;\nuniform float uRimK;\nuniform float uHuntK;\nuniform float uLow;\nuniform vec3 uAmb;\nuniform vec3 uFarTint;\nuniform float uFarMix;\nuniform float uFloor;\nuniform float uLowFill;\nvarying float vTgUp;\nuniform vec3 uTopCol;\nuniform float uTopMix;\nuniform float uSideDark;`)
+      .replace('#include <common>', `#include <common>\n${FADE_FRAG_DECL}\nvarying vec3 vTgColor;\nvarying float vTgSel;\nvarying float vTgFar;\nvarying float vTgHunt;\nuniform float uFill;\nuniform vec3 uWarm;\nuniform float uNeutral;\nuniform float uFarGain;\nuniform vec3 uRimCol;\nuniform float uRimK;\nuniform float uHuntK;\nuniform float uLow;\nuniform vec3 uAmb;\nuniform vec3 uFarTint;\nuniform float uFarMix;\nuniform float uFloor;\nuniform float uLowFill;\nvarying float vTgUp;\nuniform vec3 uTopCol;\nuniform float uTopMix;\nuniform float uSideDark;${mangeDecl}`)
       // Bright parts of the coat (the white bands and rump) are pulled toward a mid value as the light drops, so they
       // darken with the scene instead of glowing against the dark herds at dusk and night.
       .replace('#include <color_fragment>', `vec3 tgC = vTgColor * mix(1.0, uFarGain, vTgFar);
@@ -795,7 +905,7 @@ export function makeAnimalMaterials(sp: number, def: ModelDef, shared: AnimalSha
         float tgL = dot(tgC, vec3(0.2126, 0.7152, 0.0722));
         tgC = mix(tgC, vec3(tgL), 0.3 * uLow * vTgFar);
         tgC *= 1.0 - 0.8 * uLow * max(tgL - 0.16, 0.0) / max(tgL, 1e-3);
-        diffuseColor.rgb *= tgC;`)
+        diffuseColor.rgb *= tgC;${mangeFrag}`)
       // sky fill: pull toward a warm neutral (so brown coats stay brown in blue shade), then boost it so the shaded side keeps form
       .replace(
         '#include <lights_fragment_end>',

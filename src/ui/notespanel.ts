@@ -1,7 +1,8 @@
 // The field notes panel (a notebook page) and the quiet toast that announces a new note.
 import { button, h, setText } from './dom';
 import { icon } from './icons';
-import { NOTES, NOTE_COUNT, type FieldNotes, type NoteDef } from './fieldnotes';
+import { NOTES, type FieldNotes, type NoteDef } from './fieldnotes';
+import { NOTE_TOTAL as NOTE_COUNT } from './fieldnotes_r3';
 
 /** A tick drawn a little unevenly, like a pencil mark, so the notebook does not look stamped. */
 export const TICK =

@@ -103,6 +103,11 @@ engine.scene.add(cranes.object3D);
 engine.excludeFromAO(cranes.object3D);
 engine.onFrame((dt) => cranes.update(dt));
 audio.onFlyover = (f) => cranes.start({ ...f, delay: f.startAt - audio.now });
+// coyote calls: the audio calls from where a coyote rests and says how long the clip lasts, so those coyotes sit up and sing for exactly that long
+audio.coyoteSite = () => animals.chorusSite();
+audio.onCoyoteCall = (c) => animals.startChorus(c.x, c.z, c.seconds);
+// field note: a mousing leap close to the camera
+animals.onMousingLeap = () => { ui.fieldNotes.earn('mousingLeap', ui.fieldNotes.yearNow); };
 // R4 strikes -> R3 thunder player (delay is distance / 343 m/s at 1x, 0 at 10x and up)
 engine.storms.onThunder = (distance, delay) => { audio.onThunder(distance, delay); };
 (window as unknown as Record<string, unknown>).__cranes = cranes;
@@ -145,6 +150,8 @@ let lastTick = -1;
 let ready = false;
 let pending: Extract<FromWorker, { type: 'snap' }> | null = null;
 let pendingEvents: Extract<FromWorker, { type: 'snap' }>['events'] = [];
+/** The latest small-prey fields (Snapshot.small): the director films towns and mousing from them. */
+let lastSmall: Uint8Array | null = null;
 let pendingHistory: Extract<FromWorker, { type: 'snap' }>['history'] = [];
 
 let skipping = false;
@@ -171,6 +178,7 @@ worker.onmessage = (e: MessageEvent<FromWorker>) => {
   pendingHistory = pendingHistory.concat(m.history);
   if (m.veg) engine.setVeg(m.veg);
   if (m.small) {
+    lastSmall = m.small;
     smallprey.setSmall(m.small);
     // the turf in towns is clipped short: the render copy of the biomass is cut inside them (the blade layer and the terrain follow it)
     if (smallprey.clipVeg(engine.vegTexture.image.data as Uint8Array)) engine.vegTexture.needsUpdate = true;
@@ -216,7 +224,11 @@ try {
 } catch { /* unknown dev param: the worker reports it */ }
 const smallprey = new SmallPreyLayer(renderWorld, { ...smallCaps, shared: engine.uniforms });
 // where a dog yips or an alarm wave starts: the audio places it in the world
-smallprey.onBark = (kind, x, y, z) => audio.onSmallPrey(kind, x, y, z);
+smallprey.onBark = (kind, x, y, z) => {
+  audio.onSmallPrey(kind, x, y, z);
+  // field note: an alarm wave sweeping a town the camera is near
+  if (kind === 'alarm' && Math.hypot(x - engine.camera.position.x, z - engine.camera.position.z) < 200) ui.fieldNotes.earn('alarmWave', ui.fieldNotes.yearNow);
+};
 engine.scene.add(smallprey.object3D);
 engine.excludeFromAO(smallprey.object3D);
 send({ type: 'init', seed, params: simParams, schedule: scenario.schedule, replay: shared?.state.log });
@@ -525,7 +537,7 @@ engine.onFrame((dt, t) => {
     autoCam = true;
     director.setEnabled(true);
   }
-  director.update(dt, pending ? { count: pending.count, ids: pending.ids, agents: pending.agents, carcassCount: pending.carcassCount, carcasses: pending.carcasses, dayFrac: pending.env.dayFrac } : null);
+  director.update(dt, pending ? { count: pending.count, ids: pending.ids, agents: pending.agents, carcassCount: pending.carcassCount, carcasses: pending.carcasses, dayFrac: pending.env.dayFrac, small: lastSmall, events: pendingEvents } : null);
   grass.viewportHeight = engine.renderer.domElement.height;
   overlay.update(dt, engine.camera, engine.renderer.domElement);
   grass.update(engine.camera, t, engine.env, sun);
@@ -633,6 +645,7 @@ w.__smallprey = smallprey;
 w.__grass = grass;
 w.__snap = () => pending;
 w.__director = director;
+w.__lastSmall = () => lastSmall; // dev hook: the latest small-prey fields (the director's town shot reads them)
 w.__apply = (iv: Intervention) => send({ type: 'apply', iv });
 w.__audio = audio;
 w.__narrator = narrator;

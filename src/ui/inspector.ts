@@ -348,10 +348,15 @@ export class Inspector {
     if (d.alpha) chips.push('Alpha');
     if (d.pregnant) chips.push('Expecting');
     if (d.infected) chips.push('Sick');
+    // R3: a coyote with a mate wears a "Pair" chip, a canid with mange a "Mange" one, once the sim reports them (optional fields of
+    // AnimalDetail: paired, mange severity; Track S adds them to worker.ts detail())
+    const dx = d as AnimalDetail & { paired?: boolean; mange?: number };
+    if (d.sp === 6 && dx.paired) chips.push('Pair');
+    if ((dx.mange ?? 0) > 0) chips.push('Mange');
     const key = chips.join('|');
     if (key !== this.lastKey) {
       this.lastKey = key;
-      this.chips.replaceChildren(...chips.map((c) => h('span', { class: `tg-chip${c === 'Sick' ? ' is-warn' : ''}`, text: c })));
+      this.chips.replaceChildren(...chips.map((c) => h('span', { class: `tg-chip${c === 'Sick' || c === 'Mange' ? ' is-warn' : ''}`, text: c })));
       this.chips.style.display = chips.length ? '' : 'none';
     }
 

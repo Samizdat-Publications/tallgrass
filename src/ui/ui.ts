@@ -15,7 +15,8 @@ import type { Challenge } from '../challenges';
 import { ChapterCard, cardDuration } from './chapter';
 import { ChallengeRun } from './challenge';
 import { GoalCard } from './goal';
-import { FieldNotes, NoteTracker, NOTE_COUNT } from './fieldnotes';
+import { FieldNotes, NoteTracker } from './fieldnotes';
+import { NOTE_TOTAL as NOTE_COUNT, trackR3 } from './fieldnotes_r3';
 import { NotesPanel, NoteToast } from './notespanel';
 import { ResultCard } from './result';
 import { Chronicle, type ChronicleEntry } from './chronicle';
@@ -346,6 +347,7 @@ export class GameUI {
       { tick: f.tick, env: f.env, pop: f.pop, events: f.events, selected: f.selected, following: f.following, speed: f.speed },
       { memorial: this.inspector.isMemorial, challengeWon: this.run?.result?.state === 'won' },
     );
+    trackR3(this.fieldNotes, f.events, this.lastYear); // the eight R3 notes that come from sim events (fieldnotes_r3.ts)
     this.firstFrame = false;
     this.flushToast(now);
     this.updateDim(now);

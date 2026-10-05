@@ -22,6 +22,8 @@ import type { LegRig } from './models/legmath';
 import { makeAnimalMaterials } from './models/shader';
 import type { AnimalShared } from './models/shader';
 import { Dust, KillSites, Markers, SceneLit } from './models/fx';
+import { CanidState, newIn, newOut } from './canids';
+import { sunHeight } from '../audio/mix';
 import { injectTerrainShadow } from './common';
 import type { SharedUniforms } from './common';
 
@@ -35,6 +37,8 @@ const INITIAL_CAPACITY: number[] = byId({ bison: 2048, wolf: 512, raven: 512, pr
 const HUNTER: boolean[] = SPECIES.map((s) => (s.guild === 'predator' || s.guild === 'mesopredator') && !s.flies);
 /** Fliers: drawn at their altitude, banked into turns, folded on the ground (raven; later eagle, hawk). */
 const FLIES: boolean[] = SPECIES.map((s) => s.flies);
+/** The canids (wolf, coyote): mange, and for the coyote the mousing leap, the dusk chorus and the wary glance (render/canids.ts). */
+const CANID: boolean[] = SPECIES.map((s) => s.key === 'wolf' || s.key === 'coyote');
 /** Prey a lunging hunter goes for: grazers that are neither fliers nor the small ones (rabbit, prairie dog, beaver). */
 const SMALL_KEYS = new Set(['rabbit', 'prairiedog', 'beaver']);
 const LUNGE_TARGET: boolean[] = SPECIES.map((s) => s.prey && !HUNTER[s.id] && !s.flies && !SMALL_KEYS.has(s.key));
@@ -60,6 +64,7 @@ const DUST: Array<[number, number, number, number, number, number] | null> = byI
     pronghorn: [6, 0.4, 0.95, 0.2, 0.8, 1.2],
     rabbit: null,
     cougar: [5.5, 0.4, 0.8, 0.2, 0.7, 1.1],
+    coyote: [5, 0.35, 0.6, 0.18, 0.6, 1.0],
   },
   () => null, // no dust until a species is given a table
 );
@@ -551,7 +556,7 @@ export class AnimalLayer {
   /** Sim speed multiplier (1 = real time, 0 = paused). Scales gait frequency so legs match visible speed. */
   timeScale = 1;
   /** Per species visual size multiplier by species id (readability boost for small animals: wolf 1.35 (the concept art wolves read at ~0.65 of a bison), raven 1.7 (circling ravens are the "kill here" tell), rabbit 1.2, cougar 1.05). */
-  readonly speciesScale: number[] = byId({ bison: 1, wolf: 1.35, raven: 1.7, pronghorn: 1, rabbit: 1.2, cougar: 1.05 }, () => 1);
+  readonly speciesScale: number[] = byId({ bison: 1, wolf: 1.35, raven: 1.7, pronghorn: 1, rabbit: 1.2, cougar: 1.05, coyote: 1.35 }, () => 1);
 
   private world: World;
   /** Draw batch by species id; null for a species with no model (it is simply not drawn). */
@@ -587,6 +592,12 @@ export class AnimalLayer {
   private kills: KillSites;
   private markers: Markers;
   private slots = new Slots();
+  /** Canid extras (R3): mange, the mousing leap, the chorus pose, migrant columns. */
+  private cn = new CanidState();
+  private cnIn = newIn();
+  private cnOut = newOut();
+  /** Called when a coyote near the camera starts a mousing leap (x, z): the field notes. */
+  onMousingLeap: ((x: number, z: number) => void) | null = null;
   private ws: WeightState = { x: 0, z: 0, vx: 0, vz: 0, tx: 0, tz: 0 };
   private gen = 0;
 
@@ -763,6 +774,7 @@ export class AnimalLayer {
         S.wset[slot] = 0;
         S.acc[slot] = 0;
         S.lean[slot] = 0;
+        this.cn.reset(slot);
       }
       S.stamp[slot] = this.gen;
       this.currSlot[i] = slot;
@@ -771,6 +783,8 @@ export class AnimalLayer {
       const sp = ag[i * AGENT_STRIDE] | 0;
       if (sp >= 0 && sp < SPECIES_COUNT) this.counts[sp]++;
     }
+    // migrants that travel together are drawn in a short file (display offsets, R3)
+    this.cn.planColumns(ag, n, this.currSlot, (sp) => (this.batches[sp]?.def.params.length ?? 1.5) * this.speciesScale[sp], (sp) => FLIES[sp]);
     // free the slots of animals that are gone
     this.goneSlot.clear();
     for (const [id, slot] of S.map) {
@@ -851,6 +865,64 @@ export class AnimalLayer {
     const ci = Math.min(w.n - 1, Math.max(0, Math.floor(x / w.cell))), cj = Math.min(w.n - 1, Math.max(0, Math.floor(z / w.cell)));
     const c = cj * w.n + ci;
     return smoothstep(2, 16, w.waterDist[c]) * (1 - 0.7 * smoothstep(0.55, 0.9, w.moisture[c]));
+  }
+
+  /** A small puff of dust where a mousing coyote lands (R3). */
+  private landingPuff(x: number, z: number, vs: number): void {
+    const w = this.world;
+    const dryK = this.dust.dryness * this.groundDry(x, z);
+    const n = Math.round(5 * dryK);
+    for (let i = 0; i < n; i++) {
+      const a = Math.random() * Math.PI * 2, r = Math.random() * 0.4 * vs;
+      const px = x + Math.cos(a) * r, pz = z + Math.sin(a) * r;
+      this.dust.emit(
+        px, sampleHeight(w.height, w.hn, w.cell, px, pz) + 0.1, pz,
+        Math.cos(a) * 0.9, 0.3 + Math.random() * 0.4, Math.sin(a) * 0.9,
+        (0.35 + Math.random() * 0.3) * vs, 0.6 + Math.random() * 0.5, 0.25 + Math.random() * 0.15, Math.random(), dryK,
+      );
+    }
+  }
+
+  // ---------------------------------------------------------------------------------------------------------
+  // The coyote chorus (R3). The audio picks a place for a call with chorusSite(), plays the clip there and reports it with startChorus,
+  // so the resting coyotes there sit up and sing for exactly as long as the sound lasts. With no audio running (muted, no click yet)
+  // the layer makes a chorus of its own at dusk.
+
+  /** The place of a resting coyote within about 300 m of the camera, for a call to come from; null when none is resting. */
+  chorusSite(): { x: number; z: number } | null {
+    const snap = this.curr;
+    if (!snap) return null;
+    const A = snap.agents, cp = this.shared.uCamPos.value;
+    const near: number[] = [];
+    for (let i = 0; i < snap.count; i++) {
+      const o = i * AGENT_STRIDE;
+      if ((A[o] | 0) !== Sp.Coyote) continue;
+      const st = A[o + 7] | 0;
+      if ((st !== St.Rest && st !== St.Idle) || A[o + 4] >= 0.3) continue;
+      if (Math.hypot(A[o + 1] - cp.x, A[o + 2] - cp.z) > 300) continue;
+      near.push(i);
+    }
+    if (near.length === 0) return null;
+    const i = near[Math.floor(Math.random() * near.length)];
+    return { x: A[i * AGENT_STRIDE + 1], z: A[i * AGENT_STRIDE + 2] };
+  }
+
+  /** A call began at (x, z) and lasts `seconds`: the resting coyotes round it sit up and sing (see canids.ts). */
+  startChorus(x: number, z: number, seconds: number): void {
+    this.cn.startChorus(x, z, seconds, this.clock, true);
+  }
+
+  /** Capture and dev hook: a chorus now at the resting coyote nearest the camera (or at (x, z)). Returns where, or null. */
+  debugChorus(seconds = 9, x?: number, z?: number): { x: number; z: number } | null {
+    let site: { x: number; z: number } | null = x !== undefined && z !== undefined ? { x, z } : null;
+    if (!site) site = this.chorusSite();
+    if (site) this.cn.startChorus(site.x, site.z, seconds, this.clock, true);
+    return site;
+  }
+
+  /** True while a chorus is on. */
+  get chorusOn(): boolean {
+    return this.cn.choirOn(this.clock);
   }
 
   /** A kill: a puff of dust from the site, and every hunting predator close by pounces. */
@@ -1224,6 +1296,8 @@ export class AnimalLayer {
     const dustRate = Math.min(this.timeScale, 3);
     this.clock += running;
     const clock = this.clock;
+    // at dusk, with no audio calling for a while, the coyotes sing now and then on their own (render/canids.ts)
+    this.cn.maybeSelfChorus(clock, sunHeight(snap.env.dayFrac) < 0.12, this.timeScale, () => this.chorusSite());
     for (const fi of this.falls.values()) fi.pbest = 0;
     {
       const t = this.hotPrev;
@@ -1278,7 +1352,7 @@ export class AnimalLayer {
         const om = 22 * Math.min(12, Math.max(1, this.timeScale));
         // (an animal on the weight follower below springs from where this smoothing left it last frame, not from where the follower drew it)
         const own = ACCEL[sp] > 0 && S.wset[slot] === 1;
-        const ax = (own ? S.wtx[slot] : S.px[slot] - S.fox[slot]) - x, az = (own ? S.wtz[slot] : S.pz[slot] - S.foz[slot]) - z;
+        const ax = (own ? S.wtx[slot] : S.px[slot] - S.fox[slot] - this.cn.appliedX(slot)) - x, az = (own ? S.wtz[slot] : S.pz[slot] - S.foz[slot] - this.cn.appliedZ(slot)) - z;
         if (ax * ax + az * az < 900) {
           const bx = S.svx[slot] + om * ax, bz = S.svz[slot] + om * az;
           const e = Math.exp(-om * dt);
@@ -1374,6 +1448,23 @@ export class AnimalLayer {
       S.foz[slot] = offZ;
       x += offX;
       z += offZ;
+      // Canids (R3): mange, the coyote's mousing leap and chorus pose, and the file of a migrating group (display offsets)
+      const cnO = this.cnOut;
+      let cnOn = false;
+      if (CANID[sp] || (!flier && ((A[o + 8] | 0) & F_MIGRANT) !== 0)) {
+        const ci = this.cnIn;
+        ci.slot = slot; ci.id = id; ci.sp = sp; ci.state = state; ci.spd = spd1; ci.flags = A[o + 8] | 0; ci.energy = A[o + 10];
+        ci.x = x; ci.z = z; ci.h = h; ci.dt = dt; ci.running = running; ci.timeScale = this.timeScale; ci.clock = clock; ci.vs = sc * this.speciesScale[sp];
+        this.cn.step(ci, cnO);
+        x += cnO.ox;
+        z += cnO.oz;
+        cnOn = true;
+        if (cnO.leapStarted && this.onMousingLeap) {
+          const cpn = this.shared.uCamPos.value;
+          if (Math.hypot(x - cpn.x, z - cpn.z) < 140) this.onMousingLeap(x, z);
+        }
+        if (cnO.landed && dt > 0) this.landingPuff(x, z, sc * this.speciesScale[sp]);
+      } else cnO.pack = cnO.howl = cnO.air = cnO.lift = cnO.pitch = cnO.spd = 0;
       if (fd.on) h = fd.face; // it faces the carcass from its slot
       else if (rv.on) h = rv.mode > 0 ? Math.atan2(rv.hz, rv.hx) : Math.atan2(rv.cz - z, rv.cx - x);
 
@@ -1383,7 +1474,7 @@ export class AnimalLayer {
       // animation state targets
       // gait style follows the animal's own pace (walk, trot, gallop), not the time-lapse factor
       // (a predator walking to its slot round a carcass moves at the pace of that walk)
-      const spdT = this.timeScale > 0 ? Math.max(spd1 * VIS_PER_SIM, hunter ? offSpd : 0) : 0;
+      const spdT = this.timeScale > 0 ? Math.max(spd1 * VIS_PER_SIM, hunter ? offSpd : 0, cnO.spd) : 0;
       let hdT = 0, lieT = 0, crT = 0;
       let flapT = 0;
       if (state === St.Graze || state === St.Eat || state === St.Drink) hdT = 1;
@@ -1396,6 +1487,10 @@ export class AnimalLayer {
         hdT = fd.feed ? 1 : fd.drag ? 0.9 : 0; // (hauling a kill: the head down, the neck in its jaws)
         lieT = fd.lie && offRem < 0.3 ? 1 : 0;
       }
+      // a coyote at a carcass looks up warily every 2 to 3 s (and stops the bite while it does); one singing sits up
+      const gl = sp === Sp.Coyote && state === St.Eat ? this.cn.glance(id, clock) : 0;
+      if (gl > 0.001) hdT *= 1 - gl;
+      if (cnOn && (cnO.howlWant || cnO.howl > 0.4)) { lieT = 0; hdT = 0; }
       if (flier) {
         const grounded = groundedBird;
         crT = grounded ? 1 : 0; // wing fold
@@ -1432,7 +1527,7 @@ export class AnimalLayer {
       S.pgy[slot] = g0;
       const visT = dt > 1e-4 ? ds / dt : 0;
       // a predator at a carcass whose turn has not come (or that waits out of the way) is not eating yet
-      const feeding = state === St.Eat && ((hunter && (!fd.on || fd.feed)) || (flier && hdT > 0)) && this.timeScale > 0;
+      const feeding = state === St.Eat && ((hunter && (!fd.on || fd.feed)) || (flier && hdT > 0)) && this.timeScale > 0 && gl < 0.5;
       const hunting = HUNTER[sp] && this.timeScale > 0 ? (state === St.Chase || state === St.Stalk ? 1 : state === St.Eat ? 0.6 : 0) : 0;
       S.tug[slot] += ((feeding ? 1 : 0) - S.tug[slot]) * kHead;
       // predators: how hard it is hunting; ravens: how hard they are climbing (they flap steadily then, glide otherwise)
@@ -1640,6 +1735,13 @@ export class AnimalLayer {
           roll = clamp(roll, -0.15, 0.15);
         }
       }
+      if (cnO.lift > 0 || cnO.pitch !== 0) {
+        // the mousing leap: lifted off the ground, nose up at the spring and down at the landing; the end that dips is kept above the
+        // ground (the forefeet land first, the rump stays high over the pin)
+        const sn = Math.sin(cnO.pitch), fl = pr.length * vs;
+        y += cnO.lift + 0.26 * fl * Math.max(0, -sn) + 0.3 * fl * Math.max(0, sn);
+        pitch += cnO.pitch;
+      }
       // wading: in a water cell the animal stands on the bed while the water is shallower than its belly; in deeper
       // water it rides with the belly at the surface (a gentle bob, level pose) instead of looking like it stands on it
       if (!FLIES[sp] || alt <= 0.3) {
@@ -1661,7 +1763,7 @@ export class AnimalLayer {
         const ikK = 1 - smoothstep(IK_NEAR, IK_FAR, camD);
         let bT = 0;
         if (ikK > 0.001 && S.lie[slot] < 0.98) {
-          bT = stanceBodyDy(pr, this.rigs[sp]!, gaitMix(pr, gaitSpd), S.phase[slot], { x, y, z, ch, sh, pitch, roll, s: vs }, groundAt) * ikK * (1 - S.lie[slot]);
+          bT = stanceBodyDy(pr, this.rigs[sp]!, gaitMix(pr, gaitSpd), S.phase[slot], { x, y, z, ch, sh, pitch, roll, s: vs }, groundAt) * ikK * (1 - S.lie[slot]) * (1 - cnO.air) * (1 - cnO.howl);
         }
         S.bdy[slot] += (bT - S.bdy[slot]) * kBdy;
       }
@@ -1724,7 +1826,7 @@ export class AnimalLayer {
       if (flier) {
         fx2[gp] = rvHopU; fx2[gp + 1] = rvWalk; fx2[gp + 2] = takeoffK > 0 ? S.rtk[slot] : -1; fx2[gp + 3] = rvFlut;
       } else {
-        fx2[gp] = holdE; fx2[gp + 1] = S.fph[slot]; fx2[gp + 2] = leapE; fx2[gp + 3] = 0;
+        fx2[gp] = holdE; fx2[gp + 1] = S.fph[slot]; fx2[gp + 2] = leapE; fx2[gp + 3] = cnO.pack; // (canids: leap in the air, sitting to howl, mange; see tgUnpack)
       }
       look[gp] = clamp(coat, 0, 1);
       look[gp + 1] = hash01(id);

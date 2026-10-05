@@ -22,12 +22,13 @@ export type ModelKind = 'new' | 'legacy';
 export type TerrainKind = 'plane' | 'bumps';
 
 /** AnimalLayer.speciesScale: the drawn size of each species. */
-export const SPECIES_SCALE = [1, 1.35, 1.7, 1, 1.2, 1.05];
+export const SPECIES_SCALE = [1, 1.35, 1.7, 1, 1.2, 1.05, 1.35, 1];
 export const LEGGED: Array<{ sp: number; name: string }> = [
   { sp: Sp.Bison, name: 'bison' },
   { sp: Sp.Wolf, name: 'wolf' },
   { sp: Sp.Deer, name: 'pronghorn' },
   { sp: Sp.Cougar, name: 'cougar' },
+  { sp: Sp.Coyote, name: 'coyote' },
 ];
 /** Rabbit (a hopper) and raven (a bird) have no planted-foot gait: they use the old hop and flight paths and are not part of the rig. */
 export const NOT_RIGGED = ['rabbit', 'raven'];

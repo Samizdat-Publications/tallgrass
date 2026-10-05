@@ -118,6 +118,13 @@ export class AudioDirector {
   onFlyover: ((f: Flyover) => void) | null = null;
   /** Flyovers scheduled so far, newest last (capped at 20), for debug and tests. */
   readonly flyovers: Flyover[] = [];
+  /**
+   * Coyote calls and the coyotes that make them (R3). Set `coyoteSite` to a function that returns the place (three x, z) of a resting
+   * coyote near the camera (or null); the call then comes from there instead of a random spot, and `onCoyoteCall` is told where and for
+   * how many seconds it lasts, so the coyotes there can sit up and sing for exactly as long as the clip does.
+   */
+  coyoteSite: (() => { x: number; z: number } | null) | null = null;
+  onCoyoteCall: ((c: { x: number; z: number; seconds: number; howl: boolean }) => void) | null = null;
 
   private ctx: AudioContext | null = null;
   private master: GainNode | null = null;
@@ -793,10 +800,27 @@ export class AudioDirector {
       this.playAt('lark', spot.x, 1.6, spot.z, { gain: rule.gain * rand(0.8, 1.1), rate: rand(0.96, 1.05) });
       return;
     }
-    // coyotes call from somewhere out in the grass, 80 to 260 m off
-    const a = Math.random() * Math.PI * 2;
-    const d = lerp(80, 260, clamp01(rule.distance + (Math.random() - 0.5) * 0.3));
-    this.playAt(pickCoyoteClip(Math.random()), s.camX + Math.cos(a) * d, 0.8, s.camY + Math.sin(a) * d, { gain: rule.gain * rand(0.8, 1.15), rate: rand(0.95, 1.06) });
+    // coyotes call from where one is resting near the camera, else from somewhere out in the grass, 80 to 260 m off
+    const clip = pickCoyoteClip(Math.random());
+    const site = this.coyoteSite ? this.coyoteSite() : null;
+    let wx: number, wz: number;
+    if (site) {
+      wx = site.x;
+      wz = site.z;
+    } else {
+      const a = Math.random() * Math.PI * 2;
+      const d = lerp(80, 260, clamp01(rule.distance + (Math.random() - 0.5) * 0.3));
+      wx = s.camX + Math.cos(a) * d;
+      wz = s.camY + Math.sin(a) * d;
+    }
+    const seconds = this.playAt(clip, wx, 0.8, wz, { gain: rule.gain * rand(0.8, 1.15), rate: rand(0.95, 1.06) });
+    if (site && seconds > 0 && this.onCoyoteCall) {
+      try {
+        this.onCoyoteCall({ x: wx, z: wz, seconds, howl: clip === 'coyoteHowl' });
+      } catch (err) {
+        console.warn('[audio] onCoyoteCall handler threw: ' + (err instanceof Error ? err.message : String(err)));
+      }
+    }
   }
 
   /**
