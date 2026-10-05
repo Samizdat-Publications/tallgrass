@@ -1,0 +1,72 @@
+{
+ "args": {
+  "seeds": 20,
+  "seedBase": 1,
+  "ticks": 3600000,
+  "generations": 1000,
+  "sampleEvery": 2000,
+  "threads": 10,
+  "scenarios": [
+   "baseline"
+  ],
+  "params": {
+   "calendarScale": 2,
+   "smallPrey": 1,
+   "smallGameField": 1,
+   "coyote.initial": 12
+  },
+  "mock": false,
+  "maxMinutes": 0,
+  "progressSec": 15,
+  "out": "C:\\Users\\stewa\\Documents\\Claude\\ecosystem-sim\\review\\stability\\v6b-b51d880",
+  "argv": [
+   "--seeds",
+   "20",
+   "--generations",
+   "1000",
+   "--ticks",
+   "3600000",
+   "--sample",
+   "2000",
+   "--threads",
+   "10",
+   "--params",
+   "{\"calendarScale\":2,\"smallPrey\":1,\"smallGameField\":1,\"coyote.initial\":12}",
+   "--out",
+   "C:/Users/stewa/Documents/Claude/ecosystem-sim/review/stability/v6b-b51d880"
+  ]
+ },
+ "commit": "b51d880 (frozen copy)",
+ "node": "v24.19.0",
+ "platform": "win32 x64",
+ "startedAt": "2026-10-05T09:11:45.041Z",
+ "finishedAt": "2026-10-05T11:27:58.899Z",
+ "wallSeconds": 8173.85,
+ "stopReason": null,
+ "tasks": {
+  "total": 20,
+  "completed": 20,
+  "errors": 0,
+  "aborted": 0,
+  "skipped": 0
+ },
+ "msPerTick": 2.2525,
+ "ticksRun": 32188000,
+ "ticksPerSecWall": 3938,
+ "scenarios": {
+  "baseline": {
+   "seeds": 20,
+   "completed": 20,
+   "persistencePct": {
+    "bison": 100,
+    "wolf": 100,
+    "raven": 100,
+    "pronghorn": 100,
+    "rabbit": 100,
+    "coyote": 100,
+    "prairiedog": 100
+   },
+   "maxGen": 1001.646860986547
+  }
+ }
+}

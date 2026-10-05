@@ -8,7 +8,7 @@ import { animationShaderParts } from '../src/render/models/shader';
 import {
   aimLeg, bodyMotion, footModel, footPath, gaitMix, groundUnderFoot, IK_FAR, IK_NEAR, instanceRotation, legRigOf, sstep, stanceBodyDy,
 } from '../src/render/models/legmath';
-import { makeTerrain, placeInstance, SPECIES_SCALE, LEGGED, paceFor } from './footslip-core';
+import { makeTerrain, placeInstance, SPECIES_SCALE, LEGGED, paceFor, stotOf } from './footslip-core';
 import type { GaitName } from './footslip-core';
 
 declare global { interface Window { __gpuCheck?: { lines: string[]; maxErr: number; pass: boolean } } }
@@ -34,7 +34,7 @@ function compile(gl: WebGL2RenderingContext, type: number, src: string): WebGLSh
 }
 
 interface Harness {
-  run(a: { vtx: Float32Array; ph: number; spd: number; bdy: number; mat: Float32Array; camPos: [number, number, number] }): [number, number, number];
+  run(a: { vtx: Float32Array; ph: number; spd: number; bdy: number; mat: Float32Array; camPos: [number, number, number]; stot?: number }): [number, number, number];
 }
 
 function makeHarness(gl: WebGL2RenderingContext, sp: number, grid: Float32Array): Harness {
@@ -82,7 +82,7 @@ precision highp float; out vec4 c; void main() { c = vec4(1.0); }`;
   gl.bufferData(gl.TRANSFORM_FEEDBACK_BUFFER, 16, gl.DYNAMIC_READ);
   gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER, 0, tfBuf);
   return {
-    run({ vtx, ph, spd, bdy, mat, camPos }) {
+    run({ vtx, ph, spd, bdy, mat, camPos, stot }) {
       // vtx = [x y z, nx ny nz, part, w1, pivot xyz, pivot2 xyz]
       gl.vertexAttrib3f(loc('position'), vtx[0], vtx[1], vtx[2]);
       gl.vertexAttrib3f(loc('normal'), vtx[3], vtx[4], vtx[5]);
@@ -92,6 +92,7 @@ precision highp float; out vec4 c; void main() { c = vec4(1.0); }`;
       gl.vertexAttrib4f(loc('aGait'), ph, spd, 0, 0);
       gl.vertexAttrib4f(loc('aLook'), 0.5, 0, 0, 0); // seed 0: no breathing offset
       gl.vertexAttrib4f(loc('aFx'), 0, bdy, 0, 0);
+      gl.vertexAttrib4f(loc('aFx2'), 0, stot ?? 0, 0, 0); // no hold, no feeding cycle, no leap (a deer: no antlers, the stotting weight; a bison: no wallow, rub or spar)
       const l = loc('instanceMatrix');
       for (let c = 0; c < 4; c++) gl.vertexAttrib4f(l + c, mat[c * 4], mat[c * 4 + 1], mat[c * 4 + 2], mat[c * 4 + 3]);
       gl.uniform3f(uni('uCamPos'), camPos[0], camPos[1], camPos[2]);
@@ -145,19 +146,20 @@ export function runGpuCheck(): { lines: string[]; maxErr: number; pass: boolean 
       const verts = [0, 1, 2, 3].map((l) => footVertex(sp, l));
       let maxErr = 0, n = 0;
       const by = new Map<string, number>();
-      for (const gait of ['stand', 'walk', 'trot', 'gallop'] as Array<GaitName | 'stand'>) {
+      for (const gait of ['stand', 'walk', 'trot', 'gallop', ...(p.stot ? ['stot'] : [])] as Array<GaitName | 'stand'>) {
         const spd = gait === 'stand' ? 0 : paceFor(p, gait);
+        const stotW = gait === 'stand' ? 0 : stotOf(gait);
         for (const camD of [20, 30, 43, 60]) {
           for (let k = 0; k < 24; k++) {
             const ph = k / 24 + 0.013;
             const x = 40 + k * 0.7, z = 100;
             const inst = placeInstance(p, { h: (gx, gz) => ground(gx, gz) }, x, z, vs, camD);
             const R = instanceRotation(inst);
-            const gm = gaitMix(p, spd);
+            const gm = gaitMix(p, spd, stotW);
             const farK = sstep(20, 110, camD);
             const ikK = 1 - sstep(IK_NEAR, IK_FAR, camD);
             const bdy = ikK > 0.001 ? stanceBodyDy(p, rig, gm, ph, inst, ground) * ikK : 0;
-            const bm = bodyMotion(p, gm, ph, farK, bdy);
+            const bm = bodyMotion(p, gm, ph, farK, bdy, stotW);
             // the instance matrix exactly as AnimalLayer.writeInstance builds it (column major, scale in the columns)
             const mat = new Float32Array(16);
             mat[0] = R[0] * vs; mat[1] = R[3] * vs; mat[2] = R[6] * vs;
@@ -172,7 +174,7 @@ export function runGpuCheck(): { lines: string[]; maxErr: number; pass: boolean 
               const gy = ikK > 0.001 ? ikK * groundUnderFoot(inst, R, ground, b.foot[0] + footPath(gm, ph, leg).footX, b.foot[1], zf) : 0;
               const aim = aimLeg(p, rig, gm, ph, leg, zf, gy, bm);
               const exp = footModel(p, rig, leg, zf, aim, bm);
-              const got = h.run({ vtx: verts[leg], ph, spd, bdy, mat, camPos: cam });
+              const got = h.run({ vtx: verts[leg], ph, spd, bdy, mat, camPos: cam, stot: stotW });
               const err = Math.hypot(got[0] - exp[0], got[1] - exp[1], got[2] - exp[2]);
               if (err > maxErr) maxErr = err;
               const key = `${gait}@${camD}`;

@@ -9,13 +9,15 @@
 - Unmerged: `wip/drink-spots` (pond-ring fix; param drinkSpots, off by default; 0.7 is roughly level with main over 16 worlds). It is WP S10.
 - Nothing is running in the background.
 
-## In flight (Track R session started 2026-10-04 ~16:30 local, deadline 2026-10-08 12:00)
-- Done on main (as of 257bfcb): R0 all six items (keep ACES; concept baseline 4/10), R1 items 1-3 (foot lock, leg IK, rig: `npx tsx dev/footslip.ts`), R2 items 0-4 (season module, haze, silver water, golden terrain, drought ground), R14 (music + new sounds; needs an ear test), v2-sim merged at 4893296 (S0, S16, S18 pending).
-- Builders in worktrees (.claude/worktrees/agent-*): R1 items 4-6 (takedown, feeding, ravens), R2 items 6-8 (god rays, snow, dawn fog), R12 play UI minus family tree.
-- Next: R1 items 7-9 (weight, cougar kill, border fade), R2 items 5 and 9 (cloud shadows, grass close-up), crane V-formation render (audio.onFlyover hook exists), music/settings UI hooks (audio.music.setLevel/setEnabled), then R3 once S4/S5 merge.
-- Watch: midday autumn looks very ochre and hazy after R2 (scratch/merge_r1/04_pronghorn.jpg); check in the next review round. The concept_compare judge sits at 4/10 regardless (DECISIONS.md); trust the eye and trends.
-- Do not `git worktree remove` builder worktrees: each has a node_modules junction to the main node_modules.
-- Quota at ~17:40: weekly 66%, 5-hour 13%.
+## State at stop (Track R stopped 2026-10-05 ~10:20 at about 82% weekly, owner's 85% ruling)
+- Main ca557df, all pushed, live redeployed 10:15 (live check: no errors). Nothing uncommitted. No Track R builders running.
+- Done: R0-R9, R11, R12 (incl. family tree), R14, R15, M1, camera collision, rounds 13 and 14 fixes. v6 default. Track S merged through S8 + AnimalDetail fields.
+- Still running on the CPU (node workers outlive the session): v6b shock suite -> review/stability/v6b-b51d880-shocks300 (log scratch/accept_v6b_shocks.log). Post its result to REQUESTS-R next session.
+- Next Track R WPs: R10 (after S12), R13 (after S17), R16 (after S14), R17 performance presets (low_golden 15.5 ms; dense herd near LOD +2 ms), M2 milestone (blind critic + Gemini video round, deploy, MORNING).
+- Polish backlog: grey band at the storm cloud base in drone views; blocky thickets up close; coyote slightly pale; deer ears; camera view-rate spikes near groves; aurora +0.44 ms.
+- Making-of artifact: version 12 (https://claude.ai/artifact/7jPHUFvbzTv6AUz5UCA3Mu); publish new journey images at each milestone (read the url first).
+- Owner rulings today: quality over shareability (engine port allowed; staying on Three.js); per-commit bullets by category; keep the making-of artifact updated; stop near 85% weekly.
+- Builders' reports sometimes name the wrong branch: use `git branch --contains <commit>`. node_modules is shared via junctions: never rm -rf a junction; restore with `npm install`.
 
 ## Start here
 1. Read CLAUDE.md, then V2-PLAN.md sections 0 to 6. Your kickoff prompt gives your mode (single or two tracks) and your deadline: write the deadline to `.claude/hooks/run_until.local.txt` first.

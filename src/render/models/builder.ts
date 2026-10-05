@@ -5,6 +5,9 @@
 //   aPivot = pivot of the part (hip / neck base / tail root / wing root), model space
 //   aPivot2= secondary pivot (knee / hock / elbow)
 //   aColor = marking colour (multiplier of the coat colour when coat influence is 1, else absolute)
+//   aShade = (baked ambient occlusion darkness 0..1, wool shell flag 0 or the shell layer 0..1, spare). R7: 0 everywhere is "no effect".
+//   For a HEAD vertex aPart.y is 1 minus its weight on the head's rotation (0 = a whole head part, up to 1 = still the body), so one
+//   continuous loft can run from the shoulders to the nose and bend at the neck without a seam (R7 near LOD).
 import * as THREE from 'three';
 
 export type V3 = [number, number, number];
@@ -38,6 +41,16 @@ export interface TubeOpts {
   paint: PaintFn | Paint;
   /** Reflect across the XY plane (z -> -z) after construction. */
   mirror?: boolean;
+  /** Spare per-vertex tag (aPart.w): the raptor wings number their primary feathers with it. */
+  spare?: number;
+  /** Part id per vertex instead of a single one (a continuous body, neck and head loft: BODY behind the shoulders, HEAD ahead of them). */
+  partOf?: (p: V3, t: number) => number;
+  /** Occlusion group: tubes of one group do not occlude each other (a wool shell and the body it covers). Default: a group of its own. */
+  group?: number;
+  /** Marks a wool shell: its layer 0..1 (the fragment stage cuts it into tufts). Shells neither occlude nor take part in the baked AO. */
+  shell?: number;
+  /** Pushes each vertex out along its normal by this many metres after the normals are computed (shells). */
+  inflate?: (p: V3, n: V3, t: number) => number;
 }
 
 export const lin = (hex: number): V3 => {
@@ -185,6 +198,59 @@ export function torsoRings(rows: Array<[number, number, number, number, number, 
   return out;
 }
 
+/**
+ * One continuous loft along the body's own centre line, for a near-LOD body, neck and head with no part seams. Rows are
+ * [x, yCenter, up, down, side, sq?] (the pole rings have zero radii). Catmull-Rom subdivided like torsoRings, but each ring's frame
+ * follows the tangent of the centre line (u is perpendicular to it in the XY plane), so a neck that rises or a head that slopes down
+ * keeps round cross-sections.
+ */
+export type SpineRow = [number, number, number, number, number, number?];
+export function spineRings(rows: SpineRow[], sub = 3): Ring[] {
+  const n = rows.length;
+  const at = (i: number) => rows[Math.max(0, Math.min(n - 1, i))];
+  const cr = (a: number, b: number, c: number, d: number, t: number) =>
+    0.5 * (2 * b + (-a + c) * t + (2 * a - 5 * b + 4 * c - d) * t * t + (-a + 3 * b - 3 * c + d) * t * t * t);
+  const samples: Array<[number, number, number, number, number, number | undefined]> = [];
+  for (let i = 0; i < n - 1; i++) {
+    const p0 = at(i - 1), p1 = at(i), p2 = at(i + 1), p3 = at(i + 2);
+    for (let k = 0; k < sub; k++) {
+      const t = k / sub;
+      if (k === 0) { samples.push([p1[0], p1[1], p1[2], p1[3], p1[4], p1[5]]); continue; }
+      const f = (j: number) => {
+        const v = cr(p0[j] as number, p1[j] as number, p2[j] as number, p3[j] as number, t);
+        return j >= 2 ? Math.max(0, v) : v;
+      };
+      samples.push([f(0), f(1), f(2), f(3), f(4), p1[5]]);
+    }
+  }
+  const last = rows[n - 1];
+  samples.push([last[0], last[1], last[2], last[3], last[4], last[5]]);
+  const out: Ring[] = [];
+  for (let i = 0; i < samples.length; i++) {
+    const a = samples[Math.max(0, i - 1)], b = samples[Math.min(samples.length - 1, i + 1)];
+    let tx = b[0] - a[0], ty = b[1] - a[1];
+    const tl = Math.hypot(tx, ty) || 1;
+    tx /= tl; ty /= tl;
+    const r = samples[i];
+    out.push({ c: [r[0], r[1], 0], u: [-ty, tx, 0], s: [0, 0, 1], up: r[2], down: r[3], side: r[4], sq: r[5] });
+  }
+  return out;
+}
+
+/** The interpolated [yCenter, up, down, side] of a spine at x (linear between the rows; for placing eyes and horns on the surface). */
+export function spineAt(rows: SpineRow[], x: number): [number, number, number, number] {
+  for (let i = 0; i < rows.length - 1; i++) {
+    const a = rows[i], b = rows[i + 1];
+    const lo = Math.min(a[0], b[0]), hi = Math.max(a[0], b[0]);
+    if (x >= lo && x <= hi) {
+      const t = (x - a[0]) / (b[0] - a[0] || 1);
+      return [mix(a[1], b[1], t), mix(a[2], b[2], t), mix(a[3], b[3], t), mix(a[4], b[4], t)];
+    }
+  }
+  const e = Math.abs(x - rows[0][0]) < Math.abs(x - rows[rows.length - 1][0]) ? rows[0] : rows[rows.length - 1];
+  return [e[1], e[2], e[3], e[4]];
+}
+
 export class MeshBuilder {
   private pos: number[] = [];
   private nrm: number[] = [];
@@ -193,6 +259,11 @@ export class MeshBuilder {
   private pv: number[] = [];
   private pv2: number[] = [];
   private idx: number[] = [];
+  private shd: number[] = [];
+  /** Occlusion group per vertex, and the spheres (centre, radius, group) every non-shell tube offers to the baked AO. */
+  private vgrp: number[] = [];
+  private spheres: Array<{ c: V3; r: number; g: number }> = [];
+  private nextGroup = 1;
 
   get vertexCount(): number {
     return this.pos.length / 3;
@@ -275,19 +346,35 @@ export class MeshBuilder {
     const base = this.vertexCount;
     const piv: V3 = o.piv ? [o.piv[0], o.piv[1], o.piv[2] * mz] : [0, 0, 0];
     const piv2: V3 = o.piv2 ? [o.piv2[0], o.piv2[1], o.piv2[2] * mz] : piv;
+    const group = o.group ?? this.nextGroup++;
     for (let i = 0; i < nv; i++) {
-      const p = P(i);
+      let p = P(i);
       let n: V3 = norm([nrm[i * 3], nrm[i * 3 + 1], nrm[i * 3 + 2]]);
       if (!isFinite(n[0])) n = [0, 1, 0];
       const t = ringTs[i];
+      if (o.inflate) {
+        const k = o.inflate(p, n, t);
+        p = [p[0] + n[0] * k, p[1] + n[1] * k, p[2] + n[2] * k];
+      }
       const w1 = o.w1 ? o.w1(p, t) : 0;
       const paint: Paint = typeof o.paint === 'function' ? o.paint(p, n, t) : o.paint;
       this.pos.push(p[0], p[1], p[2]);
       this.nrm.push(n[0], n[1], n[2]);
       this.col.push(paint[0], paint[1], paint[2]);
-      this.prt.push(o.part, w1, paint[3], 0);
+      this.prt.push(o.partOf ? o.partOf(p, t) : o.part, w1, paint[3], o.spare ?? 0);
       this.pv.push(piv[0], piv[1], piv[2]);
       this.pv2.push(piv2[0], piv2[1], piv2[2]);
+      this.shd.push(0, o.shell ?? 0, 0);
+      this.vgrp.push(group);
+    }
+    if (o.shell === undefined) {
+      // an occluder for the baked AO: a sphere per ring (a pole ring has none)
+      for (let k = 0; k < nr; k++) {
+        const r = R[k];
+        const rad = (r.up + r.down + r.side * 2) * 0.25;
+        if (rad < 0.02) continue;
+        this.spheres.push({ c: [r.c[0], r.c[1], r.c[2] * mz], r: rad * 0.9, g: group });
+      }
     }
     for (const t of tris) this.idx.push(base + t);
   }
@@ -301,7 +388,51 @@ export class MeshBuilder {
     this.addTube({ ...o, mirror: true, part: partLeft ?? o.part });
   }
 
-  build(): THREE.BufferGeometry {
+  /**
+   * Baked ambient occlusion into aShade.x (darkness 0..1): sphere occlusion from the other tubes (leg pits, the chest between the
+   * forelegs, under the jaw) plus the ground under the belly. `ground` = the height (m) under which down-facing surfaces are
+   * shaded by the ground (about the leg length); 0 for none.
+   */
+  private bakeAO(ground: number): void {
+    const nv = this.vertexCount;
+    const sph = this.spheres;
+    const skin: number[] = [];
+    for (let i = 0; i < nv; i++) {
+      if (this.shd[i * 3 + 1] > 0) continue; // a shell takes the AO of the skin below it (below)
+      skin.push(i);
+      const px = this.pos[i * 3], py = this.pos[i * 3 + 1], pz = this.pos[i * 3 + 2];
+      const nx = this.nrm[i * 3], ny = this.nrm[i * 3 + 1], nz = this.nrm[i * 3 + 2];
+      const g = this.vgrp[i];
+      let occ = 0;
+      for (let j = 0; j < sph.length; j++) {
+        const s = sph[j];
+        if (s.g === g) continue;
+        const dx = s.c[0] - px, dy = s.c[1] - py, dz = s.c[2] - pz;
+        const d2 = dx * dx + dy * dy + dz * dz;
+        if (d2 > 9 * s.r * s.r) continue;
+        const dl = Math.sqrt(d2) || 1e-6;
+        const facing = (nx * dx + ny * dy + nz * dz) / dl;
+        if (facing <= 0) continue;
+        occ += Math.min(1, (s.r * s.r) / d2) * facing;
+      }
+      let dark = Math.min(0.6, occ * 0.75);
+      if (ground > 0 && ny < 0) dark += 0.7 * -ny * (1 - smooth(0, ground * 1.1, py)) * (1 - dark);
+      this.shd[i * 3] = Math.min(0.7, dark);
+    }
+    for (let i = 0; i < nv; i++) {
+      if (this.shd[i * 3 + 1] === 0) continue;
+      let best = 1e9, bi = -1;
+      for (const j of skin) {
+        const dx = this.pos[j * 3] - this.pos[i * 3], dy = this.pos[j * 3 + 1] - this.pos[i * 3 + 1], dz = this.pos[j * 3 + 2] - this.pos[i * 3 + 2];
+        const d = dx * dx + dy * dy + dz * dz;
+        if (d < best) { best = d; bi = j; }
+      }
+      this.shd[i * 3] = bi >= 0 ? this.shd[bi * 3] : 0;
+    }
+  }
+
+  build(o: { ground?: number } = {}): THREE.BufferGeometry {
+    this.bakeAO(o.ground ?? 0);
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.Float32BufferAttribute(this.pos, 3));
     g.setAttribute('normal', new THREE.Float32BufferAttribute(this.nrm, 3));
@@ -309,6 +440,7 @@ export class MeshBuilder {
     g.setAttribute('aPart', new THREE.Float32BufferAttribute(this.prt, 4));
     g.setAttribute('aPivot', new THREE.Float32BufferAttribute(this.pv, 3));
     g.setAttribute('aPivot2', new THREE.Float32BufferAttribute(this.pv2, 3));
+    g.setAttribute('aShade', new THREE.Float32BufferAttribute(this.shd, 3));
     g.setIndex(this.vertexCount > 65535 ? new THREE.Uint32BufferAttribute(this.idx, 1) : new THREE.Uint16BufferAttribute(this.idx, 1));
     g.computeBoundingSphere();
     return g;

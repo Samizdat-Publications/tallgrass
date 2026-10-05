@@ -34,8 +34,23 @@ const VIEW_SETUPS = {
   top: `() => { e.cam.preset('top', true); }`,
   winter: `() => { Object.assign(e.env, { dayFrac: 0.34, season: 3.2, weather: 4 }); e.applyEnvNow(); e.cam.preset('wide', true); }`,
   night: `() => { Object.assign(e.env, { dayFrac: 0.97, season: 2.2 }); e.applyEnvNow(); window.__focusHerd(); }`,
-  // TODO(storm): add a 'storm' view once the storm effects land (V2-PLAN R0), e.g.
-  //   storm: `() => { Object.assign(e.env, { dayFrac: 0.4, season: 1.2, weather: 3 }); e.applyEnvNow(); e.cam.preset('wide', true); }`,
+  // R4: a thunderstorm day seen from a low drone angle, with two cells (cloud masses, rain shafts, ground shade, sky gloom) and a
+  // strike mid-flash. A build without the storm module (engine.storms undefined) just renders the stormy weather, so an A/B of
+  // an old build against this one shows the cost of the cells.
+  storm: `() => {
+    Object.assign(e.env, { dayFrac: 0.4, season: 1.3, weather: 3, rain: 1, windStrength: 0.6, windDir: 0.35 });
+    e.applyEnvNow();
+    e.cam.setView({ distance: 430, pitchDeg: 8 }, true);
+    if (!e.storms) return;
+    e.camera.updateMatrixWorld();
+    const fw = e.camera.getWorldDirection(e.camera.position.clone());
+    const fl = Math.hypot(fw.x, fw.z) || 1, fx = fw.x / fl, fz = fw.z / fl, rx = -fz, rz = fx;
+    const f = e.cam.getFocus(e.camera.position.clone());
+    const at = (a, s, r, I) => ({ x: f.x + fx * a + rx * s, y: f.z + fz * a + rz * s, r, I });
+    e.storms.debugCells([at(240, -170, 95, 0.95), at(380, 200, 80, 0.8)]);
+    e.storms.debugStrike(f.x + fx * 230 + rx * -150, f.z + fz * 230 + rz * -150, false);
+    e.storms.onThunder = null;
+  }`,
 };
 const VIEW_NAMES = Object.keys(VIEW_SETUPS);
 const WARMUP = 6;

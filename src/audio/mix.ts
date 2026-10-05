@@ -99,6 +99,8 @@ export interface Nearby {
   wolf: number;
   raven: number;
   pronghorn: number;
+  /** Coyotes near the camera (they only call while there are some). Left out by callers that predate coyotes: counts as 0. */
+  coyote?: number;
 }
 
 /** How one kind of random spot sound should behave right now. mean = average seconds between sounds (Infinity = off). */

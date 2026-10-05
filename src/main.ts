@@ -4,38 +4,61 @@ import { Engine } from './render/engine';
 import { GrassField } from './render/grass';
 import { AnimalLayer } from './render/animals';
 import { OverlayLayer } from './render/overlay';
+import { Cranes } from './render/cranes';
+import { SmallPreyLayer } from './render/smallprey';
+import { SmallPreyOverlay } from './render/smalloverlay';
 import { GameUI, type OverlayId, type ToolId } from './ui/ui';
+import { loadSettings, type QualityPreset, type Settings } from './ui/settings';
+import { titleWanted } from './ui/title';
+import { decodeShare, shareUrl, type DecodedShare, type LoggedIntervention } from './sim/sharecode';
 import { packName } from './ui/describe';
 import { generateWorld } from './sim/world';
 import { hashSeed } from './sim/rng';
 import { scenarioById } from './scenarios';
 import { challengeById } from './challenges';
 import { Director } from './director';
+import { JPEG_QUALITY, LensController, type PhotoFormat } from './ui/photomode';
 import { AudioDirector } from './audio/audio';
 import { Narrator } from './audio/narrator';
 import { countNearby, nearWater01, scanTension } from './audio/inputs';
 import type { TensionSample } from './audio/music';
+import type { Nearby } from './audio/mix';
 import { DAY_TICKS, setCalendarScale, Sp, YEAR_TICKS, type Intervention, type Snapshot } from './sim/types';
 import { applyOverrides, defaultParams } from './sim/params';
 import { isPredator } from './sim/species';
 import type { FromWorker, ToWorker } from './sim/worker';
 
 const q = new URLSearchParams(location.search);
-// a challenge brings its own world: ?challenge=herd overrides seed and scenario
-const challenge = challengeById(q.get('challenge'));
-const seedStr = challenge?.seed ?? q.get('seed') ?? 'tallgrass';
-const seed = /^\d+$/.test(seedStr) ? Number(seedStr) : hashSeed(seedStr);
-const scenario = scenarioById(challenge?.scenario ?? q.get('scenario') ?? 'prairie');
+// a shared valley (?w=): the whole world, interventions included. A code that cannot be read starts the usual valley
+let shared: DecodedShare | null = null;
+let shareError = false;
+if (q.has('w')) {
+  try {
+    shared = decodeShare(q.get('w') ?? '');
+  } catch {
+    shareError = true;
+  }
+}
+// a challenge brings its own world: ?challenge=herd overrides seed and scenario (a share code overrides both)
+const challenge = shared ? null : challengeById(q.get('challenge'));
+const seedStr = shared ? String(shared.state.seed) : challenge?.seed ?? q.get('seed') ?? 'tallgrass';
+const seed = shared ? shared.state.seed : /^\d+$/.test(seedStr) ? Number(seedStr) : hashSeed(seedStr);
+const scenario = scenarioById(shared ? shared.state.scenario : challenge?.scenario ?? q.get('scenario') ?? 'prairie');
+
+// picture quality: ?q= wins (captures pin it), else the player's saved preset, else High (today's look)
+const savedSettings = loadSettings();
+const startPreset: QualityPreset = q.has('q') ? (q.get('q') === 'medium' ? 'medium' : 'high') : savedSettings.quality;
+const qualityTier = (p: QualityPreset): 'medium' | 'high' => (p === 'low' || p === 'medium' ? 'medium' : 'high');
 
 const world = generateWorld(seed);
 const host = document.getElementById('app')!;
 const engine = new Engine(host, world, {
-  quality: q.get('q') === 'medium' ? 'medium' : 'high',
+  quality: qualityTier(startPreset),
   toneMapping: (q.get('tm') as 'aces' | 'agx' | 'neutral' | null) ?? undefined,
 });
 // grass and animals sit on the terrain as rendered (the creek banks are reshaped for drawing)
 const renderWorld = { ...world, height: engine.terrain.heightTex.image.data as Float32Array };
-const grass = new GrassField(renderWorld, engine.vegTexture, { quality: q.get('q') === 'medium' ? 'medium' : 'high' });
+const grass = new GrassField(renderWorld, engine.vegTexture, { quality: qualityTier(startPreset), cloudShadow: engine.uniforms });
 engine.scene.add(grass.object3D);
 engine.excludeFromAO(grass.object3D);
 if (q.get('grass') === '0') grass.object3D.visible = false;
@@ -44,6 +67,29 @@ engine.scene.add(animals.object3D);
 engine.cam.preset((q.get('cam') as 'wide' | 'low' | 'top' | null) ?? 'wide', true);
 // captures pin full resolution; players get an automatic render scale that holds 60 fps
 engine.autoScale = q.get('autoscale') !== '0';
+/**
+ * Picture quality presets. Low and Medium use the engine's lighter tier (Low also draws at three quarters size), High is
+ * the default look, Ultra pins full sharpness and supersamples ordinary screens. Low and Ultra switch the automatic
+ * render scale off (it would undo their pixel ratio). Grass density is chosen when the grass is built, so a change of
+ * tier there waits for the next load.
+ */
+let builtGrassTier = qualityTier(startPreset);
+function applyQuality(p: QualityPreset): void {
+  engine.setQuality(qualityTier(p));
+  const dpr = window.devicePixelRatio || 1;
+  if (p === 'low') {
+    engine.autoScale = false;
+    engine.renderer.setPixelRatio(Math.min(dpr, 1.25) * 0.75);
+    engine.resize();
+  } else if (p === 'ultra') {
+    engine.autoScale = false;
+    engine.renderer.setPixelRatio(Math.min(Math.max(dpr, 1.5), 2));
+    engine.resize();
+  } else {
+    engine.autoScale = q.get('autoscale') !== '0';
+  }
+}
+if (startPreset === 'low' || startPreset === 'ultra') applyQuality(startPreset);
 const coverCell = world.size / world.n;
 const director = new Director(engine.cam, (id, out) => animals.getPosition(id, out), world.size, (x, y) => {
   const cx = Math.floor(x / coverCell), cy = Math.floor(y / coverCell);
@@ -52,29 +98,57 @@ const director = new Director(engine.cam, (id, out) => animals.getPosition(id, o
 // sound starts itself on the first click or key press (browser autoplay rules)
 const audio = new AudioDirector();
 void audio.load();
+// sandhill crane flyovers: the audio schedules the calls, this draws the flock crossing the sky for the same seconds
+const cranes = new Cranes(engine.uniforms, engine.camera, (x, z) => engine.groundHeight(x, z));
+engine.scene.add(cranes.object3D);
+engine.excludeFromAO(cranes.object3D);
+engine.onFrame((dt) => cranes.update(dt));
+audio.onFlyover = (f) => cranes.start({ ...f, delay: f.startAt - audio.now });
+// coyote calls: the audio calls from where a coyote rests and says how long the clip lasts, so those coyotes sit up and sing for exactly that long
+audio.coyoteSite = () => animals.chorusSite();
+audio.onCoyoteCall = (c) => animals.startChorus(c.x, c.z, c.seconds);
+// R8: the wolf howl and the bull's bellow come from where a resting wolf lies or a bull stands, and that pack howls (that bull bellows) as long as the clip lasts
+audio.wolfSite = () => animals.wolfSite();
+audio.onWolfCall = (c) => animals.startWolfChorus(c.x, c.z, c.seconds);
+audio.bellowSite = () => animals.bellowSite();
+audio.onBellowCall = (c) => animals.startBellow(c.x, c.z, c.seconds);
+// field note: a mousing leap close to the camera
+animals.onMousingLeap = () => { ui.fieldNotes.earn('mousingLeap', ui.fieldNotes.yearNow); };
+// R5 raptors: a hawk's scream or an eagle's call (and the scream of a stoop beginning), placed where the bird is (height above the ground)
+animals.onRaptorCall = (sp, scream, x, y, z) => { audio.onRaptor(sp === Sp.Hawk ? 'hawk' : 'eagle', scream, x, Math.max(0.5, y - engine.groundHeight(x, z)), z); };
+// R4 strikes -> R3 thunder player (delay is distance / 343 m/s at 1x, 0 at 10x and up)
+engine.storms.onThunder = (distance, delay) => { audio.onThunder(distance, delay); };
+(window as unknown as Record<string, unknown>).__cranes = cranes;
 // the documentary narrator: speaks on big events while the documentary camera or cinematic mode is filming
 const narrator = new Narrator(audio);
 void narrator.load();
 window.addEventListener('keydown', (e) => { if (e.key === 'm' || e.key === 'M') audio.setMuted(!audio.muted); });
 
-// Photo mode: P saves the current frame as a PNG. The UI is HTML over the canvas, so the picture is clean.
-window.addEventListener('keydown', (e) => {
-  if ((e.key !== 'p' && e.key !== 'P') || e.repeat || e.ctrlKey || e.metaKey || (e.target as HTMLElement)?.closest?.('input, textarea')) return;
+// Photo mode (R15 Lens): P opens the panel (exposure, aperture and focus, grain, freeze time, hide the interface, Save). Save writes
+// the canvas as a PNG or JPEG; the UI is HTML over the canvas, so the picture is always clean. The panel itself is wired below.
+function savePhoto(format: PhotoFormat): void {
+  ui.photo.setSaving(true);
   engine.renderOnce(0); // the drawing buffer is only readable in the same task as the render
   const year = pending ? Math.floor(pending.tick / YEAR_TICKS) + 1 : 1;
+  const jpeg = format === 'jpeg';
   engine.renderer.domElement.toBlob((blob) => {
+    ui.photo.setSaving(false);
     if (!blob) return;
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = `tallgrass-${seedStr.replace(/[^\w-]+/g, '_')}-year${year}.png`;
+    a.download = `tallgrass-${seedStr.replace(/[^\w-]+/g, '_')}-year${year}.${jpeg ? 'jpg' : 'png'}`;
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 2000);
-  }, 'image/png');
+  }, jpeg ? 'image/jpeg' : 'image/png', jpeg ? JPEG_QUALITY : undefined);
   const flash = document.createElement('div');
   flash.style.cssText = 'position:fixed;inset:0;background:#fff;opacity:0.55;pointer-events:none;z-index:50;transition:opacity 0.35s ease-out';
   document.body.append(flash);
   requestAnimationFrame(() => { flash.style.opacity = '0'; });
   setTimeout(() => flash.remove(), 450);
+}
+window.addEventListener('keydown', (e) => {
+  if ((e.key !== 'p' && e.key !== 'P') || e.repeat || e.ctrlKey || e.metaKey || (e.target as HTMLElement)?.closest?.('input, textarea')) return;
+  ui.togglePhoto();
 });
 
 // ------------------------------------------------------------------ worker
@@ -91,6 +165,8 @@ let lastTick = -1;
 let ready = false;
 let pending: Extract<FromWorker, { type: 'snap' }> | null = null;
 let pendingEvents: Extract<FromWorker, { type: 'snap' }>['events'] = [];
+/** The latest small-prey fields (Snapshot.small): the director films towns and mousing from them. */
+let lastSmall: Uint8Array | null = null;
 let pendingHistory: Extract<FromWorker, { type: 'snap' }>['history'] = [];
 
 let skipping = false;
@@ -98,6 +174,12 @@ let skipEvents: Extract<FromWorker, { type: 'snap' }>['events'] = [];
 
 worker.onmessage = (e: MessageEvent<FromWorker>) => {
   const m = e.data;
+  if (m.type === 'log') {
+    finishShare(m.log);
+    return;
+  }
+  if (m.type === 'lineage') { ui.setLineage(m.id, m.tree); return; }
+  if (m.type === 'dynasty') { ui.setDynasty(m.pack, m.list); return; }
   if (m.type !== 'snap') return;
   // "Next event": collect what happened during the skip, then cut the camera to it
   if (m.speed === -1) { skipping = true; skipEvents = skipEvents.concat(m.events); }
@@ -112,9 +194,16 @@ worker.onmessage = (e: MessageEvent<FromWorker>) => {
   pendingEvents = pendingEvents.concat(m.events);
   pendingHistory = pendingHistory.concat(m.history);
   if (m.veg) engine.setVeg(m.veg);
+  if (m.small) {
+    lastSmall = m.small;
+    smallprey.setSmall(m.small);
+    // the turf in towns is clipped short: the render copy of the biomass is cut inside them (the blade layer and the terrain follow it)
+    if (smallprey.clipVeg(engine.vegTexture.image.data as Uint8Array)) engine.vegTexture.needsUpdate = true;
+  }
   if (m.traitGrid) overlay.setTraitGrid(m.traitGrid);
   overlay.setPacks(m.packs, m.packSerials.map(packName));
   engine.setEnv(m.env);
+  engine.setStorms(m.storms, m.strikes, m.speed);
   if (m.tick !== lastTick) {
     const now = performance.now();
     if (lastTick >= 0) tickInterval = tickInterval * 0.8 + Math.min(500, now - lastTickChange) * 0.2;
@@ -125,6 +214,7 @@ worker.onmessage = (e: MessageEvent<FromWorker>) => {
       carcassCount: m.carcassCount, carcasses: m.carcasses, pop: Int32Array.from(m.pop),
     };
     animals.setSnapshot(snap);
+    smallprey.setAgents(m.agents, m.count);
   }
   pending = m;
   if (!ready) {
@@ -139,10 +229,26 @@ for (const kv of (q.get('p') ?? '').split(',')) {
   const [k, v] = kv.split(':');
   if (k && v !== undefined && Number.isFinite(Number(v))) devParams[k.trim()] = Number(v);
 }
-const simParams = { ...scenario.params, ...(challenge?.params ?? {}), ...devParams };
+// a share code carries the complete param set (the scenario's included), so it replaces the scenario's own
+const simParams: Record<string, number> = shared ? { ...shared.state.params } : { ...scenario.params, ...(challenge?.params ?? {}), ...devParams };
 // the game's own clocks (UI calendar, weather easing) follow the same valley calendar as the sim in the worker
 try { setCalendarScale(applyOverrides(defaultParams(), simParams).calendarScale); } catch { /* unknown dev param: the worker reports it */ }
-send({ type: 'init', seed, params: simParams, schedule: scenario.schedule });
+// small-prey web (R3): prairie dog towns and jackrabbits, drawn only when the sim sends the small-prey fields (smallPrey param on)
+let smallCaps = { hareK: 3, dogK: 4 };
+try {
+  const rp = applyOverrides(defaultParams(), simParams);
+  smallCaps = { hareK: rp.hareK, dogK: rp.dogK };
+} catch { /* unknown dev param: the worker reports it */ }
+const smallprey = new SmallPreyLayer(renderWorld, { ...smallCaps, shared: engine.uniforms });
+// where a dog yips or an alarm wave starts: the audio places it in the world
+smallprey.onBark = (kind, x, y, z) => {
+  audio.onSmallPrey(kind, x, y, z);
+  // field note: an alarm wave sweeping a town the camera is near
+  if (kind === 'alarm' && Math.hypot(x - engine.camera.position.x, z - engine.camera.position.z) < 200) ui.fieldNotes.earn('alarmWave', ui.fieldNotes.yearNow);
+};
+engine.scene.add(smallprey.object3D);
+engine.excludeFromAO(smallprey.object3D);
+send({ type: 'init', seed, params: simParams, schedule: scenario.schedule, replay: shared?.state.log });
 send({ type: 'speed', speed });
 
 /** Frame the biggest bison herd like a documentary opening shot. */
@@ -193,26 +299,177 @@ const ui = new GameUI(document.getElementById('ui')!, {
     }
   },
   select: (id) => select(id),
+  requestLineage: (id) => send({ type: 'lineage', id }),
+  requestDynasty: (pack) => send({ type: 'dynasty', pack }),
   flyTo: (x, y) => { takeCamera(); engine.cam.flyTo(x, y); },
-  setOverlay: (o: OverlayId) => overlay.setMode(o),
-  setCinematic: (on) => { following = null; cinematicOn = on; autoCam = false; director.setEnabled(on); takeCamera(); },
+  setOverlay: (o: OverlayId) => { overlay.setMode(o === 'smallprey' ? 'none' : o); smallOverlay.setMode(o === 'smallprey'); },
+  setCinematic: (on) => { following = null; cinematicOn = on; autoCam = false; director.setEnabled(on); takeCamera(); lens.cinematic = on; },
   takeCamera: () => takeCamera(),
   setNarrator: (on) => { narrator.enabled = on; },
   newWorld: (s, sc) => {
     const u = new URL(location.href);
     u.searchParams.delete('challenge');
+    u.searchParams.delete('w');
     u.searchParams.set('seed', s);
     u.searchParams.set('scenario', sc);
     location.href = u.toString();
   },
   startChallenge: (id) => {
     const u = new URL(location.href);
+    u.searchParams.delete('w');
     u.searchParams.delete('seed');
     u.searchParams.delete('scenario');
     u.searchParams.set('challenge', id);
     location.href = u.toString();
   },
+  share: () => send({ type: 'getLog' }),
+  startValley: (s, params) => {
+    // a fresh valley: the setup page's param overrides ride along as ?p=key:value,... (the same keys the harness uses)
+    const u = new URL(location.href);
+    for (const k of ['challenge', 'w', 'p', 'seed', 'scenario', 'notitle', 'title']) u.searchParams.delete(k);
+    u.searchParams.set('seed', s);
+    u.searchParams.set('scenario', 'prairie');
+    const p = Object.entries(params).map(([k, v]) => `${k}:${v}`).join(',');
+    if (p) u.searchParams.set('p', p);
+    location.href = u.toString();
+  },
+  applySettings: (s, changed) => applySetting(s, changed),
+  photograph: () => {
+    // the drawing buffer is only readable in the same task as the render
+    engine.renderOnce(0);
+    return new Promise<Blob | null>((resolve) => engine.renderer.domElement.toBlob((b) => resolve(b), 'image/jpeg', 0.9));
+  },
 });
+
+// ------------------------------------------------------------------ lens: depth of field, grain, photo mode (R15)
+
+/** The species of an animal id in the latest snapshot. */
+function speciesOfId(id: number): number | null {
+  if (!pending) return null;
+  for (let k = 0; k < pending.count; k++) if (pending.ids[k] === id) return pending.agents[k * 12];
+  return null;
+}
+let selectedAnimal: number | null = null;
+const selectionRing = engine.scene.getObjectByName('selection-ring') ?? null;
+const lens = new LensController({
+  camera: engine.camera,
+  post: engine.post,
+  animalPos: (id, out) => animals.getPosition(id, out),
+  speciesOf: speciesOfId,
+  pivot: (out) => engine.cam.getFocus(out),
+  selectedId: () => selectedAnimal,
+  director: director,
+  setExposure: (m) => { engine.exposure = m; },
+});
+// ?dof=0 keeps the documentary camera's close shots sharp, ?lens=0 keeps cinematic mode free of grain and colour fringe (captures)
+lens.directorDof = q.get('dof') !== '0';
+lens.cinematicLook = q.get('lens') !== '0';
+/** Freeze time: the sim speed before the panel paused it (null when it did not). */
+let frozenSpeed: number | null = null;
+function applyFreeze(): void {
+  const want = ui.photo.isOpen && ui.photo.state.freeze;
+  if (want && frozenSpeed === null) {
+    frozenSpeed = speed;
+    speed = 0;
+    send({ type: 'speed', speed: 0 });
+  } else if (!want && frozenSpeed !== null) {
+    speed = frozenSpeed;
+    frozenSpeed = null;
+    send({ type: 'speed', speed });
+  }
+}
+ui.photo.onOpenChange((open) => {
+  lens.photoOpen = open;
+  if (open) takeCamera(); // the documentary camera hands the view over while the panel is open
+  applyFreeze();
+});
+ui.photo.onChange((s, k) => {
+  lens.state = s;
+  if (k === 'freeze') applyFreeze();
+});
+ui.photo.onSave = (f) => savePhoto(f);
+ui.photo.onFocusMode = (m) => lens.setMode(m);
+lens.onLabel = (text, sp) => ui.photo.setFocusLabel(text, sp);
+lens.state = ui.photo.state;
+
+// ------------------------------------------------------------------ share, settings, title
+
+/** Copy text to the clipboard; falls back to a hidden textarea where the async clipboard is blocked. */
+async function copyText(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    const ta = document.createElement('textarea');
+    ta.style.cssText = 'position:fixed;opacity:0;pointer-events:none';
+    ta.setAttribute('aria-hidden', 'true');
+    ta.value = text;
+    document.body.append(ta);
+    ta.select();
+    let ok = false;
+    try {
+      ok = document.execCommand('copy');
+    } catch {
+      /* nothing more to try */
+    }
+    ta.remove();
+    return ok;
+  }
+}
+
+/** The worker's reply to the share button: the intervention log, which with the seed and params is the whole valley. */
+function finishShare(log: LoggedIntervention[]): void {
+  const url = shareUrl(location.href, { seed, scenario: scenario.id, params: simParams, log });
+  (window as unknown as Record<string, unknown>).__shareUrl = url;
+  void copyText(url).then((ok) => {
+    ui.shared(ok);
+    if (ok) ui.notify('Valley link copied');
+    else {
+      // no clipboard at all: put the link in the address bar so it can be copied from there
+      try { history.replaceState(null, '', url); } catch { /* ignore */ }
+      ui.notify('Copy blocked. The link is now in the address bar.', 'Share', 5000);
+    }
+  });
+}
+
+/** What the audio module offers beyond the master volume: per-bus setters, if it has them (see the report). */
+interface BusAudio {
+  setBusVolume?: (bus: 'ambience' | 'music' | 'voice', v: number) => void;
+}
+const busAudio = audio as unknown as BusAudio;
+const hasBuses = typeof busAudio.setBusVolume === 'function';
+
+let autoCamEnabled = savedSettings.autoCamera;
+let startNotice: { text: string; label: string; ms: number } | null = null;
+function applySetting(s: Settings, changed: keyof Settings): void {
+  switch (changed) {
+    case 'quality':
+      applyQuality(s.quality);
+      if (qualityTier(s.quality) !== builtGrassTier) {
+        builtGrassTier = qualityTier(s.quality);
+        ui.notify('Grass detail changes the next time the page loads.', 'Picture', 4500);
+      }
+      break;
+    case 'master':
+      audio.setVolume(s.master);
+      break;
+    case 'ambience':
+      busAudio.setBusVolume?.('ambience', s.ambience);
+      break;
+    case 'music':
+      busAudio.setBusVolume?.('music', s.music);
+      break;
+    case 'narration':
+      busAudio.setBusVolume?.('voice', s.narration);
+      break;
+    case 'autoCamera':
+      autoCamEnabled = s.autoCamera;
+      if (!autoCamEnabled && autoCam) takeCamera();
+      break;
+    default:
+      break; // idleDim and uiScale are the interface's own
+  }
+}
 
 ui.setChallenge(challenge);
 
@@ -222,6 +479,10 @@ const overlay = new OverlayLayer(world.size, (x, z) => engine.groundHeight(x, z)
 });
 engine.scene.add(overlay.object3D);
 engine.excludeFromAO(overlay.object3D);
+// the Small prey overlay is its own mesh (render/smalloverlay.ts): choosing it hides the other overlay and the reverse
+const smallOverlay = new SmallPreyOverlay(world.size, (x, z) => engine.groundHeight(x, z), engine.uniforms, document.querySelector<HTMLElement>('.tg-overlay') ?? document.body);
+engine.scene.add(smallOverlay.object3D);
+engine.excludeFromAO(smallOverlay.object3D);
 
 // Documentary camera by default: when nobody has touched the camera for a while, the director films hunts, kills,
 // herds and vistas with the UI still up. Any camera input, fly-to, selection or follow hands control straight back.
@@ -235,8 +496,31 @@ function takeCamera(): void {
 }
 engine.cam.onUserInput = takeCamera;
 
+// the saved settings take effect (the picture quality already did, at the engine); then the title card, on a plain visit only
+{
+  const s0 = ui.settings;
+  audio.setVolume(s0.master);
+  if (hasBuses) {
+    busAudio.setBusVolume?.('ambience', s0.ambience);
+    busAudio.setBusVolume?.('music', s0.music);
+    busAudio.setBusVolume?.('voice', s0.narration);
+  } else {
+    ui.setBusesAvailable(false);
+  }
+  ui.setGuideToasts(!navigator.webdriver || q.get('title') === '1');
+  // said once the valley is on screen (a toast shown while the page is still building would be gone before anyone saw it)
+  if (shareError) startNotice = { text: 'That valley code could not be read. Starting the usual valley.', label: 'Share', ms: 6000 };
+  else if (shared?.warning) startNotice = { text: shared.warning, label: 'Share', ms: 7000 };
+  if (titleWanted(location.search, !!navigator.webdriver)) {
+    ui.showTitle();
+    // the valley is alive behind the card: the documentary camera drifts over it until somebody takes over
+    if (autoCamAllowed && autoCamEnabled) { autoCam = true; director.setEnabled(true); }
+  }
+}
+
 function select(id: number | null): void {
   if (id !== null) takeCamera();
+  selectedAnimal = id;
   animals.setSelected(id);
   send({ type: 'select', id });
   if (id === null && following !== null) { following = null; engine.cam.follow(null); }
@@ -254,6 +538,16 @@ canvas.addEventListener('pointerup', (e) => {
   const r = canvas.getBoundingClientRect();
   ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
   ray.setFromCamera(ndc, engine.camera);
+  if (ui.photo.isOpen) {
+    // photo mode: a click picks what is in focus, an animal or else the ground under the pointer
+    const a = animals.pick(ray);
+    const hit = a === null ? groundHit(ray) : null;
+    if (a !== null) lens.focusAnimal(a);
+    else if (hit) lens.focusPoint(hit.x, hit.y, hit.z);
+    else return;
+    ui.photo.setFocusMode('picked');
+    return;
+  }
   if (armed) {
     const hit = groundHit(ray);
     if (hit) {
@@ -289,7 +583,9 @@ function groundHit(r: THREE.Raycaster): THREE.Vector3 | null {
 const sun = { dir: engine.uniforms.lightDir.value, color: engine.uniforms.lightColor.value };
 let fpsAcc = 0, fpsN = 0;
 let audioFrame = 0;
-let nearbyCache = { bison: 0, wolf: 0, raven: 0, pronghorn: 0 };
+let guideAt = 0;
+let nearbyCache: Nearby = { bison: 0, wolf: 0, raven: 0, pronghorn: 0, coyote: 0 };
+const camFwdV = new THREE.Vector3();
 let tensionCache: TensionSample | null = null;
 const heardDeaths = new Map<number, number>();
 // field notes: a fresh carcass with a predator beside it is a kill; one the documentary camera caught close to its focus
@@ -314,14 +610,21 @@ engine.onFrame((dt, t) => {
   // years flying by: let the camera drift slowly instead of sitting like a security camera
   engine.cam.idleDrift = speed >= 10 ? 0.025 : 0;
   animals.update(dt, alpha, t);
-  if (autoCamAllowed && !autoCam && !cinematicOn && following === null && performance.now() - lastCamInput > 25000) {
+  smallprey.timeScale = speed > 0 ? 1 : 0;
+  engine.cam.getFocus(focusV);
+  smallprey.update(dt, engine.camera, { x: focusV.x, z: focusV.z });
+  smallOverlay.update(dt);
+  if (autoCamAllowed && autoCamEnabled && !autoCam && !cinematicOn && following === null && !ui.photo.isOpen && performance.now() - lastCamInput > 25000) {
     autoCam = true;
     director.setEnabled(true);
   }
-  director.update(dt, pending ? { count: pending.count, ids: pending.ids, agents: pending.agents, carcassCount: pending.carcassCount, carcasses: pending.carcasses, dayFrac: pending.env.dayFrac } : null);
+  // (photo mode holds the camera where the photographer put it, so the director stands down while the panel is open)
+  if (!ui.photo.isOpen) director.update(dt, pending ? { count: pending.count, ids: pending.ids, agents: pending.agents, carcassCount: pending.carcassCount, carcasses: pending.carcasses, dayFrac: pending.env.dayFrac, small: lastSmall, events: pendingEvents } : null);
   grass.viewportHeight = engine.renderer.domElement.height;
   overlay.update(dt, engine.camera, engine.renderer.domElement);
   grass.update(engine.camera, t, engine.env, sun);
+  lens.update(dt);
+  if (ui.photo.isOpen && selectionRing) selectionRing.visible = false; // a photograph never carries the selection ring
   if (pending) {
     ui.update({
       tick: pending.tick, env: pending.env, pop: pending.pop, history: pendingHistory, events: pendingEvents,
@@ -333,8 +636,15 @@ engine.onFrame((dt, t) => {
     const cp = engine.camera.position; // three x = sim x, three z = sim y
     const camHeight = Math.max(0, cp.y - engine.groundHeight(cp.x, cp.z));
     audioFrame++;
+    // the field guide: what the camera is looking at, a few times a second, while time runs at a watchable pace
+    if (!skipping && pending.speed >= 0 && pending.speed <= 10 && performance.now() - guideAt > 400) {
+      guideAt = performance.now();
+      engine.cam.getFocus(focusV);
+      ui.observeGuide(pending.agents, pending.count, focusV.x, focusV.z);
+    }
     if ((audioFrame & 3) === 0) { nearbyCache = countNearby(pending.agents, pending.count, cp.x, cp.z, 250); tensionCache = scanTension(pending.agents, pending.count, cp.x, cp.z, pending.carcasses, pending.carcassCount); }
-    audio.update(dt, { env: pending.env, camX: cp.x, camY: cp.z, camHeight, speed: pending.speed, nearby: nearbyCache, nearWater: nearWater01(world, cp.x, cp.z), tension: tensionCache });
+    engine.camera.getWorldDirection(camFwdV);
+    audio.update(dt, { env: pending.env, camX: cp.x, camY: cp.z, camHeight, speed: pending.speed, nearby: nearbyCache, nearWater: nearWater01(world, cp.x, cp.z), tension: tensionCache, camFwd: [camFwdV.x, camFwdV.y, camFwdV.z], coyotes: nearbyCache.coyote ?? 0 });
     if (!skipping) for (const ev of pendingEvents) if (ev.x !== 0 || ev.y !== 0) audio.onEvent(ev, Math.hypot(ev.x - cp.x, ev.y - cp.z, camHeight));
     if (!skipping) narrator.onEvents(pendingEvents, pending.tick);
     narrator.update({ filming: autoCam || cinematicOn, speed: pending.speed });
@@ -360,7 +670,13 @@ engine.onFrame((dt, t) => {
   }
   fpsAcc += dt; fpsN++;
   if (fpsAcc > 1) { w.__fps = Math.round(fpsN / fpsAcc); fpsAcc = 0; fpsN = 0; }
-  if (ready && t > 1.5) w.__ready = true;
+  if (ready && t > 1.5) {
+    w.__ready = true;
+    if (startNotice) {
+      ui.notify(startNotice.text, startNotice.label, startNotice.ms);
+      startNotice = null;
+    }
+  }
 });
 engine.start();
 
@@ -409,9 +725,12 @@ w.__concept = (o: { dist?: number; pitch?: number; sunOff?: number; shift?: numb
 };
 w.__select = select;
 w.__animals = animals;
+w.__smallprey = smallprey;
 w.__grass = grass;
 w.__snap = () => pending;
 w.__director = director;
+w.__lens = lens; // dev hook: the lens controller (depth of field, grain, exposure) and, with __ui.photo, the photo mode panel
+w.__lastSmall = () => lastSmall; // dev hook: the latest small-prey fields (the director's town shot reads them)
 w.__apply = (iv: Intervention) => send({ type: 'apply', iv });
 w.__audio = audio;
 w.__narrator = narrator;

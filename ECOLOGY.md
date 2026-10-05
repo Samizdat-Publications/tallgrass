@@ -28,6 +28,39 @@ Plain predator-prey models (Lotka-Volterra) oscillate until something hits zero.
 ## Evolution
 Every animal carries speed, size, sight, boldness, herding, coat and litter genes, passed on with mutation. Trait costs are physical but mild: big bodies hold more reserves and resist wolves but need more grass and run a little slower, and a fast build adds a small metabolic cost that grows with activity. In the first century bison get faster and bigger under wolf pressure; then both traits sit near their limits (0.6 to 1.6 of the founders) and herding fades, because the costs are too weak to hold them back. Wolf traits mostly drift. A real arms race that keeps running needs steeper costs (see DECISIONS.md, 04:55 Sunday). Coat darkness is kept within each species' believable range, so bison stay dark and wolves stay pale.
 
+## v6: the valley opens (default since 2026-10-05)
+The valley is no longer sealed. It is one basin in a wider prairie, and animals can leave and arrive through eight corridors on its edges.
+- **Open prairie:**
+  - Wolves arrive from outside into free den sites, and loners leave.
+  - Pronghorn leave in autumn and return in spring.
+  - A species that dies out locally can come back on its own (recolonization), which is the rescue effect a closed valley never had.
+- **Vagrant ravens:** non-breeding ravens drift in when there is carrion and leave when there isn't, on top of the resident birds capped by nest sites.
+- **Canid disease:**
+  - Distemper outbreaks start in early summer and spread through packs and at carcasses.
+  - Mange spreads by contact, costs energy in the cold and slows hunting; immigrant wolves can bring it in.
+  - Disease moves wolf numbers without touching the prey.
+- **Prey-scaled wolves:**
+  - Pack size follows the prey base.
+  - Rare prey gets a refuge (wolves stop chasing a species that has become scarce).
+  - Litters shrink in lean years.
+  - So wolves now rise and fall a year behind the bison instead of sitting at the den-site cap.
+
+**Evidence** (v6E acceptance, `review/stability/v6E-3bb97a5`, 20 worlds x 1,000 bison generations, about 1,340 valley-years):
+- every species persists in 20 of 20 and never comes near zero
+- wolf CV 0.24 (v5: about 0.1), raven CV 0.15
+- wolves follow bison by 1 year (median correlation 0.69); half-cycles of about 2.5 years
+- **Shocks** (`review/stability/v6E-3bb97a5-shocks300`):
+  - after a 70% cull, a drought or a wolf wipeout, every species persists in 20 of 20 and the bison recover every time
+  - after a wipeout, wolves come back in 75% of worlds (median 41 years)
+- **Screen E** (32 worlds x 200 years): pronghorn starvation is 49% of their deaths (v5: 71%).
+
+**Built, off by default, waiting for their own screens:**
+- jackrabbits and prairie dogs as density fields, with towns and sylvatic plague
+- coyotes, with mesopredator release when wolves are gone
+- golden eagles in winter and red-tailed hawks in summer
+- storm cells with lightning fires, about 15 natural fires per 100 years
+- a spring birth pulse, which failed its acceptance (bison 17 of 20)
+
 ## Evidence (checkpoint v5 on the 2x calendar is the default since Sunday 06:10; classic-calendar v5 and v4 kept for comparison)
 - 2x calendar (a valley year of 1,200 ticks, biology per tick unchanged): 20 worlds past 1,000 bison generations (1,220 to 1,402 valley-years): bison, wolves, ravens and pronghorn 19/20 each; bison cycle about every 10 years and recover from a crash in about 8. `review/stability/cal2-2a5caf9/`. 300-year shocks: `review/stability/cal2-2a5caf9-shocks300/` (merged with a re-run of seeds 15 to 20).
 - v5: 20 worlds past 1,000 bison generations (720 to 750 years): bison, wolves and ravens 20/20, pronghorn 18/20. `review/stability/v5P-4875c69/`.

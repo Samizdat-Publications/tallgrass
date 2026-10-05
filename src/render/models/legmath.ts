@@ -14,7 +14,7 @@
 //
 // Units: model space metres (before the instance scale), x forward, y up.
 import type { AnimParams } from './types';
-import { IK_CAP, gallopDuty, plantedStride } from './types';
+import { IK_CAP, gallopDuty, plantedStride, stotStride } from './types';
 
 export const TAU = Math.PI * 2;
 /** Swing lift height as a share of the leg length per radian of the species' knee flexion parameter (kneeW/T/G). */
@@ -106,17 +106,25 @@ export function gaitWeights(p: AnimParams, spd: number): { wW: number; wT: numbe
   return { wW: sstep(0.08, 0.4, spd) * (1 - s1), wT: s1 * (1 - wG), wG, s1 };
 }
 
-export function gaitMix(p: AnimParams, spd: number): GaitMix {
+export function gaitMix(p: AnimParams, spd: number, stot = 0): GaitMix {
   const { wW, wT, wG } = gaitWeights(p, spd);
   const sum = wW + wT + wG;
   const n: [number, number, number] = sum < 1e-3 ? [1, 0, 0] : [wW / sum, wT / sum, wG / sum];
   const L = legLength(p);
   const dutyG = gallopDuty(p, spd);
-  const beta = n[0] * p.dutyW + n[1] * p.dutyT + n[2] * dutyG;
-  const stride = n[0] * plantedStride(p, 0) + n[1] * plantedStride(p, 1) + n[2] * plantedStride(p, 2, spd);
-  const lift = LIFT_K * L * (n[0] * p.kneeW + n[1] * p.kneeT + n[2] * p.kneeG);
+  let beta = n[0] * p.dutyW + n[1] * p.dutyT + n[2] * dutyG;
+  let stride = n[0] * plantedStride(p, 0) + n[1] * plantedStride(p, 1) + n[2] * plantedStride(p, 2, spd);
+  let lift = LIFT_K * L * (n[0] * p.kneeW + n[1] * p.kneeT + n[2] * p.kneeG);
   const flex = L * (n[0] * LEG_FLEX[0] + n[1] * LEG_FLEX[1] + n[2] * LEG_FLEX[2]) * Math.min(sum, 1);
-  const off = [0, 1, 2, 3].map((i) => n[0] * p.offW[i] + n[1] * p.offT[i] + n[2] * p.offG[i]) as GaitMix['off'];
+  let off = [0, 1, 2, 3].map((i) => n[0] * p.offW[i] + n[1] * p.offT[i] + n[2] * p.offG[i]) as GaitMix['off'];
+  if (stot > 0 && p.stot) {
+    // R6 stotting: the foot path of the bounds (GLSL: the STOT block after the gait blend). One path, blended by the weight.
+    const st = p.stot;
+    beta = mix(beta, st.duty, stot);
+    stride = mix(stride, stotStride(p), stot);
+    lift = mix(lift, LIFT_K * L * st.knee, stot);
+    off = off.map((o, i) => mix(o, st.off[i], stot)) as GaitMix['off'];
+  }
   return { w: [wW, wT, wG], sum, n, amt: Math.min(sum, 1), beta, stride, lift, flex, off };
 }
 
@@ -124,14 +132,14 @@ export function gaitMix(p: AnimParams, spd: number): GaitMix {
  * Metres of ground per leg cycle at a gait pace (the phase advances by distance / this, see AnimalLayer.update). The same number
  * as gaitMix(p, spd).stride, without allocating (it runs for every animal every frame).
  */
-export function gaitStride(p: AnimParams, spd: number): number {
+export function gaitStride(p: AnimParams, spd: number, stot = 0): number {
   const s1 = sstep(p.trot0, p.trot1, spd);
   const wG = sstep(p.gal0, p.gal1, spd);
   const wT = s1 * (1 - wG);
   const wW = sstep(0.08, 0.4, spd) * (1 - s1);
   const sum = wW + wT + wG;
-  if (sum < 1e-3) return plantedStride(p, 0);
-  return (wW * plantedStride(p, 0) + wT * plantedStride(p, 1) + wG * plantedStride(p, 2, spd)) / sum;
+  const base = sum < 1e-3 ? plantedStride(p, 0) : (wW * plantedStride(p, 0) + wT * plantedStride(p, 1) + wG * plantedStride(p, 2, spd)) / sum;
+  return stot > 0 && p.stot ? mix(base, stotStride(p), stot) : base;
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -224,6 +232,8 @@ export interface BodyMotion {
   /** Vertical offset of the body (bob + terrain offset, m) and its pitch (rad) about (0, comY). */
   yoff: number;
   pitch: number;
+  /** R6 stotting weight 0..1 (the whole-body cues of the gallop give way to the bounds' own bob and pitch). */
+  stot: number;
   /** Distance cue strength 0..1 (smoothstep(20, 110, camera distance)), the body length used to size the cues, and gait weights. */
   farK: number;
   bl: number;
@@ -235,12 +245,30 @@ export interface BodyMotion {
  * Bob, pitch and sink of the body for a gait (the faded weights gm.w, GLSL: bob, pitch and flex in tgAnimate), plus the vertical
  * body offset `dy` from the terrain.
  */
-export function bodyMotion(p: AnimParams, gm: GaitMix, ph: number, farK: number, dy: number): BodyMotion {
+export function bodyMotion(p: AnimParams, gm: GaitMix, ph: number, farK: number, dy: number, stot = 0): BodyMotion {
   const w = gm.w;
   const cyc = TAU * ph;
-  const bob = w[0] * p.bobW * Math.cos(2 * cyc) + w[1] * p.bobT * Math.cos(2 * cyc) + w[2] * p.bobG * Math.cos(cyc - 0.5);
-  const pitch = w[1] * p.pitchT * Math.sin(2 * cyc + 0.5) + w[2] * p.pitchG * Math.sin(cyc + 1.0);
-  return { yoff: bob - gm.flex + dy, pitch, farK, bl: p.boostLen, w, cyc };
+  let bob = w[0] * p.bobW * Math.cos(2 * cyc) + w[1] * p.bobT * Math.cos(2 * cyc) + w[2] * p.bobG * Math.cos(cyc - 0.5);
+  let pitch = w[1] * p.pitchT * Math.sin(2 * cyc + 0.5) + w[2] * p.pitchG * Math.sin(cyc + 1.0);
+  const st = p.stot;
+  if (stot > 0 && st) {
+    // R6 stotting (GLSL: the STOT block after bob and pitch): in the stance the body sinks and pitches up from landing to take-off, in
+    // the air it rises on a sine arc (the feet tuck up with it, see gaitMix) and pitches from nose up to nose down
+    const u = ph - Math.floor(ph);
+    let sb: number, sp: number;
+    if (u < st.duty) {
+      const a = u / st.duty;
+      sb = -st.sink * Math.sin(Math.PI * a);
+      sp = st.pitch * (2 * a - 1);
+    } else {
+      const s = (u - st.duty) / (1 - st.duty);
+      sb = st.bob * Math.sin(Math.PI * s);
+      sp = st.pitch * Math.cos(Math.PI * s);
+    }
+    bob = mix(bob, sb, stot);
+    pitch = mix(pitch, sp, stot);
+  }
+  return { yoff: bob - gm.flex + dy, pitch, stot, farK, bl: p.boostLen, w, cyc };
 }
 
 /** Forward body transform of a model-space point (x, y, z). */
@@ -249,7 +277,8 @@ export function bodyFwd(p: AnimParams, m: BodyMotion, pt: [number, number, numbe
   y += m.yoff;
   [x, y] = rotZ(x, y, 0, p.comY, m.pitch);
   if (m.farK > 0.001) {
-    const [wW, wT, wG] = m.w;
+    const k1 = 1 - m.stot; // (the bounds of a stot have their own rise and fall)
+    const wW = m.w[0] * k1, wT = m.w[1] * k1, wG = m.w[2] * k1;
     const c = m.cyc, bl = m.bl;
     const hop = wW * 0.03 * Math.cos(2 * c) + wT * 0.08 * Math.cos(2 * c) + wG * 0.16 * Math.cos(c - 0.5);
     const xn = clamp(x / (bl * 0.55), -1.3, 1.3);
@@ -364,4 +393,39 @@ export function stanceBodyDy(p: AnimParams, rig: LegRig, gm: GaitMix, ph: number
     n++;
   }
   return n ? sum / n : 0;
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Time-lapse gait (render only; the foot-lock rig is untouched at and below TL_LO x)
+//
+// At 10x and up the body covers ten times the ground per frame, so a planted foot cannot stand still: the cadence cap (12 Hz) is
+// hit, the legs alias at video frame rates and read as detached from the motion ("hockey pucks"). From TL_LO to TL_HI x the gait
+// is blended toward a time-lapse look: the pose follows the APPARENT speed (an animal covering 10 m/s is galloping, whatever its
+// own pace), the stride is the long flying-gallop stride, and the cadence is a readable bound rate (timelapseHz) instead of a
+// distance lock. The body also bounds (uTL in models/shader.ts) and the animal layer drops dust where it lands.
+
+export const TL_LO = 3;
+export const TL_HI = 8;
+/** 0 at and below TL_LO x sim speed, 1 at and above TL_HI x. */
+export const timelapseK = (ts: number): number => sstep(TL_LO, TL_HI, ts);
+/** Share of the species' natural flat-out gallop cadence that the time-lapse bound runs at (slower than the real one reads clearer). */
+export const TL_CADENCE_SHARE = 0.75;
+
+/**
+ * Leg cycles per second of the time-lapse bound for a quadruped: a share of its natural cadence at the top of its gallop band
+ * (wolf about 3.7 Hz, bison about 2.2 Hz, cougar 4.1 Hz), so a heavy animal still bounds slower than a light one.
+ */
+export function timelapseHz(p: AnimParams): number {
+  const top = Math.max(p.gal1, 1);
+  return clamp((TL_CADENCE_SHARE * top) / gaitStride(p, top), 1.2, 4.5);
+}
+
+/**
+ * The pace the gait pose is drawn at under time-lapse: the larger of the animal's own gait pace and its apparent ground speed,
+ * capped where the gallop stride stops growing (fast1, the flying gallop), blended in by `tl`.
+ */
+export function timelapseGaitSpd(p: AnimParams, gaitSpd: number, apparent: number, tl: number): number {
+  if (tl <= 0) return gaitSpd;
+  const cap = p.fast1 ?? p.gal1 * 2.2;
+  return gaitSpd + (Math.max(gaitSpd, Math.min(apparent * 0.9, cap)) - gaitSpd) * tl;
 }
