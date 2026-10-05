@@ -2,7 +2,7 @@
 
 *(Updated 11:57 Sunday. I keep working until the deadline in `.claude/hooks/run_until.txt` (Sunday 12:00); this file is refreshed at every milestone.)*
 
-## v2 alpha (M1, deployed 2026-10-05 00:55)
+## v2 alpha (M1, deployed 2026-10-05 00:55; redeployed 02:40 with the v6 ecology and coyote render)
 **Play it:** https://tallgrass.stewartgregerson.workers.dev. The live check passed at 00:56: no errors, 60 fps at 1600x900. The title card shows on first load; click **Watch**. Everything below the v2 sections is the v1 report.
 
 **Look at first:**
@@ -26,7 +26,8 @@
   - wolves follow bison by 1 year (correlation 0.69)
 - **v6E shock suite** (cull 70%, drought, wolf wipeout over 300 years): every species persists in all 20 worlds, and bison recover every time. After a wipeout, wolves come back in 75% of worlds.
 - **v6G** (spring-only births) failed its acceptance: bison lasted in only 17 of 20 worlds. So **E is v6**.
-- The live game still runs v5 ecology until Track S flips the defaults.
+- **v6 is now the default world** (live since 02:40): open prairie, vagrant ravens, distemper and mange, prey-scaled wolves. New golden hashes: 79f7ab0f, ef09535f, 032d866a. The sealed valley is a scenario now.
+- **Coyotes** (with mousing leaps and dusk howls), raptors, small prey and storms are built but stay off by default until their own screens pass. Try them through New valley.
 
 **Reviews:**
 - Round 13 blind critic: visual 7, life and motion 6.
