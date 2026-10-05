@@ -19,7 +19,7 @@
 import * as THREE from 'three';
 import type { World } from '../sim/world';
 import type { EnvState } from '../sim/types';
-import { COPPER_KEYS, CURE_KEYS, SEED_KEYS, SEASON_GLSL, keyCurve, smooth01, winterK } from './season';
+import { COPPER_KEYS, CURE_KEYS, SEED_KEYS, SEASON_GLSL, SNOW_GLSL, keyCurve, smooth01, winterK } from './season';
 import { CLOUD_SHADOW_GLSL, POND_GLSL, cloudShadowUniforms, makePondUniform, type SharedUniforms } from './common';
 import { STORM_GUST_GLSL, stormGustUniform } from './storms';
 
@@ -275,6 +275,7 @@ uniform float uWindGain;
 uniform float uCopper;
 uniform float uSnow;
 ${STORM_GUST_GLSL}
+uniform float uFrostG;
 
 varying vec2 vUv;
 varying vec3 vN;
@@ -288,6 +289,7 @@ varying vec4 vP3;
 varying float vRip;
 varying vec3 vAsp;
 varying vec4 vSd;   // x copper-red amount of this blade, y half width (m) of a seed head, z its length (m)
+varying vec4 vSn;   // x snow cover at the root (0..1), y dawn rime on this blade (0..1), z fraction of the blade buried (the visible part is the top)
 uniform vec3 uSunDir;
 uniform float uMoon;
 
@@ -299,6 +301,7 @@ uint pcg(uint v) {
 float u01(uint h) { return float(h) * (1.0 / 4294967296.0); }
 
 ${SEASON_GLSL}
+${SNOW_GLSL}
 ${POND_GLSL}
 ${CLOUD_SHADOW_GLSL}
 // same hash and value noise as the ground shader (common.ts NOISE_GLSL), for the riparian belt's width
@@ -341,7 +344,7 @@ vec4 vegAt(vec2 p) {
 void cullBlade() {
   gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
   vUv = vec2(0.0); vN = vec3(0.0, 1.0, 0.0); vNg = vec3(0.0, 1.0, 0.0); vWP = vec3(0.0);
-  vP0 = vec4(0.0); vP1 = vec4(0.0); vP2 = vec4(0.0); vP3 = vec4(0.0); vTS = 1.0; vRip = 0.0; vSd = vec4(0.0);
+  vP0 = vec4(0.0); vP1 = vec4(0.0); vP2 = vec4(0.0); vP3 = vec4(0.0); vTS = 1.0; vRip = 0.0; vSd = vec4(0.0); vSn = vec4(0.0);
 }
 
 void main() {
@@ -460,6 +463,7 @@ void main() {
   float seedFlag = 0.0;
   float seedHead = 0.0;   // seed blades only: head length as a fraction of the blade
   float seedHW = 0.0;     // and the full width of its quad (m)
+  float headLen = 0.0;    // seed blades: head length in metres (fixed size)
 #if LEVEL == 0
   // (the old gate, bio above 0.45, never opened: the vegetation texture's biomass tops out near 0.4 in this sim)
   seedFlag = step(rB, uSeedFrac * 0.17 * smoothstep(0.1, 0.28, bio)) * (1.0 - burn) * step(fType, 0.5);
@@ -469,11 +473,48 @@ void main() {
     // the flowering culms stand well above the leaf canopy; the head has a fixed size in metres (a turkey foot is about 9 cm across)
     H *= 1.3 + 0.35 * rA;
     float sz = 0.6 + 0.7 * fract(rF * 13.1 + rB * 5.7);   // heads vary 0.6x to 1.3x
-    seedHead = min((seedFlag < 1.5 ? 0.1 : 0.2) * sz / H, 0.45);
+    headLen = (seedFlag < 1.5 ? 0.1 : 0.2) * sz;
+    seedHead = min(headLen / H, 0.45);
     seedHW = (seedFlag < 1.5 ? 0.095 : 0.17) * sz;
   }
 #endif
   if (fType > 0.5) H *= 1.08 + 0.22 * rD;
+
+  // ---- snow burial. Where snow lies (the shared tgSnowCover threshold, from a potential built out of the same terms the ground uses:
+  // flat ground, drifts, hollows, north slopes and broad patches settle it; ridges, steep faces, trails and cover shed it) the blades
+  // stand in it: a depth in metres grows with the snow amount and the cover, only blades taller than it show, and what shows is the top
+  // of the blade (vBur is the buried fraction), pressed over by the weight. Under deep snow just the tallest culms poke out, bent.
+  float snowS = 0.0, snowPress = 0.0, vBur = 0.0, snowPoke = 0.0;
+  if (uSnow > 0.04) {
+    vec3 Ng0 = normalize(vec3(-(st0.r * 2.0 - 1.0), 1.0, -(st0.g * 2.0 - 1.0)));
+    float slopeG0 = sqrt(max(1.0 - Ng0.y * Ng0.y, 0.0)) / max(Ng0.y, 0.05);
+    float aspectS = clamp(Ng0.z * 3.5, -1.0, 1.0) * smoothstep(0.03, 0.2, slopeG0);   // low sun toward -z: north faces hold snow
+    float flatS = smoothstep(0.58, 0.93, Ng0.y);
+    float hr = clamp((moist - 0.5) * 3.0, -1.0, 1.0);                                   // wet hollows catch it, dry convex ground sheds it
+    float driftS = 0.6 * texture(uBig, pn + 0.19).r + 0.4 * patch1;
+    float patchyS = (texture(uBig, pn * 0.35 + 0.61).g - 0.5) * 0.55 + (texture(uBig, pn + 0.43).r - 0.5) * 0.4;
+    float edgeS = ((tusC - 0.5) * 0.5 + (rF - 0.5) * 0.36) * (1.0 - 0.5 * smoothstep(60.0, 400.0, dist));
+    float potS = flatS * 0.62 + driftS * 0.5 + 0.28 * max(hr, 0.0) + 0.34 * min(hr, 0.0) + 0.22 * aspectS + patchyS
+               - trodK * 0.5 - 0.4 * cover + 0.1 + edgeS;
+    snowS = tgSnowCover(potS, uSnow);
+    float sn1 = clamp(uSnow, 0.0, 1.0);
+    float depthM = snowS * (0.1 + 0.9 * pow(sn1, 0.8)) * 0.6 * uMaxH * (0.75 + 0.5 * u01(pcg(h6 + 9u)));
+    // a few percent of the culms stand rooted high on a tussock or in a lee and stay clear of the drift: they poke out, bent over and tan
+    snowPoke = step(0.945, u01(pcg(h6 + 10u))) * snowS;
+    depthM *= 1.0 - 0.75 * snowPoke;
+    float Hv = H - depthM;
+    float minVis = 0.045;
+#if LEVEL == 0
+    if (seedFlag > 0.5) minVis = max(minVis, headLen * 1.4);
+#endif
+    if (depthM > 0.0 && Hv < minVis) { cullBlade(); return; }
+    vBur = depthM / max(H, 1e-3);
+    H = max(Hv, 0.0);
+    snowPress = snowS * smoothstep(0.05, 0.5, sn1);
+#if LEVEL == 0
+    if (seedFlag > 0.5) seedHead = min(headLen / max(H, 1e-3), 0.45);
+#endif
+  }
   float wScale = min(pow(max(1.0, uDens.x / max(dens, 1e-3)), 0.8), 36.0);
   float Wd = uBladeW * (0.75 + 0.5 * rC) * wScale;
   Wd = max(Wd, dist * uPixW);
@@ -487,10 +528,12 @@ void main() {
   float stormW = tgStormWind(p, wd);  // R4: stronger gusts under and ahead of storm cells
   gust = clamp(gust + 0.9 * stormW, 0.0, 1.0);
 
-  float ws = uWindStr * uWindGain * (1.0 + 0.9 * stormW);
+  float ws = uWindStr * uWindGain * (1.0 + 0.9 * stormW) * (1.0 - 0.5 * snowPress);   // storm gusts; snow-laden blades barely sway
   float wsc = clamp(ws, 0.0, 1.0);
   float stiff = 0.75 + 0.5 * rD;
   float restLean = (0.05 + 0.3 * rE * rE) * mix(1.0, 0.35, smoothstep(30.0, 100.0, dist));
+  // the weight of snow bows the blades that stand in it over, more the deeper they are buried
+  restLean += snowPress * (0.3 + 0.55 * rE) * (0.4 + 0.6 * smoothstep(0.0, 0.8, vBur) + 0.9 * snowPoke) * mix(1.0, 0.6, smoothstep(30.0, 100.0, dist));
   // resting lean follows the wandering flow angle, much more so when the air is calm
   float yaw = windAng + flowAng * 0.55 * (1.0 - 0.6 * wsc) + (rF - 0.5) * 3.14159265 * (2.0 - 1.5 * wsc);
   vec2 restDir = vec2(cos(yaw), sin(yaw));
@@ -539,7 +582,8 @@ void main() {
 #endif
   vec3 Wf = vec3(-dir.y, 0.0, dir.x);
 
-  float prof = pow(clamp((1.0 - vg) * 1.8, 0.0, 1.0), 0.75);
+  // (a blade standing in snow shows only its top part, so its width profile starts partway down the full blade's taper)
+  float prof = pow(clamp((1.0 - (vBur + vg * (1.0 - vBur))) * 1.8, 0.0, 1.0), 0.75);
 #if LEVEL == 0
   if (seedFlag > 0.5) prof = 0.3;
 #endif
@@ -611,6 +655,20 @@ void main() {
   vP2 = vec4(rA, dist, swath, patch1);
   vP3 = vec4(fType, fTone, tusC, ridge);
   vSd = vec4(0.0);
+  float rime = 0.0;
+  if (uWinterK > 0.01) {
+    // winter grass that is not under snow is cured tan: patches of bright straw, grey-brown and russet (16 to 64 m, then tussock scale)
+    // instead of one blue-grey, strongest on dry blades and fading out toward the far field, where the ground carries it. Folded into
+    // the aspect tint, which the pixel stage already multiplies in.
+    float wvA = smoothstep(0.3, 0.7, patch1);
+    float wvB = smoothstep(0.38, 0.72, tusC + 0.35 * (swath - 0.5));
+    vec3 wTone = mix(mix(vec3(0.92, 0.8, 0.66), vec3(1.34, 1.1, 0.62), wvA), vec3(1.04, 0.76, 0.5), wvB * 0.65);
+    wTone *= vec3(1.04, 1.0, 0.9);
+    vAsp *= mix(vec3(1.0), wTone, uWinterK * dry * (1.0 - rip) * (1.0 - 0.6 * smoothstep(120.0, 400.0, dist)));
+    // rime at dawn: shaded ground and patches only, never a blanket (uFrostG is zero from mid morning)
+    rime = uFrostG * (0.25 + 0.75 * (1.0 - clamp(vTS, 0.0, 1.0))) * smoothstep(0.2, 0.7, rD + 0.3 * (patch1 - 0.5)) * (1.0 - snowS);
+  }
+  vSn = vec4(snowS, rime, vBur, 0.0);
 #if LEVEL < 2
   {
     // copper-red bluestem: a share of the blades (stands of it, all the culms that carry a turkey foot) flush copper through autumn.
@@ -688,6 +746,7 @@ varying vec4 vP3;
 varying float vRip;
 varying vec3 vAsp;
 varying vec4 vSd;
+varying vec4 vSn;
 uniform float uDrought;
 uniform float uWinterK;
 ${SEASON_GLSL}
@@ -785,7 +844,9 @@ void main() {
   // seen from above or from afar the dark blade bases are hidden under the canopy: lift them, or the sparse
   // thinned blades show up as dark flecks on the ground
   float baseLift = max(max(smoothstep(0.3, 0.85, V.y), smoothstep(30.0, 90.0, vP2.y)), 0.5 * uMoon);
-  float vc = mix(v, 0.55 + 0.45 * v, baseLift);
+  // a blade standing in snow shows only its top: its colour gradient and base shading start partway up the full blade
+  float vFull = vSn.z + v * (1.0 - vSn.z);
+  float vc = mix(vFull, 0.55 + 0.45 * vFull, baseLift);
   vec3 aGreen = grad3(uGreenB, uGreenM, uGreenT, vc);
   vec3 aDry = grad3(uDryB, uDryM, uDryT, vc);
   vec3 albedo = mix(aGreen, aDry, dry);
@@ -882,11 +943,19 @@ void main() {
   albedo = mix(albedo, uAsh, burn);
   // moonlit grass stays grass: a little darker and cooler toward teal, never silver
   albedo *= mix(vec3(1.0), vec3(0.56, 0.76, 0.82), uMoon);
-  // snow on the blades: starts at the tips and in the patches where it settles first, so the field greys and whitens gradually
-  {
-    float snowPatch = 0.3 + 0.7 * vP2.w;
-    float snowK = clamp(uSnow * 1.35 - 0.1 - (1.0 - snowPatch) * 0.55, 0.0, 1.0) * (0.3 + 0.7 * smoothstep(0.2, 1.0, v)) * (1.0 - burn);
-    albedo = mix(albedo, vec3(0.8, 0.81, 0.85), snowK * 0.78);
+  // snow on the blades, where the shared cover function says it lies (vSn.x, the same one the buried height comes from): a cap on
+  // the upper surfaces that fades down the blade (the tip, and the faces of blades bent over to the sky), plus packed snow round
+  // the foot of a buried blade, so a blade reads as grass standing in snow and never as a white spike. Everything per blade (the
+  // cover, the frost, the buried share) comes from the vertex stage, so the snow-free pixel pays one test.
+  if (vSn.x + vSn.y > 0.003) {
+    float sn1 = clamp(uSnow, 0.0, 1.0);
+    float capTip = smoothstep(0.86 - 0.36 * sn1, 1.0, v);
+    float capUp = clamp((Nf.y - 0.1) * 1.54, 0.0, 1.0) * clamp((v - 0.1) * 1.43, 0.0, 1.0);
+    float footK = (1.0 - clamp(v * 3.4, 0.0, 1.0)) * clamp(vSn.z * 5.5, 0.0, 1.0);
+    float snowK = vSn.x * clamp(max(max(capTip * 0.8, capUp * 0.9) * (0.45 + 0.55 * sn1), footK * (0.5 + 0.5 * sn1)), 0.0, 1.0) * (1.0 - burn);
+    albedo = mix(albedo, vec3(0.86, 0.88, 0.93), snowK * 0.92);
+    // rime at dawn: a thin frost on the upper blade (vSn.y: shaded ground, patchy, zero from mid morning), never a blanket
+    albedo = mix(albedo, albedo * vec3(0.9, 0.97, 1.1) + vec3(0.12, 0.14, 0.17), clamp(vSn.y * clamp((v - 0.35) * 1.54, 0.0, 1.0) * 0.7, 0.0, 0.5));
   }
 
   // ---- lighting
@@ -1020,6 +1089,7 @@ export class GrassField {
   private frameNo = 0;
   private snowU: { value: number } | null = null;
   private droughtU: { value: number } | null = null;
+  private frostU: { value: number } | null = null;
   private snowTry = 0;
   private trailU: { value: THREE.Texture | null } | null = null;
   private vegVersion = -1;
@@ -1092,6 +1162,7 @@ export class GrassField {
       uSat: { value: 1 },
       uBounce: { value: 0.07 },
       uSnow: { value: 0 },
+      uFrostG: { value: 0 },
       uSpecK: { value: 1 },
       uMoon: { value: 0 },
       uGreenB: { value: new THREE.Color() },
@@ -1355,13 +1426,17 @@ export class GrassField {
     if (!this.snowU && (this.snowTry++ & 15) === 0) {
       let root: THREE.Object3D = this.object3D;
       while (root.parent) root = root.parent;
-      const tu = root.userData?.tgUniforms as { snow?: { value: number }; drought?: { value: number }; trailTex?: { value: THREE.Texture | null } } | undefined;
+      const tu = root.userData?.tgUniforms as { snow?: { value: number }; drought?: { value: number }; frost?: { value: number }; trailTex?: { value: THREE.Texture | null } } | undefined;
       if (tu?.snow) this.snowU = tu.snow;
+      if (tu?.frost) this.frostU = tu.frost;
       if (tu?.drought) this.droughtU = tu.drought;
       if (tu?.trailTex) this.trailU = tu.trailTex;
     }
     u.uTrail.value = this.trailU?.value ?? this.blackTex;
     u.uSnow.value = this.snowU?.value ?? 0;
+    // rime on the blades only at dawn (dayFrac below about 0.3): the engine's frost also lingers through the morning and returns at dusk,
+    // which would read as a frosted field all day
+    u.uFrostG.value = (this.frostU?.value ?? 0) * (1 - smooth01((env.dayFrac - 0.26) / 0.06));
     u.uDrought.value = this.droughtU?.value ?? 0;
     // grass blades under moonlight (blue key light) must not sparkle like static: damp the specular sheen there
     const moon = Math.max(0, Math.min(1, (sun.color.b / Math.max(sun.color.r, 1e-3) - 0.95) * 3));
