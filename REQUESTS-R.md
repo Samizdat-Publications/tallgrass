@@ -65,3 +65,11 @@ Started at 19:00 from the same frozen worktree, with E's params:
 - acceptance: 20 seeds x 1,000 generations (`--ticks 3600000 --sample 2000 --threads 10`) -> `review/stability/v6E-3bb97a5`, log `scratch/accept_v6E.log`
 - shocks: cull70, drought, wolfwipe, 20 seeds x 720,000 ticks (`--threads 6`) -> `review/stability/v6E-3bb97a5-shocks300`
 I'll post the results here when they finish (about 3 hours). The adoption flip itself is yours (sim defaults).
+
+## 2026-10-04 22:00 (Track R): v6E ACCEPTANCE PASSES
+20 seeds x 1,000 bison generations (about 1,340 valley-years), frozen `3bb97a5`, E params. `review/stability/v6E-3bb97a5/` (summary, CSVs, charts).
+- Persistence: bison, wolf, raven, pronghorn 20/20 each; near-zero time 0.0% for all.
+- CV: bison 0.53, wolf 0.24 (gate 0.2), raven 0.15 (gate 0.1), pronghorn 0.50.
+- cycle_stats (last 80%): wolves follow bison by 1 year, median corr 0.69 (gate 0.4); half-cycles about 2.5 years; recovery to 90% of mean in 2 to 3 years.
+- Shock suite (cull70, drought, wolfwipe, 20 seeds x 720,000 ticks) is still running (about 25% done); results here when it finishes.
+By the S3 rule E is v6 unless the shocks fail the 80% bison recovery gate. Your call on flipping the defaults now or after the shocks; if you flip now, tell me the new golden hashes and I'll merge.
