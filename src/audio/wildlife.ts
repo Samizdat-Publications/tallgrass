@@ -111,3 +111,33 @@ export function larkSpot(camX: number, camZ: number, a: number, r: number): { x:
   const d = lerp(20, 70, clamp01(r));
   return { x: camX + Math.cos(a) * d, z: camZ + Math.sin(a) * d };
 }
+
+// ---- R5 raptors: the red-tailed hawk's scream and the golden eagle's call. The animal layer says when a raptor calls (now and then while one is in
+// earshot, and a scream as a stoop begins); this picks the clip, how loud, and how it is pitched.
+
+/** The raptor clips, by the names audio.ts loads them under (file names without .mp3, in public/audio). */
+export type RaptorClip = 'hawkScream1' | 'hawkScream2' | 'eagleCall';
+export const RAPTOR_FILES: Record<RaptorClip, string> = {
+  hawkScream1: 'hawk_scream_1',
+  hawkScream2: 'hawk_scream_2',
+  eagleCall: 'eagle_call_2',
+};
+
+/** Least real seconds between two raptor sounds (a flock of them, or a stoop in a run of stoops, must not machine-gun the same scream). */
+export const RAPTOR_GAP = 3.5;
+
+/**
+ * One raptor sound. `species` is 'hawk' or 'eagle'; `scream` is the cry of a stoop beginning (sharper, a little higher and louder than the idle calls).
+ * u1 and u2 are uniform [0, 1) samples. The eagle's clip is played lower than it was recorded: an eagle is a bigger bird and its voice should not be the
+ * hawk's. The returned `gain` is 0..1 before the master bus.
+ */
+export function raptorCall(species: 'hawk' | 'eagle', scream: boolean, u1: number, u2: number): { clip: RaptorClip; gain: number; rate: number } {
+  if (species === 'hawk') {
+    return {
+      clip: u1 < 0.5 ? 'hawkScream1' : 'hawkScream2',
+      gain: scream ? 0.95 : 0.7,
+      rate: scream ? 1.1 + 0.1 * u2 : 0.94 + 0.14 * u2,
+    };
+  }
+  return { clip: 'eagleCall', gain: scream ? 0.9 : 0.62, rate: scream ? 0.92 + 0.08 * u2 : 0.78 + 0.1 * u2 };
+}

@@ -9,6 +9,7 @@
 //            for a carcass: how far it has fallen over, 0 standing .. 1 down)
 //   A carcass (aGait.y < 0) carries its flank dent in the slots a body that is down does not use: the pull strength 0..1 in aFx.x,
 //   and the point it pulls from, in the body frame (m), in aFx.y (along the body) and aGait.w (across it).
+//   R5 raptors (RAPTOR) reuse two slots a bird does not need: aGait.w is how upright it sits on its perch (0..1), aFx.w the stoop (0..1).
 //   aFx2  = (only for hunters and birds, #define FX2) a predator: (hold on the prey 0..1, feeding cycle phase 0..1, leap 0..1: the
 //            spring onto the prey, which falls away as the hold takes over); a raven: (hop
 //            0..1 or -1, walk phase 0..1 or -1, seconds into a takeoff or -1, flutter 0..1)
@@ -21,6 +22,24 @@ import { IK_FAR, IK_NEAR, LEG_FLEX, LIFT_K, legLength, legRigOf } from './legmat
 const f = (x: number): string => (Number.isInteger(x) ? x.toFixed(1) : String(+x.toFixed(6)));
 const v4 = (a: number[]): string => `vec4(${a.map(f).join(',')})`;
 const v2 = (a: number[]): string => `vec2(${f(a[0])},${f(a[1])})`;
+
+/** The R5 raptor constants as defines (`RAPTOR 0` and nothing else for every other species, so their shaders are unchanged). */
+function raptorDefines(p: AnimParams): string[] {
+  const r = p.raptor;
+  if (p.kind !== 2 || !r) return ['#define RAPTOR 0'];
+  return [
+    '#define RAPTOR 1',
+    `#define FINGERS ${Math.min(7, r.fingers)}`,
+    `#define HAND_ROOT vec3(${r.handRoot.map(f).join(',')})`,
+    `#define FINGER_SPREAD ${f(r.spread)}`, `#define FINGER_CURL ${f(r.curl)}`,
+    `#define DIH_IN ${f(r.dihIn)}`, `#define DIH_OUT ${f(r.dihOut)}`, `#define FLAP_IN ${f(r.flapIn)}`, `#define FLAP_OUT ${f(r.flapOut)}`,
+    `#define SWEEP_FAST ${f(r.sweepFast)}`,
+    `#define STOOP_DIH ${f(r.stoopDih)}`, `#define STOOP_SWEEP ${f(r.stoopSweep)}`, `#define STOOP_CMP ${f(r.stoopCmp)}`,
+    `#define FOLD_CMP ${f(r.foldCmp)}`, `#define FOLD_DROOP ${f(r.foldDroop)}`,
+    `#define PERCH_PITCH ${f(r.perchPitch)}`, `#define PERCH_HIP vec2(${r.perchHip.map(f).join(',')})`,
+    `#define TAIL_FAN ${f(r.tailFan)}`,
+  ];
+}
 
 function defines(p: AnimParams, far: ModelDef['far'] | undefined, geometry: ModelDef['geometry']): string {
   // rest-pose bones of the front and hind leg (read from the mesh): the leg solver in tgSolveLeg aims the foot point
@@ -54,6 +73,7 @@ function defines(p: AnimParams, far: ModelDef['far'] | undefined, geometry: Mode
     `#define CURL ${f(p.curl ?? 0)}`, `#define CURL_ANG ${f(p.curlAng ?? 1.3)}`, `#define CURL_X0 ${f(p.curlX ?? 0.1)}`, `#define CURL_LEN ${f(p.curlLen ?? 1.1)}`,
     `#define LEG_CALM ${f(far?.calm ?? 0)}`, `#define WIDEN ${f(far?.widen ?? 0)}`,
     `#define FLAP_HZ ${f(p.flapHz)}`,
+    ...raptorDefines(p),
     `#define MIN_PX ${f(p.minPx)}`,
     `#define FAR_NEAR ${f(far?.d0 ?? 140)}`, `#define FAR_FAR ${f(far?.d1 ?? 400)}`,
     `#define ANIM_NEAR 20.0`, `#define ANIM_FAR 110.0`,
@@ -235,9 +255,16 @@ void tgBodyFwd(inout vec3 p, inout vec3 n) {
 // (4 to 9 s per cycle, 22 to 44% of it flapping, its own beat rate), and it flaps steadily while climbing (effort) or near the
 // ground (low). So a flock is never in step and no bird beats at a constant rate.
 float tgBirdBeat(float t, float seed, float low, float effort, out float fph) {
+#if RAPTOR
+  // a raptor beats in short bursts (3 to 8 slow, deep strokes) with long glides between: 10 to 20 s per cycle, 9 to 22% of it flapping
+  float per = 10.0 + 10.0 * fract(seed * 5.13);
+  float cph = fract(t / per + seed * 3.0);
+  float blen = 0.09 + 0.13 * fract(seed * 7.7);
+#else
   float per = 4.0 + 5.0 * fract(seed * 5.13);
   float cph = fract(t / per + seed * 3.0);
   float blen = 0.22 + 0.22 * fract(seed * 7.7);
+#endif
   float burstW = smoothstep(0.0, 0.04, cph) * (1.0 - smoothstep(blen - 0.07, blen, cph));
   float hz = FLAP_HZ * (0.75 + 0.55 * fract(seed * 3.7) + 0.35 * effort);
   fph = TG_TAU * (t * hz + seed * 10.0);
@@ -267,6 +294,14 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
   float seed = aLook.y;
   float sick = dead ? 0.0 : fract(aLook.w);
   float lie = dead ? 0.0 : aGait.w;
+  // R5 raptors: a bird has no lie weight, so aGait.w carries how upright it sits on its perch (0..1) and aFx.w the stoop (0..1)
+  float perchW = 0.0;
+  float stoopW = 0.0;
+#if RAPTOR
+  perchW = lie;
+  lie = 0.0;
+  stoopW = dead ? 0.0 : clamp(aFx.w, 0.0, 1.0);
+#endif
   float crouch = dead ? 0.0 : aLook.z;
 #if KIND == 2
   float crouchBody = 0.0; // birds reuse aLook.z as wing fold
@@ -283,6 +318,9 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
   // at drone and map range the legs swing less: their splay makes a ragged outline that reads as crumpled paper
   float calmK = 1.0 - LEG_CALM * smoothstep(150.0, 380.0, camD);
   float pounce = dead ? 0.0 : aFx.w;
+#if RAPTOR
+  pounce = 0.0; // (aFx.w is the stoop weight of a raptor)
+#endif
 
   // gait weights from speed
   float s1 = smoothstep(TROT0, TROT1, spdG);
@@ -470,6 +508,16 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
       if (fx2.x >= 0.0) hip -= 0.9 * sin(3.14159265 * fx2.x);
       else if (fx2.y >= 0.0) hip += 0.55 * sin(TG_TAU * (fx2.y + (part == 1 ? 0.0 : 0.5)));
     }
+#if RAPTOR
+    {
+      // legs trail back in flight, hang on a perch (counter-rotated against the body's upright pitch, so they stay vertical), and in the
+      // last metres of a stoop swing forward with the talons out
+      float strike = stoopW * (1.0 - smoothstep(1.4, 5.0, aFx.y));
+      hip = mix(-1.3, 0.0, aLook.z);
+      hip = mix(hip, 0.95, strike);
+      hip -= perchW * PERCH_PITCH;
+    }
+#endif
 #endif
     if (dead) {
       // A fallen animal lies on its side with the legs folded, not stiff spikes. Going down it first stumbles on (the gait it
@@ -536,6 +584,10 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
     // from the drone view the head pumps harder so a trot or a gallop reads as a body moving, not sliding
     float pump = farK * (wWalk * 0.1 * sin(2.0 * cyc + 1.0) + wTrot * 0.16 * sin(2.0 * cyc + 1.0) + wGal * 0.32 * sin(cyc + 2.0));
     ang += pump;
+#if RAPTOR
+    ang -= perchW * PERCH_PITCH * 0.8; // the body sits upright on its perch: the head tips down to look ahead
+    ang += stoopW * 0.55;              // in a stoop the head is held up out of the dive, eyes on the prey
+#endif
 #if KIND == 2
     if (fx2.y >= 0.0) ang += 0.22 * sin(TG_TAU * 2.0 * fx2.y); // a walking raven's head pumps with each step
 #endif
@@ -588,9 +640,95 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
     lift -= cnHowl * 1.05; // sitting: the body pitches up, so the tail comes up to lie along the ground behind it
 #endif
     if (dead) { float lim = 1.0 - smoothstep(0.1, 0.6, fallen); lift *= lim; sway *= lim; }
+#if RAPTOR
+    {
+      // a soaring raptor spreads its tail wide to steer and hold height; a stooping one closes it and, at the strike, fans it to brake
+      float fph0;
+      float flT = tgBirdBeat(t, seed, aGait.z * (1.0 - aLook.z), clamp(aFx.z, 0.0, 1.0), fph0) * (1.0 - stoopW);
+      float strikeT = stoopW * (1.0 - smoothstep(1.4, 5.0, aFx.y));
+      float fan = 1.0 + TAIL_FAN * (1.0 - flT) * (1.0 - aLook.z) * (1.0 - stoopW) * (0.7 + 0.3 * sin(t * 0.7 + seed * 11.0));
+      fan = mix(fan, 1.0 + TAIL_FAN * 1.1, strikeT);
+      fan = mix(fan, 0.8, stoopW * (1.0 - strikeT));
+      p.z = aPivot.z + (p.z - aPivot.z) * fan;
+      lift += strikeT * 0.45 - stoopW * 0.12 * (1.0 - strikeT);
+      sway *= 0.5 + 0.5 * (1.0 - aLook.z);
+    }
+#endif
     tgRotZ(p, n, aPivot, lift);
     tgRotY(p, n, aPivot, sway);
   } else if (part == 7 || part == 8) {
+#if RAPTOR
+    if (!dead) {
+      // ---- R5 bird of prey. The wing is a chain: the primaries ("fingers", tagged in aPart.w) fan about HAND_ROOT, the hand turns about
+      // the wrist (aPivot2, weighted by aPart.y along the wing), then the whole wing turns about the shoulder (aPivot): sweep back,
+      // dihedral, and for a folded wing a droop. Every rotation is applied child first, so each joint stays attached.
+      float right = part == 8 ? 1.0 : -1.0;
+      float fold = aLook.z;
+      float tkT = fx2.z;
+      float tkW = tkT >= 0.0 ? 1.0 - smoothstep(0.7, 1.15, tkT) : 0.0;
+      fold *= 1.0 - (tkT >= 0.0 ? smoothstep(0.0, 0.14, tkT) : 0.0); // leaving the perch: the wings come open
+      float fph = 0.0;
+      float fl = tgBirdBeat(t, seed, aGait.z * (1.0 - fold), clamp(aFx.z, 0.0, 1.0), fph);
+      float strikeT = stoopW * (1.0 - smoothstep(1.4, 5.0, aFx.y));  // the last metres of a stoop: the wings are thrown open to brake
+      float sE = stoopW * (1.0 - strikeT);                             // the drawn-in stoop pose
+      fl = max(fl * (1.0 - sE) * (1.0 - fold), tkW * 0.7);
+      float wAmp = 1.0 + 0.5 * farK;
+      float glide = (1.0 - fl) * (1.0 - sE);
+      float soar = 0.5 + 0.5 * sin(t * 0.23 + seed * 17.0);
+      float tw1 = sin(t * 1.9 + seed * 9.0 + right * 1.3), tw2 = sin(t * 2.7 + seed * 5.0 + right);
+      float spdK = smoothstep(9.0, 26.0, spd);
+      // a soaring bird rocks its wings and trims them (each wing a little differently); a flapping one beats slowly and deeply
+      float dIn = DIH_IN + glide * (0.05 * soar + 0.025 * tw1) + fl * FLAP_IN * wAmp * sin(fph);
+      float dOut = DIH_OUT + glide * (0.06 * soar + 0.03 * tw2) + fl * FLAP_OUT * wAmp * sin(fph - 1.2);
+      float sweep = 0.1 + SWEEP_FAST * spdK * glide + 0.12 * fl * (0.5 + 0.5 * cos(fph));
+      float handBack = 0.12 * spdK * glide + 0.2 * fl * (0.5 - 0.5 * sin(fph));
+      float spread = FINGER_SPREAD * glide * (1.0 - 0.6 * spdK);
+      float curl = FINGER_CURL * (0.4 + 0.6 * glide) + 0.25 * fl * (0.5 + 0.5 * sin(fph - 1.5));
+      float cmp = 1.0;
+      // a deep first beat from the perch
+      if (tkW > 0.001) {
+        dIn = mix(dIn, 0.95 * cos(TG_TAU * tkT / 0.85), tkW);
+        dOut = mix(dOut, 0.7 * cos(TG_TAU * (tkT - 0.09) / 0.85), tkW);
+        spread = mix(spread, FINGER_SPREAD, tkW);
+      }
+      // the stoop: wings drawn in and swept hard back, the hand folded against the arm, the primaries closed
+      dIn = mix(dIn, STOOP_DIH, sE);
+      dOut = mix(dOut, -0.25, sE);
+      sweep = mix(sweep, STOOP_SWEEP, sE);
+      handBack = mix(handBack, 0.45, sE);
+      spread = mix(spread, 0.0, sE);
+      cmp = mix(cmp, 1.0 - STOOP_CMP, sE);
+      // the strike: wings flung up and open
+      dIn += strikeT * 0.85;
+      dOut += strikeT * 0.3;
+      spread = mix(spread, FINGER_SPREAD * 1.3, strikeT);
+      // perched or on the ground: the wing folds against the flank, shorter, tips drooping behind
+      dIn = mix(dIn, -1.28, fold);
+      dOut = mix(dOut, 0.0, fold);
+      sweep = mix(sweep, 1.22, fold);
+      handBack = mix(handBack, 0.0, fold);
+      spread = mix(spread, 0.0, fold);
+      curl = mix(curl, 0.0, fold);
+      cmp = mix(cmp, 1.0 - FOLD_CMP, fold);
+      float w1 = aPart.y;
+      vec3 hr = vec3(HAND_ROOT.x, HAND_ROOT.y, HAND_ROOT.z * right);
+#if FINGERS > 0
+      float fk = aPart.w;
+      if (fk > 0.01) {
+        float kk = floor(fk * 8.0 + 0.5) - 1.0;                // 0 (leading) .. FINGERS - 1 (trailing)
+        float u = (kk + 0.5) / float(FINGERS) - 0.5;            // -0.5 .. 0.5
+        tgRotY(p, n, hr, right * (-2.0 * u * spread));         // the leading feather swings forward, the trailing ones back: a fan
+        tgRotX(p, n, hr, -right * curl * (0.35 + 1.3 * (u + 0.5)) * (1.0 + 0.6 * sin(t * 2.3 + seed * 7.0 + kk * 1.7) * glide * 0.3));
+      }
+#endif
+      tgRotY(p, n, aPivot2, -right * handBack * w1);
+      tgRotX(p, n, aPivot2, -right * dOut * w1);
+      p.z = aPivot.z + (p.z - aPivot.z) * cmp;
+      tgRotY(p, n, aPivot, -right * sweep);
+      tgRotX(p, n, aPivot, -right * dIn);
+      tgRotZ(p, n, aPivot, FOLD_DROOP * fold);
+    }
+#else
     float right = part == 8 ? 1.0 : -1.0;
     float fold = aLook.z;
     float fph = 0.0;
@@ -630,6 +768,7 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
     tgRotX(p, n, aPivot2, -right * outer * w1);
     tgRotX(p, n, aPivot, -right * inner);
     if (dead) { /* carcass wings stay as modelled */ }
+#endif
   }
 
 #if KIND == 0
@@ -658,6 +797,10 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
 #else
   p.y += bob + breathe - lie * LIE_DROP - crouchBody * CROUCH_DROP - sick * 0.035 * COM_Y; // a sick animal sags a little
   tgRotZ(p, n, vec3(0.0, COM_Y, 0.0), pitch);
+#endif
+#if RAPTOR
+  // sitting upright: the whole bird (the legs counter-rotate in their own code, so they stay vertical) tips nose up about the hip joint
+  tgRotZ(p, n, vec3(PERCH_HIP, 0.0), perchW * PERCH_PITCH);
 #endif
 #if KIND == 2
   if (!dead && farK > 0.001 && aLook.z < 0.5) {
@@ -976,8 +1119,8 @@ export function makeAnimalMaterials(sp: number, def: ModelDef, shared: AnimalSha
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', `#include <common>\n${defs}\n${COMMON_DECL}\nvarying float vTgFade;`)
       // a bird in flight casts no shadow (collapse it to a point): at the boost the wide view needs, it would sweep a huge
-      // blocky smudge across the ground
-      .replace('#include <begin_vertex>', `vec3 tgP = position;\n vec3 tgN = vec3(0.0, 1.0, 0.0);\n tgAnimate(tgP, tgN);\n vTgFade = aGait.y < -0.5 ? 1.0 : tgFadeOf();\n#if KIND == 2\n if (aFx.y > 1.0) tgP = vec3(0.0);\n#endif\n vec3 transformed = tgP;`);
+      // blocky smudge across the ground. A raptor below 40 m and within 170 m of the camera does cast one (R5)
+      .replace('#include <begin_vertex>', `vec3 tgP = position;\n vec3 tgN = vec3(0.0, 1.0, 0.0);\n tgAnimate(tgP, tgN);\n vTgFade = aGait.y < -0.5 ? 1.0 : tgFadeOf();\n#if KIND == 2\n#if RAPTOR\n if (aFx.y > 40.0 || distance(uCamPos, vec3(instanceMatrix[3])) > 170.0) tgP = vec3(0.0);\n#else\n if (aFx.y > 1.0) tgP = vec3(0.0);\n#endif\n#endif\n vec3 transformed = tgP;`);
     // the stippled border fade casts a stippled shadow too
     shader.fragmentShader = shader.fragmentShader
       .replace('#include <clipping_planes_fragment>', '#include <clipping_planes_fragment>\n if (tgFadeDiscard(vTgFade)) discard;')

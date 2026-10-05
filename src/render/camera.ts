@@ -43,7 +43,9 @@ export class DroneCamera {
   private goal: State;
   private cur: State;
   private rate = 4;
-  private follower: (() => { x: number; y: number } | null) | null = null;
+  private follower: (() => { x: number; y: number; h?: number } | null) | null = null;
+  /** The follower reported a height (a bird in the air): the orbit target rides at that height instead of on the ground. */
+  private liftFollow = false;
   // critically damped follow: velocity of the focus point (m/s)
   private vx = 0;
   private vz = 0;
@@ -84,9 +86,17 @@ export class DroneCamera {
   }
 
   /** Keep a moving subject framed. Pass null to stop following. */
-  follow(getPos: (() => { x: number; y: number } | null) | null): void {
+  follow(getPos: (() => { x: number; y: number; h?: number } | null) | null): void {
     this.follower = getPos;
     if (getPos) this.rate = 3.5;
+    else this.releaseLift();
+  }
+
+  /** `h`, when the follower gives it, is the world height of the subject: a bird in the air is framed at its own height, not at the ground under it. */
+  private releaseLift(): void {
+    if (!this.liftFollow) return;
+    this.liftFollow = false;
+    this.goal.lift = this.goal.dist < 60 ? 1.0 : 0;
   }
 
   isFollowing(): boolean { return this.follower !== null; }
@@ -145,9 +155,11 @@ export class DroneCamera {
   get yawDeg(): number { return this.cur.yaw / DEG; }
 
   /** Directly set orbit parameters (degrees); smooth unless snap is true. */
-  setView(opts: { x?: number; y?: number; yawDeg?: number; pitchDeg?: number; distance?: number }, snap = false): void {
+  setView(opts: { x?: number; y?: number; yawDeg?: number; pitchDeg?: number; distance?: number; h?: number }, snap = false): void {
     if (opts.x !== undefined) this.goal.tx = opts.x;
     if (opts.y !== undefined) this.goal.tz = opts.y;
+    // h: world height of the subject (a bird in the air), so a cut to it starts framed on the bird, not on the ground under it
+    if (opts.h !== undefined) { this.liftFollow = true; this.goal.lift = Math.max(0, opts.h - this.opt.ground(this.goal.tx, this.goal.tz)); }
     if (opts.yawDeg !== undefined) this.goal.yaw = opts.yawDeg * DEG;
     if (opts.pitchDeg !== undefined) this.goal.pitch = clamp(opts.pitchDeg * DEG, MIN_PITCH, MAX_PITCH);
     if (opts.distance !== undefined) this.goal.dist = clamp(opts.distance, MIN_DIST, MAX_DIST);
@@ -184,6 +196,10 @@ export class DroneCamera {
 
     if (this.follower) {
       const p = this.follower();
+      if (p && p.h !== undefined) {
+        this.liftFollow = true;
+        g.lift = Math.max(0, p.h - this.opt.ground(p.x, p.y));
+      } else this.releaseLift();
       if (p) {
         // dead zone: the goal only moves once the subject leaves a small circle around it, and then only just enough
         // to keep the subject on the circle's edge, so small wanders do not jiggle the frame
@@ -279,7 +295,7 @@ export class DroneCamera {
   private userInput(cancelFollow: boolean): void {
     this.rate = 11;
     this.moveT = 1e9;
-    if (cancelFollow && this.follower) this.follower = null;
+    if (cancelFollow && this.follower) { this.follower = null; this.releaseLift(); }
     this.lastInputT = this.clockT;
     this.onUserInput?.();
   }

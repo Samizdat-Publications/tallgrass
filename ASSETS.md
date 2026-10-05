@@ -72,6 +72,13 @@
 | 10-04 18:40 | ElevenLabs text-to-speech `eleven_multilingual_v2`, voice George (stock) | R3 narrator: 14 new lines (`tools/narration.py`, speed 0.8) -> `public/audio/narration/*.mp3`: wolvesArrive, returned, pronghornLeave, pronghornReturn, distemper, mange, plague, townBack, hareBoom, hareCrash, coyotePups, mesoRelease, lightningFire, storm | 14 takes, 1,048 characters | about $0.20 |
 | 10-04 18:45 | Gemini `gemini-3.1-pro-preview` | R3 listen-checks of the 8 sound clips and their retakes (`scratch/listen_r3.py`, not committed) and a transcript check of the 14 narrator lines (`scratch/narr_check.py`) | 32 calls | ~$0.15 |
 | 10-04 22:12 | Gemini `gemini-3.1-pro-preview` | blind video critique of reel.mp4 (69323 KB) | 1 call | ~$0.05 |
+| 10-05 02:12 | ElevenLabs sound-generation | `hawk_scream_1` (3 s) -> `public/audio/hawk_scream_1.mp3` (R5, KEPT: Gemini heard a real red-tailed hawk) | 1 SFX | 16 credits |
+| 10-05 02:12 | ElevenLabs sound-generation | `hawk_scream_2` (4 s) first take (R5, REJECTED: Gemini heard a human impression, replaced by the retake below) | 1 SFX | 22 credits |
+| 10-05 02:12 | ElevenLabs sound-generation | `hawk_stoop` (2 s) (R5, REJECTED: sounded like a squeaky toy, file deleted) | 1 SFX | 11 credits |
+| 10-05 02:12 | ElevenLabs sound-generation | `eagle_call_1` (3 s) (R5, REJECTED: sounded artificial, file deleted) | 1 SFX | 16 credits |
+| 10-05 02:12 | ElevenLabs sound-generation | `eagle_call_2` (3 s) -> `public/audio/eagle_call_2.mp3` (R5, KEPT as the golden eagle call, played lower) | 1 SFX | 16 credits |
+| 10-05 02:16 | ElevenLabs sound-generation | `hawk_scream_2` (4 s) retake -> `public/audio/hawk_scream_2.mp3` (R5, KEPT: Gemini heard a real red-tailed hawk twice; the sixth and last of the R5 budget) | 1 SFX | 22 credits |
+| 10-05 02:20 | Gemini `gemini-3.8-flash` | R5 listen-checks of the raptor clips (`scratch` script, not committed): what animal, real or imitation | 9 calls | cents |
 
 ## Downloaded third-party assets
 | Asset | Source | License | Used in |

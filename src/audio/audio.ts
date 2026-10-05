@@ -13,8 +13,8 @@ import {
 import type { BedMix, BedName, Nearby, Segment, SpotKey, SpotRule } from './mix';
 import { MusicDirector } from './music';
 import type { TensionSample } from './music';
-import { WILD_FILES, larkSpot, pickCoyoteClip, placement, thunderPlan, wildPlan } from './wildlife';
-import type { WildClip } from './wildlife';
+import { RAPTOR_FILES, RAPTOR_GAP, WILD_FILES, larkSpot, pickCoyoteClip, placement, raptorCall, thunderPlan, wildPlan } from './wildlife';
+import type { RaptorClip, WildClip } from './wildlife';
 
 export type { BedMix, BedName, Nearby } from './mix';
 export { bedMix } from './mix';
@@ -60,7 +60,7 @@ export interface Flyover {
   season: 'spring' | 'autumn';
 }
 
-type ClipName = BedName | 'thunder' | 'wolfPack' | 'wolfSingle' | 'bison' | 'stampede' | 'raven' | 'rut' | 'crane' | WildClip;
+type ClipName = BedName | 'thunder' | 'wolfPack' | 'wolfSingle' | 'bison' | 'stampede' | 'raven' | 'rut' | 'crane' | WildClip | RaptorClip;
 
 const FILES: Record<ClipName, string> = {
   wind: 'wind_day',
@@ -80,6 +80,7 @@ const FILES: Record<ClipName, string> = {
   rut: 'bison_rut',
   crane: 'crane_bugle',
   ...WILD_FILES,
+  ...RAPTOR_FILES,
 };
 
 /** Per-bed loudness trim. The files are levelled to the same RMS, so this is the artistic balance. */
@@ -751,6 +752,20 @@ export class AudioDirector {
     const seg = segs.length > 0 ? segs[Math.floor(Math.random() * segs.length)] : undefined;
     // a prairie dog is smaller than the dog the clip sounds like: pitched up
     this.playAt('dogYip', x, y + 0.3, z, { gain: 0.85, rate: rand(1.3, 1.5), segment: seg });
+  }
+
+  /**
+   * A raptor calls (R5), placed where it is (three coordinates: x, height in the world, z): its idle call now and then, or the scream of a stoop beginning.
+   * Positional while the camera is low, a plain sound from up high. Raptor sounds keep RAPTOR_GAP real seconds apart.
+   */
+  onRaptor(species: 'hawk' | 'eagle', scream: boolean, x: number, y: number, z: number): void {
+    const ctx = this.ctx;
+    if (!ctx || ctx.state !== 'running' || !this.bedsStarted || this._muted) return;
+    const prev = this.lastEvent.get('raptor');
+    if (prev !== undefined && this.clock - prev < RAPTOR_GAP) return;
+    const c = raptorCall(species, scream, Math.random(), Math.random());
+    const dur = this.playAt(c.clip, x, y, z, { gain: c.gain, rate: c.rate });
+    if (dur > 0) this.lastEvent.set('raptor', this.clock);
   }
 
   /** Sync the Web Audio listener to the camera (position and the way it looks), once per frame. */

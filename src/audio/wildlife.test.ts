@@ -1,7 +1,7 @@
 // Unit tests for the R3 wildlife audio policy (wildlife.ts). Run: npx tsx src/audio/wildlife.test.ts
 import { Weather } from '../sim/types';
 import type { MixEnv } from './mix';
-import { POSITIONAL_MAX_HEIGHT, WILD_FILES, larkSpot, pickCoyoteClip, placement, thunderPlan, wildPlan } from './wildlife';
+import { POSITIONAL_MAX_HEIGHT, RAPTOR_FILES, WILD_FILES, larkSpot, pickCoyoteClip, placement, raptorCall, thunderPlan, wildPlan } from './wildlife';
 
 let failures = 0;
 let checks = 0;
@@ -57,6 +57,19 @@ ok(seen.size === 3, 'coyote calls pick all three clips');
 const s = larkSpot(100, 200, 0, 0), s2 = larkSpot(100, 200, Math.PI, 1);
 ok(Math.abs(s.x - 120) < 1e-9 && Math.abs(s.z - 200) < 1e-9 && Math.abs(s2.x - 30) < 1e-9, 'the lark sits 20 to 70 m from the camera');
 ok(Object.keys(WILD_FILES).length === 8, 'eight wildlife clips are listed');
+
+// ---- raptors (R5)
+ok(Object.keys(RAPTOR_FILES).length === 3, 'three raptor clips are listed');
+const hs = raptorCall('hawk', true, 0.2, 0.5), hi = raptorCall('hawk', false, 0.2, 0.5), es = raptorCall('eagle', true, 0.2, 0.5), ei = raptorCall('eagle', false, 0.2, 0.5);
+ok(hs.gain > hi.gain && es.gain > ei.gain, 'a stoop scream is louder than an idle call');
+ok(hs.rate > hi.rate, 'a stoop scream is pitched higher than an idle call');
+ok(ei.rate < hi.rate && es.rate < hs.rate, 'the eagle is pitched lower than the hawk');
+ok(raptorCall('hawk', false, 0.1, 0).clip !== raptorCall('hawk', false, 0.9, 0).clip, 'the hawk has two screams to choose from');
+ok(es.clip === 'eagleCall' && ei.clip === 'eagleCall', 'the eagle uses its own call');
+for (const u of [0, 0.5, 0.999]) for (const sp of ['hawk', 'eagle'] as const) for (const sc of [true, false]) {
+  const c = raptorCall(sp, sc, u, u);
+  ok(c.gain > 0 && c.gain <= 1 && c.rate > 0.5 && c.rate < 1.5, 'raptor call parameters stay sane');
+}
 
 console.log(`${checks - failures}/${checks} checks passed`);
 if (failures > 0) process.exit(1);
