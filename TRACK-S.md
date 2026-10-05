@@ -87,6 +87,8 @@ Only Track S writes this file (V2-PLAN.md section 4.3). Track R reads it with `g
 
 - G8 (cloud, E + spring birth pulse: `matingWindow 0.8, bison.birthCooldown 900, deer.birthCooldown 800`, frozen 3bb97a5): bison 8/8, presence 8/8, **pronghorn starvation 34%**, wolf CV 0.22, corr 0.59; every bison birth falls in spring (E: births all year). This answers round 13's "births in autumn and winter" item: in v1 the pulse lost the pronghorn (4/32, DECISIONS 08:08), but open prairie's spring return now rescues them. Eligible; lower wolf CV than E (0.22 vs 0.24) but far more pronghorn margin and real seasons.
 
+- G24 (cloud, G8 plus seeds 9 to 24): bison 23/24, presence 24/24, pronghorn starvation 33%, wolf CV 0.22, corr 0.59. Eligible at 24 seeds. Files in `review/stability/v6-screens/G24-cloud/`.
+
 ## In progress
 - S5 Coyotes (builder, main tree).
 - E8b screen (E8 again at 3bb97a5 with the death columns), scratch/screens/E8b.
