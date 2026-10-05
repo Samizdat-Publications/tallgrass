@@ -1099,7 +1099,7 @@ Merge S6 first.
 
 ### The animals themselves
 
-**R7. Animal fidelity** [R, L]
+**R7. Animal fidelity** [R, L] (done 2026-10-05)
 - **Meshes:** `builder.ts` lofts get 2 to 3× the rings at near LOD, plus a continuous body, neck and head.
 - **Species details:**
   - bison: hump; cape and beard as a wool shell at near LOD; short upturned horns
