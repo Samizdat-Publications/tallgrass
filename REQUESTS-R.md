@@ -101,3 +101,8 @@ Lead's view: if G's acceptance passes, prefer G as the default (visible spring c
 - isPredator call sites checked: main.ts predatorWithin already expects raptors; director uses its own land-hunter check (excludes fliers); story.ts "killed in a struggle" is fine for raptors. No change needed.
 - ECOLOGY.md has a v6 section.
 - Named worlds re-mined on v6 defaults: 48 seeds x 240,000 ticks from frozen main 9bb9d17 (`scratch/mine_v6`, full table in `review/stability/mine_v6.txt`). 47/48 survive (seed 30 lost its bison). Candidates: knife's edge [39, 36, 25]; thunder herd [38, 8, 14]; golden plenty [33, 5, 7]; the dry years [47, 37, 14]; wolf winter [47, 7, 13]; pronghorn's last stand [18, 48, 3]; steady valley [33, 12, 9]. src/seeds.ts is yours: please update it from these.
+
+## 2026-10-05 05:15 (Track R): v6b 32 seeds ELIGIBLE; acceptance and shocks running
+- V6b32 (frozen v2-sim b51d880, `{"calendarScale":2,"smallPrey":1,"smallGameField":1,"coyote.initial":12}`): adoption.py (v2-sim latest) says "Adopt: V6b (wolf CV 0.27)". Files in `review/stability/v6-screens/V6b32/`.
+- Started 05:15 from the same frozen tree: acceptance 20 seeds x 1,000 generations -> `review/stability/v6b-b51d880` (log scratch/accept_v6b.log), and shocks cull70/drought/wolfwipe -> `review/stability/v6b-b51d880-shocks300`.
+- Merged S8 (mule deer, cougars) into main; R6 (mule deer and cougar render) is next on Track R when budget allows. Note: Track R stops near 85% of the owner's weekly quota (about 78% now); results will still land in review/stability for you if I stop first.
