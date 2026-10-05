@@ -240,6 +240,8 @@ export function cardRank(kind: string): number {
     case 'immigrated': return 2;
     case 'hareCrash': return 1;
     case 'townFounded': return 1;
+    case 'eaglesArrive': return 1;
+    case 'hawksReturn': return 1;
     default: return 0;
   }
 }
@@ -284,6 +286,8 @@ export function eventWeight(e: SimEvent): number {
     case 'hareCrash':
     case 'coyotePups':
     case 'storm':
+    case 'eaglesArrive':
+    case 'hawksReturn':
       return 2;
     case 'stampede':
       return e.a >= 60 ? 3 : 1;
@@ -491,6 +495,32 @@ export function describeEvent(e: SimEvent, ctx?: DescribeContext): EventText {
         sentence: 'With the wolves few, coyotes take over the valley.',
         card: { title: 'The coyotes take over', subtitle: when },
       };
+    case 'eaglesArrive': {
+      const n = Math.max(1, Math.round(e.a));
+      return {
+        sentence: n === 1
+          ? pick(e, ['A golden eagle drifts in over the open prairie to spend the winter.', 'One golden eagle arrives from the north for the cold months.'])
+          : pick(e, [
+            `${cap(countWord(n))} golden eagles arrive over the open prairie to winter in the valley.`,
+            `Golden eagles are back for the winter: ${countWord(n)} of them, riding the cold air in from the north.`,
+            `${cap(countWord(n))} golden eagles settle in for the cold months.`,
+          ]),
+        card: n >= 3 ? { title: 'Eagles for the winter', subtitle: when } : undefined,
+      };
+    }
+    case 'hawksReturn': {
+      const n = Math.max(1, Math.round(e.a));
+      return {
+        sentence: n === 1
+          ? pick(e, ['A pair of red-tailed hawks returns to the cottonwoods to nest.', 'Red-tailed hawks come back: one pair, and a nest in the cottonwoods.'])
+          : pick(e, [
+            `${cap(countWord(n))} pairs of red-tailed hawks return to nest in the cottonwoods.`,
+            `Red-tailed hawks are back for the summer: ${countWord(n)} pairs, each to a cottonwood.`,
+            `The hawks return, ${countWord(n)} pairs of them, and the cottonwood nests fill again.`,
+          ]),
+        card: n >= 3 ? { title: 'The hawks return', subtitle: when } : undefined,
+      };
+    }
     case 'storm':
       return { sentence: pick(e, ['A thunderstorm rolls across the valley.', 'Thunderheads build over the rim and the storm breaks.', 'A line of storms marches across the prairie.']) };
     case 'lightningFire':

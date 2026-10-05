@@ -4,7 +4,7 @@
 // ambush) stays keyed on `Sp` in sim.ts. This file imports nothing, so types.ts can derive from it.
 //
 // Fixed ids, shared by both tracks: Bison 0, Wolf 1, Raven 2, Pronghorn 3, Rabbit 4 (the jackrabbit), Cougar 5,
-// Coyote 6, PrairieDog 7. Later work packages append Eagle 8, Hawk 9, MuleDeer 10, Beaver 11.
+// Coyote 6, PrairieDog 7, Eagle 8, Hawk 9 (S7). Later work packages append MuleDeer 10, Beaver 11.
 
 export interface SpeciesDef {
   id: number;
@@ -42,6 +42,11 @@ export const SPECIES: SpeciesDef[] = [
   { id: 6, key: 'coyote', name: 'Coyote', plural: 'Coyotes', repr: 'agent', guild: 'mesopredator', prey: false, threat: 0.3, flies: false, traits: false, core: false, color: '#D9AE4B' },
   // Prairie dog (S4): a field species, never an agent. Towns of burrows on flat, dry, open ground.
   { id: 7, key: 'prairiedog', name: 'Prairie dog', plural: 'Prairie dogs', repr: 'field', guild: 'grazer', prey: false, threat: 0, flies: false, traits: false, core: false, color: '#C8A778' },
+  // Golden eagle (S7): a winter visitor that comes in through the open prairie (src/sim/sp/raptor.ts). Flies, hunts the small-prey fields,
+  // feeds at carcasses. Not a threat to the grazers (threat 0, so it is not in the predator grid) and not a core species.
+  { id: 8, key: 'eagle', name: 'Golden eagle', plural: 'Golden eagles', repr: 'agent', guild: 'raptor', prey: false, threat: 0, flies: true, traits: false, core: false, color: '#C44536' },
+  // Red-tailed hawk (S7): a summer resident that nests in a cottonwood and leaves in autumn with its young.
+  { id: 9, key: 'hawk', name: 'Red-tailed hawk', plural: 'Red-tailed hawks', repr: 'agent', guild: 'raptor', prey: false, threat: 0, flies: true, traits: false, core: false, color: '#2E8B57' },
 ];
 
 /** Number of species ids in play. */
@@ -99,9 +104,9 @@ export function canHunt(predator: number, prey: number): boolean {
 }
 
 /** Base coat darkness of a new founder, by species id (0 pale .. 1 dark). Species not listed use 0.5. */
-export const COAT_BASE: number[] = [0.85, 0.3, 0.97, 0.5, 0.5, 0.5, 0.45, 0.5];
+export const COAT_BASE: number[] = [0.85, 0.3, 0.97, 0.5, 0.5, 0.5, 0.45, 0.5, 0.8, 0.55];
 /** Coat darkness stays within a species' believable range (bison stay dark, wolves stay pale). Unlisted species use [0, 1]. */
-export const COAT_RANGE: [number, number][] = [[0.62, 1], [0.05, 0.65], [0.85, 1], [0.2, 0.8], [0.2, 0.8], [0.15, 0.6], [0.25, 0.7], [0.2, 0.8]];
+export const COAT_RANGE: [number, number][] = [[0.62, 1], [0.05, 0.65], [0.85, 1], [0.2, 0.8], [0.2, 0.8], [0.15, 0.6], [0.25, 0.7], [0.2, 0.8], [0.6, 1], [0.3, 0.8]];
 
 /** Prefix used for per-species param overrides ("bison.metabolism"). Pronghorn keeps its v1 prefix "deer". */
 export const PARAM_PREFIX: string[] = SPECIES.map((s) => (s.key === 'pronghorn' ? 'deer' : s.key));

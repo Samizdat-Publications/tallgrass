@@ -10,6 +10,8 @@ export const Sp = {
   Cougar: 5,
   Coyote: 6,
   PrairieDog: 7,
+  Eagle: 8,
+  Hawk: 9,
 } as const;
 export type Sp = (typeof Sp)[keyof typeof Sp];
 // Derived from the registry in species.ts. Keep the `Sp` ids above in step with SPECIES[].id.

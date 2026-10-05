@@ -46,18 +46,19 @@ export const TAKE_KINDS: readonly TakeKind[] = ['wolf', 'coyote', 'eagle', 'hawk
 export const PREF: Record<TakeKind, { hare: number; dog: number }> = {
   wolf: { hare: 1, dog: 0.6 }, // wolves mouse in the open; dogs dive into burrows
   coyote: { hare: 1, dog: 0.35 }, // S5: at 0.8 the coyotes camped on the towns and the prairie dogs were gone 60% of the time; 0.2 to 0.4 leaves them a refuge
-  eagle: { hare: 1, dog: 0.9 }, // S7
-  hawk: { hare: 0.4, dog: 0.7 }, // S7: takes leverets, dogs on the town edge
+  eagle: { hare: 1, dog: 0.4 }, // S7: at 0.9 the eagles and hawks together took the prairie dogs down by half (the dogs are few, and they stoop on the richest cells, the towns)
+  hawk: { hare: 0.6, dog: 0.3 }, // S7: takes leverets and young hares, a few dogs on the town edge
 };
-/** Attack rate per attempt per animal-per-cell. wolf and coyote: one attempt per tick while mousing; eagle and hawk are placeholders until S7. */
-export const A: Record<TakeKind, number> = { wolf: 0.0025, coyote: 0.1, eagle: 0.02, hawk: 0.015 };
+/** Attack rate per attempt per animal-per-cell. wolf and coyote: one attempt per tick while mousing. eagle and hawk: one attempt per stoop (S7, a stoop every 30 to 100 ticks while hunting),
+ *  so the rates are far higher per attempt; calibrated so the two raptors together take about a tenth as many animals as the coyotes do (src/sim/sp/raptor.ts). */
+export const A: Record<TakeKind, number> = { wolf: 0.0025, coyote: 0.1, eagle: 0.4, hawk: 1.0 };
 /** Handling time, in the units of 1 / effort. */
-export const HANDLE: Record<TakeKind, number> = { wolf: 2, coyote: 1.5, eagle: 4, hawk: 3 };
+export const HANDLE: Record<TakeKind, number> = { wolf: 2, coyote: 1.5, eagle: 4, hawk: 2.5 };
 export const GAIN: Record<TakeKind, { hare: number; dog: number }> = {
   wolf: { hare: 0.07, dog: 0.045 }, // at about 3 hares in the cell this matches the old flat trickle (metabolism x wolfSmallGame per tick)
   coyote: { hare: 0.1, dog: 0.1 }, // S5: a hare is a tenth of the coyote's energy bar, so a coyote on 1/1800 metabolism needs about 7 a valley year; at 0.25 the coyotes barely dented the hares (no coupling), at 0.04 to 0.06 they starved
-  eagle: { hare: 0.4, dog: 0.25 },
-  hawk: { hare: 0.2, dog: 0.15 },
+  eagle: { hare: 0.4, dog: 0.25 }, // S7: a hare is two fifths of an eagle's bar (a winter stay costs about 1)
+  hawk: { hare: 0.18, dog: 0.12 }, // S7: a season costs a hawk about 0.7, and a brood takes half of every catch while it is hungry
 };
 
 // ---- constants of the web ---------------------------------------------------------------------------------------------------
@@ -145,7 +146,11 @@ export interface SmallPreySample {
   dogTakes: number;
   hareArrivals: number;
   dogArrivals: number;
+  /** Catches by predator kind: [hares, dogs] per kind, in TAKE_KINDS order (wolf, coyote, eagle, hawk), flat: kind * 2 + (0 hare, 1 dog). */
+  byKind: number[];
 }
+
+const emptyDrain = (): SmallPreySample => ({ plagues: 0, townsFounded: 0, townsLost: 0, booms: 0, crashes: 0, hareTakes: 0, dogTakes: 0, hareArrivals: 0, dogArrivals: 0, byKind: new Array(TAKE_KINDS.length * 2).fill(0) });
 
 export class SmallPrey {
   readonly rng: Rng;
@@ -187,7 +192,7 @@ export class SmallPrey {
   private lastBoom = -1e9;
   private lastCrash = -1e9;
   private lastDogArrival = 0;
-  private drain: SmallPreySample = { plagues: 0, townsFounded: 0, townsLost: 0, booms: 0, crashes: 0, hareTakes: 0, dogTakes: 0, hareArrivals: 0, dogArrivals: 0 };
+  private drain: SmallPreySample = emptyDrain();
 
   constructor(
     private readonly seed: number,
@@ -321,10 +326,12 @@ export class SmallPrey {
     if (rng.next() * dens < H) {
       this.hare[c] = Math.max(0, this.hare[c] - 1);
       this.drain.hareTakes++;
+      this.drain.byKind[TAKE_KINDS.indexOf(kind) * 2]++;
       return GAIN[kind].hare;
     }
     this.dog[c] = Math.max(0, this.dog[c] - 1);
     this.drain.dogTakes++;
+    this.drain.byKind[TAKE_KINDS.indexOf(kind) * 2 + 1]++;
     return GAIN[kind].dog;
   }
 
@@ -800,7 +807,7 @@ export class SmallPrey {
   /** Counters since the last drain (and reset them). */
   drainSample(): SmallPreySample {
     const d = this.drain;
-    this.drain = { plagues: 0, townsFounded: 0, townsLost: 0, booms: 0, crashes: 0, hareTakes: 0, dogTakes: 0, hareArrivals: 0, dogArrivals: 0 };
+    this.drain = emptyDrain();
     return d;
   }
 }

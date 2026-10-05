@@ -441,7 +441,7 @@ function townSite(sp: SmallPrey, n: number, avoid: Set<number> = new Set()): num
   const off = createSim({ seed: 3 });
   ok(off.small === null, 'smallPrey off: no web');
   const popsOff = off.populations();
-  ok(popsOff.length === 8 && popsOff[Sp.Rabbit] === 0 && popsOff[Sp.PrairieDog] === 0 && popsOff[Sp.Coyote] === 0, 'off: no rabbits, dogs or coyotes at the start');
+  ok(popsOff.length === 10 && popsOff[Sp.Rabbit] === 0 && popsOff[Sp.PrairieDog] === 0 && popsOff[Sp.Coyote] === 0, 'off: no rabbits, dogs or coyotes at the start');
   const row = off.sample();
   ok(row.hare_total === 0 && row.dog_total === 0 && row.towns === 0 && row.plague_events === 0 && 'pop_prairiedog' in row && 'pop_coyote' in row, 'off: web columns are present and zero');
   off.introduce(Sp.Rabbit, 5, 200, 200);
