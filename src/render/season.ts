@@ -91,6 +91,25 @@ export const ASPECT = { sun: [1.14, 1.08, 0.82], shade: [0.86, 0.76, 0.5], base:
  */
 export const DROUGHT = { dry: 0.92, rip: 0.5, ripKeep: 0.6, straw: [1.28, 1.0, 0.52], lift: 1.1, amount: 0.62, dust: [0.5, 0.4, 0.26], soil: 0.7 } as const;
 
+/**
+ * Snow settling, shared by the blade layer (and free for the ground shader to call): the same threshold and edge ramp terrain.ts uses
+ * for its snow cover, so grass and ground agree on where the pack is and where it ends. Each caller supplies its own "potential" (how
+ * readily snow settles at a point: flat ground, hollows, north slopes and broad drifts high; ridges, steep faces, trails and rock low)
+ * plus an edge jitter; the potential is compared to a threshold that falls as the snow amount `sn` (the snow uniform, 0..1) rises.
+ *   tgSnowThreshold(sn)          the potential above which snow lies
+ *   tgSnowCover(potE, sn)        0..1 cover for a (jittered) potential; fades out through flecked ground at a patch edge
+ */
+export const SNOW_GLSL = /* glsl */ `
+float tgSnowThreshold(float sn) {
+  return 1.78 - 1.74 * pow(clamp(sn, 0.0, 1.0), 0.66);
+}
+float tgSnowCover(float potE, float sn) {
+  float Tsn = tgSnowThreshold(sn);
+  float edgeW2 = mix(0.19, 0.12, smoothstep(0.2, 0.8, sn));
+  return smoothstep(Tsn - 0.2 - edgeW2, Tsn + 0.06 + edgeW2, potE) * smoothstep(0.05, 0.16, sn);
+}
+`;
+
 /** GLSL float literal ("3.0", "0.95"). */
 function glf(x: number): string {
   return Number.isInteger(x) ? x.toFixed(1) : String(x);
