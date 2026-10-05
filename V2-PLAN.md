@@ -899,7 +899,7 @@ Coyote is id 6. `coyote.initial` stays 0 until R3's coyote model is on `main`, t
 ### R3. Render and audio for the new life [Track R, L]
 Merge S2, S4 and S5 first.
 
-- [ ] **1. Mange.**
+- [x] **1. Mange.**
   - `F_MANGE` gives a patchy coat: darker skin mottling scaled by severity, plus a thinner tail and ruff.
   - The distemper sick pose already exists (`F_INFECTED`).
 - [x] **2. Prairie dog towns** (new `src/render/smallprey.ts`):
@@ -919,7 +919,7 @@ Merge S2, S4 and S5 first.
   - Within 90 m; budget 250; per cell n = min(10, round(hare[c] × 0.3)).
   - Graze, sit up, ears up.
   - Bound away in a zig-zag from predators within 25 m.
-- [ ] **4. Coyote.**
+- [x] **4. Coyote.**
   - **Model** (`src/render/models/coyote.ts`, built from the wolf):
     - Shape: 0.72× scale, slimmer legs, larger ears, narrow muzzle, tail held low.
     - Colour: tawny grey with rusty legs and ears, pale throat.
@@ -928,7 +928,7 @@ Merge S2, S4 and S5 first.
     - mousing leap in Stalk near small prey: a high 1.2 s arc, forefeet first
     - a howl and yip chorus at dusk while resting: sitting, muzzle up, synced to the audio
     - a wary head-up glance every 2 to 3 s while scavenging
-- [ ] **5. Migrants.** Border fade (R1 item 9 if not done), and groups travel in a short column.
+- [x] **5. Migrants.** Border fade (R1 item 9 if not done), and groups travel in a short column.
 - [x] **6. UI.**
   - Graph rows and colours for coyote, jackrabbit and prairie dog.
   - The inspector shows coyotes, with a "pair" chip.
@@ -956,10 +956,10 @@ Merge S2, S4 and S5 first.
     - lightning fire
     - a storm
   - Wired in `audio/narration.ts` with priorities.
-- [ ] **9. Director shots.**
+- [x] **9. Director shots.**
   - New shots: "town" (a dog town with a predator near), "mousing", "migration" (a group heading for a corridor).
   - Event-driven cuts for `immigrated`, `sylvaticPlague` and `mesoRelease`.
-- [ ] **10. Field notes:** add 8:
+- [x] **10. Field notes:** add 8:
   - first coyote pups
   - a mousing leap
   - an alarm wave

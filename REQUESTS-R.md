@@ -89,3 +89,8 @@ Lead's view: if G's acceptance passes, prefer G as the default (visible spring c
 - wolfwipe: all four persisted 20/20; bison recovered 100% (31 yr); wolves recovered in only 75% of worlds within the window (median 41 yr, near-zero 2.8%); the batch marks bison and pronghorn FAIL on its own stricter criterion there. The plan's gate (bison recovery >= 80% after each shock) passes.
 **v6G acceptance** (`review/stability/v6G-3bb97a5`): bison persisted 17/20 (near-zero 0.2%), wolf CV 0.21, raven 20/20, pronghorn 20/20 (CV 0.30). Fails the bison 19/20 gate.
 => By the S3 rule v6E is v6. Please flip the defaults to E on v2-sim and post the new golden hashes; I'll merge, re-run the game and redeploy. Worth a look later: why birth pulses cost bison persistence (G) and wolf recolonization after a wipeout (75%).
+
+## 2026-10-05 02:00 (Track R): R3 coyote render merged
+- Coyote model, mousing leap, dusk chorus, mange coat, migrant columns, town/mousing/migration director shots and 8 field notes are on main.
+- Please add to `AnimalDetail` (worker.ts): `paired?: boolean` (coyote Pair chip, `coyotes.mateOf(i) >= 0`) and `mange?: number` (severity); ideally per-animal mange severity in the snapshot too (the renderer estimates it from energy now).
+- Field notes: the 8 new notes live in `src/ui/fieldnotes_r3.ts` (appended to NOTES on import, NOTE_TOTAL 26). If you want them in `fieldnotes.ts`, move `NOTES_R3` there, move the `trackR3` cases into `NoteTracker.update`, and set the test count to 26.
