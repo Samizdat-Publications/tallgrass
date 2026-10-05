@@ -2,6 +2,101 @@
 
 *(Updated 11:57 Sunday. I keep working until the deadline in `.claude/hooks/run_until.txt` (Sunday 12:00); this file is refreshed at every milestone.)*
 
+## v2 beta progress (session wrap-up 2026-10-05 ~10:20; live redeployed 10:15, live check clean)
+Since the alpha (below), all merged, live and verified (npm test, build, foot-slip rig, review stills with no errors):
+
+**Visual**
+- Trees v2: lobed crowns and dense creek groves, with willow thickets, autumn gold, junipers and burned snags.
+- Night sky: stars and the Milky Way, moon phases that drive the moonlight, meteors, a winter aurora and fireflies.
+- Lens: a photo mode (P), gentle depth of field in the documentary camera's close shots, and film grain in cinematic mode (C).
+- The camera no longer clips through trees and glides smoothly in pans.
+
+**Animals**
+- Near-range fur detail: a shaggy bison cape and hump with horns, wolf and coyote ruffs, a fur sheen.
+- Coyotes: mousing leaps, dusk howls and mange.
+- Golden eagles and red-tailed hawks: soaring, stooping and perching.
+- Mule deer: seasonal antlers and a stotting bound.
+- Cougars: a low stalk, a freeze, then the rush.
+- A behaviour library: bison wallows, tree rubs, snow digging, summer sparring, bellows and calf play; wolf howl choruses, pup play and scent marking; pronghorn rump flares; raven rolls; raptors preening.
+
+**Play**
+- Family tree (select an animal, then press T): a pedigree three generations up and two down, plus a wolf pack's line of alpha pairs.
+
+**Ecology**
+- v6 is the default world.
+- v6b (small prey and coyotes on) passed its 32-world screen.
+- Its 1,000-generation acceptance kept every species alive in 20 of 20 worlds. Prairie dogs touch near zero during plague 1.1% of the time, so the run marks them FAIL; whether to adopt v6b is Track S's call.
+- The v6b shock suite was still running at wrap-up; results land in `review/stability/v6b-b51d880-shocks300`.
+- Raptors, deer and cougars, storms and small prey stay off by default until they pass. Try them through New valley.
+
+**Quota:** weekly at about 82% when this session stopped (your 85% ruling). The cloud Track S session runs separately.
+
+**Next 5:**
+1. Track S adopts v6b, then screens the storms and the raptor, deer and cougar configs (v6c and v7).
+2. R10: dust storms, grasshoppers and floods (after S12).
+3. R13: god tools v2 and new challenges (after S17).
+4. R16: beavers and moving water.
+5. R17: performance presets. The low golden view sits at 15.5 of 16.7 ms, and a dense herd within 54 m costs 2 ms.
+
+**Making-of page:** version 12 at https://claude.ai/artifact/7jPHUFvbzTv6AUz5UCA3Mu.
+
+## v2 alpha (M1, deployed 2026-10-05 00:55; redeployed 02:40 with the v6 ecology and coyote render)
+**Play it:** https://tallgrass.stewartgregerson.workers.dev. The live check passed at 00:56: no errors, 60 fps at 1600x900. The title card shows on first load; click **Watch**. Everything below the v2 sections is the v1 report.
+
+**Look at first:**
+1. The title card, then Watch. The golden-hour valley now has warm sun-side haze, a creek that mirrors the sky, golden cured uplands, drifting cloud shadows and god rays.
+2. Menu, then **Field guide**: photograph behaviours. Menu, then **Settings**: separate volumes for ambience, music and narrator. The **Share** icon (top right) copies a link that replays your valley exactly.
+3. Follow a wolf (click it, then F). Feet now lock to the ground and legs reach it on slopes. Kills show a lunge, a hold and tug, pack mates at different contact points, feeders in slots and ravens hopping in.
+4. Fast-forward to 10x and 100x. Animals bound with a slow long stride and kick up dust, and the light goes soft so the shadows stop strobing.
+5. Wait for dawn after a calm night: mist pools in the creek valley. Winter brings snow that buries the grass. Night keeps the herds readable.
+6. Music: five ElevenLabs cues that crossfade with the tension of the hunt. **Please listen**: I could only check loudness and loop seams, not taste.
+
+**Built but off by default** (each turns on only after 32-world screens and a 1,000-generation acceptance):
+- open prairie with migration in and out, vagrant ravens, distemper and mange
+- jackrabbits, prairie dog towns and plague; coyotes
+- storm cells with lightning fires
+- You can try them now through New valley. Track S flips them on as each config passes.
+
+**Stability, from actual runs:**
+- **v6E acceptance** (`review/stability/v6E-3bb97a5`, 20 worlds x 1,000 bison generations, about 1,340 years):
+  - every species alive in 20 of 20, never near zero
+  - wolf CV 0.24 (v1: about 0.1), raven CV 0.15
+  - wolves follow bison by 1 year (correlation 0.69)
+- **v6E shock suite** (cull 70%, drought, wolf wipeout over 300 years): every species persists in all 20 worlds, and bison recover every time. After a wipeout, wolves come back in 75% of worlds.
+- **v6G** (spring-only births) failed its acceptance: bison lasted in only 17 of 20 worlds. So **E is v6**.
+- **v6 is now the default world** (live since 02:40): open prairie, vagrant ravens, distemper and mange, prey-scaled wolves. New golden hashes: 79f7ab0f, ef09535f, 032d866a. The sealed valley is a scenario now.
+- **Coyotes** (with mousing leaps and dusk howls), raptors, small prey and storms are built but stay off by default until their own screens pass. Try them through New valley.
+
+**Reviews:**
+- Round 13 blind critic: visual 7, life and motion 6.
+- Round 14 Gemini video: **life and motion 4** (v1: 1 to 3), visual 7, UI 8. Its fixes are in: time-lapse gait, night animals, shadow strobe, rain depth, contact shadows.
+- The Gemini concept judge sits at 4/10 whatever changes, so I use its difference list, not its score.
+
+**Decisions you might overrule** (DECISIONS.md):
+- I kept ACES tone mapping.
+- I stayed on Three.js rather than an engine port (your quality-over-shareability ruling is logged; revisit with a side-by-side).
+- Tree bark is now grey-brown (it was crushed to black by ambient occlusion).
+- Copper bluestem fades out in early winter.
+
+**Blocked or deferred:**
+- Camera collision with trees.
+- A family tree panel (waits for its UI).
+- Tree groves and canopy volume (R11).
+- A grey band at the cloud base in storm drone views.
+
+**v2 spend:**
+- Gemini: about 20 concept-judge calls, 1 video critique and about 32 audio checks, about $0.40.
+- ElevenLabs: 6 music generations, 22 sound effects and 14 narrator lines, about 4.3k credits of the pay-as-you-go balance.
+
+**Next 5:**
+1. Coyote model and mange coat (in progress).
+2. Merge the v6 default flip and redeploy.
+3. Tree groves (R11).
+4. Animal fidelity (R7).
+5. Camera collision.
+
+Making-of page: https://claude.ai/artifact/7jPHUFvbzTv6AUz5UCA3Mu (version 10, now with the v2 images).
+
 ## How to run it (one step)
 Open **https://tallgrass.stewartgregerson.workers.dev** in Chrome or Edge. Click once anywhere to turn on sound. (The live build is redeployed after each verified milestone; the time of the last deploy is in the line below.)
 

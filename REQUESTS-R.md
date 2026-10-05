@@ -19,3 +19,101 @@ Only Track R writes this file (V2-PLAN.md section 4.3). Track S reads it with `g
 - S3 32-seed screens A32, B32, C32, D32 are running on the local CPU from frozen `scratch/frozen/bc62e1e` (12 threads, one after another), exactly the commands in TRACK-S.md. Output `scratch/screens/<name>32`; the adoption table lands here and the summaries under `review/stability/v6-screens/` when done.
 - `story.ts` `causePhrase` now has 6 ("Left the valley for the open prairie") and 7 ("Died of distemper").
 - S18 `DecadeLines` wiring in `ui.ts` comes after the R12 play-UI merge (a builder has ui.ts open).
+- S18 is wired (2fb40fc): decade lines go in the chronicle as major entries, arcs as normal ones, both reset with the season lines. Seen live at year 10: "Years 1 to 10, the Raven Years: the ravens gathered, 30 to 208, and wolves rose from 30 to 42."
+- Text nit: "The drought of years 5 to 6, one year long; the grass came back the same year." reads oddly (two year numbers but "one year long"). Suggest "The drought that began in year 5 lasted a year; the grass came back the same season." or name the span in seasons.
+- R12 play UI is on main: the valley setup uses `<prefix>.initial`, `grassGrowth`, `droughtGrowth`, `winterDieback`, `calendarScale` and `openPrairie` (the toggle is live now that S1 is merged). Climate and winter strengths are untested guesses (grassGrowth x0.85/x1.15, winterDieback x0.5/x1.6); if you have numbers for sane ranges, say so here.
+
+## 2026-10-04 17:25 (Track R): S3 32-seed screens done
+Frozen `v2-sim@bc62e1e`, 32 seeds x 240,000 ticks, the exact commands in TRACK-S.md. `metrics.md`, `meta.json` and the table are in `review/stability/v6-screens/` (CSVs stay in `scratch/screens/<name>32/baseline/` on this machine).
+
+| Screen | Seeds | Years | Bison persist | Presence >= 90% | Pronghorn starve | Wolf CV | Wolf-bison corr (1-3 yr) | Eligible |
+|---|---|---|---|---|---|---|---|---|
+| A | 32 | 200 | 30/32 (need 30) | 30/32 (need 29) | 71% x | 0.09 | 0.19 x | no |
+| B | 32 | 200 | 32/32 (need 30) | 32/32 (need 29) | 64% x | 0.10 | 0.23 x | no |
+| C | 32 | 200 | 32/32 (need 30) | 32/32 (need 29) | 65% x | 0.10 | 0.17 x | no |
+| D | 32 | 200 | 32/32 (need 30) | 32/32 (need 29) | 58% x | 0.26 | 0.72 | no |
+
+Lead's read: D does everything the wolves need (CV 0.26, correlation 0.72, 32/32 everywhere) and fails only the pronghorn-starvation share. A pronghorn brake (density-dependent fawning or the S5 coyote fawn predation) on top of D looks like the path to v6. Happy to run the next 32-seed screen (D + pronghorn fix) the moment you post its params and a frozen hash.
+
+## 2026-10-04 18:00 (Track R): D re-run at 3bb97a5 (with old_/killed_ columns)
+Same D params, frozen `scratch/frozen/3bb97a5`, 32 seeds x 240,000 ticks. Files in `review/stability/v6-screens/D32b/`.
+
+| Screen | Seeds | Years | Bison persist | Presence >= 90% | Pronghorn starve | Wolf CV | Wolf-bison corr (1-3 yr) | Eligible |
+|---|---|---|---|---|---|---|---|---|
+| D (bc62e1e) | 32 | 200 | 32/32 | 32/32 | 58% x | 0.26 | 0.72 | no |
+| Db (3bb97a5) | 32 | 200 | 32/32 | 32/32 | 50% x | 0.26 | 0.72 | no |
+
+With the proper columns, starvation is still half of pronghorn deaths. The CPU is free: post the next screen (D + a pronghorn brake) with a frozen hash and I'll run it at 32 seeds straight away.
+
+## 2026-10-04 18:15 (Track R): round 13 blind critic, ecology items for Track S
+Full triage in REVIEWS.md round 13. For you:
+- No legible boom-bust in the first hour of play (about 30 valley-years at the default calendar): the critic sees noise around a rising trend. Screen D fixes the wolf side; the first-decade shape matters for the player.
+- Year 1 default world: bison 800 to 903 and pronghorn 350 to 463 across autumn ("come through autumn stronger"). Births should be spring-only and winter should cost animals; please check the birth timing on the default calendar.
+- Wolves only change at denning: adult wolf deaths seem to cluster, so the line is a staircase.
+- Ravens sit at a hard ceiling (~680) in screen D from year 110: worth checking against the vagrant model.
+- Herd rings around ponds (S10).
+
+## 2026-10-04 19:00 (Track R): screen E at 32 seeds is ELIGIBLE; acceptance and shocks running
+Frozen `3bb97a5`, adoption.py from v2-sim@33989fa. Files in `review/stability/v6-screens/E32/`.
+
+| Screen | Seeds | Years | Bison persist | Presence >= 90% | Pronghorn starve | Wolf CV | Wolf-bison corr (1-3 yr) | Eligible |
+|---|---|---|---|---|---|---|---|---|
+| E | 32 | 200 | 31/32 (need 30) | 32/32 (need 29) | 49% | 0.25 | 0.74 | yes |
+| Db | 32 | 200 | 32/32 (need 30) | 32/32 (need 29) | 50% x | 0.26 | 0.72 | no |
+
+Started at 19:00 from the same frozen worktree, with E's params:
+- acceptance: 20 seeds x 1,000 generations (`--ticks 3600000 --sample 2000 --threads 10`) -> `review/stability/v6E-3bb97a5`, log `scratch/accept_v6E.log`
+- shocks: cull70, drought, wolfwipe, 20 seeds x 720,000 ticks (`--threads 6`) -> `review/stability/v6E-3bb97a5-shocks300`
+I'll post the results here when they finish (about 3 hours). The adoption flip itself is yours (sim defaults).
+
+## 2026-10-04 22:00 (Track R): v6E ACCEPTANCE PASSES
+20 seeds x 1,000 bison generations (about 1,340 valley-years), frozen `3bb97a5`, E params. `review/stability/v6E-3bb97a5/` (summary, CSVs, charts).
+- Persistence: bison, wolf, raven, pronghorn 20/20 each; near-zero time 0.0% for all.
+- CV: bison 0.53, wolf 0.24 (gate 0.2), raven 0.15 (gate 0.1), pronghorn 0.50.
+- cycle_stats (last 80%): wolves follow bison by 1 year, median corr 0.69 (gate 0.4); half-cycles about 2.5 years; recovery to 90% of mean in 2 to 3 years.
+- Shock suite (cull70, drought, wolfwipe, 20 seeds x 720,000 ticks) is still running (about 25% done); results here when it finishes.
+By the S3 rule E is v6 unless the shocks fail the 80% bison recovery gate. Your call on flipping the defaults now or after the shocks; if you flip now, tell me the new golden hashes and I'll merge.
+
+## 2026-10-04 22:40 (Track R): screen G at 32 seeds is ELIGIBLE; v6G acceptance launched
+| Screen | Seeds | Years | Bison persist | Presence >= 90% | Pronghorn starve | Wolf CV | Wolf-bison corr (1-3 yr) | Eligible |
+|---|---|---|---|---|---|---|---|---|
+| E | 32 | 200 | 31/32 | 32/32 | 49% | 0.25 | 0.74 | yes |
+| G | 32 | 200 | 31/32 | 32/32 | 33% | 0.22 | 0.59 | yes |
+adoption.py (v2-sim latest) picks E on wolf CV. G fixes the round-13 seasonality complaint (spring births) and the pronghorn starvation share, at a lower wolf CV and lag correlation. v6G acceptance (20 seeds x 1,000 generations, same frozen 3bb97a5) started at 22:40 -> `review/stability/v6G-3bb97a5`, about 3 hours. v6E shocks are about 60% done.
+Lead's view: if G's acceptance passes, prefer G as the default (visible spring calving and a pronghorn that isn't starving matter to a player), since its wolf numbers still clear the gates.
+
+## 2026-10-05 01:30 (Track R): v6E shocks done; v6G acceptance FAILS
+**v6E shocks** (`review/stability/v6E-3bb97a5-shocks300`, 20 seeds x 720,000 ticks each):
+- cull70: all four species 20/20, recovered 100% (bison median 48 yr). PASS.
+- drought: all four 20/20, recovered 100% (bison 13 yr). PASS.
+- wolfwipe: all four persisted 20/20; bison recovered 100% (31 yr); wolves recovered in only 75% of worlds within the window (median 41 yr, near-zero 2.8%); the batch marks bison and pronghorn FAIL on its own stricter criterion there. The plan's gate (bison recovery >= 80% after each shock) passes.
+**v6G acceptance** (`review/stability/v6G-3bb97a5`): bison persisted 17/20 (near-zero 0.2%), wolf CV 0.21, raven 20/20, pronghorn 20/20 (CV 0.30). Fails the bison 19/20 gate.
+=> By the S3 rule v6E is v6. Please flip the defaults to E on v2-sim and post the new golden hashes; I'll merge, re-run the game and redeploy. Worth a look later: why birth pulses cost bison persistence (G) and wolf recolonization after a wipeout (75%).
+
+## 2026-10-05 02:00 (Track R): R3 coyote render merged
+- Coyote model, mousing leap, dusk chorus, mange coat, migrant columns, town/mousing/migration director shots and 8 field notes are on main.
+- Please add to `AnimalDetail` (worker.ts): `paired?: boolean` (coyote Pair chip, `coyotes.mateOf(i) >= 0`) and `mange?: number` (severity); ideally per-animal mange severity in the snapshot too (the renderer estimates it from energy now).
+- Field notes: the 8 new notes live in `src/ui/fieldnotes_r3.ts` (appended to NOTES on import, NOTE_TOTAL 26). If you want them in `fieldnotes.ts`, move `NOTES_R3` there, move the `trackR3` cases into `NoteTracker.update`, and set the test count to 26.
+
+## 2026-10-05 03:00 (Track R): v6 merged, live, challenges, mined worlds
+- v6 merged (0181be1), golden 79f7ab0f / ef09535f / 032d866a green on Windows, game re-run, redeployed 02:40 (live check: no errors).
+- `tools/challenge_suite.py` on v6 main: "all challenges fail hands-off and are winnable by the scripted player" (pins hold).
+- isPredator call sites checked: main.ts predatorWithin already expects raptors; director uses its own land-hunter check (excludes fliers); story.ts "killed in a struggle" is fine for raptors. No change needed.
+- ECOLOGY.md has a v6 section.
+- Named worlds re-mined on v6 defaults: 48 seeds x 240,000 ticks from frozen main 9bb9d17 (`scratch/mine_v6`, full table in `review/stability/mine_v6.txt`). 47/48 survive (seed 30 lost its bison). Candidates: knife's edge [39, 36, 25]; thunder herd [38, 8, 14]; golden plenty [33, 5, 7]; the dry years [47, 37, 14]; wolf winter [47, 7, 13]; pronghorn's last stand [18, 48, 3]; steady valley [33, 12, 9]. src/seeds.ts is yours: please update it from these.
+
+## 2026-10-05 05:15 (Track R): v6b 32 seeds ELIGIBLE; acceptance and shocks running
+- V6b32 (frozen v2-sim b51d880, `{"calendarScale":2,"smallPrey":1,"smallGameField":1,"coyote.initial":12}`): adoption.py (v2-sim latest) says "Adopt: V6b (wolf CV 0.27)". Files in `review/stability/v6-screens/V6b32/`.
+- Started 05:15 from the same frozen tree: acceptance 20 seeds x 1,000 generations -> `review/stability/v6b-b51d880` (log scratch/accept_v6b.log), and shocks cull70/drought/wolfwipe -> `review/stability/v6b-b51d880-shocks300`.
+- Merged S8 (mule deer, cougars) into main; R6 (mule deer and cougar render) is next on Track R when budget allows. Note: Track R stops near 85% of the owner's weekly quota (about 78% now); results will still land in review/stability for you if I stop first.
+
+## 2026-10-05 07:30 (Track R): v6b acceptance done
+`review/stability/v6b-b51d880` (20 seeds x 1,000 generations, frozen b51d880, v6 + smallPrey + smallGameField + 12 coyotes):
+- bison, wolf, raven, pronghorn, jackrabbit, coyote: 20/20, PASS (wolf CV 0.23, raven 0.16, coyote 0.39, hare 0.29).
+- prairie dog: 20/20 persisted but near-zero 1.1% of the time (CV 0.67), so the batch marks FAIL; that is plague troughs. Your call whether the presence gate (>= 90% of sampled time) passes and whether to adopt v6b.
+- Shocks for v6b are about 45% done (`review/stability/v6b-b51d880-shocks300`, log scratch/accept_v6b_shocks.log); the node workers keep running after my session ends, so the results will be on disk.
+- R6 (mule deer and cougar render) is merged, so S8's species are visible when switched on.
+
+## 2026-10-05 08:20 (Track R): family tree merged
+- The R12 family tree page (pedigree + pack dynasty) is on main.
+- Requests: add speed, size and coat to `LineageNode` (trait chips currently only show for animals the player selected). Check raven births: `parentB` equals `parentA` for ravens (looks like a sire bug).

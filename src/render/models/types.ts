@@ -1,7 +1,78 @@
 import type * as THREE from 'three';
 
+/**
+ * Wing and pose constants of a bird of prey (shader.ts, `#if RAPTOR`). Angles in radians, lengths in model metres. The wings are authored on the
+ * right (+z); the primaries ("fingers", numbered in the vertex's aPart.w) fan about `handRoot`.
+ */
+export interface RaptorParams {
+  /** Where the primaries' roots meet, right wing. */
+  handRoot: [number, number, number];
+  /** Number of separate primaries per wing (at most 7). */
+  fingers: number;
+  /** Half-angle of the fan of the primaries in a soar, and how far they curl up at the tips. */
+  spread: number;
+  curl: number;
+  /** Dihedral of the whole wing at the shoulder and of the hand above the arm at the wrist, in a glide (a hawk holds a shallow V, an eagle flatter). */
+  dihIn: number;
+  dihOut: number;
+  /** Size of the beat at the shoulder and the wrist. */
+  flapIn: number;
+  flapOut: number;
+  /** Extra back sweep of the wing in a fast glide. */
+  sweepFast: number;
+  /** The stoop: dihedral of the drawn-in wing, its back sweep, how much the wing's length is pulled in (0..1). */
+  stoopDih: number;
+  stoopSweep: number;
+  stoopCmp: number;
+  /** A folded wing is this much shorter (0..1) and the tips droop by `foldDroop`. */
+  foldCmp: number;
+  foldDroop: number;
+  /** Body pitch (nose up) of a bird sitting upright on a perch, about the hip joint at `perchHip` (x, y). */
+  perchPitch: number;
+  perchHip: [number, number];
+  /** How far the tail fans out in a soar (fraction of its width). */
+  tailFan: number;
+}
+
+/**
+ * R6 stotting (pronking) gait of a mule deer: all four feet leave the ground together in high bounds. A weight 0..1 (the animal layer's
+ * `stot`, written to aFx2.y of the deer) blends the gallop's foot path toward it, so the foot lock still holds: the feet stand still on the
+ * ground for `duty` of each cycle (they slide back at body speed, the stride is derived from `amp` and `duty` like a gait's) and fly the
+ * rest, lifted by `knee` (swing lift as the knee flexion parameter of a gait) with the whole body rising `bob` m in the air and sinking `sink`
+ * m in the stance, pitching `pitch` rad nose up at take-off and nose down at landing.
+ */
+export interface StotParams {
+  /** Hip swing amplitude (sets the stride with `duty`, like a gait's amp). */
+  amp: number;
+  /** Stance share of the cycle (short: the bounds are mostly flight). */
+  duty: number;
+  /** Swing lift as a gait's knee flexion parameter (the feet tuck up under the rising body). */
+  knee: number;
+  /** Peak rise of the body in the air (m, model units) and sink in the stance (m). */
+  bob: number;
+  sink: number;
+  /** Pitch swing (rad). */
+  pitch: number;
+  /** Per-leg phase offsets FL, FR, HL, HR (all 0: the four feet land together). */
+  off: [number, number, number, number];
+}
+
 /** Gait and pose constants for one species. Angles in radians, lengths in meters, speeds in m/s. */
 export interface AnimParams {
+  /** R6 stotting gait (mule deer only): see StotParams. Unset: the species never stots and its shader has no stotting code. */
+  stot?: StotParams;
+  /**
+   * R6 cat stalk (cougar): while crouched the shoulder blades rise above the dropped back line, the tail hangs low with a twitching tip, and in
+   * the freeze before the rush (aFx2.y, 0..1) the haunches gather and wiggle. 0 or unset: no.
+   */
+  stalk?: number;
+  /**
+   * R8 behaviour library (bison): the species reads the behaviour weights the animal layer packs into aFx2 (wallow, rub, spar, hop) and the extra
+   * attribute aFx3 (snow dig, bellow, calf play, spar phase), see models/shader.ts. Unset: the shader has none of that code.
+   */
+  behave?: boolean;
+  /** R8 pronghorn: aFx2.x is the rump flare weight on alarm (the white patch spreads and brightens). */
+  flare?: boolean;
   /** 0 quadruped, 1 hopper, 2 bird. */
   kind: 0 | 1 | 2;
   /** Height of the pivot used for body pitch. */
@@ -47,6 +118,17 @@ export interface AnimParams {
   lieKneeH: number;
   /** Stalking crouch body drop (m). */
   crouchDrop: number;
+  /**
+   * A land hunter (wolf, cougar): its material reads the second effects attribute (aFx2: the hold on the prey and the feeding
+   * cycle). Birds read it too (hop, walk, takeoff). For everything else the attribute is left out of the shader.
+   */
+  hunts?: boolean;
+  /**
+   * A hunter that takes its prey by clinging to it (cougar): in the hold the forelegs wrap the prey's shoulders and the body
+   * pitches up to about 36 degrees with the head down on the neck, instead of the wolf's pose (forefeet on the ground, body at
+   * about 17 degrees, hind legs braced and spread). 0 or unset: no.
+   */
+  clasp?: number;
   /**
    * Curled rest (canids): while lying, the hindquarters and tail swing round to one side (up to `curlAng` rad, ramping in
    * over `curlLen` m behind the pivot at x = `curlX`) and the head turns back and rests on the paws. A resting wolf then
@@ -95,6 +177,8 @@ export interface AnimParams {
   strideSpeedMax: number;
   /** Wing beat frequency (Hz), birds only. */
   flapHz: number;
+  /** R5 birds of prey (golden eagle, red-tailed hawk): slotted primaries, soaring dihedral, the stoop and the upright perch. Unset: a raven-style bird. */
+  raptor?: RaptorParams;
   /** Footprint for terrain alignment and picking. */
   length: number;
   height: number;
@@ -139,6 +223,12 @@ export function plantedStride(p: AnimParams, gait: 0 | 1 | 2, pace = 0): number 
   return (2 * (p.legL ?? p.comY) * footReach(amp)) / duty;
 }
 
+/** Metres a planted foot sweeps back per leg cycle of the stotting gait (the stride of its bounds), the same rule as plantedStride. */
+export function stotStride(p: AnimParams): number {
+  const s = p.stot;
+  return s ? (2 * (p.legL ?? p.comY) * footReach(s.amp)) / s.duty : 0;
+}
+
 /** Gallop stance fraction at a given pace (the shader evaluates the same curve). */
 export function gallopDuty(p: AnimParams, pace: number): number {
   if (p.dutyGF === undefined) return p.dutyG;
@@ -147,8 +237,56 @@ export function gallopDuty(p: AnimParams, pace: number): number {
   return p.dutyG + (p.dutyGF - p.dutyG) * t * t * (3 - 2 * t);
 }
 
+/**
+ * R7 fur shading of a quadruped (the fragment stage, both LODs so the cross-fade between them stays matched). Everything is optional
+ * and small; 0 or unset switches a term off.
+ */
+export interface FurDef {
+  /** Kajiya-Kay highlight along the hair (the body axis): strength, exponent, tint (multiplies the coat colour's own, linear). */
+  sheen: number;
+  sheenPow?: number;
+  sheenTint?: [number, number, number];
+  /** Backlit rim of fur glowing in a low sun (near range only; the far rim and the night rim are separate and are not doubled). */
+  rim: number;
+  /** Coat pattern: darker along the topline (dorsal), lighter underside (belly), tone mottling (amplitude, cells per metre), per-animal hue jitter. */
+  dorsal?: number;
+  belly?: number;
+  mottle?: number;
+  /** Hair streaks along the body (amplitude, near range only). */
+  streak?: number;
+  mottleScale?: number;
+  indiv?: number;
+  /** Shaggy wool shells (near LOD only): tuft cell size (cells per m, across and along the hair), fringe sparseness 0..1, fade-out range (m). */
+  shell?: { scale: number; along: number; sparse: number; d0: number; d1: number; /** Tone of the inner and the outer layer (multiplies the coat; default 0.8 and 1.04). */ tone?: [number, number] };
+}
+
 export interface ModelDef {
   geometry: THREE.BufferGeometry;
+  /** R7 near LOD: a denser, continuous body, neck and head loft (same rig as `geometry`, which is the far LOD). Drawn within `lod.d1` metres. */
+  nearGeometry?: THREE.BufferGeometry;
+  /** Camera distance range (m) of the dithered cross-fade from the near to the far LOD. */
+  lod?: { d0: number; d1: number };
+  fur?: FurDef;
+  /**
+   * Index count of the part of the far geometry that the ambient-occlusion pre-pass draws. That pass draws every mesh in its rest pose with one
+   * override material and no animation, so geometry the vertex shader grows or hides (the antlers of a deer, bare most of the year) must sit
+   * at the end of the index buffer and be left out here, or its rest pose leaves faint lines in the picture.
+   */
+  aoCount?: number;
+  /**
+   * R6 mule deer: a seasonal coat and antlers. The coat blends from coatPale / coatDark (the summer coat) to winterPale / winterDark by the
+   * per-instance winter weight; the antlers (head vertices tagged in aPart.w: 1 main beam, 2 fork, 3 tine) grow about `antlerBase` and
+   * their tines appear by `forkAt` (the growth at which the first forks are half out) and `tineAt` (the second tines).
+   */
+  seasonal?: {
+    winterPale: [number, number, number];
+    winterDark: [number, number, number];
+    antlerBase: [number, number, number];
+    forkAt: number;
+    tineAt: number;
+    /** Velvet and hard antler colours (linear). */
+    velvet: [number, number, number];
+  };
   params: AnimParams;
   /** Linear RGB coat palette: pale end and dark end. */
   coatPale: [number, number, number];

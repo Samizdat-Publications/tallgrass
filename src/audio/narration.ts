@@ -24,6 +24,21 @@ export const NARRATION_TEXT: Record<string, string> = {
   extinct_raven: 'The ravens have abandoned the valley.',
   introducedWolf_1: 'Wolves return to the valley. The herds have forgotten what it means to be watched.',
   fire_1: 'Fire on the prairie. It looks like ruin, but within a season the burned ground will be the greenest in the valley.',
+  // R3: the small-prey web, the canines' troubles, the storms and the valley's comings and goings
+  wolvesArrive_1: 'Wolves have come in from beyond the valley. A new pair finds an empty den and settles in.',
+  returned_1: 'An animal that had vanished from the valley has found its own way back.',
+  pronghornLeave_1: 'Winter is coming, and the pronghorn drift out of the valley toward the open prairie.',
+  pronghornReturn_1: 'With the spring, the pronghorn return.',
+  distemper_1: 'Distemper moves through the canines. It spreads where they gather, and the young are the first to go.',
+  mange_1: 'Mange has taken hold. The coats thin out, and a hard winter will finish what it started.',
+  plague_1: 'Plague has reached the prairie dog town. Within a season, almost every one of them will be gone.',
+  townBack_1: 'A few survivors start digging again. Slowly, the town comes back.',
+  hareBoom_1: 'Jackrabbits are everywhere. A year like this does not last.',
+  hareCrash_1: 'The jackrabbits have crashed. The prairie is suddenly much quieter.',
+  coyotePups_1: 'Coyote pups at the den. Small, quick, and always hungry.',
+  mesoRelease_1: 'With the wolves so few, the coyotes have taken their place. The valley has a new hunter.',
+  lightningFire_1: 'Lightning strikes the dry grass, and the prairie catches fire.',
+  storm_1: 'A thunderstorm crosses the valley. The air goes still, and then the sky breaks open.',
 };
 
 export const NARRATION_IDS = Object.keys(NARRATION_TEXT);
@@ -45,8 +60,17 @@ function earnsCard(e: SimEvent): boolean {
   return !!describeEvent(e).card;
 }
 
+/** What the narrator remembers about the valley that a single event cannot say. */
+export interface NarrationContext {
+  /** Ticks since the last prairie dog plague this page has seen (undefined when none): a town founded after one is "coming back". */
+  sincePlague?: number;
+}
+
+/** A town founded within this many valley years of a plague is a town coming back. */
+export const TOWN_BACK_YEARS = 40;
+
 /** The variant ids of the lines that suit a sim event, or null when it earns no narration. */
-export function lineVariants(e: SimEvent): string[] | null {
+export function lineVariants(e: SimEvent, ctx: NarrationContext = {}): string[] | null {
   switch (e.kind) {
     case 'packFounded': return earnsCard(e) ? ['packFounded_1', 'packFounded_2'] : null;
     case 'packLost': return ['packLost_1', 'packLost_2'];
@@ -57,6 +81,20 @@ export function lineVariants(e: SimEvent): string[] | null {
     case 'introduced': return e.sp === 1 ? ['introducedWolf_1'] : null;
     case 'fire': return ['fire_1'];
     case 'firstKill': return ['firstKill_1'];
+    // R3
+    case 'immigrated': return e.sp === 1 ? ['wolvesArrive_1'] : e.sp === 3 ? ['pronghornReturn_1'] : null;
+    case 'emigrated': return e.sp === 3 && e.a >= 5 ? ['pronghornLeave_1'] : null;
+    case 'recolonized': return ['returned_1'];
+    case 'distemper': return e.a + e.b > 0 ? ['distemper_1'] : null;
+    case 'mange': return ['mange_1'];
+    case 'sylvaticPlague': return ['plague_1'];
+    case 'townFounded': return ctx.sincePlague !== undefined && ctx.sincePlague >= 0 ? ['townBack_1'] : null;
+    case 'hareBoom': return ['hareBoom_1'];
+    case 'hareCrash': return ['hareCrash_1'];
+    case 'coyotePups': return ['coyotePups_1'];
+    case 'mesoRelease': return ['mesoRelease_1'];
+    case 'lightningFire': return ['lightningFire_1'];
+    case 'storm': return ['storm_1'];
     default: return null;
   }
 }
@@ -65,17 +103,38 @@ export function lineVariants(e: SimEvent): string[] | null {
 export function priority(kind: string): number {
   switch (kind) {
     case 'extinct': return 9;
+    case 'recolonized': return 8.5;
     case 'introduced': return 8;
+    case 'mesoRelease': return 7.8;
     case 'drought': return 7;
+    case 'sylvaticPlague': return 6.8;
+    case 'immigrated': return 6.5;
+    case 'lightningFire': return 6.2;
     case 'fire': return 6;
+    case 'distemper': return 5.5;
     case 'outbreak': return 5;
+    case 'mange': return 4.5;
     case 'stampede': return 4;
+    case 'emigrated': return 3.5;
+    case 'hareBoom': return 3.2;
+    case 'hareCrash': return 3.2;
     case 'packLost': return 3;
+    case 'coyotePups': return 2.5;
+    case 'storm': return 2.2;
+    case 'townFounded': return 2;
     case 'packFounded': return 2;
     case 'firstKill': return 2;
     default: return 0;
   }
 }
+
+/**
+ * Kinds that come round again and again get a rest: at most one line per this many valley years for the same kind and species
+ * (the pronghorn leave every autumn, a storm crosses every summer). Kinds not listed are limited only by the 40 s between lines.
+ */
+export const KIND_COOLDOWN_YEARS: Record<string, number> = {
+  emigrated: 4, storm: 3, mange: 3, distemper: 2, hareBoom: 5, hareCrash: 5, coyotePups: 3, immigrated: 2, townFounded: 3, lightningFire: 2,
+};
 
 /** Pick a variant at random, never the one that was used last for this kind when there is a choice. */
 export function pickVariant(variants: string[], last: string | undefined, rnd: number): string {

@@ -39,7 +39,7 @@ export const SCENARIOS: Scenario[] = [
   {
     id: 'island', name: 'Island of plenty',
     blurb: 'No predators at all. The herds boom until the grass gives out.',
-    params: { 'wolf.initial': 0, ...CLOSED }, schedule: [],
+    params: { 'wolf.initial': 0, 'coyote.initial': 0, ...CLOSED }, schedule: [],
   },
   {
     id: 'drought', name: 'The long drought',
@@ -67,7 +67,7 @@ export const SCENARIOS: Scenario[] = [
     // the best predator-response screen of Sunday morning (scratch/L1, 32 worlds x 200 valley-years): bison, wolves and
     // ravens 32/32, wolves follow bison at correlation 0.77, pronghorn 25/32. Over 1,000 generations (review/stability/hungrywolves-44a2bfe)
     // the pronghorn die out in all 20 worlds, between years 88 and 585, while bison, wolves and ravens hold in 19
-    params: { wolfPreyRef: 1000, wolfRareHalf: 400, leanLitter: 0.8, ...CLOSED, cdvRate: 0, mangeRate: 0 }, schedule: [],
+    params: { wolfPreyRef: 1000, wolfRareHalf: 400, leanLitter: 0.8, ...CLOSED, cdvRate: 0, mangeRate: 0, smallPrey: 0, smallGameField: 0, 'coyote.initial': 0 }, schedule: [],
   },
   {
     id: 'collapse', name: 'Collapse',

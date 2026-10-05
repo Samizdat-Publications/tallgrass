@@ -3,7 +3,8 @@
    Every size is written as N * var(--u): 1 px at 1600 wide, growing gently on large screens. */
 
 .tg-ui {
-  --u: calc(clamp(14px, 0.875vw, 22px) / 14);
+  --ui-scale: 1;
+  --u: calc(clamp(14px, 0.875vw, 22px) / 14 * var(--ui-scale));
   --m: clamp(14px, 1.5vw, 32px);
   --bar-h: calc(44 * var(--u));
   --stack: calc(var(--m) + var(--bar-h) + 12 * var(--u));
@@ -1696,12 +1697,12 @@ button.tg-ent-b:hover {
   display: none;
 }
 
-/* ---- idle: the side panels settle to about half after a while with no input, and come back on any move or key ----- */
+/* ---- idle: the side panels settle to three quarters (enough backing to stay readable over trees) after a while with no input, and come back on any move or key ----- */
 .tg-ui.is-idle:not(.is-cinematic):not(.is-hidden) .tg-tool,
 .tg-ui.is-idle:not(.is-cinematic):not(.is-hidden) .tg-rail-title,
 .tg-ui.is-idle:not(.is-cinematic):not(.is-hidden) .tg-chron,
 .tg-ui.is-idle:not(.is-cinematic):not(.is-hidden) .tg-pop {
-  opacity: 0.5;
+  opacity: 0.75;
   transition: opacity 1.2s var(--ease);
 }
 
@@ -2501,9 +2502,726 @@ button.tg-ent-b:hover {
   color: var(--paper-dim);
   line-height: 1.35;
 }
+/* the Small prey overlay's legend: a swatch and a name per layer (render/smalloverlay.ts) */
+.tg-map-legend-row {
+  display: flex;
+  align-items: center;
+  gap: calc(8 * var(--u));
+  font-size: calc(13.5 * var(--u));
+  line-height: 1.5;
+}
+.tg-map-swatch {
+  flex: none;
+  width: calc(16 * var(--u));
+  height: calc(9 * var(--u));
+  border-radius: calc(3 * var(--u));
+  background: #9ec7f2;
+}
+.tg-map-swatch-hare {
+  background: #9ec7f2;
+}
+.tg-map-swatch-dog {
+  background: #ed9e33;
+}
+.tg-map-swatch-town {
+  background: transparent;
+  border: calc(1.5 * var(--u)) solid #ffeeb8;
+}
+.tg-map-swatch-plague {
+  background: repeating-linear-gradient(135deg, #dc1a66 0 calc(3 * var(--u)), rgba(220, 26, 102, 0.35) calc(3 * var(--u)) calc(6 * var(--u)));
+}
+.tg-map-legend-small .tg-map-legend-note {
+  margin-top: calc(5 * var(--u));
+}
 @media (max-width: 720px) {
   .tg-map-legend {
     left: auto;
     right: 0;
   }
+}
+
+/* ====================================================================================================================
+   Play UI (R12): the pages (settings, new valley, field guide), form controls, toast, title card, tips, shutter, share
+   ==================================================================================================================== */
+
+/* ---- a centred page: the shape settings, new valley and the field guide share ---------------------------------- */
+.tg-pane {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 6;
+  width: min(calc(480 * var(--u)), calc(100vw - 2 * var(--m)));
+  max-height: min(calc(100vh - 2 * var(--m)), calc(720 * var(--u)));
+  display: flex;
+  flex-direction: column;
+  padding: calc(16 * var(--u)) calc(6 * var(--u)) calc(12 * var(--u)) calc(18 * var(--u));
+  background: rgba(26, 23, 17, 0.84);
+  opacity: 0;
+  transform: translate(-50%, calc(-50% + 8 * var(--u)));
+  transition: opacity 0.2s var(--ease), transform 0.2s var(--ease), visibility 0s linear 0s;
+}
+.tg-pane.is-wide {
+  width: min(calc(760 * var(--u)), calc(100vw - 2 * var(--m)));
+}
+.tg-pane.is-open {
+  opacity: 1;
+  transform: translate(-50%, -50%);
+}
+.tg-pane-head {
+  display: flex;
+  align-items: center;
+  gap: calc(12 * var(--u));
+  padding-right: calc(12 * var(--u));
+}
+.tg-pane-title {
+  flex: none;
+  font: italic 400 calc(25 * var(--u)) / 1 var(--serif);
+}
+.tg-pane-extra {
+  flex: 1;
+  display: flex;
+}
+.tg-pane-sub {
+  margin: calc(6 * var(--u)) calc(14 * var(--u)) calc(8 * var(--u)) 0;
+  font: italic 400 calc(14.5 * var(--u)) / 1.3 var(--serif);
+  color: var(--paper-dim);
+}
+.tg-pane-body {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0 calc(12 * var(--u)) calc(4 * var(--u)) 0;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(239, 230, 208, 0.25) transparent;
+}
+.tg-pane-h {
+  margin: calc(14 * var(--u)) 0 calc(4 * var(--u));
+  font: italic 400 calc(15 * var(--u)) / 1 var(--serif);
+  color: var(--paper-dim);
+}
+.tg-pane-h:first-child {
+  margin-top: calc(4 * var(--u));
+}
+.tg-pane-note {
+  margin: calc(6 * var(--u)) 0 0;
+  font: italic 400 calc(14 * var(--u)) / 1.3 var(--serif);
+  color: var(--paper-dim);
+}
+.tg-pane-foot {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: calc(14 * var(--u));
+  padding: calc(12 * var(--u)) 0 0;
+}
+.tg-pane .tg-switch,
+.tg-pane .tg-slider {
+  padding-left: calc(2 * var(--u));
+  padding-right: calc(2 * var(--u));
+}
+
+/* ---- form controls --------------------------------------------------------------------------------------------- */
+.tg-seg {
+  display: flex;
+  gap: calc(2 * var(--u));
+  padding: calc(3 * var(--u));
+  border-radius: calc(9 * var(--u));
+  border: 1px solid var(--edge);
+  background: rgba(10, 8, 4, 0.3);
+}
+.tg-seg-btn {
+  flex: 1;
+  height: calc(30 * var(--u));
+  padding: 0 calc(10 * var(--u));
+  border-radius: calc(6 * var(--u));
+  text-align: center;
+  font-weight: 500;
+  color: var(--paper-dim);
+  transition: background-color 0.15s, color 0.15s;
+  white-space: nowrap;
+}
+.tg-seg-btn:hover {
+  color: var(--paper);
+  background: rgba(240, 228, 200, 0.08);
+}
+.tg-seg-btn[aria-checked='true'] {
+  background: var(--gold);
+  color: var(--ink);
+  font-weight: 700;
+}
+.tg-seg.is-disabled {
+  opacity: 0.45;
+}
+.tg-slider {
+  display: grid;
+  gap: calc(3 * var(--u));
+  padding: calc(7 * var(--u)) calc(2 * var(--u)) calc(4 * var(--u));
+  cursor: default;
+}
+.tg-slider-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: calc(10 * var(--u));
+}
+.tg-slider-val {
+  font: 500 calc(14 * var(--u)) / 1 var(--sans);
+  font-variant-numeric: lining-nums tabular-nums;
+  color: var(--gold);
+}
+.tg-slider.is-disabled {
+  opacity: 0.45;
+}
+.tg-range {
+  --fill: 50%;
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: calc(18 * var(--u));
+  margin: 0;
+  background: transparent;
+  cursor: pointer;
+  pointer-events: auto;
+}
+.tg-range::-webkit-slider-runnable-track {
+  height: calc(4 * var(--u));
+  border-radius: 999px;
+  background: linear-gradient(to right, var(--gold) var(--fill), rgba(240, 228, 200, 0.18) var(--fill));
+}
+.tg-range::-moz-range-track {
+  height: calc(4 * var(--u));
+  border-radius: 999px;
+  background: rgba(240, 228, 200, 0.18);
+}
+.tg-range::-moz-range-progress {
+  height: calc(4 * var(--u));
+  border-radius: 999px;
+  background: var(--gold);
+}
+.tg-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: calc(16 * var(--u));
+  height: calc(16 * var(--u));
+  margin-top: calc(-6 * var(--u));
+  border-radius: 50%;
+  border: 2px solid var(--gold);
+  background: #2a2417;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+}
+.tg-range::-moz-range-thumb {
+  width: calc(12 * var(--u));
+  height: calc(12 * var(--u));
+  border-radius: 50%;
+  border: 2px solid var(--gold);
+  background: #2a2417;
+}
+.tg-range:disabled {
+  cursor: not-allowed;
+}
+.tg-switch.is-disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.tg-switch.is-disabled:hover {
+  background: none;
+}
+.tg-sc-name.has-dot {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(9 * var(--u));
+}
+.tg-sc-name.has-dot::before {
+  content: '';
+  width: calc(9 * var(--u));
+  height: calc(9 * var(--u));
+  border-radius: 50%;
+  background: var(--dot, var(--paper-dim));
+  box-shadow: 0 0 0 1px rgba(240, 228, 200, 0.25);
+}
+
+/* ---- new valley ------------------------------------------------------------------------------------------------ */
+.tg-setup-species {
+  display: grid;
+  gap: calc(2 * var(--u));
+}
+.tg-setup-row {
+  display: grid;
+  grid-template-columns: calc(190 * var(--u)) 1fr calc(44 * var(--u));
+  align-items: center;
+  gap: calc(12 * var(--u));
+}
+.tg-switch-mini {
+  padding: calc(6 * var(--u)) calc(2 * var(--u));
+}
+.tg-setup-row .tg-slider-val {
+  text-align: right;
+}
+.tg-setup-line {
+  display: grid;
+  grid-template-columns: calc(78 * var(--u)) 1fr;
+  align-items: center;
+  gap: calc(10 * var(--u));
+  padding: calc(4 * var(--u)) calc(2 * var(--u));
+}
+.tg-setup-label {
+  font: 500 calc(17 * var(--u)) / 1.2 var(--serif);
+}
+.tg-setup .tg-menu-new {
+  padding: 0;
+}
+.tg-setup-foot {
+  justify-content: space-between;
+}
+.tg-setup-warn {
+  color: var(--gold);
+}
+
+/* ---- field guide ----------------------------------------------------------------------------------------------- */
+.tg-guide-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: calc(4 * var(--u));
+  padding: calc(2 * var(--u)) 0 calc(10 * var(--u));
+  border-bottom: 1px solid rgba(239, 230, 208, 0.1);
+}
+.tg-guide-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(8 * var(--u));
+  height: calc(32 * var(--u));
+  padding: 0 calc(12 * var(--u)) 0 calc(10 * var(--u));
+  border-radius: 999px;
+  border: 1px solid var(--edge);
+  font-weight: 500;
+  color: var(--paper-dim);
+  transition: background-color 0.15s, border-color 0.15s, color 0.15s;
+}
+.tg-guide-tab:hover {
+  color: var(--paper);
+  background: rgba(240, 228, 200, 0.08);
+}
+.tg-guide-tab[aria-selected='true'] {
+  color: var(--paper);
+  border-color: var(--dot);
+  background: rgba(240, 228, 200, 0.1);
+}
+.tg-guide-dot {
+  width: calc(9 * var(--u));
+  height: calc(9 * var(--u));
+  border-radius: 50%;
+  background: var(--dot);
+}
+.tg-guide-tabcount {
+  font-size: calc(12.5 * var(--u));
+  font-variant-numeric: lining-nums tabular-nums;
+  opacity: 0.8;
+}
+.tg-guide-tab.is-done .tg-guide-tabcount {
+  color: var(--gold);
+  opacity: 1;
+}
+.tg-guide-head {
+  display: flex;
+  align-items: baseline;
+  gap: calc(14 * var(--u));
+  padding-top: calc(14 * var(--u));
+}
+.tg-guide-name {
+  margin: 0;
+  font: italic 400 calc(34 * var(--u)) / 1 var(--serif);
+  border-bottom: 2px solid var(--dot);
+  padding-bottom: calc(4 * var(--u));
+}
+.tg-guide-prog {
+  font: 500 calc(14 * var(--u)) / 1 var(--sans);
+  color: var(--gold);
+}
+.tg-guide-note {
+  margin: calc(10 * var(--u)) 0 calc(6 * var(--u));
+  font: 400 calc(16.5 * var(--u)) / 1.38 var(--serif);
+  color: var(--paper);
+  max-width: 36em;
+  text-wrap: pretty;
+  user-select: text;
+}
+.tg-guide-list {
+  overflow: visible;
+  padding: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  column-gap: calc(22 * var(--u));
+}
+.tg-guide-beh {
+  min-width: 0;
+}
+.tg-guide-beh:nth-last-child(2):nth-child(odd) {
+  border-bottom: 0;
+}
+.tg-guide-photohead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: calc(12 * var(--u));
+  margin-top: calc(10 * var(--u));
+}
+.tg-guide-photohead .tg-pane-h {
+  margin: 0;
+}
+.tg-guide-shoot {
+  height: calc(30 * var(--u));
+}
+.tg-guide-shootic {
+  display: grid;
+}
+.tg-guide-strip {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: calc(8 * var(--u));
+  margin-top: calc(8 * var(--u));
+}
+.tg-guide-thumb {
+  display: block;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border-radius: calc(6 * var(--u));
+  border: 1px solid var(--edge-hi);
+  transition: border-color 0.15s, transform 0.15s;
+}
+.tg-guide-thumb:hover {
+  border-color: var(--gold);
+  transform: translateY(calc(-1 * var(--u)));
+}
+.tg-guide-thumb img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.tg-guide-light {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: grid;
+  grid-template-rows: 1fr auto;
+  gap: calc(8 * var(--u));
+  padding: calc(8 * var(--u));
+  background: rgba(16, 12, 6, 0.94);
+  border-radius: calc(8 * var(--u));
+  cursor: pointer;
+}
+.tg-guide-lightimg {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  object-fit: contain;
+}
+.tg-guide-lightnote {
+  text-align: center;
+  font: italic 400 calc(14 * var(--u)) / 1.2 var(--serif);
+  color: var(--paper-dim);
+}
+
+/* ---- toast ----------------------------------------------------------------------------------------------------- */
+.tg-toast {
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--stack) + 6 * var(--u));
+  z-index: 7;
+  display: flex;
+  align-items: baseline;
+  gap: calc(10 * var(--u));
+  max-width: min(calc(100vw - 2 * var(--m)), calc(620 * var(--u)));
+  padding: calc(9 * var(--u)) calc(18 * var(--u));
+  border-radius: 999px;
+  background: rgba(26, 23, 17, 0.8);
+  opacity: 0;
+  visibility: hidden;
+  transform: translate(-50%, calc(8 * var(--u)));
+  pointer-events: none;
+  transition: opacity 0.4s var(--ease), transform 0.4s var(--ease), visibility 0s linear 0.4s;
+}
+.tg-toast.is-on {
+  opacity: 1;
+  visibility: visible;
+  transform: translate(-50%, 0);
+  transition-delay: 0s;
+}
+.tg-toast-label {
+  flex: none;
+  font: 500 calc(12.5 * var(--u)) / 1 var(--sans);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--gold);
+}
+.tg-toast-text {
+  font: 500 calc(16 * var(--u)) / 1.2 var(--serif);
+}
+.tg-ui.is-hidden .tg-toast {
+  display: none;
+}
+/* over a page the toast moves to the top, clear of the page's own controls */
+.tg-ui.has-pane .tg-toast {
+  bottom: auto;
+  top: calc(var(--m) + 8 * var(--u));
+}
+
+/* ---- share and photograph buttons ------------------------------------------------------------------------------- */
+.tg-sharebtn.is-copied {
+  color: var(--gold);
+  border-color: rgba(217, 182, 92, 0.55);
+}
+.tg-shutter {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: calc(36 * var(--u));
+  height: calc(36 * var(--u));
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  transition: background-color 0.18s, border-color 0.18s, opacity 0.35s var(--ease);
+}
+.tg-shutter:hover {
+  border-color: var(--edge-hi);
+  background-color: rgba(60, 50, 34, 0.6);
+}
+.tg-flash {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  background: #fff;
+  opacity: 0.55;
+  pointer-events: none;
+  transition: opacity 0.45s ease-out;
+}
+.tg-flash.is-fading {
+  opacity: 0;
+}
+
+/* ---- title card: the front door, over the live valley ------------------------------------------------------------ */
+.tg-title {
+  position: absolute;
+  inset: 0;
+  z-index: 9;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.7s var(--ease);
+}
+.tg-title.is-on {
+  opacity: 1;
+}
+.tg-title::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse 70% 60% at 50% 48%, rgba(16, 11, 4, 0.66), rgba(16, 11, 4, 0.4) 60%, rgba(16, 11, 4, 0.22));
+}
+.tg-title-in {
+  position: relative;
+  max-width: min(92vw, calc(640 * var(--u)));
+  padding: 0 calc(20 * var(--u));
+  text-align: center;
+}
+.tg-title-name {
+  margin: 0;
+  font: italic 400 clamp(calc(56 * var(--u)), 8vw, calc(120 * var(--u))) / 1 var(--serif);
+  letter-spacing: -0.01em;
+  text-shadow: 0 2px 34px rgba(0, 0, 0, 0.65), 0 1px 3px rgba(0, 0, 0, 0.45);
+}
+.tg-title-rule {
+  width: calc(72 * var(--u));
+  height: 1px;
+  margin: calc(20 * var(--u)) auto calc(16 * var(--u));
+  background: var(--gold);
+}
+.tg-title-sub {
+  margin: 0;
+  font: 400 clamp(calc(18 * var(--u)), 1.8vw, calc(26 * var(--u))) / 1.3 var(--serif);
+  text-shadow: 0 1px 14px rgba(0, 0, 0, 0.7);
+}
+.tg-title-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: calc(10 * var(--u));
+  margin-top: calc(34 * var(--u));
+}
+.tg-title-btn {
+  height: calc(44 * var(--u));
+  padding: 0 calc(24 * var(--u));
+  font-size: calc(16 * var(--u));
+  pointer-events: auto;
+  background: rgba(26, 23, 17, 0.55);
+  -webkit-backdrop-filter: blur(calc(10 * var(--u)));
+  backdrop-filter: blur(calc(10 * var(--u)));
+}
+.tg-title-btn.is-primary {
+  background: var(--gold);
+}
+.tg-title-btn.is-primary:hover {
+  background: #e6c474;
+}
+.tg-title-list {
+  margin-top: calc(26 * var(--u));
+  padding: calc(8 * var(--u)) calc(8 * var(--u)) calc(10 * var(--u));
+  text-align: left;
+  background: rgba(26, 23, 17, 0.78);
+}
+.tg-title-listhead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-right: calc(8 * var(--u));
+}
+.tg-title-sc {
+  pointer-events: auto;
+}
+.tg-ui.is-hidden .tg-title {
+  display: none;
+}
+/* while the title is up the rest of the interface waits */
+.tg-ui.has-title .tg-chrome,
+.tg-ui.has-title .tg-hint,
+.tg-ui.has-title .tg-chapter,
+.tg-ui.has-title .tg-fn-toast {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+.tg-chrome {
+  transition: opacity 0.7s var(--ease), visibility 0s linear 0s;
+}
+.tg-ui.has-title .tg-chrome {
+  transition: opacity 0.4s var(--ease), visibility 0s linear 0.4s;
+}
+
+/* ---- first-run tips -------------------------------------------------------------------------------------------- */
+.tg-tips {
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--stack) + 14 * var(--u));
+  z-index: 7;
+  width: min(calc(560 * var(--u)), calc(100vw - 2 * var(--m)));
+  padding: calc(10 * var(--u)) calc(18 * var(--u)) calc(16 * var(--u));
+  background: rgba(26, 23, 17, 0.78);
+  opacity: 0;
+  visibility: hidden;
+  transform: translate(-50%, calc(10 * var(--u)));
+  transition: opacity 0.5s var(--ease), transform 0.5s var(--ease), visibility 0s linear 0.5s;
+}
+.tg-tips.is-on {
+  opacity: 1;
+  visibility: visible;
+  transform: translate(-50%, 0);
+  transition-delay: 0s;
+}
+.tg-tips .tg-menu-h {
+  padding-left: 0;
+}
+.tg-tips-list {
+  list-style: none;
+  margin: 0 0 calc(12 * var(--u));
+  padding: 0;
+  display: grid;
+  gap: calc(8 * var(--u));
+}
+.tg-tips-list li {
+  display: grid;
+  grid-template-columns: calc(64 * var(--u)) 1fr;
+  align-items: baseline;
+  gap: calc(12 * var(--u));
+  font: 400 calc(16 * var(--u)) / 1.3 var(--serif);
+}
+.tg-tips-list .tg-kbd {
+  justify-self: start;
+}
+.tg-tips-ok {
+  pointer-events: auto;
+  float: right;
+}
+.tg-ui.is-hidden .tg-tips {
+  display: none;
+}
+
+@media (max-width: 899px) {
+  .tg-setup-row {
+    grid-template-columns: calc(150 * var(--u)) 1fr calc(40 * var(--u));
+  }
+  .tg-guide-strip {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tg-title,
+  .tg-tips,
+  .tg-toast,
+  .tg-pane {
+    transition-duration: 0.01s;
+  }
+}
+
+/* ---- photo mode (R15) --------------------------------------------------------------------------------------------- */
+/* A docked page on the right (a click on the view picks the focus, so it is not a centred, click-outside-closes modal). The right
+   column steps aside while it is open, and "hide the interface" fades every other leaf. */
+.tg-pane.tg-photo {
+  left: auto;
+  right: var(--m);
+  width: min(calc(300 * var(--u)), calc(100vw - 2 * var(--m)));
+  transform: translate(0, calc(-50% + 8 * var(--u)));
+}
+.tg-pane.tg-photo.is-open {
+  transform: translate(0, -50%);
+}
+.tg-ui.is-photo .tg-right {
+  visibility: hidden;
+  pointer-events: none;
+}
+.tg-ui.is-photoclean .tg-leaf {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.35s var(--ease), visibility 0s linear 0.35s;
+}
+.tg-ui.is-photoclean::before,
+.tg-ui.is-photoclean::after {
+  opacity: 0;
+}
+.tg-ui.is-photoclean .tg-bars,
+.tg-ui.is-photoclean .tg-chapter {
+  display: none;
+}
+.tg-photo-focus {
+  display: flex;
+  align-items: center;
+  gap: calc(9 * var(--u));
+  min-height: calc(22 * var(--u));
+  margin: calc(8 * var(--u)) calc(2 * var(--u)) 0;
+  font: italic 400 calc(16 * var(--u)) / 1.2 var(--serif);
+  color: var(--paper);
+}
+.tg-photo-dot {
+  flex: none;
+  width: calc(9 * var(--u));
+  height: calc(9 * var(--u));
+  border-radius: 50%;
+  background: var(--paper-dim);
+  box-shadow: 0 0 0 1px rgba(240, 228, 200, 0.25);
+}
+.tg-photo-foot {
+  justify-content: space-between;
+}
+.tg-photo-foot .tg-seg {
+  width: calc(124 * var(--u));
+}
+.tg-photo-save {
+  min-width: calc(96 * var(--u));
+}
+.tg-photo-save:disabled {
+  opacity: 0.55;
+  cursor: progress;
 }

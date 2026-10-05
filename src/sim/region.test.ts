@@ -80,7 +80,7 @@ function ok(cond: boolean, msg: string): void {
 // ---- off (all rates zero) reproduces a closed valley exactly
 {
   const off = simHash(3, 6000, { openPrairie: 0, ravenVagrants: 0 });
-  const zero = simHash(3, 6000, { ravenVagrants: 0, openPrairie: 1, wolfInRate: 0, wolfOutAfter: 1e9, deerOutK: 0, deerInK: 0, deerRescue: 0 });
+  const zero = simHash(3, 6000, { ravenVagrants: 0, openPrairie: 1, wolfInRate: 0, wolfOutAfter: 1e9, deerOutK: 0, deerInK: 0, deerRescue: 0, coyoteInRate: 0 });
   ok(off === zero, `openPrairie 1 with every rate at zero is identical to a closed valley (${off} vs ${zero})`);
 }
 

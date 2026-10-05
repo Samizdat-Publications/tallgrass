@@ -681,7 +681,7 @@ Fix the complaint every Gemini round repeats: sliding feet, stiff animals, wolve
   - During stance, each leg reads the ground height at its foot's world position from the height texture.
   - A two-bone analytic IK (hip, knee, foot) reaches it within ±25% of the leg length.
   - Body height = mean stance-foot height + rest leg height.
-- [ ] **4. Takedown v2.**
+- [x] **4. Takedown v2.**
   - Code to change:
     - animals.ts:98-101, 530-575 and 711-732
     - shader.ts:127-130, 177-191 and 390-409
@@ -693,22 +693,22 @@ Fix the complaint every Gemini round repeats: sliding feet, stiff animals, wolve
     - Each one that arrives within 9 m during the struggle gets its own lunge to a different contact point (flank, hindquarter, throat, by arrival order).
     - After the fall, feeders take radial slots around the carcass by arrival order. The display offset from the sim position is ≤ 2.5 m.
     - The alpha eats first. One subordinate lies 4 to 6 m out for 5 to 15 s (chosen by an id hash) before joining.
-- [ ] **5. Feeding loop.**
+- [x] **5. Feeding loop.**
   - Bite, pull back with the neck and forequarters, shake, swallow with the head up; repeat every 2.5 to 4 s.
   - The carcass flank dents with each pull.
-- [ ] **6. Ravens at kills.**
+- [x] **6. Ravens at kills.**
   - Two-footed hops with a wing flick, walking between pecks.
   - When a wolf lunges or feeds within 2 m, the raven flutters back 1 to 2 m.
   - Takeoff starts with a deep downstroke flare.
-- [ ] **7. Weight.**
+- [x] **7. Weight.**
   - Render-side acceleration caps: bison 2.5 m/s², pronghorn 6, wolf 5, coyote 6.
   - Body pitch of −4° when speeding up and +5° when braking.
   - Bison get a wider turning radius (`TURN` table).
   - Stampedes run head-low with more dust.
-- [ ] **8. Cougar kill.**
+- [x] **8. Cougar kill.**
   - Rush, forelegs on the shoulders, neck bite with a short hold.
   - Then it drags the carcass up to 3 m toward cover (display offset only).
-- [ ] **9. Border fade.** `F_MIGRANT` animals fade in or out (dithered) within 15 m of the border, so arrivals and departures don't pop.
+- [x] **9. Border fade.** `F_MIGRANT` animals fade in or out (dithered) within 15 m of the border, so arrivals and departures don't pop.
 
 **Gates:**
 - Rig: slip ≤ 5% at walk and trot, ≤ 8% at gallop; foot-to-ground ≤ 5 cm on 20° slopes within 45 m.
@@ -742,20 +742,20 @@ Budget for the whole WP: ≤ +1.0 ms at 1440p in every view.
   - Add broad, smooth tonal bands by slope aspect: sun-facing slopes pale gold, shaded slopes deeper ochre.
   - In late summer, the uplands turn more cured gold; green stays in the riparian ribbon and the swales.
 - [x] **4. Drought ground.** A drought term in the terrain and grass shaders, driven by env drought severity: pale straw grass and dusty tan soil, never mauve.
-- [ ] **5. Cloud shadows.**
+- [x] **5. Cloud shadows.**
   - A ground mask from the same fbm as the sky's cloud layer (sky.ts:271-349), projected along the sun and moved by the wind.
   - It multiplies direct sun on terrain, grass, trees and animals.
   - Coverage follows the weather: clear days get scattered cumulus; overcast turns it off.
-- [ ] **6. God rays.**
+- [x] **6. God rays.**
   - Active when the sun is within 45° of the view centre.
   - An occlusion mask from depth (sky = 1), with a radial blur toward the sun's screen position: 64 taps, half resolution.
   - Added before bloom and scaled by haze and dust.
   - ≤ 0.3 ms.
-- [ ] **7. Falling snow.**
+- [x] **7. Falling snow.**
   - A camera-local, instanced volume of flakes, driven by the wind, with density from env snow.
   - Blizzard look when snow combines with wind > 0.6: dense, near-horizontal flakes and heavier fog.
-- [ ] **8. Dawn fog.** After a clear, calm night (no rain, wind < 0.35), mist pools in low ground from dayFrac 0.2 and burns off by 0.35, using the FogPass height mist with slow noise drift.
-- [ ] **9. Grass up close,** on LOD 0:
+- [x] **8. Dawn fog.** After a clear, calm night (no rain, wind < 0.35), mist pools in low ground from dayFrac 0.2 and burns off by 0.35, using the FogPass height mist with slow noise drift.
+- [x] **9. Grass up close,** on LOD 0:
   - seed heads: bluestem's three-pronged tips, switchgrass sprays
   - a warm glow when backlit
   - copper-red bluestem stems in autumn
@@ -899,10 +899,10 @@ Coyote is id 6. `coyote.initial` stays 0 until R3's coyote model is on `main`, t
 ### R3. Render and audio for the new life [Track R, L]
 Merge S2, S4 and S5 first.
 
-- [ ] **1. Mange.**
+- [x] **1. Mange.**
   - `F_MANGE` gives a patchy coat: darker skin mottling scaled by severity, plus a thinner tail and ruff.
   - The distemper sick pose already exists (`F_INFECTED`).
-- [ ] **2. Prairie dog towns** (new `src/render/smallprey.ts`):
+- [x] **2. Prairie dog towns** (new `src/render/smallprey.ts`):
   - **Mounds:** instanced dirt cones, each with a bare ring.
     - About 12 × `town` per cell, placed by hash.
     - They stay after a die-off and slowly grass over.
@@ -915,11 +915,11 @@ Merge S2, S4 and S5 first.
     - Each dog dives into its burrow at t = distance ÷ 8 m/s, so the wave sweeps across the town.
     - Dogs reappear 6 to 15 s after the threat leaves.
     - Sentinels bark (audio).
-- [ ] **3. Jackrabbit puppets** (rabbit model, hopper kind):
+- [x] **3. Jackrabbit puppets** (rabbit model, hopper kind):
   - Within 90 m; budget 250; per cell n = min(10, round(hare[c] × 0.3)).
   - Graze, sit up, ears up.
   - Bound away in a zig-zag from predators within 25 m.
-- [ ] **4. Coyote.**
+- [x] **4. Coyote.**
   - **Model** (`src/render/models/coyote.ts`, built from the wolf):
     - Shape: 0.72× scale, slimmer legs, larger ears, narrow muzzle, tail held low.
     - Colour: tawny grey with rusty legs and ears, pale throat.
@@ -928,13 +928,13 @@ Merge S2, S4 and S5 first.
     - mousing leap in Stalk near small prey: a high 1.2 s arc, forefeet first
     - a howl and yip chorus at dusk while resting: sitting, muzzle up, synced to the audio
     - a wary head-up glance every 2 to 3 s while scavenging
-- [ ] **5. Migrants.** Border fade (R1 item 9 if not done), and groups travel in a short column.
-- [ ] **6. UI.**
+- [x] **5. Migrants.** Border fade (R1 item 9 if not done), and groups travel in a short column.
+- [x] **6. UI.**
   - Graph rows and colours for coyote, jackrabbit and prairie dog.
   - The inspector shows coyotes, with a "pair" chip.
   - A "Small prey" overlay: densities, towns, plague.
   - The chronicle text comes from Track S.
-- [ ] **7. Audio** (ElevenLabs; log each call in ASSETS.md; ≤ 25 generations):
+- [x] **7. Audio** (ElevenLabs; log each call in ASSETS.md; ≤ 25 generations):
   - New sounds:
     - coyote yip chorus ×2
     - a lone coyote howl
@@ -943,7 +943,7 @@ Merge S2, S4 and S5 first.
     - close thunder crack ×2 (for R4)
     - meadowlark song (spring and summer mornings)
   - Positional sound (PannerNode) at the source when the camera is low.
-- [ ] **8. Narrator** (same voice, "George"; `tools/narration.py`).
+- [x] **8. Narrator** (same voice, "George"; `tools/narration.py`).
   - About 14 lines:
     - wolves arrive from outside
     - a species returns
@@ -956,10 +956,10 @@ Merge S2, S4 and S5 first.
     - lightning fire
     - a storm
   - Wired in `audio/narration.ts` with priorities.
-- [ ] **9. Director shots.**
+- [x] **9. Director shots.**
   - New shots: "town" (a dog town with a predator near), "mousing", "migration" (a group heading for a corridor).
   - Event-driven cuts for `immigrated`, `sylvaticPlague` and `mesoRelease`.
-- [ ] **10. Field notes:** add 8:
+- [x] **10. Field notes:** add 8:
   - first coyote pups
   - a mousing leap
   - an alarm wave
@@ -1013,21 +1013,21 @@ Rain stays global, as now, so the weather sequence doesn't change. Lightning is 
 ### R4. Storm visuals [Track R, M]
 Merge S6 first.
 
-- [ ] **1. Clouds.**
+- [x] **1. Clouds.**
   - Each cell gets a cumulonimbus mass: layered billboards with lit tops and dark bases, plus an anvil on strong cells.
   - The sky darkens toward cells.
   - The cell's shadow moves across the ground.
-- [ ] **2. Rain shafts.**
+- [x] **2. Rain shafts.**
   - Textured vertical curtains under each cell, visible from far away.
   - They fade near the camera, where the screen rain streaks take over.
-- [ ] **3. Lightning.**
+- [x] **3. Lightning.**
   - A forked bolt mesh from the cloud base to the strike: 0.12 to 0.2 s, with 1 or 2 restrikes.
   - A scene flash: ambient and sky boosted for 2 to 3 frames.
   - Thunder is delayed by distance ÷ 343 m/s at 1x; no delay at 10x and above.
-- [ ] **4. Wind.** Grass gust bands get stronger under and ahead of cells.
-- [ ] **5. Rainbow.** After a storm, with the sun low behind the camera: a sky-shader arc at 42° around the antisolar point, fading as the rain clears.
-- [ ] **6. Lightning fire.** Strike, flash, then the smoke column starts.
-- [ ] **7. Bench view.** Add a "storm" view to `gpubench.mjs`.
+- [x] **4. Wind.** Grass gust bands get stronger under and ahead of cells.
+- [x] **5. Rainbow.** After a storm, with the sun low behind the camera: a sky-shader arc at 42° around the antisolar point, fading as the rain clears.
+- [x] **6. Lightning fire.** Strike, flash, then the smoke column starts.
+- [x] **7. Bench view.** Add a "storm" view to `gpubench.mjs`.
 
 **Gates:**
 - The storm reads from both the drone view and the low view.
@@ -1035,14 +1035,14 @@ Merge S6 first.
 - A storm segment appears in the next Gemini video round.
 
 ### M1. Phase 1 milestone [Track R, M]
-- [ ] **1. Merge and play.** Merge, then run `npm test` and the build. Play 20 minutes at 1x, 10x and 100x, and fix any crash.
-- [ ] **2. Review.**
+- [x] **1. Merge and play.** Merge, then run `npm test` and the build. Play 20 minutes at 1x, 10x and 100x, and fix any crash.
+- [x] **2. Review.**
   - Stills: the review set as JPEG, plus the current stability charts, given to a fresh blind critic.
   - One Gemini video round.
   - Triage everything in REVIEWS.md.
   - Fix the top 3 if each takes ≤ 1 hour.
-- [ ] **3. Deploy.** `npm run deploy`, then verify the live build.
-- [ ] **4. Report.** Write a "v2 alpha" section in MORNING.md:
+- [x] **3. Deploy.** `npm run deploy`, then verify the live build.
+- [x] **4. Report.** Write a "v2 alpha" section in MORNING.md:
   - what's new
   - what to look at first
   - 4 to 6 screenshots
@@ -1072,7 +1072,7 @@ Merge S6 first.
 - **Events:** `eaglesArrive`, `hawksReturn`.
 - **Gate:** persistence moves by ≤ 1 of 32.
 
-**R5. Raptor render** [R, M]
+**R5. Raptor render** [R, M] (done 2026-10-05)
 - **Models:** eagle and hawk, bird kind. Wingspans 2.0 m and 1.2 m, slotted primaries, slow flaps, soaring dihedral, a folded-wing stoop pose, a perched pose.
 - **Ground shadow:** raptors below 40 m cast one. It triggers the dog-town alarm.
 - **Sound and shots:** hawk scream and eagle calls; a "stoop" director shot.
@@ -1091,7 +1091,7 @@ Merge S6 first.
   - Cougars join the default world if they are present ≥ 80% of the time over 200 years and the other species stay within 1 of 32.
   - Otherwise "Cougar country" gets deer.
 
-**R6. Deer render** [R, M]
+**R6. Deer render** [R, M] (done 2026-10-05)
 - The mule deer model is built from the pronghorn: big ears, black-tipped tail, white rump, grey-brown coat.
 - Antlers grow from spring, are full in autumn and are shed in late winter.
 - Stotting gait: all four feet bounce together.
@@ -1099,7 +1099,7 @@ Merge S6 first.
 
 ### The animals themselves
 
-**R7. Animal fidelity** [R, L]
+**R7. Animal fidelity** [R, L] (done 2026-10-05)
 - **Meshes:** `builder.ts` lofts get 2 to 3× the rings at near LOD, plus a continuous body, neck and head.
 - **Species details:**
   - bison: hump; cape and beard as a wool shell at near LOD; short upturned horns
@@ -1115,7 +1115,7 @@ Merge S6 first.
 - **LOD:** today's mesh becomes the far LOD.
 - **Gates:** ≤ +0.5 ms (herd view); a Gemini close-up round.
 
-**R8. Behaviour library** [R, M]
+**R8. Behaviour library** [R, M] (done 2026-10-05)
 Render-side only, driven by sim state plus an id hash; no sim change.
 - **Bison:**
   - wallow on bare dry ground (a roll plus dust)
@@ -1196,7 +1196,7 @@ Render-side only, driven by sim state plus an id hash; no sim change.
 - Replay applies each intervention at its exact tick.
 - A version check warns when the build differs.
 
-**R12. Play UI** [R, L]
+**R12. Play UI** [R, L] (done 2026-10-05, family tree included)
 - **Field guide:**
   - species pages, each with 4 to 6 behaviours to witness or photograph, and a short ecology note
   - a behaviour counts when the camera's focus is within 60 m of an animal in that state
@@ -1278,7 +1278,7 @@ Render-side only, driven by sim state plus an id hash; no sim change.
 - **Updates:** the cover field updates each season.
 - **New pieces:** a "plant a grove" intervention; events `encroachment` and `grove`.
 
-**R11. Trees v2** [R, L]
+**R11. Trees v2** [R, L] (done 2026-10-05: crowns, groves, autumn gold, junipers, snags, dynamic API)
 - **Crowns:** denser, lobed, with soft spherical lighting, backlit translucency, inner AO and fewer visible branches.
 - **New looks:** autumn gold cottonwoods, burned snags, junipers, willow thickets along the creek.
 - **Instancing:** dynamic, so trees can be added and removed without a rebuild.
@@ -1296,7 +1296,7 @@ Render-side only, driven by sim state plus an id hash; no sim change.
   - blizzard wind
   - grasshopper buzz
 
-**R15. Lens** [R, M]
+**R15. Lens** [R, M] (done 2026-10-05)
 - Depth of field in director close shots and photo mode (a gather bokeh from the depth texture).
 - Film grain and faint chromatic aberration in cinematic mode.
 - A photo mode panel: exposure, focus on the selected animal, freeze time.

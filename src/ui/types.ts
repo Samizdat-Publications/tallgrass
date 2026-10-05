@@ -3,9 +3,10 @@ import type { EnvState } from '../sim/types';
 import { SCENARIOS as GAME_SCENARIOS } from '../scenarios';
 import type { HistoryRow, AnimalDetail } from '../sim/worker';
 import type { SimEvent, StoryEntry } from '../sim/sim';
+import type { Settings } from './settings';
 
 export type ToolId = 'rain' | 'drought' | 'fire' | 'plague' | 'cull' | 'addWolves' | 'addBison' | 'removeWolves';
-export type OverlayId = 'none' | 'vegetation' | 'fear' | 'territory' | 'traits';
+export type OverlayId = 'none' | 'vegetation' | 'fear' | 'territory' | 'traits' | 'smallprey';
 
 export interface UIActions {
   /** 0 = pause, 1, 10, 100 */
@@ -27,6 +28,18 @@ export interface UIActions {
   setNarrator?(on: boolean): void;
   /** Load a challenge by id (the page reloads with ?challenge=id). */
   startChallenge(id: string): void;
+  /** Share button: copy a link that reopens this valley, interventions included (asks the worker for its log). */
+  share?(): void;
+  /** Valley setup: start a fresh valley with these param overrides (the same keys as ?p=). */
+  startValley?(seed: string, params: Record<string, number>): void;
+  /** A setting changed (or, with 'quality', 'master' etc. all at once on load). The game applies picture, camera and volume. */
+  applySettings?(s: Settings, changed: keyof Settings): void;
+  /** Photograph: render once and read the canvas back in the same task. Null when the canvas could not be read. */
+  photograph?(): Promise<Blob | null>;
+  /** Family tree page: ask the worker for the lineage of an animal; the answer comes back through GameUI.setLineage. */
+  requestLineage?(id: number): void;
+  /** Family tree page: ask the worker for a pack's alpha pairs; the answer comes back through GameUI.setDynasty. */
+  requestDynasty?(pack: number): void;
 }
 
 export interface UIFrame {

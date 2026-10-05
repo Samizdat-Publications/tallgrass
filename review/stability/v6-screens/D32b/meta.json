@@ -1,0 +1,71 @@
+{
+ "args": {
+  "seeds": 32,
+  "seedBase": 1,
+  "ticks": 240000,
+  "generations": null,
+  "sampleEvery": 600,
+  "threads": 13,
+  "scenarios": [
+   "baseline"
+  ],
+  "params": {
+   "calendarScale": 2,
+   "openPrairie": 1,
+   "ravenVagrants": 1,
+   "cdvRate": 0.15,
+   "mangeRate": 0.03,
+   "wolfPreyRef": 1000,
+   "wolfRareHalf": 400,
+   "leanLitter": 0.8
+  },
+  "mock": false,
+  "maxMinutes": 0,
+  "progressSec": 15,
+  "out": "C:\\Users\\stewa\\Documents\\Claude\\ecosystem-sim\\scratch\\screens\\D32b",
+  "argv": [
+   "--seeds",
+   "32",
+   "--ticks",
+   "240000",
+   "--sample",
+   "600",
+   "--threads",
+   "13",
+   "--params",
+   "{\"calendarScale\":2,\"openPrairie\":1,\"ravenVagrants\":1,\"cdvRate\":0.15,\"mangeRate\":0.03,\"wolfPreyRef\":1000,\"wolfRareHalf\":400,\"leanLitter\":0.8}",
+   "--out",
+   "C:/Users/stewa/Documents/Claude/ecosystem-sim/scratch/screens/D32b"
+  ]
+ },
+ "commit": "3bb97a5 (frozen copy)",
+ "node": "v24.19.0",
+ "platform": "win32 x64",
+ "startedAt": "2026-10-04T21:32:12.198Z",
+ "finishedAt": "2026-10-04T21:57:04.644Z",
+ "wallSeconds": 1492.44,
+ "stopReason": null,
+ "tasks": {
+  "total": 32,
+  "completed": 32,
+  "errors": 0,
+  "aborted": 0,
+  "skipped": 0
+ },
+ "msPerTick": 2.174996,
+ "ticksRun": 7680000,
+ "ticksPerSecWall": 5146,
+ "scenarios": {
+  "baseline": {
+   "seeds": 32,
+   "completed": 32,
+   "persistencePct": {
+    "bison": 100,
+    "wolf": 100,
+    "raven": 100,
+    "pronghorn": 100
+   },
+   "maxGen": 124.6683569979716
+  }
+ }
+}

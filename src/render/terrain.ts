@@ -9,6 +9,7 @@ import {
   HEIGHT_GLSL, NOISE_GLSL, POND_GLSL, SharedUniforms, clamp, fbm2, injectSafeOutput, injectTerrainShadow, makePondUniform, smoothstep, vnoise2,
 } from './common';
 import { SEASON_GLSL } from './season';
+import { SMALL_TEX, TOWN_ON } from './smalltex';
 
 const SHADOW_RES = 512;
 const FAR_RES = 512;
@@ -760,6 +761,8 @@ export class Terrain {
       const u = shader.uniforms;
       u.uPonds = pondU;
       u.tVeg = sh.vegTex;
+      u.tSmall = SMALL_TEX; // prairie dog towns (smallprey.ts)
+      u.uTownOn = TOWN_ON;
       u.tStatic = sh.staticTex;
       u.tTrail = sh.trailTex;
       u.uFarStats = sh.farStats;
@@ -853,6 +856,8 @@ const GROUND_PARS = /* glsl */ `
 uniform sampler2D tVeg;
 uniform sampler2D tStatic;
 uniform sampler2D tTrail;
+uniform sampler2D tSmall;
+uniform float uTownOn;
 uniform sampler2D tMacro1;
 uniform sampler2D tMacro2;
 uniform sampler2D tMacro3;
@@ -908,6 +913,23 @@ float tgCombN(vec2 q, vec4 ow, float across, float along, float seed){
   if (ow.z > 0.0) n += ow.z * tgNoise2(vec2(q.y * along, q.x * across) + seed + 6.7);
   if (ow.w > 0.0) n += ow.w * tgNoise2(vec2((q.y - q.x) * 0.7071 * along, (q.x + q.y) * 0.7071 * across) + seed + 9.3);
   return n;
+}
+
+// Chromatic adaptation for the dim ends of the day: a low sun is orange and its sky a deep blue, so pale ground lit by both goes
+// salmon on the sunlit side and violet in the shade. The eye adapts; this returns the albedo factor that pulls the lit colour back
+// toward neutral (1 in daylight, at night and in summer where the caller does not ask for it), estimated from the hemisphere light
+// and the key light on this normal.
+vec3 tgAdapt(vec3 nrm, float ts){
+  float dimK = (1.0 - smoothstep(1.0, 2.6, dot(uLightColor, vec3(0.2126, 0.7152, 0.0722)))) * (1.0 - uNight);
+  if (dimK < 0.01) return vec3(1.0);
+  vec3 E = uLightColor * max(dot(nrm, uLightDir), 0.0) * ts;
+#if NUM_HEMI_LIGHTS > 0
+  E += mix(hemisphereLights[0].groundColor, hemisphereLights[0].skyColor, 0.5 * nrm.y + 0.5);
+#else
+  E += vec3(0.5);
+#endif
+  float l = dot(E, vec3(0.2126, 0.7152, 0.0722));
+  return mix(vec3(1.0), clamp(l / max(E, vec3(0.02)), 0.5, 1.7), dimK);
 }
 
 vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
@@ -1039,7 +1061,8 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
   // the blades add their own shading; the far-field ground is the canopy average: slightly olive and a little less saturated
   grassCol *= vec3(1.04, 1.01, 0.86);
   grassCol = mix(vec3(dot(grassCol, vec3(0.3333))), grassCol, 0.8);
-  grassCol *= 0.86 + 0.28 * nA;
+  // (dormant winter ground has no colour contrast to carry the 1 to 3 m mottling, so beyond about 50 m it would read as marble)
+  grassCol *= 0.86 + 0.28 * mix(nA, 0.5, 0.65 * winterK * smoothstep(50.0, 200.0, dist));
   grassCol *= clamp(1.0 + streakTone * 0.7, 0.6, 1.4);
   grassCol *= 1.0 + (wave - 0.5) * 0.22 * (0.35 + uWind.z) * (1.0 - 0.75 * uNight);
   // tonal patches the way real prairie goes: straw, olive, sage and russet in swaths 40 to 250 m across
@@ -1102,7 +1125,7 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
     // contrast restore: a crossfade of two noises is flatter than either alone (about 0.7 at the midpoint)
     fine = 0.5 + (fine - 0.5) * (1.0 + 0.42 * (1.0 - abs(2.0 * gf - 1.0)));
     grain = fine * 0.65 + coarse * 0.35;
-    float amp = mix(0.62, 0.3, topK) * grW * (1.0 - 0.8 * uNight) * (1.0 - 0.25 * smoothstep(150.0, 500.0, dist));   // at night the stipple reads as ripples on water: keep only a trace
+    float amp = mix(0.62, 0.3, topK) * grW * (1.0 - 0.8 * uNight) * (1.0 - 0.25 * smoothstep(150.0, 500.0, dist)) * (1.0 - 0.4 * winterK);   // at night the stipple reads as ripples on water: keep only a trace
     grassCol *= 1.0 + (grain - 0.5) * amp + (fine - 0.5) * 0.3 * grW * (1.0 - topK);
     grassCol = mix(grassCol, grassCol * vec3(0.88, 1.05, 0.78), (fine - 0.5) * 0.6 * grW * (1.0 - 0.8 * uNight));
     // pale seed heads and dry tufts catch the sun: sparse bright flecks in the finest octave
@@ -1154,15 +1177,37 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
   soilShow = max(soilShow, apron);
   vec3 shortGrass = mix(grassCol, grassCol * vec3(0.9, 0.84, 0.74) + uSoil * 0.12, stubA * 0.5);
   // grazed ground is stubble, not a smooth plane: short blade flecks (dark gaps, pale cut ends) at close and middle range
-  if (stubA > 0.05 && dist < 220.0) {
+  if (stubA > 0.05 && dist < 260.0) {
     float sb = tgDet(xz, 0.16, 1, vec2(0.41)) * 0.55 + tgDet(xz, 0.44, 0, vec2(0.13)) * 0.45;
     float sbk = stubA * (1.0 - smoothstep(60.0, 220.0, dist));
     shortGrass *= 1.0 + (sb - 0.5) * 0.5 * sbk;
     shortGrass = mix(shortGrass, shortGrass * vec3(1.14, 1.06, 0.84), smoothstep(0.62, 0.9, sb) * 0.5 * sbk);
+    // mid range (the flat mustard band): cropped ground is a patchwork, not one tone. Tussocks the herd left standing (about a
+    // metre, pale straw), darker cropped swaths a few metres across, and flecks of bare soil between the stems. Everything fades
+    // out by about 260 m so the far field stays calm.
+    float mk = stubA * (1.0 - smoothstep(110.0, 260.0, dist)) * (1.0 - 0.7 * uSnow);
+    if (mk > 0.002) {
+      float t1 = tgDet(xz, 1.1, 2, vec2(0.58)) * 0.6 + tgDet(xz, 3.7, 3, vec2(0.27)) * 0.4;
+      float swath = tgDet(xz, 7.5, 1, vec2(0.71));
+      shortGrass *= 1.0 + ((smoothstep(0.35, 0.8, t1) - 0.45) * 0.34 + (swath - 0.5) * 0.3) * mk;
+      float fleck = smoothstep(0.7, 0.88, tgDet(xz, 0.55, 1, vec2(0.9)) * 0.6 + tgDet(xz, 1.6, 0, vec2(0.33)) * 0.4);
+      shortGrass = mix(shortGrass, uSoil * (0.75 + 0.5 * nA) * vec3(0.95, 0.88, 0.8), fleck * 0.55 * mk);
+    }
   }
   // drought soil is dry dusty tan, not dark earth
   vec3 soilCol = uDrought > 0.001 ? tgDroughtSoil(uSoil, uDrought) : uSoil;
   vec3 col = mix(shortGrass, soilCol * (0.8 + 0.5 * nA), soilShow * 0.85);
+  // prairie dog town (smallprey.ts, R3): the colony clips its turf short and fresh, and the earth round the burrows is pale and trodden
+  if (uTownOn > 0.5) {
+    float townB = texture2D(tSmall, cuvM).b * inS;
+    float tt = smoothstep(0.1, 0.6, townB + (nM1 - 0.5) * 0.3 + (nC - 0.5) * 0.1);
+    if (tt > 0.002) {
+      vec3 turf = mix(uGrassGreen, uGrassDry, 0.2) * vec3(0.98, 1.1, 0.74) * (0.86 + 0.3 * nA);
+      col = mix(col, turf, tt * 0.5 * (1.0 - 0.7 * winterK) * (1.0 - 0.6 * uDrought));
+      float bare = smoothstep(0.52, 0.8, tgNoise2(xz * 0.9 + 17.0) * 0.6 + tgNoise2(xz * 3.1 + 5.0) * 0.4) * tt;
+      col = mix(col, vec3(0.5, 0.4, 0.27) * (0.8 + 0.4 * nC) * (1.0 - 0.5 * uNight), bare * 0.55);
+    }
+  }
   // the apron is dry, pale, dusty earth (lighter than the damp mud at the waterline, which the wet line below darkens again)
   if (apron > 0.003) {
     float ag = tgNoise2(xz * 2.3 + 5.0) * 0.6 + tgNoise2(xz * 7.1 + 1.0) * 0.4;
@@ -1190,20 +1235,36 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
     }
     gTgGrass *= 1.0 - 0.45 * trodK;
   }
+  // trampled ground near water: the herds come down to drink along worn paths and churn the margin, so within a few tens of metres of
+  // the creek and ponds thin winding trails (about a metre wide) and patches of churned mud darken and brown the sward
+  if (wd < 28.0 && dist < 320.0) {
+    float prox = 1.0 - smoothstep(4.0, 28.0, wd);
+    vec2 wqT = xz + 9.0 * vec2(nD - 0.5, nM2 - 0.5);
+    float tn = tgNoise2(wqT * 0.042 + vec2(11.0, 4.0)) * 0.7 + tgNoise2(wqT * 0.11 + vec2(2.0, 17.0)) * 0.3;
+    float trail = 1.0 - smoothstep(0.0, 0.032, abs(tn - 0.5));
+    float churn = smoothstep(0.58, 0.82, tgNoise2(xz * 0.21 + 6.0) * 0.65 + tgNoise2(xz * 0.7 + 2.0) * 0.35) * (1.0 - smoothstep(1.5, 10.0, wd));
+    float tk = clamp(trail * prox + churn * 0.7, 0.0, 1.0) * (1.0 - smoothstep(180.0, 320.0, dist)) * inS * (1.0 - 0.8 * uSnow);
+    col = mix(col, col * vec3(0.62, 0.54, 0.42) + uSoil * 0.1, tk * 0.5);
+    gTgGrass *= 1.0 - 0.3 * tk;
+  }
 
   // water's edge: a thin wet line at the waterline, a faint damp band, and a narrow mud lip that is ragged and broken (some stretches of
   // bank run straight from the water to green grass), so from above the riparian green frames the water and not a dark ring
-  float damp = (1.0 - smoothstep(0.0, 5.5, wd)) * (0.6 + 0.4 * nA);
-  col = mix(col, col * vec3(0.8, 0.76, 0.66), damp * 0.22);
-  float wetLine = 1.0 - smoothstep(0.0, 1.1, wd);
-  col = mix(col, col * vec3(0.62, 0.57, 0.48), wetLine * 0.4);
+  // at mid range (about 25 to 250 m) the damp ground widens into a soft, ragged brown band, so the creek meets the grass through a
+  // gradient and not along a drawn edge
+  float wetMid = smoothstep(18.0, 55.0, dist) * (1.0 - 0.75 * smoothstep(160.0, 380.0, dist));
+  float damp = (1.0 - smoothstep(0.0, mix(5.5, 9.0, wetMid), wd)) * mix(0.6 + 0.4 * nA, 0.5 + 0.5 * nM1, wetMid);
+  col = mix(col, col * vec3(0.8, 0.76, 0.66), damp * mix(0.22, 0.36, wetMid));
+  float wetLine = 1.0 - smoothstep(0.0, mix(1.1, 2.4, wetMid), wd + wetMid * 0.5 * (nM2 - 0.5));
+  col = mix(col, col * vec3(0.62, 0.57, 0.48), wetLine * mix(0.4, 0.55, wetMid));
   if (wd < 3.0) {
     float lipN = tgNoise2(xz * 0.31 + vec2(5.3, 17.9)) * 0.6 + tgNoise2(xz * 0.9 + vec2(41.0, 3.3)) * 0.4;
     lipN = mix(0.5, lipN, 1.0 - smoothstep(120.0, 420.0, dist));
     float lipW = 0.3 + 1.6 * smoothstep(0.38, 0.72, lipN);
     float mud = 1.0 - smoothstep(0.0, lipW, wd + (nC - 0.5) * 0.9);
     // from the drone the mud lip reads as a pale dirt bank (dry cut bank and sand), as in the concept, not a dark ring
-    vec3 mudC = mix(vec3(0.22, 0.175, 0.125), vec3(0.46, 0.37, 0.25), smoothstep(70.0, 180.0, dist) * (1.0 - riparian * 0.4));
+    // (only in patches: the rest of the bank stays dark wet mud, so a long reach of the creek is never edged in a pale line)
+    vec3 mudC = mix(vec3(0.19, 0.15, 0.108), vec3(0.46, 0.37, 0.25), smoothstep(70.0, 180.0, dist) * (1.0 - riparian * 0.4) * mix(smoothstep(0.5, 0.78, lipN), 1.0, smoothstep(120.0, 260.0, dist)));
     col = mix(col, mudC * (0.8 + 0.4 * nC), mud * 0.62);
   }
 
@@ -1245,31 +1306,38 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
   // winter: frost is a thin cold bloom in the shade, never a snow blanket; snow only when it is snowing
   float shadeAmt = 1.0 - ts;
   float frost = uFrost * (0.1 + 0.3 * shadeAmt) * (1.0 - charAmt);
-  col = mix(col, col * vec3(0.88, 0.96, 1.1) + vec3(0.07, 0.085, 0.11), clamp(frost * 1.5, 0.0, 0.62));
+  // (a pale, nearly neutral bloom that gathers in the hollows: a saturated blue wash over the whole shaded ground read as violet at dusk)
+  col = mix(col, col * vec3(0.93, 0.97, 1.04) + vec3(0.05, 0.057, 0.066), clamp(frost * 1.4 * (0.55 + 0.9 * hollowK), 0.0, 0.55));
   // snow lands on flats and in hollows first, is blown off convex ridges and steep faces, and builds up patchily as it keeps
   // snowing; the ground shows through grass tips, ridges and rock until it is deep
   float snowCover = 0.0;
   float spark = 0.0;
   if (uSnow > 0.04) {
     float flatK = smoothstep(0.58, 0.93, nrm.y);
-    float dHi = 0.5;
-    if (lodMid > 0.002) dHi = mix(0.5, tgNoise2(xz * 0.31 + 4.0) * 0.65 + tgNoise2(xz * 0.8 + 9.0) * 0.35, lodMid);
-    float drift = driftLow * 0.6 + dHi * 0.4;
-    // aspect: the low winter sun (south, toward -z) melts and blows snow off south faces; north faces hold it. Broad 40 to 120 m
-    // patches (the baked macro maps) make a partial pack read as drifts and bare ground, not an even blanket; herd trails stay thin.
+    // Where the snow lies follows the land. The potential is built from terrain features (flatness, hollows against ridges at about
+    // 16 m, the aspect to the sun, the lee of the prevailing wind) plus noise that only varies over 40 to 150 m, so a thin pack
+    // reads as drifts in the hollows and on the sheltered north slopes with bare sunny ridges between, never as speckle. The fine
+    // octaves (a few metres and below) only rough up the edge near the camera.
+    float drift = nM2 * 0.5 + nE * 0.5;
+    // aspect: the low winter sun (south, toward -z) melts and blows snow off south faces; north faces hold it
     float aspect = clamp(nrm.z * 3.5, -1.0, 1.0) * slopeW;
-    float patchy = (nB - 0.5) * 0.55 + (nM1 - 0.5) * 0.4;
-    float pot = flatK * 0.62 + drift * 0.5 + hollowK * 0.28 - ridgeK * 0.34 - rock * 0.5 - charAmt * 0.6 + 0.1 * gTgGrass
-              + 0.22 * aspect + patchy - trodK * 0.5;
-    // The threshold starts above the highest possible potential (about 1.5), so a trace of leftover snow (the eased value never
+    // lee: slopes that face downwind collect what the wind carries off the windward side and the crests
+    float lee = clamp(dot(nrm.xz, wv) * 4.5, -1.0, 1.0) * slopeW;
+    float patchy = (nM1 - 0.5) * 0.4 + (nM2 - 0.5) * 0.3 + (nE - 0.5) * 0.2;
+    float pot = 0.14 + flatK * 0.45 + drift * 0.3 + hollowK * 0.62 - ridgeK * 0.5 - rock * 0.5 - charAmt * 0.6 + 0.1 * gTgGrass
+              + 0.3 * aspect + 0.3 * lee + patchy - trodK * 0.5;
+    // The threshold starts above the highest possible potential (about 1.8), so a trace of leftover snow (the eased value never
     // reaches exactly zero) cannot show as isolated white patches on the flattest, wettest spots: nothing settles until there is real snow.
     float sn1 = clamp(uSnow, 0.0, 1.0);
     float Tsn = 1.78 - 1.74 * pow(sn1, 0.66);
-    // The edge of a patch is jittered by two scales of noise (about 1.5 m and 40 cm) and ramps over a wide band of the potential, so a
-    // patch fades out through grass-flecked snow instead of ending on a cut line; a thin pack is also never fully opaque.
-    float edgeN = (tgDet(xz, 1.5, 2, vec2(0.7)) - 0.5) * 0.5 + (tgDet(xz, 0.4, 3, vec2(0.2)) - 0.5) * 0.36;
-    float edgeW2 = mix(0.19, 0.12, smoothstep(0.2, 0.8, uSnow));
-    float snowAmt = smoothstep(Tsn - 0.2 - edgeW2, Tsn + 0.06 + edgeW2, pot + edgeN * (1.0 - 0.5 * smoothstep(60.0, 400.0, dist))) * smoothstep(0.05, 0.16, uSnow);
+    // The edge of a patch ramps over a wide band of the potential (tens of metres across), jittered by a 12 m term at any range and by
+    // two fine scales (about 1.5 m and 40 cm) only near the camera, so a patch fades out through grass-flecked snow instead of ending
+    // on a cut line; a thin pack is also never fully opaque.
+    float fineK = 1.0 - smoothstep(25.0, 110.0, dist);
+    float edgeN = (tgDet(xz, 12.0, 0, vec2(0.45)) - 0.5) * 0.3;
+    if (fineK > 0.01) edgeN += ((tgDet(xz, 1.5, 2, vec2(0.7)) - 0.5) * 0.5 + (tgDet(xz, 0.4, 3, vec2(0.2)) - 0.5) * 0.36) * fineK;
+    float edgeW2 = mix(0.3, 0.19, smoothstep(0.2, 0.8, uSnow));
+    float snowAmt = smoothstep(Tsn - 0.2 - edgeW2, Tsn + 0.06 + edgeW2, pot + edgeN) * smoothstep(0.05, 0.16, uSnow);
     float tipsPoke = (0.3 * gTgGrass * smoothstep(0.45, 0.8, s2 + 0.2 * edgeN)) * (1.0 - smoothstep(0.4, 0.9, uSnow));
     float packCap = mix(0.86, 0.96, smoothstep(0.1, 0.7, uSnow));
     snowCover = clamp(snowAmt * (packCap - tipsPoke), 0.0, 1.0);
@@ -1284,6 +1352,8 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
     // fine mottling and wind ripples so it is a surface, not a flat white fill
     snowC *= (0.94 + 0.08 * nC + 0.05 * (nA - 0.5) + streakTone * 0.12) * (1.0 - 0.45 * uNight);   // moonlit snow is grey-blue, not a floodlit white
     snowC = mix(snowC, col * 2.0 + vec3(0.05), 0.07 * (1.0 - snowCover * 0.5));
+    // under a dusk or dawn sky the snow takes the sky's colour softly (pearl in the sun's rose, pale blue in the shade), not violet
+    snowC *= mix(vec3(1.0), tgAdapt(nrm, ts), 0.62);
     col = mix(col, snowC, snowCover);
     col = mix(col, col * vec3(0.76, 0.76, 0.78), trodK * snowCover * 0.55);
     // sastrugi-like relief: soft drifts and wind-combed ripples take the light, the grass relief underneath is buried
@@ -1302,6 +1372,9 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
       }
     }
   }
+
+  // bare winter ground at dusk and dawn is adapted the same way, more gently (summer keeps its golden dusk)
+  if (winterK > 0.01) col *= mix(vec3(1.0), tgAdapt(nrm, ts), 0.62 * winterK * (1.0 - snowCover));
 
   // moonlit meadow: grass stays grass, cooler and darker, and the combed strokes stay readable
   if (uNight > 0.02) {

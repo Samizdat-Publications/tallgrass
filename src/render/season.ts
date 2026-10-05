@@ -16,6 +16,14 @@ export const SEED_KEYS: Keys = [
   [0, 0.0], [0.9, 0.0], [1.3, 0.04], [1.8, 0.12], [2.2, 0.18], [3.0, 0.14], [3.6, 0.04], [4.0, 0.0],
 ];
 /**
+ * How copper-red the bluestem stems and blades are across the year: [season, amount]. Big and little bluestem stay green through the
+ * summer, flush to bronze as the grass cures (the CURE_KEYS ramp, season 1.5 to 2.0), and hold a copper-red through autumn, then weather to a dull tan-bronze
+ * through early winter (the red is gone by about season 3.5) and stay tan-grey under frost and snow. The blade layer multiplies it by each blade's dryness.
+ */
+export const COPPER_KEYS: Keys = [
+  [0, 0.0], [1.5, 0.0], [1.9, 0.35], [2.3, 0.85], [2.7, 1.0], [3.0, 0.5], [3.3, 0.12], [3.6, 0.0], [4.0, 0.0],
+];
+/**
  * Cottonwood leaf cover across the year: [season, leaf amount]. Bare through winter and into early spring, buds and small leaves
  * by mid spring, full by early summer, thinning from mid autumn. The old table interpolated half-season keys around the year
  * wrap (late winter 0.1 to early spring 0.45), so crowns were already half green in late winter.
@@ -82,6 +90,25 @@ export const ASPECT = { sun: [1.14, 1.08, 0.82], shade: [0.86, 0.76, 0.5], base:
  * the same luminance and leans yellow (r above g above b, so never mauve or pink), and the riparian belt shrinks by `rip`.
  */
 export const DROUGHT = { dry: 0.92, rip: 0.5, ripKeep: 0.6, straw: [1.28, 1.0, 0.52], lift: 1.1, amount: 0.62, dust: [0.5, 0.4, 0.26], soil: 0.7 } as const;
+
+/**
+ * Snow settling, shared by the blade layer (and free for the ground shader to call): the same threshold and edge ramp terrain.ts uses
+ * for its snow cover, so grass and ground agree on where the pack is and where it ends. Each caller supplies its own "potential" (how
+ * readily snow settles at a point: flat ground, hollows, north slopes and broad drifts high; ridges, steep faces, trails and rock low)
+ * plus an edge jitter; the potential is compared to a threshold that falls as the snow amount `sn` (the snow uniform, 0..1) rises.
+ *   tgSnowThreshold(sn)          the potential above which snow lies
+ *   tgSnowCover(potE, sn)        0..1 cover for a (jittered) potential; fades out through flecked ground at a patch edge
+ */
+export const SNOW_GLSL = /* glsl */ `
+float tgSnowThreshold(float sn) {
+  return 1.78 - 1.74 * pow(clamp(sn, 0.0, 1.0), 0.66);
+}
+float tgSnowCover(float potE, float sn) {
+  float Tsn = tgSnowThreshold(sn);
+  float edgeW2 = mix(0.19, 0.12, smoothstep(0.2, 0.8, sn));
+  return smoothstep(Tsn - 0.2 - edgeW2, Tsn + 0.06 + edgeW2, potE) * smoothstep(0.05, 0.16, sn);
+}
+`;
 
 /** GLSL float literal ("3.0", "0.95"). */
 function glf(x: number): string {
