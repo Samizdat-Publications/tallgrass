@@ -294,6 +294,7 @@ export class Engine {
       sunAzimuth: () => Math.atan2(this.uniforms.lightDir.value.x, this.uniforms.lightDir.value.z),
       lowAnchor,
     });
+    this.cam.setObstacles(this.trees); // the camera keeps out of crowns, trunks and hills (camcollide.ts)
 
     this.setQuality(opts.quality ?? 'high');
     this.resize();

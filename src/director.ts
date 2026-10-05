@@ -81,7 +81,7 @@ export class Director {
    * Of eight headings around the subject, the one with the least canopy between camera and subject. Only the stretch
    * where the camera ray is still below crown height (about 12 m) can be blocked.
    */
-  private clearYaw(sx: number, sy: number, pitchDeg: number, baseYaw: number): number {
+  private clearYaw(sx: number, sy: number, pitchDeg: number, baseYaw: number, dist: number, lift: number): number {
     const reach = Math.min(70, 12 / Math.max(0.05, Math.tan((pitchDeg * Math.PI) / 180)));
     let best = baseYaw, bestScore = Infinity;
     for (let k = 0; k < 8; k++) {
@@ -89,6 +89,9 @@ export class Director {
       const r = (yaw * Math.PI) / 180, dx = Math.sin(r), dy = Math.cos(r);
       let score = 0;
       for (let d = 5; d <= reach; d += 3) score += this.coverAt(sx + dx * d, sy + dy * d) * (1 - d / (reach + 1));
+      // and the camera's own collision test: a heading whose whole boom is free of crowns and trunks wins, so a shot begins clear
+      // instead of swinging round a tree after it starts (1 when the camera has no tree list)
+      score += (1 - this.cam.headingReach(sx, sy, lift, yaw, pitchDeg, dist)) * 6;
       if (score < bestScore - 1e-6) { bestScore = score; best = yaw; }
     }
     return best % 360;
@@ -161,7 +164,7 @@ export class Director {
     const ok = shot.id !== null ? this.getPos(shot.id, v) : false;
     const sx = shot.id !== null ? (ok ? v.x : NaN) : shot.x, sy = shot.id !== null ? (ok ? v.z : NaN) : shot.y;
     const known = Number.isFinite(sx) && Number.isFinite(sy);
-    if (known) shot.yaw = this.clearYaw(sx, sy, shot.pitch, shot.yaw);
+    if (known) shot.yaw = this.clearYaw(sx, sy, shot.pitch, shot.yaw, shot.dist, shot.air && ok ? Math.max(0, v.y - this.cam.groundAt(sx, sy)) : 0);
     // an editor cuts to a subject across the valley rather than flying the camera through the trees to reach it;
     // near subjects get a glide that eases in and out
     const focus = this.cam.getFocus(this.tmp);

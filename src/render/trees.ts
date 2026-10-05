@@ -1228,6 +1228,26 @@ export class Trees {
     return true;
   }
 
+  /**
+   * Camera collision (R15 camera pass): calls `fn` for every live crown instance, cottonwoods (including the spare crowns that fill
+   * grove gaps), junipers, willow thickets and shrubs: the instance matrix (16 floats at `m[o]`, local to world) and the crown
+   * geometry's bounding box in local space as [centre x, y, z, half x, y, z]. Read only; nothing is allocated per call.
+   */
+  forEachCrown(fn: (m: Float32Array, o: number, bounds: readonly number[], kind: 'tree' | 'juniper' | 'thicket' | 'shrub') => void): void {
+    const run = (pools: Pool[], kind: 'tree' | 'juniper' | 'thicket' | 'shrub') => {
+      for (const p of pools) {
+        const g = p.crownMeshes[0]?.geometry;
+        if (!g) continue;
+        if (!g.boundingBox) g.computeBoundingBox();
+        const b = g.boundingBox!;
+        const bounds = [(b.min.x + b.max.x) / 2, (b.min.y + b.max.y) / 2, (b.min.z + b.max.z) / 2, (b.max.x - b.min.x) / 2, (b.max.y - b.min.y) / 2, (b.max.z - b.min.z) / 2];
+        for (let s = 0; s < p.hi; s++) if (p.crownOn[s]) fn(p.crownMats, s * 16, bounds, kind);
+      }
+    };
+    run(this.cw, 'tree'); run(this.jun, 'juniper'); run(this.thick, 'thicket');
+    if (this.shrubPool) run([this.shrubPool], 'shrub');
+  }
+
   getTree(id: number): Readonly<TreeSpec> | undefined { return this.recs.get(id)?.spec; }
   hasTree(id: number): boolean { return this.recs.has(id); }
   get liveTrees(): number { return this.recs.size; }

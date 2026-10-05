@@ -1,0 +1,6 @@
+camera path:
+frames 4259 over 105.3 s, cuts 2, dt median 17 ms, p99 100 ms
+  position: max speed 595 m/s, max accel 14877 (p99 1653) m/s2, max jerk 740472 (p99 61103, p50 15.75) m/s3
+  view dir: max rate 0.38 rad/s, max accel 14.21 (p99 0.35) rad/s2, max jerk 902 (p99 3.12, p50 0.00) rad/s3
+inside a tree crown: 413 of 4275 frames {"cottonwood":413} in a willow thicket: 0 min height above ground: 2.09 min boom: 1.00 max swing deg: 0 last-resort pushes: 0 33.34 33.36 33.37 33.39 33.41 33.42 33.44 33.46 33.47 33.49 33.51 33.52
+saved ../../review/wip/cam/reel-before.mp4 (110 s) 
