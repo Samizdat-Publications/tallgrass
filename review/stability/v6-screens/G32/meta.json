@@ -1,0 +1,74 @@
+{
+ "args": {
+  "seeds": 32,
+  "seedBase": 1,
+  "ticks": 240000,
+  "generations": null,
+  "sampleEvery": 600,
+  "threads": 10,
+  "scenarios": [
+   "baseline"
+  ],
+  "params": {
+   "calendarScale": 2,
+   "openPrairie": 1,
+   "ravenVagrants": 1,
+   "cdvRate": 0.3,
+   "mangeRate": 0.06,
+   "wolfPreyRef": 1000,
+   "wolfRareHalf": 400,
+   "leanLitter": 0.8,
+   "matingWindow": 0.8,
+   "bison.birthCooldown": 900,
+   "deer.birthCooldown": 800
+  },
+  "mock": false,
+  "maxMinutes": 0,
+  "progressSec": 15,
+  "out": "C:\\Users\\stewa\\Documents\\Claude\\ecosystem-sim\\scratch\\screens\\G32",
+  "argv": [
+   "--seeds",
+   "32",
+   "--ticks",
+   "240000",
+   "--sample",
+   "600",
+   "--threads",
+   "10",
+   "--params",
+   "{\"calendarScale\":2,\"openPrairie\":1,\"ravenVagrants\":1,\"cdvRate\":0.3,\"mangeRate\":0.06,\"wolfPreyRef\":1000,\"wolfRareHalf\":400,\"leanLitter\":0.8,\"matingWindow\":0.8,\"bison.birthCooldown\":900,\"deer.birthCooldown\":800}",
+   "--out",
+   "C:/Users/stewa/Documents/Claude/ecosystem-sim/scratch/screens/G32"
+  ]
+ },
+ "commit": "3bb97a5 (frozen copy)",
+ "node": "v24.19.0",
+ "platform": "win32 x64",
+ "startedAt": "2026-10-05T01:59:14.232Z",
+ "finishedAt": "2026-10-05T02:21:06.016Z",
+ "wallSeconds": 1311.77,
+ "stopReason": null,
+ "tasks": {
+  "total": 32,
+  "completed": 32,
+  "errors": 0,
+  "aborted": 0,
+  "skipped": 0
+ },
+ "msPerTick": 1.535433,
+ "ticksRun": 7680000,
+ "ticksPerSecWall": 5855,
+ "scenarios": {
+  "baseline": {
+   "seeds": 32,
+   "completed": 32,
+   "persistencePct": {
+    "bison": 96.875,
+    "wolf": 100,
+    "raven": 100,
+    "pronghorn": 100
+   },
+   "maxGen": 94.83292383292384
+  }
+ }
+}

@@ -73,3 +73,11 @@ I'll post the results here when they finish (about 3 hours). The adoption flip i
 - cycle_stats (last 80%): wolves follow bison by 1 year, median corr 0.69 (gate 0.4); half-cycles about 2.5 years; recovery to 90% of mean in 2 to 3 years.
 - Shock suite (cull70, drought, wolfwipe, 20 seeds x 720,000 ticks) is still running (about 25% done); results here when it finishes.
 By the S3 rule E is v6 unless the shocks fail the 80% bison recovery gate. Your call on flipping the defaults now or after the shocks; if you flip now, tell me the new golden hashes and I'll merge.
+
+## 2026-10-04 22:40 (Track R): screen G at 32 seeds is ELIGIBLE; v6G acceptance launched
+| Screen | Seeds | Years | Bison persist | Presence >= 90% | Pronghorn starve | Wolf CV | Wolf-bison corr (1-3 yr) | Eligible |
+|---|---|---|---|---|---|---|---|---|
+| E | 32 | 200 | 31/32 | 32/32 | 49% | 0.25 | 0.74 | yes |
+| G | 32 | 200 | 31/32 | 32/32 | 33% | 0.22 | 0.59 | yes |
+adoption.py (v2-sim latest) picks E on wolf CV. G fixes the round-13 seasonality complaint (spring births) and the pronghorn starvation share, at a lower wolf CV and lag correlation. v6G acceptance (20 seeds x 1,000 generations, same frozen 3bb97a5) started at 22:40 -> `review/stability/v6G-3bb97a5`, about 3 hours. v6E shocks are about 60% done.
+Lead's view: if G's acceptance passes, prefer G as the default (visible spring calving and a pronghorn that isn't starving matter to a player), since its wolf numbers still clear the gates.
