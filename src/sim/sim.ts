@@ -15,6 +15,7 @@ import { flightStep, Raptors } from './sp/raptor';
 import { AGENT_STRIDE, CARCASS_STRIDE, F_ALPHA, F_INFECTED, F_JUVENILE, F_MALE, F_MANGE, F_MIGRANT, F_PREGNANT, F_STOT, Intervention, SimLike, Snapshot, SPECIES_COUNT, SPECIES_KEYS, Sp, St, YEAR_TICKS, SEASON_TICKS, BASE_YEAR_TICKS, setCalendarScale } from './types';
 import { COAT_BASE, COAT_RANGE, DIET, IS_PREY, isGrazer, REACT, SPECIES, THREAT } from './species';
 import { STRIDE, Vegetation } from './vegetation';
+import { Winter, WINTER_STEP } from './winter';
 import { distanceTransform, generateWorld, World } from './world';
 
 const DT = 0.15; // seconds of motion per tick (1x is a gentle 1.5x time-lapse)
@@ -25,7 +26,8 @@ export type SimEventKind =
   | 'packFounded' | 'packLost' | 'drought' | 'droughtEnd' | 'outbreak' | 'stampede' | 'extinct'
   | 'introduced' | 'removed' | 'culled' | 'fire' | 'record' | 'elder' | 'firstKill' | 'plague' | 'rain'
   | 'immigrated' | 'emigrated' | 'recolonized' | 'distemper' | 'mange' | 'townFounded' | 'townLost' | 'sylvaticPlague'
-  | 'hareBoom' | 'hareCrash' | 'coyotePups' | 'mesoRelease' | 'storm' | 'lightningFire' | 'eaglesArrive' | 'hawksReturn';
+  | 'hareBoom' | 'hareCrash' | 'coyotePups' | 'mesoRelease' | 'storm' | 'lightningFire' | 'eaglesArrive' | 'hawksReturn'
+  | 'blizzard' | 'hardWinter';
 
 export interface SimEvent {
   tick: number;
@@ -184,6 +186,8 @@ export class Sim implements SimLike {
   /** Storm cells and lightning (params.stormCells; null when off). */
   storms: StormCells | null = null;
   private cLightning = 0;
+  /** Snow depth, drift and melt (params.snowDepth; null when off). */
+  winter: Winter | null = null;
 
   constructor(opts: SimOptions) {
     const self = this;
@@ -194,8 +198,10 @@ export class Sim implements SimLike {
     this.world = opts.world ?? generateWorld(this.seed);
     this.env = new Environment(this.rng.fork(11));
     this.env.climateAmp = this.p.climateAmp;
+    this.env.greenUpShift = this.p.greenUpShift;
     this.veg = new Vegetation(this.world, this.p, this.env, this.rng.fork(12));
     if (this.p.stormCells > 0) this.storms = new StormCells(this.seed, this.world.size, this.p, DT);
+    if (this.p.snowDepth > 0) this.winter = new Winter(this.seed, this.world, this.p, this.env, { event: (kind, sp, x, y, a, b) => this.event(kind, sp, x, y, a, b) });
     this.a = new Agents(4096);
     this.lineage = new Lineage(this.a, { alive: this.packAlive, serial: this.packSerial, alphaF: this.packAlphaF, alphaM: this.packAlphaM });
     this.dis = new Disease(this.a, this.p, this.env, this.seed, {
@@ -554,6 +560,7 @@ export class Sim implements SimLike {
     const t = this.tick;
     this.env.update(t);
     if (this.storms) this.stepStorms(t);
+    if (this.winter !== null && t % WINTER_STEP === 0) this.winter.step();
     this.veg.step(t);
     this.groundB = grassBrightness(this.env.state.season);
 
@@ -1071,6 +1078,8 @@ export class Sim implements SimLike {
     let m = P.metabolism * Math.pow(size, -0.25) * (0.98 + 0.02 * spd * spd) * activity;
     const sprintCost = P.sprintCost > 0 ? P.sprintCost : this.p.sprintCost;
     if (running && sprintCost > 0) m *= Math.max(0.3, 1 + sprintCost * (spd * spd - 1));
+    // deep snow makes every step cost more (ground animals that are moving)
+    if (this.winter !== null && v > 0.3 && !SPECIES[a.sp[i]].flies) m *= 1 + this.p.snowMove * this.winter.at(a.x[i], a.y[i]);
     if (a.infected[i] > 0) m *= this.p.diseaseMetab;
     if (this.dis.on && IS_CANID[a.sp[i]]) m *= this.dis.metabMult(i, this.env.state.warmth);
     if (a.age[i] < P.matureAge) m *= 0.75;
@@ -1291,7 +1300,10 @@ export class Sim implements SimLike {
       const browser = P.diet > 0;
       // dogGrazeBonus (S4): grazers favour the edges of prairie dog towns, where the grass regrows short and sweet
       const gb = !browser && this.small !== null && this.p.dogGrazeBonus > 0 ? this.small.grazeBonus : null;
-      const gHere = (browser ? (this.veg.browse[c] > 0.03 ? this.veg.browse[c] * 1.6 + this.veg.grass[c] * 0.3 : 0) : this.veg.grass[c]) * (mh !== null ? mh[c] : 1);
+      // snow hides the food (winter, S11): the grazer sees the patch, the next steps and the far pastures through the depth
+      const win = this.winter, sk = win !== null ? this.snowGrazeK(s) : 0;
+      let gHere = (browser ? (this.veg.browse[c] > 0.03 ? this.veg.browse[c] * 1.6 + this.veg.grass[c] * 0.3 : 0) : this.veg.grass[c]) * (mh !== null ? mh[c] : 1);
+      if (sk > 0) gHere *= 1 - sk * win!.at(x, y);
       if (hiding) {
         // a young fawn lies still in the grass while its mother grazes nearby
         state = St.Rest;
@@ -1331,7 +1343,8 @@ export class Sim implements SimLike {
             if (sx < 3 || sy < 3 || sx > this.world.size - 3 || sy > this.world.size - 3) continue;
             const sc = this.veg.cellAt(sx, sy);
             if (this.world.water[sc]) continue;
-            const food = (browser ? this.veg.browse[sc] * 1.6 + this.veg.grass[sc] * 0.35 : this.veg.grass[sc]) * (mh !== null ? mh[sc] : 1);
+            let food = (browser ? this.veg.browse[sc] * 1.6 + this.veg.grass[sc] * 0.35 : this.veg.grass[sc]) * (mh !== null ? mh[sc] : 1);
+            if (sk > 0) food *= 1 - sk * win!.at(sx, sy);
             let score = food - p.fearWeight * this.veg.fear[sc] - 0.004 * this.prey.counts[this.prey.bucketOf(sx, sy)] + (k === 0 ? 0.03 : 0) + rng.next() * 0.02;
             if (gb !== null) score += gb[this.small!.cellOf(sx, sy)];
             if (score > bestS) { bestS = score; bdx = ux; bdy = uy; }
@@ -1365,7 +1378,8 @@ export class Sim implements SimLike {
               for (let xx = Math.max(0, bx0 - R); xx <= Math.min(B - 1, bx0 + R); xx++) {
                 const k = yy * B + xx;
                 const cx2 = (xx + 0.5) * cs, cy2 = (yy + 0.5) * cs;
-                const food = mh !== null ? this.mule.coarse[k] : browser ? this.coarseBrowse[k] * 1.6 + this.coarseGrass[k] * 0.35 : this.coarseGrass[k];
+                let food = mh !== null ? this.mule.coarse[k] : browser ? this.coarseBrowse[k] * 1.6 + this.coarseGrass[k] * 0.35 : this.coarseGrass[k];
+                if (sk > 0) food *= 1 - sk * win!.depth[k];
                 let v = food - 0.0012 * Math.hypot(cx2 - x, cy2 - y) - 0.004 * this.prey.counts[this.prey.bucketOf(cx2, cy2)];
                 if (gb !== null) v += gb[k];
                 if (v > bv) { bv = v; tx = cx2; ty = cy2; }
@@ -1396,13 +1410,23 @@ export class Sim implements SimLike {
     a.state[i] = state;
   }
 
+  /** How hard snow cuts a grazer's food: the grazing multiplier is 1 - k x depth (winter, S11). */
+  private snowGrazeK(sp: number): number {
+    const p = this.p;
+    return sp === Sp.Bison ? p.snowGrazeBison : sp === Sp.MuleDeer ? p.snowGrazeMule : p.snowGrazePronghorn;
+  }
+
   private liveHerbivore(i: number, P: SpeciesParams): void {
     const a = this.a;
     if (a.state[i] === St.Graze) {
       const c = this.veg.cellAt(a.x[i], a.y[i]);
       const juvenile = a.age[i] < P.matureAge;
       const sz = a.genes[i * NG + G_SIZE];
-      const want = P.bite * Math.pow(sz, 0.75) * (juvenile ? 0.55 : 1);
+      let want = P.bite * Math.pow(sz, 0.75) * (juvenile ? 0.55 : 1);
+      if (this.winter !== null) {
+        const sk = this.snowGrazeK(a.sp[i]);
+        if (sk > 0) want *= 1 - sk * this.winter.at(a.x[i], a.y[i]);
+      }
       const perMass = 1 / sz; // energy is normalized to body reserves
       if (P.diet > 0) {
         // browsers take forbs and shrubs first, then grass at half value
@@ -1744,7 +1768,9 @@ export class Sim implements SimLike {
           // a herd that circles up around its calves protects them as well as its adults
           const defense = 1 + Pt.defense * Math.min(5, guards);
           const resist = Pt.toughness * a.genes[t * NG + G_SIZE] * young * condition * defense * (a.infected[t] > 0 ? 0.7 : 1);
-          const pk2 = p.wolfKillChance * a.genes[i * NG + G_SIZE] * (1 + 0.45 * Math.min(4, helpers)) / resist;
+          let pk2 = p.wolfKillChance * a.genes[i * NG + G_SIZE] * (1 + 0.45 * Math.min(4, helpers)) / resist;
+          // prey floundering in snow is easier to pull down (winter, S11)
+          if (this.winter !== null) pk2 *= 1 + p.snowKill * this.winter.at(a.x[t], a.y[t]);
           dbg('attack_roll');
           if (!isYoung && et > 0.5 && this.rng.next() < p.wolfTestGiveUp * Math.min(1, guards / 2 + 0.3)) {
             // tested a strong adult and thought better of it
@@ -2839,6 +2865,14 @@ export class Sim implements SimLike {
     this.raptors.sampleRow(row);
     row.fires_lightning = this.cLightning;
     row.storm_cells = this.storms ? this.storms.cells.length : 0;
+    // winter (S11): snow now (mean and deepest cell), the highest mean depth since the last sample, and blizzards and hard winters begun since then (all 0 with snowDepth off)
+    const wn = this.winter;
+    const wd = wn ? wn.drainSample() : null;
+    row.snow_mean = wn ? wn.meanDepth() : 0;
+    row.snow_max = wn ? wn.maxDepth() : 0;
+    row.snow_peak = wd ? wd.peak : 0;
+    row.blizzards = wd ? wd.blizzards : 0;
+    row.hard_winters = wd ? wd.hardWinters : 0;
     this.cKills = 0;
     this.cKillsDeer = 0;
     this.cStrife = 0;
@@ -2918,6 +2952,10 @@ export class Sim implements SimLike {
       tick: this.tick, env: { ...this.env.state }, count: k, ids, agents: out, carcassCount: this.cN, carcasses: car, veg, small,
       pop: Int32Array.from(this.populations()),
     };
+    if (withVeg && this.winter !== null) {
+      snap.snow = new Uint8Array(32 * 32);
+      this.winter.fillTexture(snap.snow);
+    }
     if (this.storms) {
       snap.storms = this.storms.toArray(this.env.state, this.tick);
       snap.strikes = this.storms.drainStrikes();

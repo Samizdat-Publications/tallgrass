@@ -15,6 +15,10 @@ export class Environment {
   droughtTicks = 0;
   droughtSeverity = 0;
   rainTicks = 0;
+  /** Ticks left on a forced snowfall (set by the winter module; 0 otherwise). */
+  snowTicks = 0;
+  /** Spring green-up delay in seasons (0 = off): the rise from dormancy to the late-spring peak starts this much later. */
+  greenUpShift = 0;
   private weatherTimer = 0;
   private storm = false;
   /** Slow climate swing in grass growth (0 = off): wet and dry runs of years from two incommensurate cycles. */
@@ -55,6 +59,7 @@ export class Environment {
 
     if (this.droughtTicks > 0) this.droughtTicks--;
     if (this.rainTicks > 0) this.rainTicks--;
+    if (this.snowTicks > 0) this.snowTicks--;
 
     // weather rolls once per day
     if (--this.weatherTimer <= 0) {
@@ -62,6 +67,7 @@ export class Environment {
       this.rollWeather(s.season);
     }
     if (this.droughtTicks > 0) s.weather = Weather.Drought;
+    else if (this.snowTicks > 0) s.weather = Weather.Snow;
     else if (this.rainTicks > 0) s.weather = s.season >= 3 ? Weather.Snow : this.storm ? Weather.Storm : Weather.Rain;
     else s.weather = Weather.Clear;
     const targetRain = s.weather === Weather.Rain || s.weather === Weather.Storm ? 1 : s.weather === Weather.Snow ? 0.6 : 0;
@@ -89,7 +95,15 @@ export class Environment {
   growthFactor(): number {
     const s = this.state.season;
     // peak in late spring, weak in autumn, dormant in winter
-    const g = Math.max(0, Math.cos(((s - 0.7) / 4) * Math.PI * 2));
+    let g = Math.max(0, Math.cos(((s - 0.7) / 4) * Math.PI * 2));
+    if (this.greenUpShift > 0) {
+      // the rise runs from dormancy (season 3.7) to the peak (0.7); with a shift it starts that many seasons later and reaches the same peak
+      const u = (s + 0.3) % 4;
+      if (u < 1) {
+        const v = (u - Math.min(0.95, this.greenUpShift)) / (1 - Math.min(0.95, this.greenUpShift));
+        g = v <= 0 ? 0 : Math.cos(((v - 1) * Math.PI) / 2);
+      }
+    }
     let f = 0.04 + 0.96 * Math.pow(g, 1.3);
     if (this.droughtTicks > 0) f *= 1 - this.droughtSeverity;
     if (this.state.rain > 0.3 && s < 3) f *= 1 + 0.35 * this.state.rain;

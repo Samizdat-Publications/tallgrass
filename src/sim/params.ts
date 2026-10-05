@@ -256,6 +256,32 @@ export interface Params {
   lightningRate: number;
   /** Chance a strike in dry, cured grass (season 1.4 to 3.1, grass above 0.3, rain below 0.35) starts a fire. */
   lightningIgnite: number;
+  /** Winter (S11, winter.ts; 0 = off). On, snow builds a depth field on the coarse grid (it drifts into hollows and melts with warmth),
+   *  the grazers lose food to it, moving costs more and wolves kill more easily; `blizzard` and `hardWinter` events fire. The value
+   *  scales how much snow falls (1 = the screened amount). */
+  snowDepth: number;
+  /** Snowfalls per winter, on average (a hard winter has 1.8 times as many). */
+  snowStorms: number;
+  /** Depth added by one full-strength snowfall (before snowDepth; the field is 0..1). */
+  snowFall: number;
+  /** Wind drift: share of a cell's snow moved one cell downwind per season at wind strength 1 on level ground. */
+  snowDrift: number;
+  /** Melt per season of warmth above 0.14 (depth units; hollows melt a little slower). */
+  snowMelt: number;
+  /** Chance a winter is a hard one (more and deeper snowfalls, slow melt). */
+  hardWinterP: number;
+  /** Share of snowfalls that are blizzards (deeper, shorter, wind at 0.85 or more). */
+  blizzardP: number;
+  /** Grazing multiplier is 1 - k x depth: pronghorn, bison, and mule deer (they browse above the snow). */
+  snowGrazePronghorn: number;
+  snowGrazeBison: number;
+  snowGrazeMule: number;
+  /** Movement cost multiplier is 1 + snowMove x depth (ground animals that are moving). */
+  snowMove: number;
+  /** Wolf kill chance multiplier is 1 + snowKill x depth at the prey. */
+  snowKill: number;
+  /** Spring green-up delay in seasons (0 = off; 0.5 = the rise from dormancy begins half a season later, the late-spring peak stays). */
+  greenUpShift: number;
   // fear
   fearKill: number;
   fearKillRadius: number;
@@ -501,6 +527,19 @@ export function defaultParams(): Params {
     stormCells: 0,
     lightningRate: 0.05,
     lightningIgnite: 0.5,
+    snowDepth: 0,
+    snowStorms: 4,
+    snowFall: 0.2,
+    snowDrift: 10,
+    snowMelt: 24,
+    hardWinterP: 0.15,
+    blizzardP: 0.25,
+    snowGrazePronghorn: 0.6,
+    snowGrazeBison: 0.3,
+    snowGrazeMule: 0.3,
+    snowMove: 1,
+    snowKill: 0.3,
+    greenUpShift: 0,
     fearKill: 0.7,
     fearKillRadius: 22,
     fearPredatorStamp: 0.0008,

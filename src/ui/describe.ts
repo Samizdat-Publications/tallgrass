@@ -242,6 +242,8 @@ export function cardRank(kind: string): number {
     case 'townFounded': return 1;
     case 'eaglesArrive': return 1;
     case 'hawksReturn': return 1;
+    case 'hardWinter': return 3;
+    case 'blizzard': return 2;
     default: return 0;
   }
 }
@@ -275,6 +277,7 @@ export function eventWeight(e: SimEvent): number {
     case 'packLost':
     case 'distemper':
     case 'mesoRelease':
+    case 'hardWinter':
       return 3;
     case 'immigrated':
       return e.sp === 1 ? 3 : 2;
@@ -286,6 +289,7 @@ export function eventWeight(e: SimEvent): number {
     case 'hareCrash':
     case 'coyotePups':
     case 'storm':
+    case 'blizzard':
     case 'eaglesArrive':
     case 'hawksReturn':
       return 2;
@@ -529,6 +533,16 @@ export function describeEvent(e: SimEvent, ctx?: DescribeContext): EventText {
     }
     case 'storm':
       return { sentence: pick(e, ['A thunderstorm rolls across the valley.', 'Thunderheads build over the rim and the storm breaks.', 'A line of storms marches across the prairie.']) };
+    case 'blizzard':
+      return {
+        sentence: pick(e, ['A blizzard blows in, and the valley disappears into white.', 'A blizzard sweeps down from the north, and the snow drives sideways across the prairie.', 'The wind rises and a blizzard closes over the valley.']),
+        card: { title: 'Blizzard', subtitle: when },
+      };
+    case 'hardWinter':
+      return {
+        sentence: pick(e, ['A hard winter settles on the valley: deep snow, bitter cold, and a long wait for the thaw.', 'The snow comes early and stays. This will be a hard winter.', 'A hard winter grips the prairie, and the grass lies buried under the drifts.']),
+        card: { title: 'A hard winter', subtitle: when },
+      };
     case 'lightningFire':
       return {
         sentence: region && region !== 'central' ? `Lightning strikes the ${region} prairie, and the grass catches.` : 'Lightning strikes the dry grass, and it catches.',

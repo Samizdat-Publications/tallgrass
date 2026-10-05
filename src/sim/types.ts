@@ -116,6 +116,9 @@ export interface Snapshot {
   storms?: Float32Array;
   /** Lightning strikes since the last snapshot, STRIKE_STRIDE (4) floats each: x, y, tick, ignited (0 or 1). */
   strikes?: Float32Array;
+  /** Snow depth (S11, params.snowDepth), 32 x 32 coarse cells (16 m) like `small`, bytes row-major by y then x: 0..255 = depth 0..1.
+   *  Present only when snowDepth is on and the snapshot carries the vegetation texture. */
+  snow?: Uint8Array;
 }
 
 /** Ticks per second of real time at 1x speed. */
