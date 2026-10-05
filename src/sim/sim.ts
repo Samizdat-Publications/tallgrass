@@ -15,7 +15,7 @@ import { flightStep, Raptors } from './sp/raptor';
 import { AGENT_STRIDE, CARCASS_STRIDE, F_ALPHA, F_INFECTED, F_JUVENILE, F_MALE, F_MANGE, F_MIGRANT, F_PREGNANT, F_STOT, Intervention, SimLike, Snapshot, SPECIES_COUNT, SPECIES_KEYS, Sp, St, YEAR_TICKS, SEASON_TICKS, BASE_YEAR_TICKS, setCalendarScale } from './types';
 import { COAT_BASE, COAT_RANGE, DIET, IS_PREY, isGrazer, REACT, SPECIES, THREAT } from './species';
 import { STRIDE, Vegetation } from './vegetation';
-import { generateWorld, World } from './world';
+import { distanceTransform, generateWorld, World } from './world';
 
 const DT = 0.15; // seconds of motion per tick (1x is a gentle 1.5x time-lapse)
 const BUCKET = 16;
@@ -90,6 +90,8 @@ export class Sim implements SimLike {
   /** Unit vectors pointing downhill in water distance (toward water), per cell. */
   private waterGX: Float32Array;
   private waterGY: Float32Array;
+  /** Distance (m) to a place to drink: the shore itself, or with drinkSpots only some stretches of it. */
+  private drinkD: Float32Array;
 
   // carcasses (small SoA pool)
   cN = 0;
@@ -209,7 +211,20 @@ export class Sim implements SimLike {
     const n = this.world.n;
     this.waterGX = new Float32Array(n * n);
     this.waterGY = new Float32Array(n * n);
-    const wd = this.world.waterDist;
+    let wd = this.world.waterDist;
+    if (this.p.drinkSpots > 0) {
+      // keep the water cells in coarse 40 m blocks picked by a seeded hash (no rng draws), so each pond and the creek keep a few drinking places
+      const w = this.world.water, src = new Uint8Array(n * n), blk = Math.max(1, Math.round(40 / this.world.cell));
+      for (let k = 0; k < n * n; k++) {
+        if (!w[k]) continue;
+        const bi = ((k % n) / blk) | 0, bj = ((k / n / blk) | 0);
+        let h = (bi * 73856093) ^ (bj * 19349663) ^ (this.seed * 83492791);
+        h = Math.imul(h ^ (h >>> 13), 1274126177);
+        if (((h >>> 8) & 0xffff) / 0x10000 < this.p.drinkSpots) src[k] = 1;
+      }
+      wd = distanceTransform(src, n, this.world.cell);
+    }
+    this.drinkD = wd;
     for (let j = 0; j < n; j++) {
       for (let i = 0; i < n; i++) {
         const c = j * n + i;
@@ -1106,6 +1121,9 @@ export class Sim implements SimLike {
     // --- herd scan (3x3 buckets)
     const g = this.prey, nb = g.nb, bs = g.bs;
     const bx = Math.min(nb - 1, Math.max(0, (x / bs) | 0)), by = Math.min(nb - 1, Math.max(0, (y / bs) | 0));
+    // herdSpacingGraze: a second, wider separation sum used only while grazing (computed only when the param is on)
+    const gm = p.herdSpacingGraze, gSpacing = spacing * gm, gSpacing2 = spacing2 * gm * gm;
+    let gsepx = 0, gsepy = 0;
     let n = 0, cx = 0, cy = 0, avx = 0, avy = 0, sepx = 0, sepy = 0, alarm = 0, alx = 0, aly = 0, infNear = 0, maxFlee = 0;
     let mate = -1, mateD = 1e9;
     let nnx = 0, nny = 0, nnd2 = 1e9;
@@ -1132,6 +1150,11 @@ export class Sim implements SimLike {
             const d = Math.sqrt(d2) + 0.01;
             sepx -= dx / d * (spacing - d);
             sepy -= dy / d * (spacing - d);
+          }
+          if (gm > 0 && d2 < gSpacing2) {
+            const d = Math.sqrt(d2) + 0.01;
+            gsepx -= dx / d * (gSpacing - d);
+            gsepy -= dy / d * (gSpacing - d);
           }
           if (a.flee[j] > 18) { alarm++; alx += a.fleeX[j]; aly += a.fleeY[j]; if (a.flee[j] > maxFlee) maxFlee = a.flee[j]; }
           if (a.infected[j] > 0 && d2 < 16) infNear++;
@@ -1252,7 +1275,7 @@ export class Sim implements SimLike {
       dvy = a.fleeY[i] * run + sepy * 2;
       state = St.Flee;
     } else if (a.hydration[i] < 0.3 || (a.state[i] === St.Drink && a.hydration[i] < 0.97)) {
-      if (this.world.waterDist[c] < 3) {
+      if (this.drinkD[c] < 3) {
         state = St.Drink;
         a.hydration[i] = Math.min(1, a.hydration[i] + 0.09);
       } else {
@@ -1317,16 +1340,18 @@ export class Sim implements SimLike {
         if (grazing) {
           state = St.Graze;
           const v = bestS > hereS + 0.05 ? 0.35 : 0.12;
-          dvx = bdx * v + sepx * 0.5;
-          dvy = bdy * v + sepy * 0.5;
+          // with herdSpacingGraze the personal space is wider and the pull back to the herd weaker by the same factor
+          dvx = bdx * v + (gm > 0 ? gsepx : sepx) * 0.5;
+          dvy = bdy * v + (gm > 0 ? gsepy : sepy) * 0.5;
+          const gcoh = gm > 0 ? 0.3 / gm : 0.3;
           if (n > 0) {
             if (p.herdNearest > 0) {
               // stay within reach of the nearest herd-mate rather than the herd's centre: grazing fronts and strands, not rings
               const d = Math.sqrt(nnd2);
-              if (d > p.herdNearest) { dvx += (nnx / d) * 0.3 * herd; dvy += (nny / d) * 0.3 * herd; }
+              if (d > p.herdNearest) { dvx += (nnx / d) * gcoh * herd; dvy += (nny / d) * gcoh * herd; }
             } else {
               const dx = cx - x, dy = cy - y, d = Math.sqrt(dx * dx + dy * dy);
-              if (d > coh) { dvx += (dx / d) * 0.3 * herd; dvy += (dy / d) * 0.3 * herd; }
+              if (d > coh) { dvx += (dx / d) * gcoh * herd; dvy += (dy / d) * gcoh * herd; }
             }
           }
         } else {
@@ -1360,6 +1385,11 @@ export class Sim implements SimLike {
           state = St.Walk;
         }
       }
+    }
+    // drink spots: a grazer that has drunk its fill drifts back off the bank instead of lingering in a ring at the water
+    if (p.drinkSpots > 0 && state !== St.Drink && state !== St.Flee && a.hydration[i] > 0.85 && this.drinkD[c] < 12) {
+      dvx -= this.waterGX[c] * 0.5;
+      dvy -= this.waterGY[c] * 0.5;
     }
     a.dvx[i] = dvx;
     a.dvy[i] = dvy;
@@ -1461,7 +1491,7 @@ export class Sim implements SimLike {
 
     // water comes first unless starving
     if (((a.hydration[i] < 0.3 && !chasing) || a.hydration[i] < 0.08) && a.energy[i] > 0.12 || (a.state[i] === St.Drink && a.hydration[i] < 0.97)) {
-      if (this.world.waterDist[c] < 3) { state = St.Drink; a.hydration[i] = Math.min(1, a.hydration[i] + 0.06); }
+      if (this.drinkD[c] < 3) { state = St.Drink; a.hydration[i] = Math.min(1, a.hydration[i] + 0.06); }
       else { dvx = this.waterGX[c] * trot; dvy = this.waterGY[c] * trot; state = St.Walk; }
       a.dvx[i] = dvx; a.dvy[i] = dvy; a.state[i] = state;
       return;
@@ -1828,7 +1858,7 @@ export class Sim implements SimLike {
     const chasing = a.state[i] === St.Chase && a.same(a.target[i], a.targetId[i]);
     // water
     if (!chasing && ((a.hydration[i] < 0.3 && a.energy[i] > 0.12) || (a.state[i] === St.Drink && a.hydration[i] < 0.97))) {
-      if (this.world.waterDist[c] < 3) { state = St.Drink; a.hydration[i] = Math.min(1, a.hydration[i] + 0.06); }
+      if (this.drinkD[c] < 3) { state = St.Drink; a.hydration[i] = Math.min(1, a.hydration[i] + 0.06); }
       else { dvx = this.waterGX[c] * walk * 1.4; dvy = this.waterGY[c] * walk * 1.4; state = St.Walk; }
       return done();
     }
@@ -2631,6 +2661,52 @@ export class Sim implements SimLike {
     return out;
   }
 
+  /**
+   * Herd shape (S10), read-only: no rng, no state. Columns, all about bison:
+   *   near_bison       bison within 30 m of water
+   *   ring_bison       share of those standing in the bank band (3 to 12 m from the water, so not drinking); a plain uniform spread gives about 0.3,
+   *                    a ring around a pond more (NaN with fewer than 5 bison near water)
+   *   nn_graze_bison   mean distance (m, each capped at 30) from a grazing bison to the nearest other bison (NaN with fewer than 2 grazers)
+   */
+  private herdShapeRow(row: Record<string, number>): void {
+    const a = this.a, wd = this.world.waterDist;
+    const idx: number[] = [];
+    let near = 0, ring = 0;
+    for (let i = 0; i < a.hi; i++) {
+      if (!a.alive[i] || a.sp[i] !== Sp.Bison) continue;
+      idx.push(i);
+      const d = wd[this.veg.cellAt(a.x[i], a.y[i])];
+      if (d < 30) { near++; if (d >= 3 && d < 12) ring++; }
+    }
+    row.near_bison = near;
+    row.ring_bison = near >= 5 ? ring / near : NaN;
+    // nearest neighbour by a sweep over the bison sorted on x
+    idx.sort((p, q) => a.x[p] - a.x[q] || p - q);
+    let sum = 0, cnt = 0;
+    for (let k = 0; k < idx.length; k++) {
+      const i = idx[k];
+      if (a.state[i] !== St.Graze) continue;
+      let best = 900;
+      for (let m = k + 1; m < idx.length; m++) {
+        const dx = a.x[idx[m]] - a.x[i];
+        if (dx * dx >= best) break;
+        const dy = a.y[idx[m]] - a.y[i];
+        const d2 = dx * dx + dy * dy;
+        if (d2 < best) best = d2;
+      }
+      for (let m = k - 1; m >= 0; m--) {
+        const dx = a.x[idx[m]] - a.x[i];
+        if (dx * dx >= best) break;
+        const dy = a.y[idx[m]] - a.y[i];
+        const d2 = dx * dx + dy * dy;
+        if (d2 < best) best = d2;
+      }
+      sum += Math.sqrt(best);
+      cnt++;
+    }
+    row.nn_graze_bison = cnt >= 2 ? sum / cnt : NaN;
+  }
+
   sample(): Record<string, number> {
     const a = this.a;
     const pops = this.populations();
@@ -2677,6 +2753,7 @@ export class Sim implements SimLike {
     }
     row.search_wolf = imgN ? imgSum / imgN : NaN;
     row.juv_bison = juvBison;
+    this.herdShapeRow(row);
     row.infected_bison = infBison;
     // canid disease: wolves sick with distemper now, wolves with mange now (and their mean severity),
     // disease deaths, outbreaks closed and packs newly hit by mange since the last sample

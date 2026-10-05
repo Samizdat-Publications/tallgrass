@@ -98,6 +98,12 @@ export interface Params {
   matingWindow: number;
   /** If > 0, grazing and resting herbivores keep within this many metres of their nearest herd-mate instead of drifting to the herd centre (0 = centre). */
   herdNearest: number;
+  /** If > 0, only this share of the shore (0.6 to 0.8 are the screened values) is a drinking place, in seeded 40 m blocks, so thirsty grazers gather at a few spots
+   *  instead of ringing every pond; a grazer that has drunk its fill also drifts back off the bank. 0 = off: any shore is a drinking place. */
+  drinkSpots: number;
+  /** If > 0, personal space while grazing: a grazing herbivore keeps this multiple of the usual separation (spacing and range) from herd-mates,
+   *  and its cohesion pull is divided by the same factor, so the herd spreads out over the patch (1.6 is the screened value). 0 = off (1 would match the old spacing). */
+  herdSpacingGraze: number;
   /** Amplitude of the slow climate cycle on grass growth (0 = off; 0.3 = +/-30%). */
   climateAmp: number;
   /** Shortens the valley year k-fold (1 = 2,400-tick years). Biology per tick is unchanged, so animals live k times as
@@ -422,6 +428,8 @@ export function defaultParams(): Params {
     loneIndividual: 0,
     matingWindow: 0,
     herdNearest: 0,
+    drinkSpots: 0,
+    herdSpacingGraze: 0,
     climateAmp: 0,
     calendarScale: 2,
     droughtRefuge: 0,
