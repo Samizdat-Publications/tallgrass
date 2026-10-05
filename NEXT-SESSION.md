@@ -9,15 +9,14 @@
 - Unmerged: `wip/drink-spots` (pond-ring fix; param drinkSpots, off by default; 0.7 is roughly level with main over 16 worlds). It is WP S10.
 - Nothing is running in the background.
 
-## In flight (Track R session started 2026-10-04 ~16:30 local, deadline 2026-10-08 12:00)
-- Done on main (215d4af): R0 all; R1 items 1-6 (foot lock, leg IK, takedown v2, feeding, ravens at kills); R2 items 0-9 (all); R12 except family tree; R14 (music, sounds, crane render); S18 decade lines wired; v2-sim merged through d4f956d (S0, S1, S2, S4, S6, S15, S16, S18; all new ecology off by default). Round 13 blind critic done (REVIEWS.md).
-- Builders in worktrees: R1 items 7-9 + upright-wolf fix; R3 (prairie dogs, jackrabbits, small-prey UI, audio incl. thunder, narrator); R4 storm visuals; round-13 fixes (mid-range water, early-winter snow, grazed stubble); grass copper fade in winter.
-- Next: R3 items 1, 4, 5, 9, 10 after S5 coyotes merge (mange needs animals.ts free); round-13 leftovers (snow buries grass, moonlight on animals at night, potato rocks); M1 once R3/R4 land (Gemini video round with hunt and storm segments, deploy, MORNING).
-- S3: 32-seed screens A-D and D re-run at 3bb97a5 done (review/stability/v6-screens/). D: wolf CV 0.26, corr 0.72, 32/32, fails only pronghorn starve share (50%). Waiting for Track S to post the next screen; run it locally at 32 seeds from a frozen worktree.
-- Owner request (via the v1 session): keep the making-of artifact https://claude.ai/artifact/7jPHUFvbzTv6AUz5UCA3Mu updated from journey/ (tools/journey.py, then tools/journey_page.py --artifact --out scratch/artifact_journey/making-of.html, publish with files = only new images {basename: journey/basename}; read the url first). v2 images are archived in journey/; publish at M1. Landing draft https://claude.ai/artifact/JHgLkaPPUGvWmeZU5FJ3YM can be refreshed with v2 stills.
-- Builders' reports sometimes name the wrong branch: use `git branch --contains <commit>`.
-- Do not `git worktree remove` builder worktrees: each has a node_modules junction to the main node_modules.
-- Quota at ~18:30: weekly 67%.
+## In flight (Track R session started 2026-10-04 ~16:30 local, deadline 2026-10-08 12:00; OWNER: wrap up and stop near 85% weekly)
+- Done on main (bbab3ab): R0, R1 (all 9), R2 (all 10), R3 items 2, 3, 6, 7, 8, R4, R12 (minus family tree), R14 + crane render, round 13 fixes (water, snow, stubble, snow-buried grass, idle panels), S18 wiring, thunder wired to storms. v2-sim merged through d4f956d.
+- v6E acceptance PASSES (review/stability/v6E-3bb97a5): 20/20 all species, wolf CV 0.24, raven CV 0.15, lag corr 0.69. Shocks run (review/stability/v6E-3bb97a5-shocks300, log scratch/accept_v6E_shocks.log) still going; then post results to REQUESTS-R. Screen G32 running (scratch/screens/G32); post adoption table to REQUESTS-R when done.
+- M1 in progress: round 14 Gemini video done (life and motion 4). Builders: time-lapse gait + hover + night rim (animals.ts); 100x shadow strobe + rain depth + black shadow slab (engine/sunshadow/post). Then: merge, blind-critic stills round, `npm run deploy` and verify live, MORNING v2 alpha section with self-audit, publish making-of artifact (see note below), journey images.
+- Waiting on Track S: S5 coyotes (then R3 items 1, 4, 5, 9, 10), v6 default flip (merge it and re-run the game).
+- Owner request: keep the making-of artifact https://claude.ai/artifact/7jPHUFvbzTv6AUz5UCA3Mu updated from journey/ (tools/journey.py, then tools/journey_page.py --artifact --out scratch/artifact_journey/making-of.html, publish with files = only new images {basename: journey/basename}; read the url first and read the saved file fully before republishing).
+- Builders' reports sometimes name the wrong branch: use `git branch --contains <commit>`. node_modules is shared via junctions: never rm -rf a junction; restore with `npm install` (not npm ci).
+- Quota at 22:15: weekly 73%.
 
 ## Start here
 1. Read CLAUDE.md, then V2-PLAN.md sections 0 to 6. Your kickoff prompt gives your mode (single or two tracks) and your deadline: write the deadline to `.claude/hooks/run_until.local.txt` first.
