@@ -1181,11 +1181,13 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
     // metre, pale straw), darker cropped swaths a few metres across, and flecks of bare soil between the stems. Everything fades
     // out by about 260 m so the far field stays calm.
     float mk = stubA * (1.0 - smoothstep(110.0, 260.0, dist)) * (1.0 - 0.7 * uSnow);
-    float t1 = tgDet(xz, 1.1, 2, vec2(0.58)) * 0.6 + tgDet(xz, 3.7, 3, vec2(0.27)) * 0.4;
-    float swath = tgDet(xz, 7.5, 1, vec2(0.71));
-    shortGrass *= 1.0 + ((smoothstep(0.35, 0.8, t1) - 0.45) * 0.34 + (swath - 0.5) * 0.3) * mk;
-    float fleck = smoothstep(0.7, 0.88, tgDet(xz, 0.55, 1, vec2(0.9)) * 0.6 + tgDet(xz, 1.6, 0, vec2(0.33)) * 0.4);
-    shortGrass = mix(shortGrass, uSoil * (0.75 + 0.5 * nA) * vec3(0.95, 0.88, 0.8), fleck * 0.55 * mk);
+    if (mk > 0.002) {
+      float t1 = tgDet(xz, 1.1, 2, vec2(0.58)) * 0.6 + tgDet(xz, 3.7, 3, vec2(0.27)) * 0.4;
+      float swath = tgDet(xz, 7.5, 1, vec2(0.71));
+      shortGrass *= 1.0 + ((smoothstep(0.35, 0.8, t1) - 0.45) * 0.34 + (swath - 0.5) * 0.3) * mk;
+      float fleck = smoothstep(0.7, 0.88, tgDet(xz, 0.55, 1, vec2(0.9)) * 0.6 + tgDet(xz, 1.6, 0, vec2(0.33)) * 0.4);
+      shortGrass = mix(shortGrass, uSoil * (0.75 + 0.5 * nA) * vec3(0.95, 0.88, 0.8), fleck * 0.55 * mk);
+    }
   }
   // drought soil is dry dusty tan, not dark earth
   vec3 soilCol = uDrought > 0.001 ? tgDroughtSoil(uSoil, uDrought) : uSoil;
@@ -1356,7 +1358,7 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
   }
 
   // bare winter ground at dusk and dawn is adapted the same way, more gently (summer keeps its golden dusk)
-  if (winterK > 0.01) col *= mix(vec3(1.0), tgAdapt(nrm, ts), 0.42 * winterK * (1.0 - snowCover));
+  if (winterK > 0.01) col *= mix(vec3(1.0), tgAdapt(nrm, ts), 0.62 * winterK * (1.0 - snowCover));
 
   // moonlit meadow: grass stays grass, cooler and darker, and the combed strokes stay readable
   if (uNight > 0.02) {
