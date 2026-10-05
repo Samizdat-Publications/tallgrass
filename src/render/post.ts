@@ -560,7 +560,17 @@ const DOF_COMMON = /* glsl */ `
   uniform sampler2D tDepth;
   uniform vec4 uCoc;   // x: far blur in full-res pixels, y: focus distance (m along the view axis), z: near plane, w: far plane
   float tgLinZ(float d) { return uCoc.z * uCoc.w / (uCoc.w - d * (uCoc.w - uCoc.z)); }
-  float tgCoc(float d) { return clamp(uCoc.x * (1.0 - uCoc.y / tgLinZ(d)), -uCoc.x, uCoc.x); }
+  uniform vec4 uStyle; // x: 1 = long lens (gentle), 0 = thin lens; y: sharp slab around the focus (m); z: z / focus where the far blur is full; w: z / focus where near blur starts
+  float tgCoc(float d) {
+    float z = tgLinZ(d);
+    if (uStyle.x < 0.5) return clamp(uCoc.x * (1.0 - uCoc.y / z), -uCoc.x, uCoc.x);
+    // long lens, for the documentary camera: the subject and the metres around its depth stay sharp, the far background softens
+    // slowly out to twice the subject distance, and only something very close to the lens goes soft in front
+    float f = uCoc.y;
+    float far = smoothstep(0.0, 1.0, max(z - f - uStyle.y, 0.0) / max(f * (uStyle.z - 1.0) - uStyle.y, 1.0));
+    float near = 1.0 - smoothstep(uStyle.w * 0.3, uStyle.w, z / f);
+    return uCoc.x * (far - near);
+  }
 `;
 const DOF_TILE = 16;
 
@@ -571,6 +581,8 @@ class DofPass extends Pass {
   focus = 20;
   /** Gather taps (16 to 32). */
   taps = 24;
+  /** The circle of confusion's shape (see DOF_COMMON): x 1 = long lens (the documentary camera), 0 = thin lens (photo mode). Shared with both shaders. */
+  readonly style = new THREE.Vector4(0, 4, 2, 0.5);
   private w = 2;
   private h = 2;
   private halfRT: THREE.WebGLRenderTarget | null = null;
@@ -594,8 +606,9 @@ class DofPass extends Pass {
     this.needsSwap = true;
     this.enabled = false;
     const cocU = () => ({ value: new THREE.Vector4(10, 20, 0.5, 9000) });
+    const styleU = { value: this.style };
     this.downMat = new THREE.ShaderMaterial({
-      uniforms: { tDiffuse: { value: null }, tDepth: { value: null }, uCoc: cocU(), uTexel: { value: new THREE.Vector2(1 / 1600, 1 / 900) } },
+      uniforms: { tDiffuse: { value: null }, tDepth: { value: null }, uCoc: cocU(), uStyle: styleU, uTexel: { value: new THREE.Vector2(1 / 1600, 1 / 900) } },
       vertexShader: FS_VERT,
       fragmentShader: /* glsl */ `
         precision highp float;
@@ -738,7 +751,7 @@ class DofPass extends Pass {
       depthTest: false, depthWrite: false,
     });
     this.compMat = new THREE.ShaderMaterial({
-      uniforms: { tDiffuse: { value: null }, tDepth: { value: null }, tBlur: { value: null }, uCoc: cocU() },
+      uniforms: { tDiffuse: { value: null }, tDepth: { value: null }, tBlur: { value: null }, uCoc: cocU(), uStyle: styleU },
       vertexShader: FS_VERT,
       fragmentShader: /* glsl */ `
         precision highp float;
@@ -1006,12 +1019,15 @@ export class PostFX {
   /**
    * Depth of field (R15). `blur` is the far blur as a fraction of the image height (0 turns the pass off completely: it is skipped
    * and holds no memory), `focus` the distance in metres along the view axis to the plane in focus, `taps` the gather count.
+   * `longLens` gives the documentary camera's shape: a sharp slab around the subject, the far background softening out to twice its
+   * distance, near blur only for something very close to the lens (photo mode uses the plain thin lens).
    */
-  setDof(blur: number, focus: number, taps = 24): void {
+  setDof(blur: number, focus: number, taps = 24, longLens = false): void {
     const d = this.dof;
     d.blur = Math.max(0, blur);
     d.focus = focus;
     d.taps = taps;
+    d.style.x = longLens ? 1 : 0;
     d.enabled = d.active;
   }
 

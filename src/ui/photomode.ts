@@ -28,8 +28,11 @@ export interface PhotoState {
 export const PHOTO_DEFAULTS: PhotoState = { exposure: 0, aperture: 0, freeze: true, hideUi: false, grain: false, format: 'png' };
 export const JPEG_QUALITY = 0.9;
 
-/** Far blur as a fraction of the image height, for the documentary camera's close shots (gentle) and for the widest photo aperture. */
-export const DIRECTOR_BLUR = 0.008;
+/**
+ * Far blur as a fraction of the image height: for the documentary camera's close shots (a long lens: 3.5 px at 1600 x 900 at most,
+ * and only for the far background) and for the widest photo aperture.
+ */
+export const DIRECTOR_BLUR = 0.0039;
 export const PHOTO_BLUR_MAX = 0.038;
 /** Film grain amplitude and fringe (pixels at the corners, each way) in cinematic mode. */
 export const CINE_GRAIN = 0.022;
@@ -65,7 +68,7 @@ export function viewDepth(camera: THREE.Camera, p: THREE.Vector3): number {
 export interface LensDeps {
   camera: THREE.PerspectiveCamera;
   post: {
-    setDof(blur: number, focus: number, taps?: number): void;
+    setDof(blur: number, focus: number, taps?: number, longLens?: boolean): void;
     setLens(grain: number, fringePx: number): void;
   };
   /** World position of an animal by id (false when it is gone). */
@@ -142,7 +145,7 @@ export class LensController {
   update(dt: number): void {
     let blurT = 0;
     let have = false;
-    let tau = 0.7;
+    let tau = 0.33; // the director's blur arrives over about a second (95% in 3 tau)
     let focusTau = 0.35;
     const photo = this.photoOpen;
     if (photo) {
@@ -177,7 +180,7 @@ export class LensController {
     } else if (!have) {
       this.focusSet = false;
     }
-    this.d.post.setDof(this.blur, this.focus, 24);
+    this.d.post.setDof(this.blur, this.focus, 24, !photo);
 
     // film grain and the fringe: cinematic mode, and the panel's grain switch
     const cine = this.cinematic && this.cinematicLook;

@@ -50,7 +50,10 @@ try {
     // a director close shot: the lens controller racks focus on the shot's subject (the director's own pick is random, so the shot
     // is declared here; the controller reads exactly this getter)
     await page.evaluate((id) => { window.__director.closeShot = () => ({ id, x: 0, y: 0, dist: 14 }); }, setup.id);
-    await page.waitForTimeout(2500);
+    const ramp = [];
+    for (const ms of [250, 450, 400]) { await page.waitForTimeout(ms); ramp.push(await page.evaluate(() => +(window.__lens.current.blur / 0.0039).toFixed(2))); }
+    console.log('director ramp (fraction of full at ~0.25, 0.7, 1.1 s):', JSON.stringify(ramp));
+    await page.waitForTimeout(1500);
     await settle(60);
     const st = await page.evaluate(() => window.__lens.current);
     console.log('director lens', JSON.stringify(st));

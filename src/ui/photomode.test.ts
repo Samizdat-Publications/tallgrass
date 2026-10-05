@@ -34,16 +34,16 @@ ok(exposureLabel(0) === '0 EV' && exposureLabel(1.5) === '+1.5 EV' && exposureLa
 }
 
 // the controller, with a fake post stack
-function rig(): { lens: LensController; calls: { dof: Array<[number, number, number | undefined]>; lens: Array<[number, number]>; exposure: number[] }; state: { close: ReturnType<LensDeps['director']['closeShot']>; selected: number | null; animals: Map<number, THREE.Vector3> } } {
+function rig(): { lens: LensController; calls: { dof: Array<[number, number, number | undefined, boolean | undefined]>; lens: Array<[number, number]>; exposure: number[] }; state: { close: ReturnType<LensDeps['director']['closeShot']>; selected: number | null; animals: Map<number, THREE.Vector3> } } {
   const cam = new THREE.PerspectiveCamera(45, 16 / 9, 0.5, 9000);
   cam.position.set(0, 2, 0);
   cam.lookAt(0, 2, 100);
   cam.updateMatrixWorld(true);
-  const calls = { dof: [] as Array<[number, number, number | undefined]>, lens: [] as Array<[number, number]>, exposure: [] as number[] };
+  const calls = { dof: [] as Array<[number, number, number | undefined, boolean | undefined]>, lens: [] as Array<[number, number]>, exposure: [] as number[] };
   const state = { close: null as ReturnType<LensDeps['director']['closeShot']>, selected: null as number | null, animals: new Map<number, THREE.Vector3>() };
   const lens = new LensController({
     camera: cam,
-    post: { setDof: (b, f, t) => calls.dof.push([b, f, t]), setLens: (g, c) => calls.lens.push([g, c]) },
+    post: { setDof: (b, f, t, l) => calls.dof.push([b, f, t, l]), setLens: (g, c) => calls.lens.push([g, c]) },
     animalPos: (id, out) => { const p = state.animals.get(id); if (!p) return false; out.copy(p); return true; },
     speciesOf: (id) => (state.animals.has(id) ? 1 : null),
     pivot: (out) => out.set(0, 0, 40),
@@ -73,6 +73,8 @@ const step = (lens: LensController, seconds: number): void => { for (let t = 0; 
   const last = calls.dof[calls.dof.length - 1];
   ok(near(last[0], DIRECTOR_BLUR, 1e-4), 'a close shot settles at the gentle director blur');
   ok(near(last[1], 25, 0.01), 'and focuses at the subject depth (25 m)');
+  ok(last[3] === true, 'the director uses the long lens shape');
+  ok(DIRECTOR_BLUR * 900 <= 3.6, 'the director blur is at most 3.5 px at 1600 x 900');
   state.close = null;
   step(lens, 4);
   ok(calls.dof[calls.dof.length - 1][0] === 0, 'when the shot ends the blur fades to exactly zero (the pass can skip)');
@@ -100,6 +102,7 @@ const step = (lens: LensController, seconds: number): void => { for (let t = 0; 
   step(lens, 4);
   let last = calls.dof[calls.dof.length - 1];
   ok(near(last[0], apertureToBlur(0.8), 1e-4), 'photo mode: the blur follows the aperture slider');
+  ok(last[3] === false, 'photo mode uses the thin lens shape');
   ok(near(last[1], 18, 0.05), 'photo mode, auto: focus is on the selected animal (18 m)');
   ok(calls.exposure[calls.exposure.length - 1] === 2, 'photo mode: +1 EV doubles the exposure');
   ok(near(calls.lens[calls.lens.length - 1][0], 0.03, 1e-3) && calls.lens[calls.lens.length - 1][1] === 0, 'photo mode: grain switch gives grain and no fringe');

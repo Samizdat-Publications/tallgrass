@@ -35,7 +35,7 @@ try {
     };
     const focusNow = () => e.camera.position.distanceTo(e.cam.getFocus());
     const F = {
-      dof_gentle: { set: (on) => e.post.setDof(on ? 0.008 : 0, focusNow(), 24) },
+      dof_gentle: { set: (on) => e.post.setDof(on ? 0.0039 : 0, focusNow(), 24, true) },
       dof_photo: { set: (on) => e.post.setDof(on ? 0.022 : 0, focusNow(), 24) },
       dof_wide: { set: (on) => e.post.setDof(on ? 0.038 : 0, focusNow(), 24) },
       dof_wide16: { set: (on) => e.post.setDof(on ? 0.038 : 0, focusNow(), 16) },
