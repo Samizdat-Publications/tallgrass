@@ -2,6 +2,44 @@
 
 *(Updated 11:57 Sunday. I keep working until the deadline in `.claude/hooks/run_until.txt` (Sunday 12:00); this file is refreshed at every milestone.)*
 
+## v2 beta progress (session wrap-up 2026-10-05 ~10:20; live redeployed 10:15, live check clean)
+Since the alpha (below), all merged, live and verified (npm test, build, foot-slip rig, review stills with no errors):
+
+**Visual**
+- Trees v2: lobed crowns and dense creek groves, with willow thickets, autumn gold, junipers and burned snags.
+- Night sky: stars and the Milky Way, moon phases that drive the moonlight, meteors, a winter aurora and fireflies.
+- Lens: a photo mode (P), gentle depth of field in the documentary camera's close shots, and film grain in cinematic mode (C).
+- The camera no longer clips through trees and glides smoothly in pans.
+
+**Animals**
+- Near-range fur detail: a shaggy bison cape and hump with horns, wolf and coyote ruffs, a fur sheen.
+- Coyotes: mousing leaps, dusk howls and mange.
+- Golden eagles and red-tailed hawks: soaring, stooping and perching.
+- Mule deer: seasonal antlers and a stotting bound.
+- Cougars: a low stalk, a freeze, then the rush.
+- A behaviour library: bison wallows, tree rubs, snow digging, summer sparring, bellows and calf play; wolf howl choruses, pup play and scent marking; pronghorn rump flares; raven rolls; raptors preening.
+
+**Play**
+- Family tree (select an animal, then press T): a pedigree three generations up and two down, plus a wolf pack's line of alpha pairs.
+
+**Ecology**
+- v6 is the default world.
+- v6b (small prey and coyotes on) passed its 32-world screen.
+- Its 1,000-generation acceptance kept every species alive in 20 of 20 worlds. Prairie dogs touch near zero during plague 1.1% of the time, so the run marks them FAIL; whether to adopt v6b is Track S's call.
+- The v6b shock suite was still running at wrap-up; results land in `review/stability/v6b-b51d880-shocks300`.
+- Raptors, deer and cougars, storms and small prey stay off by default until they pass. Try them through New valley.
+
+**Quota:** weekly at about 82% when this session stopped (your 85% ruling). The cloud Track S session runs separately.
+
+**Next 5:**
+1. Track S adopts v6b, then screens the storms and the raptor, deer and cougar configs (v6c and v7).
+2. R10: dust storms, grasshoppers and floods (after S12).
+3. R13: god tools v2 and new challenges (after S17).
+4. R16: beavers and moving water.
+5. R17: performance presets. The low golden view sits at 15.5 of 16.7 ms, and a dense herd within 54 m costs 2 ms.
+
+**Making-of page:** version 12 at https://claude.ai/artifact/7jPHUFvbzTv6AUz5UCA3Mu.
+
 ## v2 alpha (M1, deployed 2026-10-05 00:55; redeployed 02:40 with the v6 ecology and coyote render)
 **Play it:** https://tallgrass.stewartgregerson.workers.dev. The live check passed at 00:56: no errors, 60 fps at 1600x900. The title card shows on first load; click **Watch**. Everything below the v2 sections is the v1 report.
 
