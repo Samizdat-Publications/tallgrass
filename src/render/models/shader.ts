@@ -10,6 +10,9 @@
 //   A carcass (aGait.y < 0) carries its flank dent in the slots a body that is down does not use: the pull strength 0..1 in aFx.x,
 //   and the point it pulls from, in the body frame (m), in aFx.y (along the body) and aGait.w (across it).
 //   R5 raptors (RAPTOR) reuse two slots a bird does not need: aGait.w is how upright it sits on its perch (0..1), aFx.w the stoop (0..1).
+//   R7 near/far LOD (quadrupeds with `nearGeometry`): two meshes share the animal layer's per-instance data. The far mesh draws every
+//   instance; the near mesh draws only those within the near range (a copy of their rows). aLook.w carries 32 * (this instance has a near
+//   copy) on top of the flags above. Within the fade range (ModelDef.lod) the two cross-fade by a complementary dithered discard.
 //   aFx2  = (only for hunters and birds, #define FX2) a predator: (hold on the prey 0..1, feeding cycle phase 0..1, leap 0..1: the
 //            spring onto the prey, which falls away as the hold takes over); a raven: (hop
 //            0..1 or -1, walk phase 0..1 or -1, seconds into a takeoff or -1, flutter 0..1)
@@ -41,7 +44,30 @@ function raptorDefines(p: AnimParams): string[] {
   ];
 }
 
-function defines(p: AnimParams, far: ModelDef['far'] | undefined, geometry: ModelDef['geometry']): string {
+type Variant = 'single' | 'near' | 'far';
+
+/** R7 constants as defines: which LOD this program draws, the cross-fade range, and the fur and shell shading. */
+function lodDefines(def: ModelDef | undefined, variant: Variant): string[] {
+  const fur = def?.fur;
+  const lod = def?.lod ?? { d0: 50, d1: 70 };
+  const sh = fur?.shell;
+  return [
+    `#define NEARLOD ${variant === 'near' ? 1 : 0}`, `#define FARLOD ${variant === 'far' ? 1 : 0}`,
+    `#define LOD0 ${f(lod.d0)}`, `#define LOD1 ${f(lod.d1)}`,
+    `#define FUR ${fur ? 1 : 0}`,
+    `#define FUR_SHEEN ${f(fur?.sheen ?? 0)}`, `#define FUR_SHEEN_POW ${f(fur?.sheenPow ?? 40)}`,
+    `#define FUR_SHEEN_TINT vec3(${(fur?.sheenTint ?? [1, 1, 1]).map(f).join(',')})`,
+    `#define FUR_RIM ${f(fur?.rim ?? 0)}`,
+    `#define FUR_DORSAL ${f(fur?.dorsal ?? 0)}`, `#define FUR_BELLY ${f(fur?.belly ?? 0)}`,
+    `#define FUR_STREAK ${f(fur?.streak ?? 0)}`, `#define FUR_MOTTLE ${f(fur?.mottle ?? 0)}`, `#define FUR_MOTTLE_SCALE ${f(fur?.mottleScale ?? 7)}`, `#define FUR_INDIV ${f(fur?.indiv ?? 0)}`,
+    `#define SHELL ${variant === 'near' && sh ? 1 : 0}`,
+    `#define SHELL_SCALE ${f(sh?.scale ?? 30)}`, `#define SHELL_ALONG ${f(sh?.along ?? 0.5)}`, `#define SHELL_SPARSE ${f(sh?.sparse ?? 0.4)}`,
+    `#define SHELL_D0 ${f(sh?.d0 ?? 30)}`, `#define SHELL_D1 ${f(sh?.d1 ?? 50)}`,
+    `#define SHELL_TONE vec2(${(sh?.tone ?? [0.8, 1.04]).map(f).join(',')})`,
+  ];
+}
+
+function defines(p: AnimParams, far: ModelDef['far'] | undefined, geometry: ModelDef['geometry'], def?: ModelDef, variant: Variant = 'single'): string {
   // rest-pose bones of the front and hind leg (read from the mesh): the leg solver in tgSolveLeg aims the foot point
   const rig = p.kind === 0 ? legRigOf(geometry) : { front: { hip: [0, 0], knee: [0, 0], foot: [0, 0] }, hind: { hip: [0, 0], knee: [0, 0], foot: [0, 0] } };
   return [
@@ -81,6 +107,7 @@ function defines(p: AnimParams, far: ModelDef['far'] | undefined, geometry: Mode
     `#define FX2 ${p.hunts || p.kind === 2 ? 1 : 0}`,
     `#define CLASP ${f(p.clasp ?? 0)}`,
     `#define MANGE ${p.hunts && p.kind === 0 ? 1 : 0}`, // canids can have mange: a patchy coat (the fragment stage mottles it)
+    ...lodDefines(def, variant),
   ].join('\n');
 }
 
@@ -106,9 +133,17 @@ uniform float uTL;
 // Border fade (animals with the migrant flag within 15 m of the world edge): the animal layer packs the fade into aLook.w as
 // floor() = selected (0 or 1) + 2 * q, q = 0 (fully there) .. 15 (gone), fract() = sickness. A stippled discard in the fragment
 // stage (the same pattern in the shadow pass) takes the animal in and out without a pop.
-float tgFadeOf() {
+float tgFlagsOf() {
   float fl = floor(aLook.w + 0.001);
+  return fl - 32.0 * floor(fl / 32.0);
+}
+float tgFadeOf() {
+  float fl = tgFlagsOf();
   return 1.0 - floor(fl * 0.5) / 15.0;
+}
+// R7: 1 when the animal layer has put a copy of this instance in the near-LOD mesh (bit 32 of the flag word)
+float tgNearCopy() {
+  return floor(floor(aLook.w + 0.001) / 32.0);
 }
 
 // R3 canids: the animal layer packs three things into aFx2.w of a hunter (a quadruped with FX2): floor(w) = air + 16 * howl, each
@@ -549,11 +584,14 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
 #endif
   } else if (part == 5) {
     float graze = dead ? 0.0 : aGait.z;
+    // aPart.y of a head vertex is 1 minus its weight on the head's rotation: a whole head part has 0 (full weight), the neck of a
+    // continuous near-LOD loft ramps from 0 (still the body) to full, so the neck bends without a seam
+    float hw = 1.0 - aPart.y;
 #if KIND == 0
     if (cnMange > 0.01) {
       // mange: the ruff round the neck goes thin (inset along the normal where the neck meets the shoulders)
       float rf = 1.0 - smoothstep(0.28, 0.42, p.x / BODY_LEN);
-      p -= n * BODY_LEN * 0.03 * cnMange * rf;
+      p -= n * BODY_LEN * 0.03 * cnMange * rf * hw;
     }
 #endif
 #if KIND == 2
@@ -619,8 +657,8 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
       ang = mix(ang, -0.35 - 0.5 * fract(seed * 6.7), smoothstep(0.6, 1.0, fallen));
       yaw = (fract(seed * 9.1) - 0.5) * 1.2 * fallen + strug * 0.5 * sin(fallen * 37.0 + seed * 2.0);
     }
-    tgRotY(p, n, aPivot, yaw);
-    tgRotZ(p, n, aPivot, ang);
+    tgRotY(p, n, aPivot, yaw * hw);
+    tgRotZ(p, n, aPivot, ang * hw);
   } else if (part == 6) {
 #if KIND == 0
     if (cnMange > 0.01) {
@@ -889,7 +927,32 @@ varying float vTgUp;
 varying float vTgFade;
 #if MANGE
 varying float vTgMg;
+#endif
+#if MANGE || FUR
 varying vec3 vTgPos;
+#endif
+#if FUR
+attribute vec3 aShade;
+varying float vTgSeed;
+varying float vTgCamD;
+varying float vTgAO;
+varying float vTgNy;
+varying vec3 vTgTan;
+#if SHELL
+varying vec2 vTgShell;
+#endif
+#endif
+#if NEARLOD || FARLOD
+varying float vTgLod;
+// 0 = this instance is drawn by the near-LOD mesh, 1 = by the far one, between = the dithered cross-fade
+float tgLodOf() {
+  float k = smoothstep(LOD0, LOD1, distance(uCamPos, vec3(instanceMatrix[3])));
+#if FARLOD
+  return tgNearCopy() > 0.5 ? k : 1.0; // an instance with no near copy is the far mesh's alone
+#else
+  return k;
+#endif
+}
 #endif
 uniform float uLegTone;
 
@@ -927,8 +990,13 @@ void tgShade(vec3 on) {
     col *= mix(vec3(1.0), vec3(0.5, 0.6, 0.42), occ * occ * (3.0 - 2.0 * occ) * 0.85);
   }
 #endif
+#if FUR
+  // per-animal hue jitter (a warmer or cooler coat), on top of the brightness jitter above
+  float tgJ = (fract(aLook.y * 13.7) - 0.5) * FUR_INDIV * c;
+  col *= vec3(1.0 + tgJ, 1.0, 1.0 - tgJ);
+#endif
   vTgColor = col;
-  float tgFl = floor(aLook.w + 0.001);
+  float tgFl = tgFlagsOf();
   vTgSel = tgFl - 2.0 * floor(tgFl * 0.5);
   vTgFade = dead ? 1.0 : tgFadeOf();
   // distance readability: 0 close up, 1 from the wide view (see ModelDef.far)
@@ -940,7 +1008,22 @@ void tgShade(vec3 on) {
   if (tgPart >= 1 && tgPart <= 4 && !dead) vTgColor *= mix(1.0, uLegTone, vTgFar);
 #if MANGE
   vTgMg = tgMangeOf();
+#endif
+#if MANGE || FUR
   vTgPos = position;
+#endif
+#if FUR
+  vTgAO = 1.0 - aShade.x;
+  vTgSeed = aLook.y;
+  vTgNy = normal.y;
+  // the direction the hair lies (along the body, backward and a little down; down the legs), in view space, for the sheen
+  vec3 tgFd = (tgPart >= 1 && tgPart <= 4) ? vec3(0.0, -1.0, 0.0) : normalize(vec3(-1.0, -0.32, 0.0));
+  vTgTan = mat3(modelViewMatrix) * (mat3(instanceMatrix) * tgFd);
+  float tgCD = distance(uCamPos, vec3(instanceMatrix[3]));
+  vTgCamD = tgCD;
+#if SHELL
+  vTgShell = vec2(aShade.y, 1.0 - smoothstep(SHELL_D0, SHELL_D1, tgCD));
+#endif
 #endif
 }
 `;
@@ -950,9 +1033,8 @@ export function animationShaderParts(def: ModelDef): { defs: string; decl: strin
   return { defs: defines(def.params, def.far, def.geometry), decl: COMMON_DECL };
 }
 
-/** Mange, fragment side: declarations and the mottling applied after the coat colour (only models with MANGE). */
-const MANGE_DECL = /* glsl */ `
-varying float vTgMg;
+/** Value noise shared by mange and fur (fragment side), and the position varying. */
+const NOISE_DECL = /* glsl */ `
 varying vec3 vTgPos;
 float tgH3(vec3 q) { return fract(sin(dot(q, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
 float tgVN(vec3 q) {
@@ -963,6 +1045,10 @@ float tgVN(vec3 q) {
     mix(mix(tgH3(i + vec3(0.0, 0.0, 1.0)), tgH3(i + vec3(1.0, 0.0, 1.0)), f.x), mix(tgH3(i + vec3(0.0, 1.0, 1.0)), tgH3(i + vec3(1.0, 1.0, 1.0)), f.x), f.y),
     f.z);
 }
+`;
+/** Mange, fragment side: declarations and the mottling applied after the coat colour (only models with MANGE). */
+const MANGE_DECL = /* glsl */ `
+varying float vTgMg;
 `;
 const MANGE_FRAG = /* glsl */ `
         if (vTgMg > 0.01) {
@@ -978,6 +1064,113 @@ const MANGE_FRAG = /* glsl */ `
           diffuseColor.rgb = mix(diffuseColor.rgb * (1.0 - 0.16 * medge), mix(diffuseColor.rgb * 0.5, mskin, 0.45), mloss * 0.72);
         }
 `;
+
+/** R7 fur, fragment side: declarations, the near/far cross-fade, the shell tufts and the coat pattern (only models with `fur`). */
+const FUR_DECL = /* glsl */ `
+uniform sampler2D tTgNoise;
+// cheap value noise for the fur: one fetch of a tiled random texture (bilinear), the third axis skews the lookup
+float tgFN(vec3 q) { return texture2D(tTgNoise, q.xy * (1.0 / 64.0) + q.z * vec2(0.0089, 0.0111)).r; }
+varying float vTgSeed;
+varying float vTgCamD;
+varying float vTgAO;
+varying float vTgNy;
+varying vec3 vTgTan;
+#if SHELL
+varying vec2 vTgShell;
+#endif
+`;
+const LOD_DECL = /* glsl */ `
+varying float vTgLod;
+// the complementary dithered discard of the cross-fade: the near mesh keeps the pixels where the noise is above the fade level, the far
+// mesh the ones below it, so together they cover every pixel exactly once (and the noise differs from the border fade's offset)
+float tgLodNoise() {
+  return fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715)) + 0.37));
+}
+bool tgLodDiscard() {
+#if NEARLOD
+  return tgLodNoise() < vTgLod;
+#else
+  return tgLodNoise() >= vTgLod;
+#endif
+}
+`;
+const SHELL_DECL = /* glsl */ `
+// wool shells: the shell is cut into tufts by an elongated value noise (the hair hangs down); the outer layer and a far one are sparser
+bool tgShellDiscard() {
+  // cells elongated along the way the hair lies (back and down in the body's x, y plane), thin across it
+  vec2 hu = vec2(-0.95, -0.31);
+  vec3 q = vec3(dot(vTgPos.xy, hu) * SHELL_SCALE * SHELL_ALONG, dot(vTgPos.xy, vec2(-hu.y, hu.x)) * SHELL_SCALE, vTgPos.z * SHELL_SCALE * 0.8);
+  float n = tgFN(q) * 0.62 + tgFN(q * 2.3 + 9.0) * 0.38;
+  if (vTgShell.x < 0.01) return false;
+  float thr = SHELL_SPARSE + 0.3 * vTgShell.x + (1.0 - vTgShell.y) * 0.45;
+  return n < thr;
+}
+`;
+const FUR_COLOR = /* glsl */ `
+        {
+          // coat pattern: a darker back and a paler belly (everywhere, so the two LODs match), and within 80 m tone mottling at two scales
+          // (per animal, so no two coats are alike) and hair streaks running along the body
+          float ftone = 1.0 - FUR_DORSAL * smoothstep(0.35, 0.95, vTgNy) + FUR_BELLY * smoothstep(-0.2, -0.8, vTgNy);
+          if (vTgCamD < 80.0) {
+            vec3 fq = vTgPos * FUR_MOTTLE_SCALE + vec3(aLookSeed * 31.7, aLookSeed * 17.3, aLookSeed * 9.1);
+            float fnz = 0.55 * tgFN(fq) + 0.3 * tgFN(fq * 2.7 + 3.1) + 0.15 * tgFN(fq * 7.3 + 1.7);
+            ftone *= 1.0 + FUR_MOTTLE * (fnz - 0.5) * 2.0 * (1.0 - smoothstep(35.0, 80.0, vTgCamD));
+            float fnearD = 1.0 - smoothstep(10.0, 34.0, vTgCamD); // (finer than a pixel beyond that)
+            float fst = 0.6 * tgFN(vTgPos * vec3(12.0, 80.0, 80.0) + 5.0) + 0.4 * tgFN(vTgPos * vec3(30.0, 190.0, 190.0) + 1.0);
+            ftone *= 1.0 + FUR_STREAK * (fst - 0.5) * 2.0 * fnearD;
+            // wool shells: darker at the root (the inner layer), paler at the tips (the outer one)
+#if SHELL
+            if (vTgShell.x > 0.01) ftone *= mix(SHELL_TONE.x, SHELL_TONE.y, vTgShell.x);
+#endif
+          }
+          diffuseColor.rgb *= ftone;
+        }`;
+const FUR_LIGHT = /* glsl */ `
+#if FUR
+        {
+          // baked AO on the direct light too (half strength: the sun still reaches a leg pit a little)
+          reflectedLight.directDiffuse *= mix(1.0, vTgAO, 0.5);
+          if (vTgCamD < 80.0) {
+            vec3 fLd = directLight.direction;
+            vec3 fVv = normalize(vViewPosition);
+            float fnear = 1.0 - smoothstep(30.0, 80.0, vTgCamD);
+            // hair sheen (Kajiya and Kay): a highlight that runs along the body axis, strongest where the hair is most sideways to the half vector
+            vec3 fH = normalize(fLd + fVv);
+            float fth = dot(normalize(vTgTan), fH);
+            float fk = pow(sqrt(max(1.0 - fth * fth, 0.0)), FUR_SHEEN_POW);
+            float flit = smoothstep(-0.05, 0.45, dot(normal, fLd));
+            vec3 fcoat = mix(vec3(1.0), diffuseColor.rgb * 6.0, 0.5) * FUR_SHEEN_TINT;
+            reflectedLight.directSpecular += directLight.color * fcoat * (fk * flit * FUR_SHEEN * 0.14 * fnear * (1.0 - 0.7 * uLow));
+            // backlit rim of glowing hair in a low sun (near range only: the far rim and the night rim are separate)
+            float fback = clamp(-dot(fLd, fVv), 0.0, 1.0);
+            float fedge = pow(1.0 - clamp(dot(normal, fVv), 0.0, 1.0), 2.4);
+            float fwrap = clamp(dot(normal, fLd) * 0.6 + 0.5, 0.0, 1.0);
+            reflectedLight.directSpecular += directLight.color * fcoat * (fedge * fback * fwrap * FUR_RIM * 0.17 * fnear * (1.0 - uLow));
+#if SHELL
+            // hair of the shells, lit from behind, glows through (translucent): the sun shows through a fringe of tufts
+            float fwrapS = clamp(dot(normal, fLd) * 0.5 + 0.5, 0.0, 1.0);
+            reflectedLight.directSpecular += directLight.color * diffuseColor.rgb * (vTgShell.x * fback * fwrapS * 0.6 * fnear * (1.0 - uLow));
+#endif
+          }
+        }
+#endif`;
+
+let noiseTex: THREE.DataTexture | null = null;
+/** A 64 x 64 tiled random texture (bilinear, mipmapped) that the fur shading reads as value noise. */
+function furNoise(): THREE.DataTexture {
+  if (!noiseTex) {
+    const n = 64, d = new Uint8Array(n * n * 4);
+    let s = 0x2545f491;
+    for (let i = 0; i < d.length; i++) { s ^= s << 13; s ^= s >>> 17; s ^= s << 5; d[i] = (s >>> 0) & 255; }
+    noiseTex = new THREE.DataTexture(d, n, n, THREE.RGBAFormat);
+    noiseTex.wrapS = noiseTex.wrapT = THREE.RepeatWrapping;
+    noiseTex.magFilter = THREE.LinearFilter;
+    noiseTex.minFilter = THREE.LinearMipmapLinearFilter;
+    noiseTex.generateMipmaps = true;
+    noiseTex.needsUpdate = true;
+  }
+  return noiseTex;
+}
 
 const NO_FAR: NonNullable<ModelDef['far']> = { gain: 1, rim: 0, hunt: 0, rimCol: [1, 1, 1] };
 
@@ -1009,14 +1202,24 @@ export interface AnimalShared {
   probe?: (scene: THREE.Object3D, exposure: number) => void;
 }
 
-export function makeAnimalMaterials(sp: number, def: ModelDef, shared: AnimalShared): AnimalMaterials {
+/**
+ * The materials of a species. `variant` picks the LOD this material draws: 'single' (one mesh, the default), 'far' (the far mesh of a
+ * species that also has a near LOD: it hides the instances that the near mesh draws) or 'near'. The depth material is the same for all
+ * (shadows use the far mesh everywhere).
+ */
+export function makeAnimalMaterials(sp: number, def: ModelDef, shared: AnimalShared, variant: Variant = 'single'): AnimalMaterials {
   shared.uTL ??= { value: 0 };
   shared.uNightK ??= { value: 1 };
-  const defs = defines(def.params, def.far, def.geometry);
+  const defs = defines(def.params, def.far, def.geometry, def, variant);
+  const defsDepth = defines(def.params, def.far, def.geometry);
   // R3 mange (canids only): the fragment stage mottles the coat with dark bare skin in patches, more of it with severity (vTgMg).
   const hasMange = def.params.hunts === true && def.params.kind === 0;
-  const mangeDecl = hasMange ? MANGE_DECL : '';
-  const mangeFrag = hasMange ? MANGE_FRAG : '';
+  const hasFur = def.fur !== undefined && def.params.kind === 0;
+  const lodOn = variant !== 'single';
+  const hasShell = variant === 'near' && hasFur && def.fur?.shell !== undefined;
+  const mangeDecl = (hasMange ? MANGE_DECL : '') + (hasMange || hasFur ? NOISE_DECL : '') + (hasFur ? FUR_DECL : '') + (lodOn ? LOD_DECL : '') + (hasShell ? SHELL_DECL : '');
+  const lodDefs = lodDefines(def, variant).join('\n');
+  const mangeFrag = (hasFur ? FUR_COLOR.replace(/aLookSeed/g, 'vTgSeed') : '') + (hasMange ? MANGE_FRAG : '');
   const material = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: def.roughness, metalness: 0 });
   material.onBeforeCompile = (shader) => {
     shader.uniforms.uTime = shared.uTime;
@@ -1025,6 +1228,7 @@ export function makeAnimalMaterials(sp: number, def: ModelDef, shared: AnimalSha
     shader.uniforms.tHeight = shared.tHeight;
     shader.uniforms.uCell = shared.uCell;
     shader.uniforms.uHN = shared.uHN;
+    if (hasFur) shader.uniforms.tTgNoise = { value: furNoise() };
     shader.uniforms.uCoatPale = { value: new THREE.Vector3(...def.coatPale) };
     shader.uniforms.uCoatDark = { value: new THREE.Vector3(...def.coatDark) };
     shader.uniforms.uBone = { value: new THREE.Vector3(...def.bone) };
@@ -1053,12 +1257,15 @@ export function makeAnimalMaterials(sp: number, def: ModelDef, shared: AnimalSha
       .replace('#include <common>', `#include <common>\n${defs}\n${COMMON_DECL}\n${VERT_SHADE_DECL}`)
       .replace(
         '#include <beginnormal_vertex>',
-        `#include <beginnormal_vertex>\n vec3 tgP = position;\n tgAnimate(tgP, objectNormal);\n tgShade(objectNormal);`,
+        lodOn
+          // an instance the other LOD draws collapses to a point (a degenerate triangle: no fragments, no cost)
+          ? `#include <beginnormal_vertex>\n vec3 tgP = position;\n float tgLod = tgLodOf();\n vTgLod = tgLod;\n#if NEARLOD\n if (tgLod < 0.999) {\n#else\n if (tgLod > 0.001) {\n#endif\n tgAnimate(tgP, objectNormal);\n tgShade(objectNormal);\n#if SHELL\n if (aShade.y > 0.0 && distance(uCamPos, vec3(instanceMatrix[3])) > SHELL_D1) tgP = vec3(0.0);\n#endif\n } else { tgP = vec3(0.0); }`
+          : `#include <beginnormal_vertex>\n vec3 tgP = position;\n tgAnimate(tgP, objectNormal);\n tgShade(objectNormal);`,
       )
       .replace('#include <begin_vertex>', 'vec3 transformed = tgP;');
     shader.fragmentShader = shader.fragmentShader
-      .replace('#include <clipping_planes_fragment>', '#include <clipping_planes_fragment>\n if (tgFadeDiscard(vTgFade)) discard;')
-      .replace('#include <common>', `#include <common>\n${FADE_FRAG_DECL}\nvarying vec3 vTgColor;\nvarying float vTgSel;\nvarying float vTgFar;\nvarying float vTgHunt;\nuniform float uFill;\nuniform vec3 uWarm;\nuniform float uNeutral;\nuniform float uFarGain;\nuniform vec3 uRimCol;\nuniform float uRimK;\nuniform float uHuntK;\nuniform float uLow;\nuniform vec3 uAmb;\nuniform vec3 uFarTint;\nuniform float uFarMix;\nuniform float uFloor;\nuniform float uLowFill;\nvarying float vTgUp;\nuniform vec3 uTopCol;\nuniform float uTopMix;\nuniform float uSideDark;\nuniform float uNightK;${mangeDecl}`)
+      .replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>\n if (tgFadeDiscard(vTgFade)) discard;${lodOn ? '\n if (tgLodDiscard()) discard;' : ''}${hasShell ? '\n if (tgShellDiscard()) discard;' : ''}`)
+      .replace('#include <common>', `#include <common>\n${lodDefs}\n${FADE_FRAG_DECL}\nvarying vec3 vTgColor;\nvarying float vTgSel;\nvarying float vTgFar;\nvarying float vTgHunt;\nuniform float uFill;\nuniform vec3 uWarm;\nuniform float uNeutral;\nuniform float uFarGain;\nuniform vec3 uRimCol;\nuniform float uRimK;\nuniform float uHuntK;\nuniform float uLow;\nuniform vec3 uAmb;\nuniform vec3 uFarTint;\nuniform float uFarMix;\nuniform float uFloor;\nuniform float uLowFill;\nvarying float vTgUp;\nuniform vec3 uTopCol;\nuniform float uTopMix;\nuniform float uSideDark;\nuniform float uNightK;${mangeDecl}`)
       // Bright parts of the coat (the white bands and rump) are pulled toward a mid value as the light drops, so they
       // darken with the scene instead of glowing against the dark herds at dusk and night.
       .replace('#include <color_fragment>', `vec3 tgC = vTgColor * mix(1.0, uFarGain, vTgFar);
@@ -1084,7 +1291,7 @@ export function makeAnimalMaterials(sp: number, def: ModelDef, shared: AnimalSha
       // sky fill: pull toward a warm neutral (so brown coats stay brown in blue shade), then boost it so the shaded side keeps form
       .replace(
         '#include <lights_fragment_end>',
-        `irradiance = mix(irradiance, vec3(dot(irradiance, vec3(0.2126, 0.7152, 0.0722))) * uWarm, uNeutral) * uFill * (1.0 - uLowFill * uLow);\n#include <lights_fragment_end>`,
+        `irradiance = mix(irradiance, vec3(dot(irradiance, vec3(0.2126, 0.7152, 0.0722))) * uWarm, uNeutral) * uFill * (1.0 - uLowFill * uLow);\n${hasFur ? 'irradiance *= vTgAO;\n' : ''}#include <lights_fragment_end>${hasFur ? FUR_LIGHT : ''}`,
       )
       .replace(
         '#include <emissivemap_fragment>',
@@ -1105,7 +1312,7 @@ export function makeAnimalMaterials(sp: number, def: ModelDef, shared: AnimalSha
         totalEmissiveRadiance += diffuseColor.rgb * vec3(0.045, 0.06, 0.11) * tgNK * (0.5 + 0.5 * vTgUp) * tgNL;`,
       );
   };
-  material.customProgramCacheKey = () => `tg-animal-${sp}`;
+  material.customProgramCacheKey = () => `tg-animal-${sp}-${variant}`;
 
   const depth = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking });
   depth.onBeforeCompile = (shader) => {
@@ -1117,7 +1324,7 @@ export function makeAnimalMaterials(sp: number, def: ModelDef, shared: AnimalSha
     shader.uniforms.uHN = shared.uHN;
     shader.uniforms.uTL = shared.uTL!;
     shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', `#include <common>\n${defs}\n${COMMON_DECL}\nvarying float vTgFade;`)
+      .replace('#include <common>', `#include <common>\n${defsDepth}\n${COMMON_DECL}\nvarying float vTgFade;`)
       // a bird in flight casts no shadow (collapse it to a point): at the boost the wide view needs, it would sweep a huge
       // blocky smudge across the ground. A raptor below 40 m and within 170 m of the camera does cast one (R5)
       .replace('#include <begin_vertex>', `vec3 tgP = position;\n vec3 tgN = vec3(0.0, 1.0, 0.0);\n tgAnimate(tgP, tgN);\n vTgFade = aGait.y < -0.5 ? 1.0 : tgFadeOf();\n#if KIND == 2\n#if RAPTOR\n if (aFx.y > 40.0 || distance(uCamPos, vec3(instanceMatrix[3])) > 170.0) tgP = vec3(0.0);\n#else\n if (aFx.y > 1.0) tgP = vec3(0.0);\n#endif\n#endif\n vec3 transformed = tgP;`);
