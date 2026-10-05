@@ -72,7 +72,10 @@ export class Inspector {
   private memorialText: HTMLElement;
   private lastDetail: AnimalDetail | null = null;
 
-  constructor(private actions: UIActions) {
+  private familyBtn: HTMLButtonElement;
+
+  /** `onFamily` opens the family tree page for the animal on show (live or in memoriam); the button is never there without it. */
+  constructor(private actions: UIActions, private onFamily?: () => void) {
     this.caption = h('h2', { class: 'tg-insp-caption' });
     this.lineage = h('p', { class: 'tg-insp-lineage' });
     this.activity = h('p', { class: 'tg-insp-activity' });
@@ -116,6 +119,14 @@ export class Inspector {
       h('kbd', { class: 'tg-kbd', text: 'Esc' }),
     );
 
+    this.familyBtn = button(
+      { class: 'tg-btn tg-insp-family', title: 'Parents, young and, for a wolf, the alpha pairs of its pack (T)', onclick: () => this.onFamily?.() },
+      h('span', { html: icon('family', 16) }),
+      h('span', { text: 'Family tree' }),
+      h('kbd', { class: 'tg-kbd', text: 'T' }),
+    );
+    this.familyBtn.hidden = !this.onFamily;
+
     // "In memoriam": replaces the live readout when the animal dies, and stays until the player closes it
     this.memorialText = h('p', { class: 'tg-memorial-text' });
     const memorial = h(
@@ -150,12 +161,18 @@ export class Inspector {
       h('p', { class: 'tg-insp-note tg-live', text: 'Bar: this animal. Grey tick: where the founders started. Bright tick: the species now.' }),
       this.stats,
       this.storyEl,
+      this.familyBtn,
       h('div', { class: 'tg-insp-actions' }, this.followBtn, closeBtn),
     );
   }
 
   get isOpen(): boolean {
     return this.open;
+  }
+
+  /** Id of the animal on show (live or in memoriam), or null while the card is away. */
+  get shownId(): number | null {
+    return this.open && this.currentId >= 0 ? this.currentId : null;
   }
 
   /** True while the "In memoriam" card is showing for an animal that has died. */
@@ -334,7 +351,8 @@ export class Inspector {
       const parent = g.dot.parentElement?.parentElement;
       if (parent) parent.title = `${t.title}: ${v.toFixed(2)} (${word} against the founders). The tick is where the founders started (${t.base(d.sp).toFixed(2)}).`;
     });
-    this.lastKey = '';
+    // a sentinel, not '': an animal with no chips (a bison after a wolf) must still clear the previous animal's chips
+    this.lastKey = '\u0001';
     this.applyMeans();
   }
 
@@ -395,7 +413,7 @@ function stat(value: string, label: string): HTMLElement {
 
 const capFirst = (s: string): string => (s ? s[0].toUpperCase() + s.slice(1) : s);
 /** A gene as a change from the founders' value: "+12%", "-8%", or "0%" when within half a percent. */
-const relWord = (v: number, base: number): string => {
+export const relWord = (v: number, base: number): string => {
   const pct = Math.round((v / (base || 1) - 1) * 100);
   return pct > 0 ? `+${pct}%` : `${pct}%`;
 };

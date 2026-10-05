@@ -7,9 +7,11 @@ import '@fontsource/alegreya-sans/400.css';
 import '@fontsource/alegreya-sans/500.css';
 import '@fontsource/alegreya-sans/700.css';
 import './ui.css';
+import './familytree.css';
 
 import type { SimEvent } from '../sim/sim';
 import type { HistoryRow } from '../sim/worker';
+import type { DynastyEntry, LineageTree } from '../sim/lineage';
 import { YEAR_TICKS } from '../sim/types';
 import type { Challenge } from '../challenges';
 import { ChapterCard, cardDuration } from './chapter';
@@ -34,6 +36,7 @@ import { FeedFilter } from './feed';
 import { DecadeLines, SeasonLines } from './seasonlines';
 import { button, h, unitPx } from './dom';
 import { icon } from './icons';
+import { FamilyPanel } from './familytree';
 import { Inspector } from './inspector';
 import { TopRight, challengeInfo } from './menu';
 import { PopGraph, type Marker } from './popgraph';
@@ -121,6 +124,8 @@ export class GameUI {
   private settingsPanel: SettingsPanel;
   private setupPanel: SetupPanel;
   private guidePanel: GuidePanel;
+  /** Family tree (R12): a docked page the inspector opens (T). Not a modal: the world stays clickable around it. */
+  private family: FamilyPanel;
   /** Photo mode (R15): the P key opens it. The game wires its callbacks (lens, freeze, save). */
   readonly photo = new PhotoPanel();
   private guide = new FieldGuide();
@@ -160,7 +165,8 @@ export class GameUI {
     this.tools = new ToolRail(actions);
     this.time = new TimeBar(actions);
     this.chron = new Chronicle((x, y) => actions.flyTo(x, y));
-    this.inspector = new Inspector(actions);
+    this.family = new FamilyPanel(actions);
+    this.inspector = new Inspector(actions, () => this.toggleFamily());
     this.tracker = new NoteTracker(this.fieldNotes);
     this.notesPanel = new NotesPanel(this.fieldNotes, () => this.notesPanel.hide());
     this.top = new TopRight(actions, () => this.setHidden(true), () => this.openPane(null, 'notes'), {
@@ -269,6 +275,7 @@ export class GameUI {
       this.settingsPanel.el,
       this.setupPanel.el,
       this.guidePanel.el,
+      this.family.el,
       this.photo.el,
       this.toast.el,
       this.hint,
@@ -290,6 +297,7 @@ export class GameUI {
       this.ui.classList.toggle('is-photoclean', open && this.photo.state.hideUi);
       if (open) {
         this.notesPanel.hide();
+        this.family.hide();
         this.closePanes();
         this.toast.hide();
         this.top.close();
@@ -356,6 +364,8 @@ export class GameUI {
     if (f.events.length) this.handleEvents(f.events, now, f.tick, f.pop);
     this.pop.update(now, f.pop);
     this.inspector.update(f.selected, f.following, f.story, f.storyId);
+    if (f.selected) this.family.noteDetail(f.selected);
+    this.family.frame(f.tick, f.selected ? f.selected.id : null);
     this.lastYear = f.env.year + 1;
     this.fieldNotes.yearNow = this.lastYear;
     this.top.setWorld(f.seed, f.scenario);
@@ -433,9 +443,32 @@ export class GameUI {
     else this.toast.show(`${w.length} new behaviours noted`, 'Field guide', 4200);
   }
 
+  /** The worker's answer to a lineage request (the family tree page draws it). */
+  setLineage(id: number, tree: LineageTree | null): void {
+    this.family.setTree(id, tree);
+  }
+
+  /** The worker's answer to a dynasty request (a wolf pack's alpha pairs). */
+  setDynasty(pack: number, list: DynastyEntry[]): void {
+    this.family.setDynasty(pack, list);
+  }
+
+  /** T and the inspector's Family tree button: open the page for the animal on show, or close it. */
+  toggleFamily(): void {
+    if (this.titleOpen || this.photo.isOpen) return;
+    const id = this.inspector.shownId;
+    if (!this.family.isOpen && id === null) return;
+    if (!this.family.isOpen) {
+      this.notesPanel.hide();
+      this.closePanes();
+    }
+    this.family.toggle(id);
+  }
+
   /** Open one page (and close the others). Null with which='notes' opens the field notes. */
   openPane(p: ModalPanel | null, which: 'notes' | null = null): void {
     this.leaveTitle();
+    this.family.hide();
     for (const q of [this.settingsPanel, this.setupPanel, this.guidePanel]) if (q !== p) q.hide();
     if (which === 'notes') {
       this.notesPanel.show();
@@ -767,6 +800,7 @@ export class GameUI {
     this.settingsPanel.destroy();
     this.setupPanel.destroy();
     this.guidePanel.destroy();
+    this.family.destroy();
     this.title?.destroy();
     this.tips.destroy();
     this.chron.destroy();
@@ -1042,6 +1076,9 @@ export class GameUI {
       case 'v':
         if (!e.repeat) this.actions.setNarrator?.(!this.narratorOn);
         break;
+      case 't':
+        if (!e.repeat) this.toggleFamily();
+        break;
       case 'f':
         if (!e.repeat && this.selectedId !== null) this.actions.follow(this.followingId === this.selectedId ? null : this.selectedId);
         break;
@@ -1057,6 +1094,8 @@ export class GameUI {
   private onEscape(): void {
     if (this.photo.isOpen) {
       this.photo.close();
+    } else if (this.family.isOpen) {
+      this.family.hide();
     } else if (this.paneOpen) {
       this.closePanes();
     } else if (this.notesPanel.isOpen) {
