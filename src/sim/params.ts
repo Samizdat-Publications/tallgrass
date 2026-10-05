@@ -256,6 +256,8 @@ export interface Params {
   lightningRate: number;
   /** Chance a strike in dry, cured grass (season 1.4 to 3.1, grass above 0.3, rain below 0.35) starts a fire. */
   lightningIgnite: number;
+  /** How readily a grass fire spreads to its neighbours, as a multiple of the screened rate (1 = as before; S17 Storm season uses 3 to 4). */
+  fireSpread: number;
   /** Winter (S11, winter.ts; 0 = off). On, snow builds a depth field on the coarse grid (it drifts into hollows and melts with warmth),
    *  the grazers lose food to it, moving costs more and wolves kill more easily; `blizzard` and `hardWinter` events fire. The value
    *  scales how much snow falls (1 = the screened amount). */
@@ -282,6 +284,8 @@ export interface Params {
   snowKill: number;
   /** Spring green-up delay in seasons (0 = off; 0.5 = the rise from dormancy begins half a season later, the late-spring peak stays). */
   greenUpShift: number;
+  /** Chance per day, in summer, that a natural dry spell starts (0.1 = as screened; 0 = none, S17 Storm season). */
+  summerDroughtP: number;
   // fear
   fearKill: number;
   fearKillRadius: number;
@@ -527,6 +531,7 @@ export function defaultParams(): Params {
     stormCells: 0,
     lightningRate: 0.05,
     lightningIgnite: 0.5,
+    fireSpread: 1,
     snowDepth: 0,
     snowStorms: 4,
     snowFall: 0.2,
@@ -540,6 +545,7 @@ export function defaultParams(): Params {
     snowMove: 1,
     snowKill: 0.3,
     greenUpShift: 0,
+    summerDroughtP: 0.1,
     fearKill: 0.7,
     fearKillRadius: 22,
     fearPredatorStamp: 0.0008,

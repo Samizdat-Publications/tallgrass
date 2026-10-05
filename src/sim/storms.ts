@@ -131,6 +131,12 @@ export class StormCells {
     }
   }
 
+  /** Record a strike made by hand (the lightning god tool) so the snapshot carries it like a storm's. */
+  pushStrike(x: number, y: number, tick: number, ignited: number): void {
+    this.strikes.push(x, y, tick, ignited);
+    if (this.strikes.length > MAX_STRIKE_FLOATS) this.strikes.splice(0, this.strikes.length - MAX_STRIKE_FLOATS);
+  }
+
   /** Strikes since the last call, as a Float32Array (STRIKE_STRIDE floats each); clears the buffer. */
   drainStrikes(): Float32Array {
     const out = Float32Array.from(this.strikes);

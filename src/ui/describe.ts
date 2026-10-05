@@ -244,6 +244,8 @@ export function cardRank(kind: string): number {
     case 'hawksReturn': return 1;
     case 'hardWinter': return 3;
     case 'blizzard': return 2;
+    case 'flood': return 3;
+    case 'grovePlanted': return 1;
     default: return 0;
   }
 }
@@ -278,6 +280,7 @@ export function eventWeight(e: SimEvent): number {
     case 'distemper':
     case 'mesoRelease':
     case 'hardWinter':
+    case 'flood':
       return 3;
     case 'immigrated':
       return e.sp === 1 ? 3 : 2;
@@ -292,6 +295,7 @@ export function eventWeight(e: SimEvent): number {
     case 'blizzard':
     case 'eaglesArrive':
     case 'hawksReturn':
+    case 'grovePlanted':
       return 2;
     case 'stampede':
       return e.a >= 60 ? 3 : 1;
@@ -548,6 +552,17 @@ export function describeEvent(e: SimEvent, ctx?: DescribeContext): EventText {
         sentence: region && region !== 'central' ? `Lightning strikes the ${region} prairie, and the grass catches.` : 'Lightning strikes the dry grass, and it catches.',
         card: { title: 'Lightning fire', subtitle: when },
       };
+    case 'flood': {
+      const big = e.b >= 0.6;
+      return {
+        sentence: big
+          ? pick(e, ['The creek bursts its banks and the floodwater spreads across the bottomland.', 'Floodwater pours over the banks and drowns the grass along the creek.'])
+          : pick(e, ['The creek rises and spills over its banks.', 'The creek swells and the low ground by the water goes under.']),
+        card: { title: 'The creek floods', subtitle: when },
+      };
+    }
+    case 'grovePlanted':
+      return { sentence: pick(e, ['A grove of young cottonwoods takes root on the prairie.', 'Saplings are planted, and a grove begins to rise from the grass.']) };
     default:
       return { sentence: 'Something stirs in the valley.' };
   }

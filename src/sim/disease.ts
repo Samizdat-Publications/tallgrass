@@ -67,9 +67,9 @@ export interface DiseaseHost {
 
 export class Disease {
   readonly rng: Rng;
-  readonly cdvOn: boolean;
+  cdvOn: boolean;
   readonly mangeOn: boolean;
-  readonly on: boolean;
+  on: boolean;
 
   // distemper outbreak bookkeeping
   private cdvActive = false;
@@ -142,12 +142,18 @@ export class Disease {
     this.startOutbreak(1 + this.rng.int(2));
   }
 
-  /** Infect up to n random susceptible canids (an outbreak starting). Returns how many were infected. */
-  startOutbreak(n: number): number {
+  /** The god tool needs distemper to run even at cdvRate 0: switch the illness on (outbreaks still only start by hand while the rate is 0). */
+  forceOn(): void {
+    this.cdvOn = true;
+    this.on = true;
+  }
+
+  /** Infect up to n random susceptible canids (an outbreak starting), only of species `only` when given. Returns how many were infected. */
+  startOutbreak(n: number, only = -1): number {
     const a = this.a;
     const cand: number[] = [];
     for (let i = 0; i < a.hi; i++) {
-      if (a.alive[i] && IS_CANID[a.sp[i]] && a.cdv[i] === 0 && a.immune[i] === 0) cand.push(i);
+      if (a.alive[i] && IS_CANID[a.sp[i]] && (only < 0 || a.sp[i] === only) && a.cdv[i] === 0 && a.immune[i] === 0) cand.push(i);
     }
     let done = 0;
     while (done < n && cand.length > 0) {

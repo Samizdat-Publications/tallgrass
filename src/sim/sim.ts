@@ -5,7 +5,7 @@ import { Environment } from './env';
 import { DEATH_CAUSES, Lineage } from './lineage';
 import { BucketGrid } from './grid';
 import { applyOverrides, defaultParams, Params, SpeciesParams } from './params';
-import { Rng } from './rng';
+import { hashSeed, Rng } from './rng';
 import { StormCells } from './storms';
 import { RegionalPool } from './region';
 import { SmallPrey, TAKE_KINDS } from './smallprey';
@@ -21,13 +21,16 @@ import { distanceTransform, generateWorld, World } from './world';
 const DT = 0.15; // seconds of motion per tick (1x is a gentle 1.5x time-lapse)
 const BUCKET = 16;
 const MAX_PACKS = 64;
+/** Energy drain multiplier while a blizzard god tool is blowing (S17). */
+const BLIZZARD_COLD = 1.6;
+const MAX_GROVES = 24;
 
 export type SimEventKind =
   | 'packFounded' | 'packLost' | 'drought' | 'droughtEnd' | 'outbreak' | 'stampede' | 'extinct'
   | 'introduced' | 'removed' | 'culled' | 'fire' | 'record' | 'elder' | 'firstKill' | 'plague' | 'rain'
   | 'immigrated' | 'emigrated' | 'recolonized' | 'distemper' | 'mange' | 'townFounded' | 'townLost' | 'sylvaticPlague'
   | 'hareBoom' | 'hareCrash' | 'coyotePups' | 'mesoRelease' | 'storm' | 'lightningFire' | 'eaglesArrive' | 'hawksReturn'
-  | 'blizzard' | 'hardWinter';
+  | 'blizzard' | 'hardWinter' | 'flood' | 'grovePlanted';
 
 export interface SimEvent {
   tick: number;
@@ -188,6 +191,16 @@ export class Sim implements SimLike {
   private cLightning = 0;
   /** Snow depth, drift and melt (params.snowDepth; null when off). */
   winter: Winter | null = null;
+  /** God tools v2 (S17). A running flood (null when none): ticks left, severity, flooded band width (m) and the cell mask. */
+  flood: { left: number; sev: number; radius: number; mask: Uint8Array } | null = null;
+  /** Ticks left of a blizzard god tool: every animal pays a cold drain (BLIZZARD_COLD) while it blows. */
+  private blizzardLeft = 0;
+  /** Strikes made by the lightning tool while no storm cells exist (drained by snapshot()). */
+  private godStrikes: number[] = [];
+  /** The grove generator (own stream, made on the first grove) and where the player's trees start in world.trees. */
+  private groveRng: Rng | null = null;
+  private groveBase = -1;
+  private groveCount = 0;
 
   constructor(opts: SimOptions) {
     const self = this;
@@ -199,6 +212,7 @@ export class Sim implements SimLike {
     this.env = new Environment(this.rng.fork(11));
     this.env.climateAmp = this.p.climateAmp;
     this.env.greenUpShift = this.p.greenUpShift;
+    this.env.droughtChance = this.p.summerDroughtP;
     this.veg = new Vegetation(this.world, this.p, this.env, this.rng.fork(12));
     if (this.p.stormCells > 0) this.storms = new StormCells(this.seed, this.world.size, this.p, DT);
     if (this.p.snowDepth > 0) this.winter = new Winter(this.seed, this.world, this.p, this.env, { event: (kind, sp, x, y, a, b) => this.event(kind, sp, x, y, a, b) });
@@ -504,9 +518,9 @@ export class Sim implements SimLike {
     return this.p.wolfPackMax * this.preyScale();
   }
 
-  private findDenSite(nearX?: number, nearY?: number): [number, number] | null {
+  private findDenSite(nearX?: number, nearY?: number, relax = 1): [number, number] | null {
     const w = this.world;
-    const minD = this.p.wolfDenMinDist / Math.sqrt(this.preyScale());
+    const minD = (this.p.wolfDenMinDist / Math.sqrt(this.preyScale())) * relax;
     for (let k = 0; k < 200; k++) {
       const x = nearX !== undefined ? nearX + this.rng.range(-30, 30) : this.rng.range(50, w.size - 50);
       const y = nearY !== undefined ? nearY + this.rng.range(-30, 30) : this.rng.range(50, w.size - 50);
@@ -559,6 +573,8 @@ export class Sim implements SimLike {
     const a = this.a;
     const t = this.tick;
     this.env.update(t);
+    if (this.blizzardLeft > 0) this.blizzardLeft--;
+    if (this.flood !== null) this.floodStep();
     if (this.storms) this.stepStorms(t);
     if (this.winter !== null && t % WINTER_STEP === 0) this.winter.step();
     this.veg.step(t);
@@ -1081,6 +1097,7 @@ export class Sim implements SimLike {
     // deep snow makes every step cost more (ground animals that are moving)
     if (this.winter !== null && v > 0.3 && !SPECIES[a.sp[i]].flies) m *= 1 + this.p.snowMove * this.winter.at(a.x[i], a.y[i]);
     if (a.infected[i] > 0) m *= this.p.diseaseMetab;
+    if (this.blizzardLeft > 0) m *= BLIZZARD_COLD;
     if (this.dis.on && IS_CANID[a.sp[i]]) m *= this.dis.metabMult(i, this.env.state.warmth);
     if (a.age[i] < P.matureAge) m *= 0.75;
     // cold costs extra, much more for a small bird
@@ -2222,7 +2239,8 @@ export class Sim implements SimLike {
     if (sp === Sp.Wolf) {
       let left = count;
       while (left > 0) {
-        const den = x !== undefined && y !== undefined ? (this.findDenSite(x, y) ?? [x, y]) : this.findDenSite();
+        // the god tool always finds the new pack a home: with every site taken it settles for a den half the usual distance from its neighbours
+        const den = x !== undefined && y !== undefined ? (this.findDenSite(x, y) ?? [x, y]) : (this.findDenSite() ?? this.findDenSite(undefined, undefined, 0.5));
         if (!den) break;
         const pk = this.newPack(den[0], den[1]);
         const m = Math.min(left, 6);
@@ -2296,6 +2314,11 @@ export class Sim implements SimLike {
         this.veg.ignite(iv.x, iv.y, 6);
         this.event('fire', -1, iv.x, iv.y, 0, 0);
         break;
+      case 'lightning': this.lightning(iv.x, iv.y); break;
+      case 'blizzard': this.blizzard(iv.ticks); break;
+      case 'flood': this.startFlood(iv.ticks, iv.severity); break;
+      case 'disease': this.applyDisease(iv.disease, iv.species, iv.fraction); break;
+      case 'grove': this.plantGrove(iv.x, iv.y, iv.radius); break;
       case 'plague': {
         if (iv.species === Sp.PrairieDog && this.small !== null) {
           // sylvatic plague: seeds the outbreak in a share of the colony cells (the fields have no per-animal infection)
@@ -2310,6 +2333,174 @@ export class Sim implements SimLike {
         break;
       }
     }
+  }
+
+  // ------------------------------------------------------------------ god tools v2 (S17)
+  // All of these run only when the player acts. They draw from the main stream (interventions are the player's own moments, and
+  // a run that never calls them is untouched) or, for grove trees, from a generator of their own.
+
+  /** Lightning at a point: grass catches (except over water) and every ground animal within 3 m dies. */
+  private lightning(x: number, y: number): void {
+    const a = this.a, size = this.world.size;
+    x = Math.min(size - 0.01, Math.max(0, x));
+    y = Math.min(size - 0.01, Math.max(0, y));
+    const lit = this.veg.ignite(x, y, 4);
+    let killed = 0;
+    for (let i = 0; i < a.hi; i++) {
+      if (!a.alive[i] || a.alt[i] > 3) continue;
+      const dx = a.x[i] - x, dy = a.y[i] - y;
+      if (dx * dx + dy * dy <= 9) { this.die(i, 'culled'); killed++; }
+    }
+    if (this.storms !== null) this.storms.pushStrike(x, y, this.tick, lit > 0 ? 1 : 0);
+    else {
+      this.godStrikes.push(x, y, this.tick, lit > 0 ? 1 : 0);
+      if (this.godStrikes.length > 64 * 4) this.godStrikes.splice(0, this.godStrikes.length - 64 * 4);
+    }
+    if (lit > 0) {
+      this.cLightning++;
+      this.event('lightningFire', -1, x, y, killed, 1);
+    }
+  }
+
+  /** A blizzard of `ticks`: snow weather and a gale, a deep snowfall when snowDepth is on, and a cold drain on every animal. */
+  private blizzard(ticks: number): void {
+    const t = Math.max(10, Math.round(ticks));
+    const env = this.env;
+    env.rainTicks = 0;
+    env.droughtTicks = 0;
+    env.snowTicks = t;
+    env.state.windStrength = Math.max(env.state.windStrength, 0.9);
+    this.blizzardLeft = t;
+    if (this.winter !== null) this.winter.forceBlizzard(t);
+    this.event('blizzard', -1, this.world.size / 2, this.world.size / 2, t, 1);
+  }
+
+  /**
+   * Flood: for `ticks` the land within 12 + 38 x severity m of the creek and ponds is under water. At the start the grass there drowns
+   * (down by 85% x severity), browse is hit half as hard, fires in the band go out, and young animals caught in it may drown (40% x
+   * severity; adults 5% x severity; counted as culled). While it lasts, ground animals in the band are pushed away from the water
+   * (drinkers are left alone). When it recedes the silt feeds the soil (+0.2 x severity).
+   */
+  private startFlood(ticks: number, severity: number): void {
+    const w = this.world, v = this.veg, a = this.a;
+    const sev = Math.min(1, Math.max(0.1, severity));
+    const radius = 12 + 38 * sev;
+    const mask = new Uint8Array(w.n * w.n);
+    for (let c = 0; c < mask.length; c++) {
+      if (!w.water[c] && w.waterDist[c] <= radius) {
+        mask[c] = 1;
+        v.grass[c] *= 1 - 0.85 * sev;
+        v.browse[c] *= 1 - 0.5 * sev;
+        v.burn[c] = 0;
+      }
+    }
+    for (let i = 0; i < a.hi; i++) {
+      if (!a.alive[i] || SPECIES[a.sp[i]].flies || a.state[i] === St.Migrate) continue;
+      if (!mask[v.cellAt(a.x[i], a.y[i])]) continue;
+      const young = a.age[i] < this.p.species[a.sp[i]].matureAge;
+      if (this.rng.next() < (young ? 0.4 : 0.05) * sev) this.die(i, 'culled');
+    }
+    this.flood = { left: Math.max(10, Math.round(ticks)), sev, radius, mask };
+    this.event('flood', -1, w.size / 2, w.size / 2, this.flood.left, sev);
+  }
+
+  private floodStep(): void {
+    const f = this.flood!;
+    const w = this.world, v = this.veg, a = this.a, n = w.n, wd = w.waterDist;
+    if (--f.left <= 0) {
+      for (let c = 0; c < f.mask.length; c++) if (f.mask[c]) v.soil[c] = Math.min(1.4, v.soil[c] + 0.2 * f.sev);
+      this.flood = null;
+      return;
+    }
+    if (this.tick % 5 !== 0) return;
+    const half = w.size / 2;
+    for (let i = 0; i < a.hi; i++) {
+      if (!a.alive[i] || SPECIES[a.sp[i]].flies || a.state[i] === St.Migrate || a.state[i] === St.Drink) continue;
+      const c = v.cellAt(a.x[i], a.y[i]);
+      if (!f.mask[c]) continue;
+      const ci = c % n, cj = (c / n) | 0;
+      let gx = wd[cj * n + Math.min(n - 1, ci + 1)] - wd[cj * n + Math.max(0, ci - 1)];
+      let gy = wd[Math.min(n - 1, cj + 1) * n + ci] - wd[Math.max(0, cj - 1) * n + ci];
+      let g = Math.sqrt(gx * gx + gy * gy);
+      if (g < 1e-6) { gx = half - a.x[i]; gy = half - a.y[i]; g = Math.sqrt(gx * gx + gy * gy) + 1e-6; }
+      a.x[i] = Math.min(w.size - 1, Math.max(1, a.x[i] + (gx / g) * 2));
+      a.y[i] = Math.min(w.size - 1, Math.max(1, a.y[i] + (gy / g) * 2));
+    }
+    // the water puts out any fire in the band
+    for (let c = 0; c < f.mask.length; c++) if (f.mask[c] && v.burn[c] > 1) v.burn[c] = 1;
+  }
+
+  /** Targeted outbreaks. Every one reports with a 'plague' event at the start (the natural 'distemper' event still closes a distemper outbreak). */
+  private applyDisease(disease: 'fever' | 'distemper' | 'plague', species?: number, fraction?: number): void {
+    const a = this.a;
+    if (disease === 'plague') {
+      const n = this.small !== null ? this.small.seedPlague(this.tick, fraction ?? 0.5) : 0;
+      this.event('plague', Sp.PrairieDog, 0, 0, n, 0);
+      return;
+    }
+    const sp = species ?? (disease === 'distemper' ? Sp.Wolf : Sp.Bison);
+    if (this.isFieldSpecies(sp)) { this.event('plague', sp, 0, 0, 0, 0); return; }
+    const cand: number[] = [];
+    for (let i = 0; i < a.hi; i++) if (a.alive[i] && a.sp[i] === sp && a.infected[i] === 0 && a.immune[i] === 0) cand.push(i);
+    const f = fraction ?? (disease === 'distemper' ? 0.1 : 0.15);
+    const want = cand.length === 0 ? 0 : Math.max(1, Math.round(Math.min(1, Math.max(0, f)) * cand.length));
+    let n = 0;
+    if (disease === 'distemper') {
+      if (IS_CANID[sp] && want > 0) { this.dis.forceOn(); n = this.dis.startOutbreak(want, sp); }
+    } else {
+      for (let q = 0; q < want; q++) {
+        const k = this.rng.int(cand.length);
+        a.infected[cand[k]] = this.p.diseaseTicks;
+        this.logStory(cand[k], 'infected');
+        cand[k] = cand[cand.length - 1];
+        cand.pop();
+        n++;
+      }
+    }
+    this.event('plague', sp, 0, 0, n, 0);
+  }
+
+  /** A grove: tree cover and browse in a disc (radius 6..40 m) and a stand of cottonwoods appended to world.trees (the sim's world; the renderer's
+   *  own copy does not have them, so snapshots carry `groves`). Shade cuts the grass there as the standing trees do. */
+  private plantGrove(x: number, y: number, radius: number): void {
+    const w = this.world, v = this.veg;
+    if (this.groveCount >= MAX_GROVES) return;
+    const r = Math.min(40, Math.max(6, radius));
+    x = Math.min(w.size - 2, Math.max(2, x));
+    y = Math.min(w.size - 2, Math.max(2, y));
+    const n = w.n, cell = w.cell;
+    const i0 = Math.max(0, Math.floor((x - r) / cell)), i1 = Math.min(n - 1, Math.floor((x + r) / cell));
+    const j0 = Math.max(0, Math.floor((y - r) / cell)), j1 = Math.min(n - 1, Math.floor((y + r) / cell));
+    const before = new Float32Array((i1 - i0 + 1) * (j1 - j0 + 1));
+    let q = 0;
+    for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) before[q++] = w.cover[j * n + i];
+    v.stamp(w.cover, x, y, r, 0.9, 1);
+    q = 0;
+    for (let j = j0; j <= j1; j++) {
+      for (let i = i0; i <= i1; i++) {
+        const c = j * n + i, old = before[q++], now = w.cover[c];
+        if (w.water[c] || now <= old) continue;
+        w.capacity[c] *= (1 - 0.45 * now) / (1 - 0.45 * old);
+        v.browseK[c] = 0.4 * w.capacity[c] / Math.max(0.3, 1 - 0.45 * now) + 0.6 * now;
+        if (v.browse[c] < 0.6 * v.browseK[c]) v.browse[c] = 0.6 * v.browseK[c];
+      }
+    }
+    this.groveRng ??= new Rng(hashSeed(this.seed + ':groves'));
+    const g = this.groveRng;
+    if (this.groveBase < 0) this.groveBase = w.trees.length;
+    const count = Math.min(40, Math.max(3, Math.round((Math.PI * r * r) / 110)));
+    const add = new Float32Array(count * 4);
+    for (let k = 0; k < count; k++) {
+      const ang = g.next() * Math.PI * 2, rad = r * 0.85 * Math.sqrt(g.next());
+      const th = g.range(9, 15);
+      add.set([x + Math.cos(ang) * rad, y + Math.sin(ang) * rad, th, th * g.range(0.38, 0.5)], k * 4);
+    }
+    const all = new Float32Array(w.trees.length + add.length);
+    all.set(w.trees);
+    all.set(add, w.trees.length);
+    w.trees = all;
+    this.groveCount++;
+    this.event('grovePlanted', -1, x, y, r, count);
   }
 
   // ------------------------------------------------------------------ open prairie (S1)
@@ -2959,7 +3150,12 @@ export class Sim implements SimLike {
     if (this.storms) {
       snap.storms = this.storms.toArray(this.env.state, this.tick);
       snap.strikes = this.storms.drainStrikes();
+    } else if (this.godStrikes.length > 0) {
+      snap.strikes = Float32Array.from(this.godStrikes);
+      this.godStrikes.length = 0;
     }
+    if (this.flood !== null) snap.flood = Float32Array.of(this.flood.left, this.flood.sev, this.flood.radius);
+    if (withVeg && this.groveBase >= 0) snap.groves = this.world.trees.slice(this.groveBase);
     return snap;
   }
 }

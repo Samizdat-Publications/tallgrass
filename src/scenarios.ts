@@ -19,6 +19,30 @@ export interface Scenario {
  */
 const CLOSED = { openPrairie: 0, ravenVagrants: 0 };
 
+/** Cougar country (also the Cat country challenge's world). */
+export const COUGAR_WORLD: Record<string, number> = {
+  'cougar.initial': 6, 'muledeer.initial': 60, cougarKillChance: 0.9, cougarAmbushRadius: 26, 'cougar.metabolism': 0.0007, cougarImmigration: 0.5,
+};
+/**
+ * S17 worlds. Their params are exported because the challenges that use them (src/challenges.ts) pin the same values.
+ * Mesopredator release: coyotes that live four valley years instead of two (so a pair raises several litters) and twenty founders;
+ * with the wolves trapped out in year 1.5 they multiply until the hares, the prairie dog towns and the pronghorn fawns are gone.
+ */
+export const MESO_PARAMS: Record<string, number> = {
+  smallPrey: 1, smallGameField: 1, 'coyote.initial': 20, 'coyote.maxAge': 9600, openPrairie: 0, ravenVagrants: 0,
+};
+/** The plague year: the small-prey web with a plague-prone prairie dog town. */
+export const PLAGUETOWN_PARAMS: Record<string, number> = { smallPrey: 1, smallGameField: 1, plagueRate: 0.08, openPrairie: 0, ravenVagrants: 0 };
+/** Storm season: thunderstorm cells whose own strikes never ignite (the scheduled ones below do), fast-spreading grass fires, and no natural dry spells (so a rain really does stop the fire). */
+export const STORM_PARAMS: Record<string, number> = { stormCells: 1, lightningRate: 0.03, lightningIgnite: 0, fireSpread: 3, summerDroughtP: 0, openPrairie: 0, ravenVagrants: 0 };
+/** Dry lightning in late summer of years 1 to 5: four strikes across the valley, a few ticks apart (late summer is around tick 2,400 k). */
+const LIGHTNING_SPOTS: [number, number][] = [[120, 150], [250, 330], [380, 200], [150, 400]];
+const stormSchedule = (): { tick: number; iv: Intervention }[] => {
+  const out: { tick: number; iv: Intervention }[] = [];
+  for (let k = 1; k <= 5; k++) LIGHTNING_SPOTS.forEach(([x, y], j) => out.push({ tick: Y * k + 40 + 12 * j, iv: { kind: 'lightning', x, y } }));
+  return out;
+};
+
 export const SCENARIOS: Scenario[] = [
   {
     id: 'prairie', name: 'Open prairie',
@@ -59,7 +83,7 @@ export const SCENARIOS: Scenario[] = [
     // tuned on v5 (screen cgB): surer ambushes, a wider strike zone, a leaner metabolism, and dispersers from outside (S8 made these the
     // cougar defaults and added cougarRange 200 and cougarInRate; they stay explicit here so the scenario does not move if the defaults do).
     // Mule deer (S8) are the cats' first choice of prey; without them the cats live on pronghorn, bison calves and wolf kills.
-    params: { 'cougar.initial': 6, 'muledeer.initial': 60, cougarKillChance: 0.9, cougarAmbushRadius: 26, 'cougar.metabolism': 0.0007, cougarImmigration: 0.5 }, schedule: [],
+    params: COUGAR_WORLD, schedule: [],
   },
   {
     id: 'hungrywolves', name: 'Hungry wolves',
@@ -68,6 +92,26 @@ export const SCENARIOS: Scenario[] = [
     // ravens 32/32, wolves follow bison at correlation 0.77, pronghorn 25/32. Over 1,000 generations (review/stability/hungrywolves-44a2bfe)
     // the pronghorn die out in all 20 worlds, between years 88 and 585, while bison, wolves and ravens hold in 19
     params: { wolfPreyRef: 1000, wolfRareHalf: 400, leanLitter: 0.8, ...CLOSED, cdvRate: 0, mangeRate: 0, smallPrey: 0, smallGameField: 0, 'coyote.initial': 0 }, schedule: [],
+  },
+  {
+    id: 'meso', name: 'Wolves trapped out',
+    get blurb() { return `A closed valley with wolves, twenty long-lived coyotes and the small-prey web. In year ${yrs(1.5)} the wolves are trapped out, and the coyotes inherit the valley.`; },
+    params: MESO_PARAMS, schedule: [{ tick: Y * 1.5, iv: { kind: 'remove', species: Sp.Wolf } }],
+  },
+  {
+    id: 'plaguetown', name: 'The plague year',
+    blurb: 'Sylvatic plague has swept the prairie dog towns and the last survivors are gone. The valley is closed: nothing comes back unless it is brought. Another plague is due in year 6.',
+    params: PLAGUETOWN_PARAMS,
+    schedule: [
+      { tick: 20, iv: { kind: 'disease', disease: 'plague', fraction: 1 } },
+      { tick: 700, iv: { kind: 'remove', species: Sp.PrairieDog } },
+      { tick: Y * 6 + 20, iv: { kind: 'disease', disease: 'plague', fraction: 0.5 } },
+    ],
+  },
+  {
+    id: 'stormseason', name: 'Storm season',
+    get blurb() { return `Every late summer dry lightning rakes the valley, and the grass fires run fast. Five storm seasons begin in year ${yrs(1) + 1}.`; },
+    params: STORM_PARAMS, schedule: stormSchedule(),
   },
   {
     id: 'collapse', name: 'Collapse',

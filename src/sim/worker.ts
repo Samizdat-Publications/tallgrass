@@ -97,6 +97,10 @@ export type FromWorker =
       /** Storm cells and the strikes since the last post (only with params.stormCells); layouts in types.ts. */
       storms?: Float32Array;
       strikes?: Float32Array;
+      /** A running flood (god tool, S17): [ticks left, severity 0..1, flooded band width in m from the water]. */
+      flood?: Float32Array;
+      /** Trees planted by the player's groves (S17), stride 4 like world.trees (x, y, height m, crown radius m), all of them; sent with veg once a grove exists. */
+      groves?: Float32Array;
       /** Trait heatmap, TRAIT_GRID^2 RGBA bytes: R speed relative to the species mean (128 = average), G animal density. Sent with veg. */
       traitGrid?: Uint8Array;
       pop: number[];
@@ -253,7 +257,7 @@ function post(forceVeg: boolean): void {
   const sel = selectedId !== null ? detail(selectedId) : null;
   const msg: FromWorker = {
     type: 'snap', tick: s.tick, env: s.env, count: s.count, ids: s.ids, agents: s.agents, carcassCount: s.carcassCount,
-    carcasses: s.carcasses, veg: s.veg, small: s.small, snow: s.snow, storms: s.storms, strikes: s.strikes, traitGrid: withVeg ? traitGrid() : undefined, pop: Array.from(s.pop), events, history, selected: sel,
+    carcasses: s.carcasses, veg: s.veg, small: s.small, snow: s.snow, storms: s.storms, strikes: s.strikes, flood: s.flood, groves: s.groves, traitGrid: withVeg ? traitGrid() : undefined, pop: Array.from(s.pop), events, history, selected: sel,
     selectedGone: selectedId !== null && sel === null, story: sim.story.slice(), storyId: sim.trackedId, ...packInfo(), speed: skipping ? -1 : speed, ticksPerSec, stepMs: stepMsAvg,
   };
   history = [];
@@ -263,6 +267,8 @@ function post(forceVeg: boolean): void {
   if (s.snow) transfer.push(s.snow.buffer);
   if (s.storms) transfer.push(s.storms.buffer);
   if (s.strikes) transfer.push(s.strikes.buffer);
+  if (s.flood) transfer.push(s.flood.buffer);
+  if (s.groves) transfer.push(s.groves.buffer);
   ctx.postMessage(msg, transfer);
 }
 

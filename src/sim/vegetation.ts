@@ -144,21 +144,24 @@ export class Vegetation {
       const len = k < 4 ? 1 : Math.SQRT2;
       const align = (di * wx + dj * wy) / len;
       const dry = 1 - 0.6 * this.w.moisture[c];
-      const pr = Math.min(0.95, 0.22 * (STRIDE / 8) * seasonDry * dry * Math.min(1, fuel * 1.6) * Math.max(0.15, 1 + 1.8 * windS * align) / len);
+      const pr = Math.min(0.95, this.p.fireSpread * 0.22 * (STRIDE / 8) * seasonDry * dry * Math.min(1, fuel * 1.6) * Math.max(0.15, 1 + 1.8 * windS * align) / len);
       if (this.rng.next() < pr) this.burn[c] = 2;
     }
   }
 
-  ignite(x: number, y: number, r: number): void {
+  /** Set the land cells within r of (x, y) burning. Returns how many caught. */
+  ignite(x: number, y: number, r: number): number {
     const n = this.n, cell = this.cell;
+    let lit = 0;
     const i0 = Math.max(0, Math.floor((x - r) / cell)), i1 = Math.min(n - 1, Math.floor((x + r) / cell));
     const j0 = Math.max(0, Math.floor((y - r) / cell)), j1 = Math.min(n - 1, Math.floor((y + r) / cell));
     for (let j = j0; j <= j1; j++) {
       for (let i = i0; i <= i1; i++) {
         const c = j * n + i;
-        if (!this.w.water[c] && Math.hypot((i + 0.5) * cell - x, (j + 0.5) * cell - y) <= r) this.burn[c] = 2;
+        if (!this.w.water[c] && Math.hypot((i + 0.5) * cell - x, (j + 0.5) * cell - y) <= r) { this.burn[c] = 2; lit++; }
       }
     }
+    return lit;
   }
 
   /** Add to a field in a disc with linear falloff. */

@@ -119,6 +119,12 @@ export interface Snapshot {
   /** Snow depth (S11, params.snowDepth), 32 x 32 coarse cells (16 m) like `small`, bytes row-major by y then x: 0..255 = depth 0..1.
    *  Present only when snowDepth is on and the snapshot carries the vegetation texture. */
   snow?: Uint8Array;
+  /** Flood (S17 god tool): present only while a flood is running. [ticks left, severity 0..1, flooded band width in m]: every land cell whose
+   *  `world.waterDist` is within the band width is under water. */
+  flood?: Float32Array;
+  /** Grove trees planted by the player (S17), stride 4 like `world.trees` (x, y, height m, crown radius m), all of them, in planting order.
+   *  Present on snapshots that carry the vegetation texture, once at least one grove exists. They are NOT in the renderer's own world.trees. */
+  groves?: Float32Array;
 }
 
 /** Ticks per second of real time at 1x speed. */
@@ -144,7 +150,17 @@ export type Intervention =
   | { kind: 'drought'; ticks: number; severity: number }
   | { kind: 'rain'; ticks: number }
   | { kind: 'fire'; x: number; y: number }
-  | { kind: 'plague'; species: number; fraction: number };
+  | { kind: 'plague'; species: number; fraction: number }
+  /** God tools v2 (S17). A lightning bolt at a point: sets the grass alight (not over water) and kills what stands within 3 m. */
+  | { kind: 'lightning'; x: number; y: number }
+  /** A blizzard for `ticks` (a deep snowfall when snowDepth is on, always a snow spell, high wind and a cold drain on every animal). */
+  | { kind: 'blizzard'; ticks: number }
+  /** The creek and ponds flood for `ticks`: the banks within 12 + 38 x severity m of water drown their grass, animals are pushed out, silt feeds the soil after. */
+  | { kind: 'flood'; ticks: number; severity: number }
+  /** A targeted outbreak: 'fever' infects a fraction of `species` (default bison), 'distemper' a fraction of wolves or coyotes (default wolves), 'plague' is sylvatic plague in the prairie dog towns. */
+  | { kind: 'disease'; disease: 'fever' | 'distemper' | 'plague'; species?: number; fraction?: number }
+  /** Plant a grove: tree cover, browse and trees in a disc (radius clamped to 6..40 m). */
+  | { kind: 'grove'; x: number; y: number; radius: number };
 
 /**
  * What the headless harness needs from a simulation. src/sim/sim.ts exports

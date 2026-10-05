@@ -193,6 +193,15 @@ export class Winter {
     if (m > this.peakMean) this.peakMean = m;
   }
 
+  /** The blizzard god tool: a deep snowfall of `dur` ticks starts now, whatever the season (no random draws; the sim raises the event). */
+  forceBlizzard(dur: number): void {
+    this.intensity = 3;
+    this.total = Math.max(WINTER_STEP, dur);
+    this.left = this.total;
+    this.blizzard = true;
+    this.env.snowTicks = Math.ceil(this.total);
+  }
+
   private startFall(): void {
     const rng = this.rng, p = this.p;
     const blizzard = rng.next() < p.blizzardP * (this.hard ? 1.5 : 1);

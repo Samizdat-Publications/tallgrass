@@ -19,6 +19,8 @@ export class Environment {
   snowTicks = 0;
   /** Spring green-up delay in seasons (0 = off): the rise from dormancy to the late-spring peak starts this much later. */
   greenUpShift = 0;
+  /** Chance per day, in summer, that a natural dry spell starts. */
+  droughtChance = 0.1;
   private weatherTimer = 0;
   private storm = false;
   /** Slow climate swing in grass growth (0 = off): wet and dry runs of years from two incommensurate cycles. */
@@ -79,7 +81,7 @@ export class Environment {
     const r = this.rng.next();
     const si = Math.floor(season) % 4;
     // natural dry spells: mostly summer
-    if (si === 1 && r < 0.1) {
+    if (si === 1 && r < this.droughtChance) {
       this.droughtTicks = Math.round((BASE_YEAR_TICKS / 4) * (1 + this.rng.next() * 1.5));
       this.droughtSeverity = 0.6 + 0.3 * this.rng.next();
       return;
