@@ -194,6 +194,11 @@ worker.onmessage = (e: MessageEvent<FromWorker>) => {
   // keep events and history from every message even if frames skip some
   pendingEvents = pendingEvents.concat(m.events);
   pendingHistory = pendingHistory.concat(m.history);
+  // dynamic trees (S13): before setVeg, so the renderer's own fire hook is already off when the first veg frame lands
+  if (m.treesVersion !== undefined) {
+    engine.setDynamicTrees(m.trees, m.treesVersion, m.treeCover);
+    if (m.treeCover) grass.setCover(m.treeCover);
+  }
   if (m.veg) engine.setVeg(m.veg);
   if (m.snow) engine.setSnowDepth(m.snow);
   if (m.veg) engine.setGroves(m.groves);

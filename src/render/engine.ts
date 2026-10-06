@@ -377,6 +377,17 @@ export class Engine {
     this.trees.setGroves(g);
   }
 
+  /**
+   * Dynamic trees (S13): Snapshot.trees / treesVersion / treeCover. Call with every snapshot (treesVersion is on all of them while the
+   * sim param is on); the list and the cover field only come when the version changed, so this is a no-op the rest of the time. The tree
+   * cover also reaches the terrain shade here (one texture upload per version); the grass layer takes it through Grass.setCover.
+   */
+  setDynamicTrees(trees: Float32Array | undefined, version: number | undefined, cover: Uint8Array | undefined): void {
+    if (version === undefined) return;
+    this.trees.setDynamic(trees, version);
+    if (cover) this.terrain.setCover(cover);
+  }
+
   /** Apply the current env immediately without smoothing (call right after setEnv, before the first frame). */
   applyEnvNow(): void {
     this.firstFrame = true;
