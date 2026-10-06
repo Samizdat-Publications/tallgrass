@@ -441,16 +441,35 @@
   --pop-h: calc(146 * var(--u));
 }
 .tg-ui:has(.tg-pop[data-rows='3']) {
-  --pop-h: calc(200 * var(--u));
+  --pop-h: calc(202 * var(--u));
 }
 .tg-ui:has(.tg-pop[data-rows='4']) {
-  --pop-h: calc(254 * var(--u));
+  --pop-h: calc(258 * var(--u));
 }
 .tg-ui:has(.tg-pop.is-open) {
   --pop-h: calc(300 * var(--u));
 }
 .tg-rail > * {
   pointer-events: auto;
+}
+/* a visual group of tools: it stays whole when the rail wraps into another column. Only its buttons take clicks. */
+.tg-rail-group {
+  display: flex;
+  flex-direction: column;
+  flex: none;
+  gap: calc(6 * var(--u));
+  margin-bottom: calc(10 * var(--u));
+  pointer-events: none;
+}
+.tg-rail-group > * {
+  pointer-events: auto;
+}
+/* too short for a whole group: the buttons wrap on their own, with a small gap where a group began */
+.tg-rail.is-flat .tg-rail-group {
+  display: contents;
+}
+.tg-rail.is-flat .tg-rail-group:not(:first-of-type) > :first-child {
+  margin-top: calc(10 * var(--u));
 }
 .tg-rail:hover,
 .tg-rail:focus-within,
@@ -473,9 +492,6 @@
   color: var(--paper);
   text-shadow: var(--shadow-text);
   pointer-events: none;
-}
-.tg-rail-gap {
-  height: calc(4 * var(--u));
 }
 .tg-toolwrap {
   position: relative;
@@ -858,10 +874,15 @@ button.tg-ent-b:hover {
 }
 /* seven or more species (later work packages): a row of three per 54 */
 .tg-pop[data-rows='3'] {
-  height: calc(200 * var(--u));
+  height: calc(202 * var(--u));
 }
 .tg-pop[data-rows='4'] {
-  height: calc(254 * var(--u));
+  height: calc(258 * var(--u));
+}
+/* three or four rows of sparklines: a tighter row gap, so the last row is not cut off at the bottom */
+.tg-pop[data-rows='3'] .tg-cells,
+.tg-pop[data-rows='4'] .tg-cells {
+  row-gap: calc(3 * var(--u));
 }
 .tg-pop.is-open {
   width: min(calc(640 * var(--u)), calc(100vw - 2 * var(--m)));
