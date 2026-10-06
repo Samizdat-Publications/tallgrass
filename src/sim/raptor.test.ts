@@ -23,7 +23,7 @@ type Any = any;
 function quiet(params: Record<string, number> = {}, seed = 5): Sim {
   return createSim({
     seed,
-    params: { calendarScale: 2, smallPrey: 1, plagueRate: 0, ravenVagrants: 0, cdvRate: 0, mangeRate: 0, 'bison.initial': 0, 'deer.initial': 0, 'wolf.initial': 0, 'raven.initial': 0, ...params },
+    params: { calendarScale: 2, smallPrey: 1, plagueRate: 0, ravenVagrants: 0, cdvRate: 0, mangeRate: 0, 'bison.initial': 0, 'deer.initial': 0, 'wolf.initial': 0, 'raven.initial': 0, 'coyote.initial': 0, ...params },
   });
 }
 /** Hold the time of day (0.5 = noon, 0.9 = night) whatever the tick. */
@@ -269,7 +269,7 @@ for (const [scale, e, want] of [[2, 0.8, 3], [2, 0.35, 2], [2, 0.2, 0], [1, 0.8,
 }
 {
   // no hunting without the small-prey web
-  const sim = createSim({ seed: 5, params: { calendarScale: 2, 'bison.initial': 0, 'deer.initial': 0, 'wolf.initial': 0, 'raven.initial': 0 } });
+  const sim = createSim({ seed: 5, params: { calendarScale: 2, smallPrey: 0, smallGameField: 0, 'bison.initial': 0, 'deer.initial': 0, 'wolf.initial': 0, 'raven.initial': 0, 'coyote.initial': 0 } });
   pinDay(sim, 0.5);
   const i = place(sim, Sp.Eagle, 250, 250, 0.55, 30);
   let stoops = 0;

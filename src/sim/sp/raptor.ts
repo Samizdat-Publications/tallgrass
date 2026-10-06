@@ -64,6 +64,7 @@ import type { Environment } from '../env';
 import type { Params } from '../params';
 import { hashSeed, Rng } from '../rng';
 import type { SimEventKind } from '../sim';
+import type { Hoppers } from '../hoppers';
 import { PREF, type SmallPrey } from '../smallprey';
 import { SEASON_TICKS, Sp, St, YEAR_TICKS } from '../types';
 import { COARSE_N, type World } from '../world';
@@ -120,6 +121,8 @@ export interface RaptorHost {
   /** Alive counts by species for this tick (filled at the top of the sim's step). */
   readonly pop: Int32Array;
   readonly small: SmallPrey | null;
+  /** Grasshoppers (S12), null unless params.grasshoppers is on: a hawk counts a thick patch as prey and stoops on it (eagles ignore them). */
+  readonly hoppers: Hoppers | null;
   readonly cN: number;
   readonly cX: Float32Array;
   readonly cY: Float32Array;
@@ -210,6 +213,26 @@ export class Raptors {
       if (t[k + 2] >= NEST_TREE_MIN) this.nestTrees.push(k / 4);
     }
     this.nTree.fill(-1);
+  }
+
+  /** The nest trees a hawk may use, one flag per tree of world.trees (dynamic trees, S13: a snag or a gone tree is no nest); null = all of them. */
+  private liveTrees: Uint8Array | null = null;
+
+  /**
+   * Dynamic trees (S13): world.trees was rebuilt (heights grew, trees died, new ones took root). The perch table and the list of nest trees are made again
+   * from it; `live` says which slots hold a living tree (a snag still serves as a perch but never as a nest).
+   */
+  refreshTrees(live: Uint8Array): void {
+    this.liveTrees = live;
+    this.ttH.fill(0);
+    this.nestTrees.length = 0;
+    const t = this.world.trees;
+    for (let k = 0; k + 3 < t.length; k += 4) {
+      if (t[k + 2] <= 0) continue;
+      const c = this.coarse(t[k], t[k + 1]);
+      if (t[k + 2] > this.ttH[c]) { this.ttH[c] = t[k + 2]; this.ttX[c] = t[k]; this.ttY[c] = t[k + 1]; }
+      if (t[k + 2] >= NEST_TREE_MIN && live[k / 4]) this.nestTrees.push(k / 4);
+    }
   }
 
   private coarse(x: number, y: number): number {
@@ -386,7 +409,8 @@ export class Raptors {
       }
       return true;
     };
-    for (const ti of this.oldSites) if (chosen.length < n && ok(ti)) chosen.push(ti);
+    const lt = this.liveTrees;
+    for (const ti of this.oldSites) if (chosen.length < n && (lt === null || (lt[ti] === 1 && w[ti * 4 + 2] >= NEST_TREE_MIN)) && ok(ti)) chosen.push(ti);
     for (let tries = 0; tries < 120 && chosen.length < n && this.nestTrees.length > 0; tries++) {
       const ti = this.nestTrees[r.int(this.nestTrees.length)];
       if (ok(ti)) chosen.push(ti);
@@ -705,6 +729,7 @@ export class Raptors {
     const N = sm.cells, cs = sm.cellSize;
     const reach = hawk ? 100 : 150;
     const pref = hawk ? PREF.hawk : PREF.eagle;
+    const hop = hawk ? this.h.hoppers : null;
     const rc = Math.ceil(reach / cs);
     const c = sm.cellOf(x, y), cx = c % N, cy = (c / N) | 0;
     let best = -1, bestV = MIN_DENS;
@@ -717,7 +742,7 @@ export class Raptors {
         if (d > reach) continue;
         if (home && Math.hypot(ccx - hx, ccy - hy) > HAWK_RANGE) continue;
         const nc = ny * N + nx;
-        const v = (sm.hare[nc] * pref.hare + sm.dog[nc] * pref.dog) / (1 + d / 100);
+        const v = (sm.hare[nc] * pref.hare + sm.dog[nc] * pref.dog + (hop !== null ? hop.d[nc] * this.p.hopperHawk : 0)) / (1 + d / 100);
         if (v > bestV) { bestV = v; best = nc; }
       }
     }
@@ -856,7 +881,9 @@ export class Raptors {
     const hawk = a.sp[i] === Sp.Hawk;
     const sm = h.small;
     const eff = a.age[i] < P.matureAge ? 0.5 : 1;
-    const g = sm !== null ? sm.take(this.tgtX[i], this.tgtY[i], hawk ? 'hawk' : 'eagle', eff, this.rng) : 0;
+    let g = sm !== null ? sm.take(this.tgtX[i], this.tgtY[i], hawk ? 'hawk' : 'eagle', eff, this.rng) : 0;
+    // a hawk that missed the hares may still find grasshoppers in the cell (S12; its own generator, so the hawk's stream is untouched)
+    if (g === 0 && hawk && h.hoppers !== null) g = h.hoppers.take(this.tgtX[i], this.tgtY[i], eff);
     a.x[i] = this.tgtX[i]; a.y[i] = this.tgtY[i];
     a.alt[i] = 0.8;
     if (g > 0) {

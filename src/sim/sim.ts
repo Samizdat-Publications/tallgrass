@@ -5,27 +5,41 @@ import { Environment } from './env';
 import { DEATH_CAUSES, Lineage } from './lineage';
 import { BucketGrid } from './grid';
 import { applyOverrides, defaultParams, Params, SpeciesParams } from './params';
-import { Rng } from './rng';
+import { hashSeed, Rng } from './rng';
 import { StormCells } from './storms';
+import { DustStorms, DUST_STEP } from './dust';
+import { Hoppers } from './hoppers';
+import { SpringFloods, FLOOD_STEP } from './springflood';
+import { Trees, TREE_STEP } from './trees';
 import { RegionalPool } from './region';
 import { SmallPrey, TAKE_KINDS } from './smallprey';
 import { Coyotes } from './sp/coyote';
 import { MuleDeer } from './sp/muledeer';
+import { Beavers, emptyBeaverRow } from './sp/beaver';
 import { flightStep, Raptors } from './sp/raptor';
 import { AGENT_STRIDE, CARCASS_STRIDE, F_ALPHA, F_INFECTED, F_JUVENILE, F_MALE, F_MANGE, F_MIGRANT, F_PREGNANT, F_STOT, Intervention, SimLike, Snapshot, SPECIES_COUNT, SPECIES_KEYS, Sp, St, YEAR_TICKS, SEASON_TICKS, BASE_YEAR_TICKS, setCalendarScale } from './types';
 import { COAT_BASE, COAT_RANGE, DIET, IS_PREY, isGrazer, REACT, SPECIES, THREAT } from './species';
 import { STRIDE, Vegetation } from './vegetation';
-import { generateWorld, World } from './world';
+import { Winter, WINTER_STEP } from './winter';
+import { distanceTransform, generateWorld, World } from './world';
 
 const DT = 0.15; // seconds of motion per tick (1x is a gentle 1.5x time-lapse)
 const BUCKET = 16;
 const MAX_PACKS = 64;
+/** Energy drain multiplier while a blizzard god tool is blowing (S17). */
+const BLIZZARD_COLD = 1.6;
+const MAX_GROVES = 24;
+/** CSV column parts for the tree counts (S13): kind (cottonwood, juniper, bur oak) and stage (seedling .. snag). */
+const TREE_KIND_KEYS = ['cw', 'jun', 'oak'];
+const TREE_STAGE_KEYS = ['seedling', 'sapling', 'young', 'mature', 'snag'];
 
 export type SimEventKind =
   | 'packFounded' | 'packLost' | 'drought' | 'droughtEnd' | 'outbreak' | 'stampede' | 'extinct'
   | 'introduced' | 'removed' | 'culled' | 'fire' | 'record' | 'elder' | 'firstKill' | 'plague' | 'rain'
   | 'immigrated' | 'emigrated' | 'recolonized' | 'distemper' | 'mange' | 'townFounded' | 'townLost' | 'sylvaticPlague'
-  | 'hareBoom' | 'hareCrash' | 'coyotePups' | 'mesoRelease' | 'storm' | 'lightningFire' | 'eaglesArrive' | 'hawksReturn';
+  | 'hareBoom' | 'hareCrash' | 'coyotePups' | 'mesoRelease' | 'storm' | 'lightningFire' | 'eaglesArrive' | 'hawksReturn'
+  | 'blizzard' | 'hardWinter' | 'flood' | 'grovePlanted' | 'dustStorm' | 'grasshopperOutbreak' | 'springFlood' | 'encroachment'
+  | 'damBuilt' | 'pondFilled' | 'damBreached' | 'beaverMeadow' | 'colonyLeft';
 
 export interface SimEvent {
   tick: number;
@@ -81,6 +95,9 @@ export class Sim implements SimLike {
   readonly raptors: Raptors;
   /** Mule deer (S8): the habitat map and founder groups. Inert (never read) while no mule deer lives in the valley. */
   readonly mule: MuleDeer;
+  /** Beavers (S14): colonies, dams, ponds and their effects. Null unless `beavers` or `beaver.initial` is above 0. */
+  beavers: Beavers | null = null;
+  private beaversSent = 0;
   readonly prey: BucketGrid;
   readonly pred: BucketGrid;
   private preyList = new Int32Array(4096);
@@ -90,6 +107,8 @@ export class Sim implements SimLike {
   /** Unit vectors pointing downhill in water distance (toward water), per cell. */
   private waterGX: Float32Array;
   private waterGY: Float32Array;
+  /** Distance (m) to a place to drink: the shore itself, or with drinkSpots only some stretches of it. */
+  private drinkD: Float32Array;
 
   // carcasses (small SoA pool)
   cN = 0;
@@ -122,6 +141,8 @@ export class Sim implements SimLike {
   private packEnergy = new Float32Array(MAX_PACKS);
   /** Search image: how keen each pack is on each prey species (learned from recent kills). */
   packPref = new Float32Array(MAX_PACKS * SPECIES_COUNT);
+  /** Coat search image (S9, coatSearch): per pack and prey species, the coat darkness it last killed, drifting toward each new kill; -1 = none yet. */
+  packCoat = new Float32Array(MAX_PACKS * SPECIES_COUNT).fill(-1);
   private packCandF = new Int32Array(MAX_PACKS);
   private packCandM = new Int32Array(MAX_PACKS);
   private packCx = new Float32Array(MAX_PACKS);
@@ -180,6 +201,29 @@ export class Sim implements SimLike {
   /** Storm cells and lightning (params.stormCells; null when off). */
   storms: StormCells | null = null;
   private cLightning = 0;
+  /** Snow depth, drift and melt (params.snowDepth; null when off). */
+  winter: Winter | null = null;
+  /** God tools v2 (S17). A running flood (null when none): ticks left, severity, flooded band width (m) and the cell mask. */
+  flood: { left: number; sev: number; radius: number; mask: Uint8Array; silt: number } | null = null;
+  /** Dust storms (S12; params.dustStorms, null when off), grasshoppers (params.grasshoppers) and natural spring floods (params.springFloods). */
+  dust: DustStorms | null = null;
+  hoppers: Hoppers | null = null;
+  springFloods: SpringFloods | null = null;
+  /** Dynamic trees (S13; params.dynamicTrees, null when off): the sim's own tree list, stages, recruitment, fire and browse. */
+  trees: Trees | null = null;
+  private treesSent = 0;
+  /** The multiplier on every animal's sight this tick: 1, less while a dust storm blows. */
+  visMul = 1;
+  private cSpringFloods = 0;
+  private cFawnsDrowned = 0;
+  /** Ticks left of a blizzard god tool: every animal pays a cold drain (BLIZZARD_COLD) while it blows. */
+  private blizzardLeft = 0;
+  /** Strikes made by the lightning tool while no storm cells exist (drained by snapshot()). */
+  private godStrikes: number[] = [];
+  /** The grove generator (own stream, made on the first grove) and where the player's trees start in world.trees. */
+  private groveRng: Rng | null = null;
+  private groveBase = -1;
+  private groveCount = 0;
 
   constructor(opts: SimOptions) {
     const self = this;
@@ -187,11 +231,20 @@ export class Sim implements SimLike {
     this.p = applyOverrides(defaultParams(), opts.params);
     setCalendarScale(this.p.calendarScale);
     this.rng = new Rng(this.seed);
-    this.world = opts.world ?? generateWorld(this.seed);
+    // the sim owns its World object (a shallow copy): the fields that dynamic trees and beaver ponds rewrite are copied when those systems start, so a world handed
+    // in by the caller (or the generator's) is never changed
+    this.world = { ...(opts.world ?? generateWorld(this.seed)) };
+    if (this.p.dynamicTrees > 0) this.copyCover();
     this.env = new Environment(this.rng.fork(11));
     this.env.climateAmp = this.p.climateAmp;
+    this.env.greenUpShift = this.p.greenUpShift;
+    this.env.droughtChance = this.p.summerDroughtP;
     this.veg = new Vegetation(this.world, this.p, this.env, this.rng.fork(12));
     if (this.p.stormCells > 0) this.storms = new StormCells(this.seed, this.world.size, this.p, DT);
+    if (this.p.snowDepth > 0) this.winter = new Winter(this.seed, this.world, this.p, this.env, { event: (kind, sp, x, y, a, b) => this.event(kind, sp, x, y, a, b) });
+    if (this.p.dustStorms > 0) this.dust = new DustStorms(this.seed, this.p, this.env, this.world, this.veg, { event: (kind, sp, x, y, a, b) => this.event(kind, sp, x, y, a, b) });
+    if (this.p.grasshoppers > 0) this.hoppers = new Hoppers(this.seed, this.p, this.world, this.env, this.coarseGrass, this.veg, { event: (kind, sp, x, y, a, b) => this.event(kind, sp, x, y, a, b) });
+    if (this.p.springFloods > 0) { const wn = this.winter; this.springFloods = new SpringFloods(this.seed, this.p, this.env, wn !== null ? () => wn.meanDepth() : null); }
     this.a = new Agents(4096);
     this.lineage = new Lineage(this.a, { alive: this.packAlive, serial: this.packSerial, alphaF: this.packAlphaF, alphaM: this.packAlphaM });
     this.dis = new Disease(this.a, this.p, this.env, this.seed, {
@@ -207,17 +260,8 @@ export class Sim implements SimLike {
     const n = this.world.n;
     this.waterGX = new Float32Array(n * n);
     this.waterGY = new Float32Array(n * n);
-    const wd = this.world.waterDist;
-    for (let j = 0; j < n; j++) {
-      for (let i = 0; i < n; i++) {
-        const c = j * n + i;
-        const gx = (i < n - 1 ? wd[c + 1] : wd[c]) - (i > 0 ? wd[c - 1] : wd[c]);
-        const gy = (j < n - 1 ? wd[c + n] : wd[c]) - (j > 0 ? wd[c - n] : wd[c]);
-        const l = Math.hypot(gx, gy) || 1;
-        this.waterGX[c] = -gx / l;
-        this.waterGY[c] = -gy / l;
-      }
-    }
+    this.drinkD = this.world.waterDist;
+    this.buildWaterFields();
     this.coyotes = new Coyotes(this.a, this.p, this.env, this.seed, {
       get tick() { return self.tick; },
       get size() { return self.world.size; },
@@ -228,6 +272,8 @@ export class Sim implements SimLike {
       get pop() { return self.pop; },
       get groundB() { return self.groundB; },
       get small() { return self.small; },
+      get hoppers() { return self.hoppers; },
+      get visMul() { return self.visMul; },
       get dis() { return self.dis; },
       get cN() { return self.cN; },
       get cX() { return self.cX; },
@@ -261,6 +307,7 @@ export class Sim implements SimLike {
       get tick() { return self.tick; },
       get pop() { return self.pop; },
       get small() { return self.small; },
+      get hoppers() { return self.hoppers; },
       get cN() { return self.cN; },
       get cX() { return self.cX; },
       get cY() { return self.cY; },
@@ -294,8 +341,19 @@ export class Sim implements SimLike {
       event: (kind, sp, x, y, a, b) => this.event(kind, sp, x, y, a, b),
     });
     this.mule = new MuleDeer(this.seed, this.world, this.p);
+    if (this.p.dynamicTrees > 0) {
+      this.trees = new Trees(this.seed, this.p, this.env, this.world, this.veg, this.a, {
+        event: (kind, sp, x, y, a, b) => this.event(kind, sp, x, y, a, b),
+        changed: () => {
+          this.mule.invalidate();
+          this.raptors.refreshTrees(this.trees!.live);
+        },
+      });
+    }
+    if (this.p.beavers > 0 || this.p.species[Sp.Beaver].initial > 0) this.startBeavers();
     this.populate();
     this.coyotes.seedFounders();
+    this.beavers?.seedFounders();
     if (this.p.openPrairie > 0 || this.p.ravenVagrants > 0) {
       this.region = new RegionalPool(this.seed, COAT_BASE);
       this.region.seedFrom(this.a.sp, this.a.alive, this.a.genes, this.a.hi);
@@ -309,6 +367,82 @@ export class Sim implements SimLike {
   }
 
   // ------------------------------------------------------------------ setup
+
+  /** Cover, capacity and the tree list are rewritten by dynamic trees and drowned by beaver ponds: the sim works on its own copies. */
+  private ownCover = false;
+  private copyCover(): void {
+    if (this.ownCover) return;
+    this.ownCover = true;
+    const w = this.world;
+    w.cover = new Float32Array(w.cover);
+    w.capacity = new Float32Array(w.capacity);
+    w.trees = new Float32Array(w.trees);
+  }
+
+  /**
+   * Build the beaver system (S14): at the start when `beavers` or `beaver.initial` is on, or the first time the god tool puts a beaver in the valley. It
+   * copies the fields ponds rewrite (the water mask and surface, waterDist, moisture, and cover, capacity and trees for the drowned trees) and finds the sites.
+   */
+  private startBeavers(): Beavers {
+    if (this.beavers !== null) return this.beavers;
+    const w = this.world, self = this;
+    this.copyCover();
+    w.water = new Uint8Array(w.water);
+    w.waterHeight = new Float32Array(w.waterHeight);
+    w.waterDist = new Float32Array(w.waterDist);
+    w.moisture = new Float32Array(w.moisture);
+    if (this.p.drinkSpots <= 0) this.drinkD = w.waterDist; // the drink distance is the world's own waterDist unless drink spots thin it
+    this.beavers = new Beavers(this.a, this.p, this.env, this.seed, this.world, this.veg, {
+      get tick() { return self.tick; },
+      get pred() { return self.pred; },
+      get predList() { return self.predList; },
+      get predN() { return self.predN; },
+      vitals: (i) => this.vitals(i, this.p.species[Sp.Beaver]),
+      water: (x, y, out) => {
+        const c = this.veg.cellAt(x, y);
+        out[0] = this.waterGX[c]; out[1] = this.waterGY[c]; out[2] = this.drinkD[c];
+      },
+      leave: (i) => this.leaveValley(i),
+      noteBirths: (n) => { this.cBirths[Sp.Beaver] += n; },
+      noteArrivals: (n) => { this.cImm[Sp.Beaver] += n; },
+      markPresent: () => { this.everPresent[Sp.Beaver] = 1; },
+      event: (kind, sp, x, y, a, b) => this.event(kind, sp, x, y, a, b),
+    }, {
+      waterChanged: () => { this.buildWaterFields(); this.mule.invalidate(); },
+      drown: this.p.dynamicTrees > 0 ? (depth) => this.trees!.drown(depth) : null,
+      staticTreesChanged: (live) => this.raptors.refreshTrees(live),
+    });
+    return this.beavers;
+  }
+
+  /** The unit vectors toward water and the distance to a place to drink; built at the start and again whenever beaver ponds change the water (S14). */
+  private buildWaterFields(): void {
+    const n = this.world.n;
+    let wd = this.world.waterDist;
+    if (this.p.drinkSpots > 0) {
+      // keep the water cells in coarse 40 m blocks picked by a seeded hash (no rng draws), so each pond and the creek keep a few drinking places
+      const w = this.world.water, src = new Uint8Array(n * n), blk = Math.max(1, Math.round(40 / this.world.cell));
+      for (let k = 0; k < n * n; k++) {
+        if (!w[k]) continue;
+        const bi = ((k % n) / blk) | 0, bj = ((k / n / blk) | 0);
+        let h = (bi * 73856093) ^ (bj * 19349663) ^ (this.seed * 83492791);
+        h = Math.imul(h ^ (h >>> 13), 1274126177);
+        if (((h >>> 8) & 0xffff) / 0x10000 < this.p.drinkSpots) src[k] = 1;
+      }
+      wd = distanceTransform(src, n, this.world.cell);
+    }
+    this.drinkD = wd;
+    for (let j = 0; j < n; j++) {
+      for (let i = 0; i < n; i++) {
+        const c = j * n + i;
+        const gx = (i < n - 1 ? wd[c + 1] : wd[c]) - (i > 0 ? wd[c - 1] : wd[c]);
+        const gy = (j < n - 1 ? wd[c + n] : wd[c]) - (j > 0 ? wd[c - n] : wd[c]);
+        const l = Math.hypot(gx, gy) || 1;
+        this.waterGX[c] = -gx / l;
+        this.waterGY[c] = -gy / l;
+      }
+    }
+  }
 
   private defaultGenes(sp: number, out: Float32Array, o: number): void {
     const r = this.rng;
@@ -393,7 +527,7 @@ export class Sim implements SimLike {
     // above keep their own layouts and draws. Species that live as density fields (prairie dogs, and the jackrabbit when smallPrey
     // is on) are seeded by SmallPrey instead; the jackrabbit is the one field species that still has an agent form (smallPrey off).
     for (const d of SPECIES) {
-      if (d.id === Sp.Bison || d.id === Sp.Deer || d.id === Sp.Wolf || d.id === Sp.Cougar || d.id === Sp.Raven || d.id === Sp.MuleDeer) continue;
+      if (d.id === Sp.Bison || d.id === Sp.Deer || d.id === Sp.Wolf || d.id === Sp.Cougar || d.id === Sp.Raven || d.id === Sp.MuleDeer || d.id === Sp.Beaver) continue;
       if (d.repr === 'field' && (this.p.smallPrey > 0 || d.id !== Sp.Rabbit)) continue;
       let left = P[d.id].initial;
       while (left > 0) {
@@ -481,9 +615,9 @@ export class Sim implements SimLike {
     return this.p.wolfPackMax * this.preyScale();
   }
 
-  private findDenSite(nearX?: number, nearY?: number): [number, number] | null {
+  private findDenSite(nearX?: number, nearY?: number, relax = 1): [number, number] | null {
     const w = this.world;
-    const minD = this.p.wolfDenMinDist / Math.sqrt(this.preyScale());
+    const minD = (this.p.wolfDenMinDist / Math.sqrt(this.preyScale())) * relax;
     for (let k = 0; k < 200; k++) {
       const x = nearX !== undefined ? nearX + this.rng.range(-30, 30) : this.rng.range(50, w.size - 50);
       const y = nearY !== undefined ? nearY + this.rng.range(-30, 30) : this.rng.range(50, w.size - 50);
@@ -499,6 +633,12 @@ export class Sim implements SimLike {
     return null;
   }
 
+  /** A pack kills prey of species `prey` with coat `coat`: its search image for that species moves toward it (the first kill sets it). */
+  learnCoat(pk: number, prey: number, coat: number): void {
+    const k = pk * SPECIES_COUNT + prey;
+    this.packCoat[k] = this.packCoat[k] < 0 ? coat : this.packCoat[k] + this.p.coatSearchRate * (coat - this.packCoat[k]);
+  }
+
   private newPack(x: number, y: number): number {
     for (let pk = 0; pk < MAX_PACKS; pk++) {
       if (!this.packAlive[pk]) {
@@ -512,7 +652,7 @@ export class Sim implements SimLike {
         this.packFounded[pk] = this.tick;
         this.packSerial[pk] = this.nextPackSerial++;
         this.packSize[pk] = 0;
-        for (let s = 0; s < SPECIES_COUNT; s++) this.packPref[pk * SPECIES_COUNT + s] = 0.7;
+        for (let s = 0; s < SPECIES_COUNT; s++) { this.packPref[pk * SPECIES_COUNT + s] = 0.7; this.packCoat[pk * SPECIES_COUNT + s] = -1; }
         if (this.tick > 0) this.event('packFounded', Sp.Wolf, x, y, this.packSerial[pk], 0);
         return pk;
       }
@@ -530,8 +670,23 @@ export class Sim implements SimLike {
     const a = this.a;
     const t = this.tick;
     this.env.update(t);
+    if (this.blizzardLeft > 0) this.blizzardLeft--;
+    if (this.flood !== null) this.floodStep();
     if (this.storms) this.stepStorms(t);
+    if (this.winter !== null && t % WINTER_STEP === 0) this.winter.step();
+    if (this.dust !== null) {
+      if (t % DUST_STEP === 0) this.dust.step(t);
+      this.visMul = this.dust.visionMul();
+    }
+    if (this.springFloods !== null && t % FLOOD_STEP === 0) {
+      const call = this.springFloods.step(this.flood !== null);
+      if (call !== null) this.startFlood(call.ticks, call.severity, this.springFloods.rng);
+    }
     this.veg.step(t);
+    if (this.trees !== null) {
+      this.trees.noteBurning(this.veg.burningCells);
+      if (t % TREE_STEP === 0) this.trees.step(t);
+    }
     this.groundB = grassBrightness(this.env.state.season);
 
     // lists, grids, pack bookkeeping
@@ -574,6 +729,7 @@ export class Sim implements SimLike {
     if (t % 50 === 0) {
       this.refreshCoarse();
       if (this.small !== null) this.small.step(t); // the web reads the map just refreshed, so it is never stale
+      if (this.hoppers !== null) this.hoppers.step(t);
       if (this.small !== null) this.coyotes.tickPrey(t);
       if (this.pop[Sp.MuleDeer] > 0) this.mule.refresh(this.veg.browse, this.veg.grass);
     }
@@ -581,6 +737,7 @@ export class Sim implements SimLike {
     this.pred.build(this.predList, this.predN, a.x, a.y);
     this.updatePacks();
     if (this.pop[Sp.Coyote] > 0) this.coyotes.step(t);
+    if (this.beavers !== null) this.beavers.step(t);
     if (this.p.raptors > 0 || this.pop[Sp.Eagle] + this.pop[Sp.Hawk] > 0) this.raptors.step(t);
     if (this.region !== null) this.openPrairieStep(t);
     if (this.dis.on) this.dis.step(this.pop[Sp.Wolf]);
@@ -612,6 +769,9 @@ export class Sim implements SimLike {
       } else if (s === Sp.Eagle || s === Sp.Hawk) {
         if ((i + t) % 4 === 0) this.raptors.think(i);
         this.raptors.live(i);
+      } else if (s === Sp.Beaver && this.beavers !== null) {
+        if ((i + t) % 4 === 0) this.beavers.think(i);
+        this.beavers.live(i);
       }
     }
 
@@ -1046,8 +1206,12 @@ export class Sim implements SimLike {
     const running = v > P.walkSpeed * 2.2;
     const activity = a.state[i] === St.Rest ? 0.7 : running ? 1.8 : v > 0.3 ? 1.05 : 0.9;
     let m = P.metabolism * Math.pow(size, -0.25) * (0.98 + 0.02 * spd * spd) * activity;
-    if (running && this.p.sprintCost > 0) m *= Math.max(0.3, 1 + this.p.sprintCost * (spd * spd - 1));
+    const sprintCost = P.sprintCost > 0 ? P.sprintCost : this.p.sprintCost;
+    if (running && sprintCost > 0) m *= Math.max(0.3, 1 + sprintCost * (spd * spd - 1));
+    // deep snow makes every step cost more (ground animals that are moving)
+    if (this.winter !== null && v > 0.3 && !SPECIES[a.sp[i]].flies) m *= 1 + this.p.snowMove * this.winter.at(a.x[i], a.y[i]);
     if (a.infected[i] > 0) m *= this.p.diseaseMetab;
+    if (this.blizzardLeft > 0) m *= BLIZZARD_COLD;
     if (this.dis.on && IS_CANID[a.sp[i]]) m *= this.dis.metabMult(i, this.env.state.warmth);
     if (a.age[i] < P.matureAge) m *= 0.75;
     // cold costs extra, much more for a small bird
@@ -1097,6 +1261,9 @@ export class Sim implements SimLike {
     // --- herd scan (3x3 buckets)
     const g = this.prey, nb = g.nb, bs = g.bs;
     const bx = Math.min(nb - 1, Math.max(0, (x / bs) | 0)), by = Math.min(nb - 1, Math.max(0, (y / bs) | 0));
+    // herdSpacingGraze: a second, wider separation sum used only while grazing (computed only when the param is on)
+    const gm = p.herdSpacingGraze, gSpacing = spacing * gm, gSpacing2 = spacing2 * gm * gm;
+    let gsepx = 0, gsepy = 0;
     let n = 0, cx = 0, cy = 0, avx = 0, avy = 0, sepx = 0, sepy = 0, alarm = 0, alx = 0, aly = 0, infNear = 0, maxFlee = 0;
     let mate = -1, mateD = 1e9;
     let nnx = 0, nny = 0, nnd2 = 1e9;
@@ -1123,6 +1290,11 @@ export class Sim implements SimLike {
             const d = Math.sqrt(d2) + 0.01;
             sepx -= dx / d * (spacing - d);
             sepy -= dy / d * (spacing - d);
+          }
+          if (gm > 0 && d2 < gSpacing2) {
+            const d = Math.sqrt(d2) + 0.01;
+            gsepx -= dx / d * (gSpacing - d);
+            gsepy -= dy / d * (gSpacing - d);
           }
           if (a.flee[j] > 18) { alarm++; alx += a.fleeX[j]; aly += a.fleeY[j]; if (a.flee[j] > maxFlee) maxFlee = a.flee[j]; }
           if (a.infected[j] > 0 && d2 < 16) infNear++;
@@ -1158,7 +1330,7 @@ export class Sim implements SimLike {
     const fearHere = this.veg.fear[this.veg.cellAt(x, y)];
     // --- predators: detection with vigilance (more eyes, earlier warning)
     const night = this.env.isNight();
-    const sight = P.sight * a.genes[o + G_SIGHT] * (night ? 0.65 : 1);
+    const sight = P.sight * a.genes[o + G_SIGHT] * (night ? 0.65 : 1) * this.visMul;
     const pg = this.pred;
     const rr = Math.ceil(sight / bs);
     let threat = -1, threatD = 1e9;
@@ -1243,7 +1415,7 @@ export class Sim implements SimLike {
       dvy = a.fleeY[i] * run + sepy * 2;
       state = St.Flee;
     } else if (a.hydration[i] < 0.3 || (a.state[i] === St.Drink && a.hydration[i] < 0.97)) {
-      if (this.world.waterDist[c] < 3) {
+      if (this.drinkD[c] < 3) {
         state = St.Drink;
         a.hydration[i] = Math.min(1, a.hydration[i] + 0.09);
       } else {
@@ -1259,7 +1431,10 @@ export class Sim implements SimLike {
       const browser = P.diet > 0;
       // dogGrazeBonus (S4): grazers favour the edges of prairie dog towns, where the grass regrows short and sweet
       const gb = !browser && this.small !== null && this.p.dogGrazeBonus > 0 ? this.small.grazeBonus : null;
-      const gHere = (browser ? (this.veg.browse[c] > 0.03 ? this.veg.browse[c] * 1.6 + this.veg.grass[c] * 0.3 : 0) : this.veg.grass[c]) * (mh !== null ? mh[c] : 1);
+      // snow hides the food (winter, S11): the grazer sees the patch, the next steps and the far pastures through the depth
+      const win = this.winter, sk = win !== null ? this.snowGrazeK(s) : 0;
+      let gHere = (browser ? (this.veg.browse[c] > 0.03 ? this.veg.browse[c] * 1.6 + this.veg.grass[c] * 0.3 : 0) : this.veg.grass[c]) * (mh !== null ? mh[c] : 1);
+      if (sk > 0) gHere *= 1 - sk * win!.at(x, y);
       if (hiding) {
         // a young fawn lies still in the grass while its mother grazes nearby
         state = St.Rest;
@@ -1299,7 +1474,8 @@ export class Sim implements SimLike {
             if (sx < 3 || sy < 3 || sx > this.world.size - 3 || sy > this.world.size - 3) continue;
             const sc = this.veg.cellAt(sx, sy);
             if (this.world.water[sc]) continue;
-            const food = (browser ? this.veg.browse[sc] * 1.6 + this.veg.grass[sc] * 0.35 : this.veg.grass[sc]) * (mh !== null ? mh[sc] : 1);
+            let food = (browser ? this.veg.browse[sc] * 1.6 + this.veg.grass[sc] * 0.35 : this.veg.grass[sc]) * (mh !== null ? mh[sc] : 1);
+            if (sk > 0) food *= 1 - sk * win!.at(sx, sy);
             let score = food - p.fearWeight * this.veg.fear[sc] - 0.004 * this.prey.counts[this.prey.bucketOf(sx, sy)] + (k === 0 ? 0.03 : 0) + rng.next() * 0.02;
             if (gb !== null) score += gb[this.small!.cellOf(sx, sy)];
             if (score > bestS) { bestS = score; bdx = ux; bdy = uy; }
@@ -1308,16 +1484,18 @@ export class Sim implements SimLike {
         if (grazing) {
           state = St.Graze;
           const v = bestS > hereS + 0.05 ? 0.35 : 0.12;
-          dvx = bdx * v + sepx * 0.5;
-          dvy = bdy * v + sepy * 0.5;
+          // with herdSpacingGraze the personal space is wider and the pull back to the herd weaker by the same factor
+          dvx = bdx * v + (gm > 0 ? gsepx : sepx) * 0.5;
+          dvy = bdy * v + (gm > 0 ? gsepy : sepy) * 0.5;
+          const gcoh = gm > 0 ? 0.3 / gm : 0.3;
           if (n > 0) {
             if (p.herdNearest > 0) {
               // stay within reach of the nearest herd-mate rather than the herd's centre: grazing fronts and strands, not rings
               const d = Math.sqrt(nnd2);
-              if (d > p.herdNearest) { dvx += (nnx / d) * 0.3 * herd; dvy += (nny / d) * 0.3 * herd; }
+              if (d > p.herdNearest) { dvx += (nnx / d) * gcoh * herd; dvy += (nny / d) * gcoh * herd; }
             } else {
               const dx = cx - x, dy = cy - y, d = Math.sqrt(dx * dx + dy * dy);
-              if (d > coh) { dvx += (dx / d) * 0.3 * herd; dvy += (dy / d) * 0.3 * herd; }
+              if (d > coh) { dvx += (dx / d) * gcoh * herd; dvy += (dy / d) * gcoh * herd; }
             }
           }
         } else {
@@ -1331,7 +1509,8 @@ export class Sim implements SimLike {
               for (let xx = Math.max(0, bx0 - R); xx <= Math.min(B - 1, bx0 + R); xx++) {
                 const k = yy * B + xx;
                 const cx2 = (xx + 0.5) * cs, cy2 = (yy + 0.5) * cs;
-                const food = mh !== null ? this.mule.coarse[k] : browser ? this.coarseBrowse[k] * 1.6 + this.coarseGrass[k] * 0.35 : this.coarseGrass[k];
+                let food = mh !== null ? this.mule.coarse[k] : browser ? this.coarseBrowse[k] * 1.6 + this.coarseGrass[k] * 0.35 : this.coarseGrass[k];
+                if (sk > 0) food *= 1 - sk * win!.depth[k];
                 let v = food - 0.0012 * Math.hypot(cx2 - x, cy2 - y) - 0.004 * this.prey.counts[this.prey.bucketOf(cx2, cy2)];
                 if (gb !== null) v += gb[k];
                 if (v > bv) { bv = v; tx = cx2; ty = cy2; }
@@ -1352,9 +1531,20 @@ export class Sim implements SimLike {
         }
       }
     }
+    // drink spots: a grazer that has drunk its fill drifts back off the bank instead of lingering in a ring at the water
+    if (p.drinkSpots > 0 && state !== St.Drink && state !== St.Flee && a.hydration[i] > 0.85 && this.drinkD[c] < 12) {
+      dvx -= this.waterGX[c] * 0.5;
+      dvy -= this.waterGY[c] * 0.5;
+    }
     a.dvx[i] = dvx;
     a.dvy[i] = dvy;
     a.state[i] = state;
+  }
+
+  /** How hard snow cuts a grazer's food: the grazing multiplier is 1 - k x depth (winter, S11). */
+  private snowGrazeK(sp: number): number {
+    const p = this.p;
+    return sp === Sp.Bison ? p.snowGrazeBison : sp === Sp.MuleDeer ? p.snowGrazeMule : p.snowGrazePronghorn;
   }
 
   private liveHerbivore(i: number, P: SpeciesParams): void {
@@ -1363,7 +1553,11 @@ export class Sim implements SimLike {
       const c = this.veg.cellAt(a.x[i], a.y[i]);
       const juvenile = a.age[i] < P.matureAge;
       const sz = a.genes[i * NG + G_SIZE];
-      const want = P.bite * Math.pow(sz, 0.75) * (juvenile ? 0.55 : 1);
+      let want = P.bite * Math.pow(sz, 0.75) * (juvenile ? 0.55 : 1);
+      if (this.winter !== null) {
+        const sk = this.snowGrazeK(a.sp[i]);
+        if (sk > 0) want *= 1 - sk * this.winter.at(a.x[i], a.y[i]);
+      }
       const perMass = 1 / sz; // energy is normalized to body reserves
       if (P.diet > 0) {
         // browsers take forbs and shrubs first, then grass at half value
@@ -1452,7 +1646,7 @@ export class Sim implements SimLike {
 
     // water comes first unless starving
     if (((a.hydration[i] < 0.3 && !chasing) || a.hydration[i] < 0.08) && a.energy[i] > 0.12 || (a.state[i] === St.Drink && a.hydration[i] < 0.97)) {
-      if (this.world.waterDist[c] < 3) { state = St.Drink; a.hydration[i] = Math.min(1, a.hydration[i] + 0.06); }
+      if (this.drinkD[c] < 3) { state = St.Drink; a.hydration[i] = Math.min(1, a.hydration[i] + 0.06); }
       else { dvx = this.waterGX[c] * trot; dvy = this.waterGY[c] * trot; state = St.Walk; }
       a.dvx[i] = dvx; a.dvy[i] = dvy; a.state[i] = state;
       return;
@@ -1477,6 +1671,12 @@ export class Sim implements SimLike {
     let tgt = -1;
     if (a.same(a.target[i], a.targetId[i])) tgt = a.target[i];
     else if (pk >= 0 && this.packTarget[pk] >= 0 && a.energy[i] < 0.9 && a.same(this.packTarget[pk], this.packTargetId[pk])) tgt = this.packTarget[pk];
+    if (tgt >= 0 && a.sp[tgt] === Sp.Beaver && this.beavers !== null && this.beavers.safe(tgt)) {
+      // the beaver reached the water: the hunt is off
+      a.target[i] = -1;
+      if (pk >= 0 && this.packTarget[pk] === tgt) this.packTarget[pk] = -1;
+      tgt = -1;
+    }
     const resting = a.timer[i] < 0; // negative timer = exhausted cooldown
     if (resting) a.timer[i] += 3;
 
@@ -1485,10 +1685,13 @@ export class Sim implements SimLike {
     const scented = pk < 0 || this.packScentHit[pk] === 1 || this.p.huntNeedsScent === 0;
     if (tgt < 0 && (a.energy[i] < hungerLine || opportunist) && !resting && (scented || opportunist)) {
       // look for the most vulnerable prey in sight
-      const sight = P.sight * a.genes[o + G_SIGHT] * (night ? 0.75 : 1);
+      const sight = P.sight * a.genes[o + G_SIGHT] * (night ? 0.75 : 1) * this.visMul;
       const g = this.prey, nb = g.nb, bs = g.bs;
       const bx = Math.min(nb - 1, Math.max(0, (x / bs) | 0)), by = Math.min(nb - 1, Math.max(0, (y / bs) | 0));
-      const rr = Math.ceil(sight / bs);
+      // coat search image (S9): a matching coat is noticed from further off, so the scan reaches that far too
+      const imgOn = p.coatSearch > 0 && pk >= 0;
+      const reach = imgOn ? sight * Math.max(1, p.coatSearchBoost) : sight;
+      const rr = Math.ceil(reach / bs);
       let best = -1, bestS = 0;
       for (let yy = by - rr; yy <= by + rr; yy++) {
         if (yy < 0 || yy >= nb) continue;
@@ -1501,14 +1704,23 @@ export class Sim implements SimLike {
             if (!a.alive[j]) continue;
             const dx = a.x[j] - x, dy = a.y[j] - y;
             const dd = Math.sqrt(dx * dx + dy * dy);
-            if (dd > sight) continue;
+            if (dd > reach) continue;
             const dietW = DIET[Sp.Wolf][a.sp[j]];
             if (dietW <= 0) continue;
+            // a beaver in the water is out of reach (S14): wolves take them on land only
+            if (a.sp[j] === Sp.Beaver && this.beavers !== null && this.beavers.safe(j)) continue;
             const Pj = this.p.species[a.sp[j]];
             if (Pj.hideAge > 0 && a.age[j] < Pj.hideAge && a.state[j] === St.Rest && dd > 5) continue;
             const camo = Pj.camo;
             const contrast = Math.abs((1 - a.genes[j * NG + G_COAT]) * 0.75 + 0.1 - this.groundB);
-            if (dd > sight * (1 - camo * (1 - (0.6 + 0.8 * contrast)))) continue;
+            let seen = sight * (1 - camo * (1 - (0.6 + 0.8 * contrast)));
+            // a coat the pack has been killing is noticed from further off and stands out among the herd (x boost on its score too)
+            let imgW = 1;
+            if (imgOn) {
+              const img = this.packCoat[pk * SPECIES_COUNT + a.sp[j]];
+              if (img >= 0 && Math.abs(a.genes[j * NG + G_COAT] - img) < p.coatSearchWindow) { seen *= p.coatSearchBoost; imgW = p.coatSearchBoost; }
+            }
+            if (dd > seen) continue;
             const young = a.age[j] < Pj.matureAge ? 2.6 : 1;
             const old = a.age[j] > Pj.maxAge * 0.7 ? 1.8 : 1;
             // a sated wolf only bothers with easy, close prey
@@ -1523,7 +1735,7 @@ export class Sim implements SimLike {
             // prey switching (type III): hunting effort follows the common prey, so a crashed species gets a refuge
             const np = this.pop[a.sp[j]];
             const rare = p.wolfRareHalf > 0 ? np / (np + p.wolfRareHalf) : 1;
-            const score = (pref * dietW * young * old * weak * lone * catchable * catchable * rare) / (Pj.toughness * a.genes[j * NG + G_SIZE]) / (dd + 15);
+            const score = (imgW * pref * dietW * young * old * weak * lone * catchable * catchable * rare) / (Pj.toughness * a.genes[j * NG + G_SIZE]) / (dd + 15);
             if (score > bestS) { bestS = score; best = j; }
           }
         }
@@ -1695,7 +1907,9 @@ export class Sim implements SimLike {
           // a herd that circles up around its calves protects them as well as its adults
           const defense = 1 + Pt.defense * Math.min(5, guards);
           const resist = Pt.toughness * a.genes[t * NG + G_SIZE] * young * condition * defense * (a.infected[t] > 0 ? 0.7 : 1);
-          const pk2 = p.wolfKillChance * a.genes[i * NG + G_SIZE] * (1 + 0.45 * Math.min(4, helpers)) / resist;
+          let pk2 = p.wolfKillChance * a.genes[i * NG + G_SIZE] * (1 + 0.45 * Math.min(4, helpers)) / resist;
+          // prey floundering in snow is easier to pull down (winter, S11)
+          if (this.winter !== null) pk2 *= 1 + p.snowKill * this.winter.at(a.x[t], a.y[t]);
           dbg('attack_roll');
           if (!isYoung && et > 0.5 && this.rng.next() < p.wolfTestGiveUp * Math.min(1, guards / 2 + 0.3)) {
             // tested a strong adult and thought better of it
@@ -1712,6 +1926,10 @@ export class Sim implements SimLike {
             this.veg.stamp(this.veg.fear, a.x[t], a.y[t], p.fearKillRadius, p.fearKill, 1);
             if (a.sp[t] === Sp.Deer) this.cKillsDeer++;
             if (pk >= 0) {
+              if (p.coatSearch > 0) {
+                // the coat search image drifts toward the coat just killed (the first kill sets it)
+                this.learnCoat(pk, a.sp[t], a.genes[t * NG + G_COAT]);
+              }
               // a successful kill sharpens the search image for that prey and dulls the others
               const o2 = pk * SPECIES_COUNT;
               for (let s = 0; s < SPECIES_COUNT; s++) {
@@ -1805,7 +2023,7 @@ export class Sim implements SimLike {
     const chasing = a.state[i] === St.Chase && a.same(a.target[i], a.targetId[i]);
     // water
     if (!chasing && ((a.hydration[i] < 0.3 && a.energy[i] > 0.12) || (a.state[i] === St.Drink && a.hydration[i] < 0.97))) {
-      if (this.world.waterDist[c] < 3) { state = St.Drink; a.hydration[i] = Math.min(1, a.hydration[i] + 0.06); }
+      if (this.drinkD[c] < 3) { state = St.Drink; a.hydration[i] = Math.min(1, a.hydration[i] + 0.06); }
       else { dvx = this.waterGX[c] * walk * 1.4; dvy = this.waterGY[c] * walk * 1.4; state = St.Walk; }
       return done();
     }
@@ -2002,7 +2220,12 @@ export class Sim implements SimLike {
     let state: number = St.Fly;
     const k = this.nearestCarcass(x, y, P.sight);
     const fly = P.walkSpeed;
-    if (k >= 0) {
+    // a hungry raven over a thick grasshopper patch drops in and feeds on it, unless a carcass is right there (S12)
+    const hopGraze = this.hoppers !== null && a.energy[i] < 0.9 && this.hoppers.densAt(x, y) > 0.25
+      && !(k >= 0 && Math.abs(this.cX[k] - x) + Math.abs(this.cY[k] - y) < 25);
+    if (hopGraze) {
+      state = St.Graze;
+    } else if (k >= 0) {
       const dx = this.cX[k] - x, dy = this.cY[k] - y, d = Math.sqrt(dx * dx + dy * dy) + 0.01;
       if (a.energy[i] < 0.9) {
         a.timer[i] = k;
@@ -2063,6 +2286,7 @@ export class Sim implements SimLike {
       a.alt[i] = Math.max(0, a.alt[i] - 0.5);
     } else if (st === St.Graze) {
       a.energy[i] = Math.min(1, a.energy[i] + P.metabolism * 1.15);
+      if (this.hoppers !== null) a.energy[i] = Math.min(1, a.energy[i] + this.hoppers.feed(a.x[i], a.y[i], 'raven', P.metabolism));
       a.vx[i] *= 0.5; a.vy[i] *= 0.5;
       a.alt[i] = Math.max(0, a.alt[i] - 0.4);
     } else {
@@ -2140,10 +2364,17 @@ export class Sim implements SimLike {
       this.event('introduced', sp, x ?? 0, y ?? 0, 0, 0);
       return;
     }
+    if (sp === Sp.Beaver) {
+      // beavers (S14): set down at the point (or on the creek), they walk to the creek and look for the best free site (the first call builds the beaver system)
+      const n = this.startBeavers().introduce(count, x, y);
+      this.event('introduced', sp, x ?? 0, y ?? 0, n, 0);
+      return;
+    }
     if (sp === Sp.Wolf) {
       let left = count;
       while (left > 0) {
-        const den = x !== undefined && y !== undefined ? (this.findDenSite(x, y) ?? [x, y]) : this.findDenSite();
+        // the god tool always finds the new pack a home: with every site taken it settles for a den half the usual distance from its neighbours
+        const den = x !== undefined && y !== undefined ? (this.findDenSite(x, y) ?? [x, y]) : (this.findDenSite() ?? this.findDenSite(undefined, undefined, 0.5));
         if (!den) break;
         const pk = this.newPack(den[0], den[1]);
         const m = Math.min(left, 6);
@@ -2217,6 +2448,11 @@ export class Sim implements SimLike {
         this.veg.ignite(iv.x, iv.y, 6);
         this.event('fire', -1, iv.x, iv.y, 0, 0);
         break;
+      case 'lightning': this.lightning(iv.x, iv.y); break;
+      case 'blizzard': this.blizzard(iv.ticks); break;
+      case 'flood': this.startFlood(iv.ticks, iv.severity); break;
+      case 'disease': this.applyDisease(iv.disease, iv.species, iv.fraction); break;
+      case 'grove': this.plantGrove(iv.x, iv.y, iv.radius); break;
       case 'plague': {
         if (iv.species === Sp.PrairieDog && this.small !== null) {
           // sylvatic plague: seeds the outbreak in a share of the colony cells (the fields have no per-animal infection)
@@ -2231,6 +2467,191 @@ export class Sim implements SimLike {
         break;
       }
     }
+  }
+
+  // ------------------------------------------------------------------ god tools v2 (S17)
+  // All of these run only when the player acts. They draw from the main stream (interventions are the player's own moments, and
+  // a run that never calls them is untouched) or, for grove trees, from a generator of their own.
+
+  /** Lightning at a point: grass catches (except over water) and every ground animal within 3 m dies. */
+  private lightning(x: number, y: number): void {
+    const a = this.a, size = this.world.size;
+    x = Math.min(size - 0.01, Math.max(0, x));
+    y = Math.min(size - 0.01, Math.max(0, y));
+    const lit = this.veg.ignite(x, y, 4);
+    let killed = 0;
+    for (let i = 0; i < a.hi; i++) {
+      if (!a.alive[i] || a.alt[i] > 3) continue;
+      const dx = a.x[i] - x, dy = a.y[i] - y;
+      if (dx * dx + dy * dy <= 9) { this.die(i, 'culled'); killed++; }
+    }
+    if (this.storms !== null) this.storms.pushStrike(x, y, this.tick, lit > 0 ? 1 : 0);
+    else {
+      this.godStrikes.push(x, y, this.tick, lit > 0 ? 1 : 0);
+      if (this.godStrikes.length > 64 * 4) this.godStrikes.splice(0, this.godStrikes.length - 64 * 4);
+    }
+    if (lit > 0) {
+      this.cLightning++;
+      this.event('lightningFire', -1, x, y, killed, 1);
+    }
+  }
+
+  /** A blizzard of `ticks`: snow weather and a gale, a deep snowfall when snowDepth is on, and a cold drain on every animal. */
+  private blizzard(ticks: number): void {
+    const t = Math.max(10, Math.round(ticks));
+    const env = this.env;
+    env.rainTicks = 0;
+    env.droughtTicks = 0;
+    env.snowTicks = t;
+    env.state.windStrength = Math.max(env.state.windStrength, 0.9);
+    this.blizzardLeft = t;
+    if (this.winter !== null) this.winter.forceBlizzard(t);
+    this.event('blizzard', -1, this.world.size / 2, this.world.size / 2, t, 1);
+  }
+
+  /**
+   * Flood: for `ticks` the land within 12 + 38 x severity m of the creek and ponds is under water. At the start the grass there drowns
+   * (down by 85% x severity), browse is hit half as hard, fires in the band go out, and young animals caught in it may drown (40% x
+   * severity; adults 5% x severity; counted as culled). While it lasts, ground animals in the band are pushed away from the water
+   * (drinkers are left alone). When it recedes the silt feeds the soil (+0.2 x severity).
+   */
+  private startFlood(ticks: number, severity: number, natural?: Rng): void {
+    const w = this.world, v = this.veg, a = this.a, p = this.p;
+    const sev = Math.min(1, Math.max(0.1, severity));
+    // a natural spring flood (S12) is the same machinery with a narrower band, its own params and its own generator
+    const radius = natural !== undefined ? p.floodBand : 12 + 38 * sev;
+    const grassHit = natural !== undefined ? p.floodGrass : 0.85;
+    const rng = natural ?? this.rng;
+    if (this.beavers !== null) this.beavers.onFlood(sev);
+    const mask = new Uint8Array(w.n * w.n);
+    for (let c = 0; c < mask.length; c++) {
+      if (!w.water[c] && w.waterDist[c] <= radius) {
+        mask[c] = 1;
+        v.grass[c] *= 1 - grassHit * sev;
+        v.browse[c] *= 1 - 0.5 * sev;
+        v.burn[c] = 0;
+      }
+    }
+    for (let i = 0; i < a.hi; i++) {
+      if (!a.alive[i] || SPECIES[a.sp[i]].flies || a.state[i] === St.Migrate) continue;
+      if (!mask[v.cellAt(a.x[i], a.y[i])]) continue;
+      const young = a.age[i] < this.p.species[a.sp[i]].matureAge;
+      if (rng.next() < (natural !== undefined ? (young ? p.floodYoung : p.floodAdult) : young ? 0.4 : 0.05) * sev) {
+        if (young) this.cFawnsDrowned++;
+        this.die(i, 'culled');
+      }
+    }
+    this.flood = { left: Math.max(10, Math.round(ticks)), sev, radius, mask, silt: natural !== undefined ? p.floodSilt : 0.2 };
+    if (natural !== undefined) this.cSpringFloods++;
+    this.event(natural !== undefined ? 'springFlood' : 'flood', -1, w.size / 2, w.size / 2, this.flood.left, sev);
+  }
+
+  private floodStep(): void {
+    const f = this.flood!;
+    const w = this.world, v = this.veg, a = this.a, n = w.n, wd = w.waterDist;
+    if (--f.left <= 0) {
+      for (let c = 0; c < f.mask.length; c++) if (f.mask[c]) v.soil[c] = Math.min(1.4, v.soil[c] + f.silt * f.sev);
+      if (this.trees !== null) this.trees.floodEnded(f.mask, f.sev, this.tick);
+      this.flood = null;
+      return;
+    }
+    if (this.tick % 5 !== 0) return;
+    const half = w.size / 2;
+    for (let i = 0; i < a.hi; i++) {
+      if (!a.alive[i] || SPECIES[a.sp[i]].flies || a.state[i] === St.Migrate || a.state[i] === St.Drink) continue;
+      const c = v.cellAt(a.x[i], a.y[i]);
+      if (!f.mask[c]) continue;
+      const ci = c % n, cj = (c / n) | 0;
+      let gx = wd[cj * n + Math.min(n - 1, ci + 1)] - wd[cj * n + Math.max(0, ci - 1)];
+      let gy = wd[Math.min(n - 1, cj + 1) * n + ci] - wd[Math.max(0, cj - 1) * n + ci];
+      let g = Math.sqrt(gx * gx + gy * gy);
+      if (g < 1e-6) { gx = half - a.x[i]; gy = half - a.y[i]; g = Math.sqrt(gx * gx + gy * gy) + 1e-6; }
+      a.x[i] = Math.min(w.size - 1, Math.max(1, a.x[i] + (gx / g) * 2));
+      a.y[i] = Math.min(w.size - 1, Math.max(1, a.y[i] + (gy / g) * 2));
+    }
+    // the water puts out any fire in the band
+    for (let c = 0; c < f.mask.length; c++) if (f.mask[c] && v.burn[c] > 1) v.burn[c] = 1;
+  }
+
+  /** Targeted outbreaks. Every one reports with a 'plague' event at the start (the natural 'distemper' event still closes a distemper outbreak). */
+  private applyDisease(disease: 'fever' | 'distemper' | 'plague', species?: number, fraction?: number): void {
+    const a = this.a;
+    if (disease === 'plague') {
+      const n = this.small !== null ? this.small.seedPlague(this.tick, fraction ?? 0.5) : 0;
+      this.event('plague', Sp.PrairieDog, 0, 0, n, 0);
+      return;
+    }
+    const sp = species ?? (disease === 'distemper' ? Sp.Wolf : Sp.Bison);
+    if (this.isFieldSpecies(sp)) { this.event('plague', sp, 0, 0, 0, 0); return; }
+    const cand: number[] = [];
+    for (let i = 0; i < a.hi; i++) if (a.alive[i] && a.sp[i] === sp && a.infected[i] === 0 && a.immune[i] === 0) cand.push(i);
+    const f = fraction ?? (disease === 'distemper' ? 0.1 : 0.15);
+    const want = cand.length === 0 ? 0 : Math.max(1, Math.round(Math.min(1, Math.max(0, f)) * cand.length));
+    let n = 0;
+    if (disease === 'distemper') {
+      if (IS_CANID[sp] && want > 0) { this.dis.forceOn(); n = this.dis.startOutbreak(want, sp); }
+    } else {
+      for (let q = 0; q < want; q++) {
+        const k = this.rng.int(cand.length);
+        a.infected[cand[k]] = this.p.diseaseTicks;
+        this.logStory(cand[k], 'infected');
+        cand[k] = cand[cand.length - 1];
+        cand.pop();
+        n++;
+      }
+    }
+    this.event('plague', sp, 0, 0, n, 0);
+  }
+
+  /** A grove: tree cover and browse in a disc (radius 6..40 m) and a stand of cottonwoods appended to world.trees (the sim's world; the renderer's
+   *  own copy does not have them, so snapshots carry `groves`). Shade cuts the grass there as the standing trees do. */
+  private plantGrove(x: number, y: number, radius: number): void {
+    const w = this.world, v = this.veg;
+    if (this.groveCount >= MAX_GROVES) return;
+    const r = Math.min(40, Math.max(6, radius));
+    x = Math.min(w.size - 2, Math.max(2, x));
+    y = Math.min(w.size - 2, Math.max(2, y));
+    if (this.trees !== null) {
+      // dynamic trees (S13): the grove is young cottonwoods in the tree list, and the cover is rebuilt from it
+      this.groveRng ??= new Rng(hashSeed(this.seed + ':groves'));
+      const made = this.trees.plant(x, y, r, Math.min(40, Math.max(3, Math.round((Math.PI * r * r) / 110))), this.groveRng);
+      this.groveCount++;
+      this.event('grovePlanted', -1, x, y, r, made);
+      return;
+    }
+    const n = w.n, cell = w.cell;
+    const i0 = Math.max(0, Math.floor((x - r) / cell)), i1 = Math.min(n - 1, Math.floor((x + r) / cell));
+    const j0 = Math.max(0, Math.floor((y - r) / cell)), j1 = Math.min(n - 1, Math.floor((y + r) / cell));
+    const before = new Float32Array((i1 - i0 + 1) * (j1 - j0 + 1));
+    let q = 0;
+    for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) before[q++] = w.cover[j * n + i];
+    v.stamp(w.cover, x, y, r, 0.9, 1);
+    q = 0;
+    for (let j = j0; j <= j1; j++) {
+      for (let i = i0; i <= i1; i++) {
+        const c = j * n + i, old = before[q++], now = w.cover[c];
+        if (w.water[c] || now <= old) continue;
+        w.capacity[c] *= (1 - 0.45 * now) / (1 - 0.45 * old);
+        v.browseK[c] = 0.4 * w.capacity[c] / Math.max(0.3, 1 - 0.45 * now) + 0.6 * now;
+        if (v.browse[c] < 0.6 * v.browseK[c]) v.browse[c] = 0.6 * v.browseK[c];
+      }
+    }
+    this.groveRng ??= new Rng(hashSeed(this.seed + ':groves'));
+    const g = this.groveRng;
+    if (this.groveBase < 0) this.groveBase = w.trees.length;
+    const count = Math.min(40, Math.max(3, Math.round((Math.PI * r * r) / 110)));
+    const add = new Float32Array(count * 4);
+    for (let k = 0; k < count; k++) {
+      const ang = g.next() * Math.PI * 2, rad = r * 0.85 * Math.sqrt(g.next());
+      const th = g.range(9, 15);
+      add.set([x + Math.cos(ang) * rad, y + Math.sin(ang) * rad, th, th * g.range(0.38, 0.5)], k * 4);
+    }
+    const all = new Float32Array(w.trees.length + add.length);
+    all.set(w.trees);
+    all.set(add, w.trees.length);
+    w.trees = all;
+    this.groveCount++;
+    this.event('grovePlanted', -1, x, y, r, count);
   }
 
   // ------------------------------------------------------------------ open prairie (S1)
@@ -2608,6 +3029,52 @@ export class Sim implements SimLike {
     return out;
   }
 
+  /**
+   * Herd shape (S10), read-only: no rng, no state. Columns, all about bison:
+   *   near_bison       bison within 30 m of water
+   *   ring_bison       share of those standing in the bank band (3 to 12 m from the water, so not drinking); a plain uniform spread gives about 0.3,
+   *                    a ring around a pond more (NaN with fewer than 5 bison near water)
+   *   nn_graze_bison   mean distance (m, each capped at 30) from a grazing bison to the nearest other bison (NaN with fewer than 2 grazers)
+   */
+  private herdShapeRow(row: Record<string, number>): void {
+    const a = this.a, wd = this.world.waterDist;
+    const idx: number[] = [];
+    let near = 0, ring = 0;
+    for (let i = 0; i < a.hi; i++) {
+      if (!a.alive[i] || a.sp[i] !== Sp.Bison) continue;
+      idx.push(i);
+      const d = wd[this.veg.cellAt(a.x[i], a.y[i])];
+      if (d < 30) { near++; if (d >= 3 && d < 12) ring++; }
+    }
+    row.near_bison = near;
+    row.ring_bison = near >= 5 ? ring / near : NaN;
+    // nearest neighbour by a sweep over the bison sorted on x
+    idx.sort((p, q) => a.x[p] - a.x[q] || p - q);
+    let sum = 0, cnt = 0;
+    for (let k = 0; k < idx.length; k++) {
+      const i = idx[k];
+      if (a.state[i] !== St.Graze) continue;
+      let best = 900;
+      for (let m = k + 1; m < idx.length; m++) {
+        const dx = a.x[idx[m]] - a.x[i];
+        if (dx * dx >= best) break;
+        const dy = a.y[idx[m]] - a.y[i];
+        const d2 = dx * dx + dy * dy;
+        if (d2 < best) best = d2;
+      }
+      for (let m = k - 1; m >= 0; m--) {
+        const dx = a.x[idx[m]] - a.x[i];
+        if (dx * dx >= best) break;
+        const dy = a.y[idx[m]] - a.y[i];
+        const d2 = dx * dx + dy * dy;
+        if (d2 < best) best = d2;
+      }
+      sum += Math.sqrt(best);
+      cnt++;
+    }
+    row.nn_graze_bison = cnt >= 2 ? sum / cnt : NaN;
+  }
+
   sample(): Record<string, number> {
     const a = this.a;
     const pops = this.populations();
@@ -2620,12 +3087,14 @@ export class Sim implements SimLike {
     // generation depth and trait means
     const gsum = new Float64Array(SPECIES_COUNT);
     const tsum = new Float64Array(SPECIES_COUNT * NG);
+    const csq = new Float64Array(SPECIES_COUNT);
     let juvBison = 0, infBison = 0, cdvWolf = 0, mangeWolf = 0, mangeSev = 0;
     for (let i = 0; i < a.hi; i++) {
       if (!a.alive[i]) continue;
       const s = a.sp[i];
       gsum[s] += a.gen[i];
       for (let g = 0; g < NG; g++) tsum[s * NG + g] += a.genes[i * NG + g];
+      csq[s] += a.genes[i * NG + G_COAT] * a.genes[i * NG + G_COAT];
       if (a.cdv[i] > 0 && IS_CANID[s]) cdvWolf++;
       if (a.mange[i] > 0 && IS_CANID[s]) { mangeWolf++; mangeSev += a.mange[i]; }
       if (s === Sp.Bison) {
@@ -2640,7 +3109,19 @@ export class Sim implements SimLike {
     for (const [s, g] of traits) {
       row[`trait_${SPECIES_KEYS[s]}_${GENE_NAMES[g]}`] = pops[s] ? tsum[s * NG + g] / pops[s] : NaN;
     }
+    // coat variance per species (S9: does selection keep the colours varied?) and the wolves' mean bison coat search image
+    for (const [s, key] of [[Sp.Bison, 'bison'], [Sp.Deer, 'pronghorn'], [Sp.Wolf, 'wolf']] as [number, string][]) {
+      const n = pops[s], m = n ? tsum[s * NG + G_COAT] / n : 0;
+      row['coatvar_' + key] = n > 1 ? Math.max(0, csq[s] / n - m * m) : NaN;
+    }
+    let imgSum = 0, imgN = 0;
+    for (let pk = 0; pk < MAX_PACKS; pk++) {
+      const v = this.packCoat[pk * SPECIES_COUNT + Sp.Bison];
+      if (this.packAlive[pk] && v >= 0) { imgSum += v; imgN++; }
+    }
+    row.search_wolf = imgN ? imgSum / imgN : NaN;
     row.juv_bison = juvBison;
+    this.herdShapeRow(row);
     row.infected_bison = infBison;
     // canid disease: wolves sick with distemper now, wolves with mange now (and their mean severity),
     // disease deaths, outbreaks closed and packs newly hit by mange since the last sample
@@ -2724,8 +3205,58 @@ export class Sim implements SimLike {
     row.raptor_takes_hare = row.takes_hare_eagle + row.takes_hare_hawk;
     row.raptor_takes_dog = row.takes_dog_eagle + row.takes_dog_hawk;
     this.raptors.sampleRow(row);
+    // beaver ponds (S14): colonies, dams, ponds and meadows now and the counts since the last sample (all 0 with the beaver system off), and the mean
+    // distance from a land cell to water (m), which a pond shortens
+    if (this.beavers !== null) this.beavers.sampleRow(row); else emptyBeaverRow(row);
+    {
+      const wd = this.world.waterDist, wat = this.world.water;
+      let s = 0, k = 0;
+      for (let c = 0; c < wd.length; c++) if (!wat[c]) { s += wd[c]; k++; }
+      row.water_dist_mean = k ? s / k : 0;
+    }
     row.fires_lightning = this.cLightning;
     row.storm_cells = this.storms ? this.storms.cells.length : 0;
+    // winter (S11): snow now (mean and deepest cell), the highest mean depth since the last sample, and blizzards and hard winters begun since then (all 0 with snowDepth off)
+    const wn = this.winter;
+    const wd = wn ? wn.drainSample() : null;
+    row.snow_mean = wn ? wn.meanDepth() : 0;
+    row.snow_max = wn ? wn.maxDepth() : 0;
+    row.snow_peak = wd ? wd.peak : 0;
+    row.blizzards = wd ? wd.blizzards : 0;
+    row.hard_winters = wd ? wd.hardWinters : 0;
+    // S12: dust storms begun, the bare share of the land (0 when dustStorms is off), grasshoppers (field total, densest cell, outbreaks begun, grass eaten as
+    // mean-grass units, energy fed to coyotes, ravens and hawks), spring floods begun, flood now (0/1) and young animals drowned by any flood since the last sample
+    const du = this.dust !== null ? this.dust.drainSample() : null;
+    row.dust_storms = du ? du.storms : 0;
+    row.dust_now = this.dust !== null ? this.dust.intensity() : 0;
+    row.dust_bare = this.dust !== null ? this.dust.bareShare() : 0;
+    const hd = this.hoppers !== null ? this.hoppers.drainSample() : null;
+    row.hop_total = this.hoppers !== null ? this.hoppers.total() : 0;
+    row.hop_peak = this.hoppers !== null ? this.hoppers.maxDensity() : 0;
+    row.hop_outbreaks = hd ? hd.outbreaks : 0;
+    row.hop_eaten = hd ? hd.eaten : 0;
+    row.hop_fed_coyote = hd ? hd.fed[0] : 0;
+    row.hop_fed_raven = hd ? hd.fed[1] : 0;
+    row.hop_fed_hawk = hd ? hd.fed[2] : 0;
+    row.spring_floods = this.cSpringFloods;
+    row.flood_now = this.flood !== null ? 1 : 0;
+    row.fawns_drowned = this.cFawnsDrowned;
+    // S13: trees by kind and stage now (0 with dynamicTrees off), recruits, fire deaths, mean cover of the land (always), juniper share of the ridges
+    const tc = this.trees !== null ? this.trees.counts() : null;
+    const td = this.trees !== null ? this.trees.drainSample() : null;
+    for (let k = 0; k < 3; k++) for (let s = 0; s < 5; s++) row[`tr_${TREE_KIND_KEYS[k]}_${TREE_STAGE_KEYS[s]}`] = tc ? tc.n[k][s] : 0;
+    row.tr_live = tc ? tc.total : 0;
+    row.tr_rec_cw = td ? td.recCw : 0;
+    row.tr_rec_jun = td ? td.recJun : 0;
+    row.tr_fire_small = td ? td.fireSmall : 0;
+    row.tr_fire_mature = td ? td.fireMature : 0;
+    row.tr_old = td ? td.old : 0;
+    row.tr_hazard = td ? td.hazard : 0;
+    row.tr_planted = td ? td.planted : 0;
+    row.tr_encroach = td ? td.encroach : 0;
+    row.tr_browse_slow = td ? td.slow : 0;
+    row.tr_jun_ridge = this.trees !== null ? this.trees.ridgeShare() : 0;
+    row.cover_mean = this.veg.meanOf(this.world.cover);
     this.cKills = 0;
     this.cKillsDeer = 0;
     this.cStrife = 0;
@@ -2744,6 +3275,8 @@ export class Sim implements SimLike {
     this.cVagIn = 0;
     this.cVagOut = 0;
     this.cLightning = 0;
+    this.cSpringFloods = 0;
+    this.cFawnsDrowned = 0;
     return row;
   }
 
@@ -2805,9 +3338,43 @@ export class Sim implements SimLike {
       tick: this.tick, env: { ...this.env.state }, count: k, ids, agents: out, carcassCount: this.cN, carcasses: car, veg, small,
       pop: Int32Array.from(this.populations()),
     };
+    if (withVeg && this.winter !== null) {
+      snap.snow = new Uint8Array(32 * 32);
+      this.winter.fillTexture(snap.snow);
+    }
     if (this.storms) {
       snap.storms = this.storms.toArray(this.env.state, this.tick);
       snap.strikes = this.storms.drainStrikes();
+    } else if (this.godStrikes.length > 0) {
+      snap.strikes = Float32Array.from(this.godStrikes);
+      this.godStrikes.length = 0;
+    }
+    if (this.flood !== null) snap.flood = Float32Array.of(this.flood.left, this.flood.sev, this.flood.radius);
+    if (withVeg && this.groveBase >= 0 && this.trees === null) snap.groves = this.world.trees.slice(this.groveBase);
+    if (this.trees !== null) {
+      // dynamic trees (S13): the whole list, and the cover field it makes, whenever the list changed since the last snapshot that carried them
+      snap.treesVersion = this.trees.version;
+      if (withVeg && this.trees.version !== this.treesSent) {
+        snap.trees = this.trees.toArray();
+        snap.treeCover = this.trees.coverBytes();
+        this.treesSent = this.trees.version;
+      }
+    }
+    if (this.beavers !== null) {
+      // beaver ponds (S14): the depth field, the dams and the lodges, whenever they changed since the last snapshot that carried them (with the vegetation texture)
+      snap.pondVersion = this.beavers.ponds.version;
+      if (withVeg && this.beavers.ponds.version !== this.beaversSent) {
+        snap.ponds = this.beavers.ponds.depthBytes();
+        snap.dams = this.beavers.ponds.damArray();
+        snap.lodges = this.beavers.lodgeArray();
+        snap.drownedTrees = Uint32Array.from(this.beavers.ponds.drownedTrees);
+        this.beaversSent = this.beavers.ponds.version;
+      }
+    }
+    if (this.dust !== null) { const d = this.dust.toArray(); if (d !== null) snap.dust = d; }
+    if (withVeg && this.hoppers !== null) {
+      snap.hoppers = new Uint8Array(32 * 32);
+      this.hoppers.fillTexture(snap.hoppers);
     }
     return snap;
   }

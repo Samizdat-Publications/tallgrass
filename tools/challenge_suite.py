@@ -1,7 +1,7 @@
 """Re-validate every challenge against the current default sim: each one hands-off (should usually fail) and with the
 scripted player from tools/challenge_check.ts (should be winnable within the budget).
 
-Usage: .venv/Scripts/python tools/challenge_suite.py [--jobs 6] [--out scratch/challenges/suite.jsonl]
+Usage: .venv/Scripts/python tools/challenge_suite.py [--jobs 6] [--only meso,town] [--out scratch/challenges/suite.jsonl]
 """
 import argparse
 import concurrent.futures as cf
@@ -33,9 +33,13 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--jobs', type=int, default=6)
     ap.add_argument('--out', default='scratch/challenges/suite.jsonl')
+    ap.add_argument('--only', default=None, help='comma-separated challenge ids to run (default: all)')
     ap.add_argument('--params', default=None, help='JSON sim params on top of each scenario, e.g. {"calendarScale":2}')
     a = ap.parse_args()
     ids = challenge_ids()
+    if a.only:
+        want = a.only.split(',')
+        ids = [c for c in ids if c in want]
     jobs = [(c, p) for c in ids for p in (False, True)]
     with cf.ThreadPoolExecutor(a.jobs) as ex:
         results = list(ex.map(lambda j: run(*j, a.params), jobs))

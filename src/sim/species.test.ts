@@ -17,14 +17,18 @@ function ok(cond: boolean, msg: string): void {
 
 // ids are positions, and the Sp constants agree with the registry
 ok(SPECIES.every((d, i) => d.id === i), 'registry ids are array positions');
-ok(SPECIES_COUNT === SPECIES.length && SPECIES_COUNT === 11, 'SPECIES_COUNT is 11 after S8');
-ok(SPECIES_KEYS.join() === 'bison,wolf,raven,pronghorn,rabbit,cougar,coyote,prairiedog,eagle,hawk,muledeer', 'SPECIES_KEYS order');
-ok(SPECIES_NAMES.join() === 'Bison,Wolf,Raven,Pronghorn,Jackrabbit,Cougar,Coyote,Prairie dog,Golden eagle,Red-tailed hawk,Mule deer', 'SPECIES_NAMES order');
+ok(SPECIES_COUNT === SPECIES.length && SPECIES_COUNT === 12, 'SPECIES_COUNT is 12 after S14');
+ok(SPECIES_KEYS.join() === 'bison,wolf,raven,pronghorn,rabbit,cougar,coyote,prairiedog,eagle,hawk,muledeer,beaver', 'SPECIES_KEYS order');
+ok(SPECIES_NAMES.join() === 'Bison,Wolf,Raven,Pronghorn,Jackrabbit,Cougar,Coyote,Prairie dog,Golden eagle,Red-tailed hawk,Mule deer,Beaver', 'SPECIES_NAMES order');
 ok(SPECIES_BY_KEY.bison.id === Sp.Bison && SPECIES_BY_KEY.wolf.id === Sp.Wolf && SPECIES_BY_KEY.raven.id === Sp.Raven, 'Sp ids match keys (1)');
 ok(SPECIES_BY_KEY.pronghorn.id === Sp.Deer && SPECIES_BY_KEY.rabbit.id === Sp.Rabbit && SPECIES_BY_KEY.cougar.id === Sp.Cougar, 'Sp ids match keys (2)');
 ok(SPECIES_BY_KEY.coyote.id === Sp.Coyote && SPECIES_BY_KEY.prairiedog.id === Sp.PrairieDog && Sp.Coyote === 6 && Sp.PrairieDog === 7, 'Sp ids match keys (3)');
 ok(SPECIES_BY_KEY.eagle.id === Sp.Eagle && SPECIES_BY_KEY.hawk.id === Sp.Hawk && Sp.Eagle === 8 && Sp.Hawk === 9, 'Sp ids match keys (4)');
 ok(SPECIES_BY_KEY.muledeer.id === Sp.MuleDeer && Sp.MuleDeer === 10, 'Sp ids match keys (5)');
+ok(SPECIES_BY_KEY.beaver.id === Sp.Beaver && Sp.Beaver === 11, 'Sp ids match keys (6)');
+ok(SPECIES[Sp.Beaver].guild === 'engineer' && SPECIES[Sp.Beaver].prey && SPECIES[Sp.Beaver].threat === 0 && SPECIES[Sp.Beaver].repr === 'agent' && !SPECIES[Sp.Beaver].core && !SPECIES[Sp.Beaver].flies, 'beaver registry entry');
+ok(isPrey(Sp.Beaver) && !isGrazer(Sp.Beaver) && !isPredator(Sp.Beaver) && !isThreat(Sp.Beaver), 'beaver is prey and nothing else');
+ok(canHunt(Sp.Wolf, Sp.Beaver) && !canHunt(Sp.Cougar, Sp.Beaver) && !canHunt(Sp.Coyote, Sp.Beaver), 'wolves hunt beavers (on land: sim.ts), nobody else does');
 ok(SPECIES[Sp.MuleDeer].guild === 'browser' && SPECIES[Sp.MuleDeer].prey && SPECIES[Sp.MuleDeer].threat === 0 && SPECIES[Sp.MuleDeer].repr === 'agent' && !SPECIES[Sp.MuleDeer].core, 'mule deer registry entry');
 ok(isGrazer(Sp.MuleDeer) && isPrey(Sp.MuleDeer) && !isPredator(Sp.MuleDeer) && !isThreat(Sp.MuleDeer), 'mule deer is a browsing prey animal');
 ok(canHunt(Sp.Wolf, Sp.MuleDeer) && canHunt(Sp.Cougar, Sp.MuleDeer) && !canHunt(Sp.Coyote, Sp.MuleDeer), 'wolves and cougars hunt mule deer');
@@ -38,13 +42,13 @@ ok(new Set(SPECIES.map((d) => d.key)).size === SPECIES.length, 'keys are unique'
 ok(SPECIES.every((d) => /^#[0-9A-Fa-f]{6}$/.test(d.color)), 'colours are hex');
 ok(DIET.length === SPECIES_COUNT && DIET.every((r) => r.length === SPECIES_COUNT), 'DIET is square');
 ok(COAT_BASE.length >= SPECIES_COUNT && COAT_RANGE.length >= SPECIES_COUNT, 'coat tables cover every species');
-ok(PARAM_PREFIX.join() === 'bison,wolf,raven,deer,rabbit,cougar,coyote,prairiedog,eagle,hawk,muledeer', 'param prefixes keep the v1 names');
+ok(PARAM_PREFIX.join() === 'bison,wolf,raven,deer,rabbit,cougar,coyote,prairiedog,eagle,hawk,muledeer,beaver', 'param prefixes keep the v1 names');
 const params = defaultParams();
 ok(params.species.length === SPECIES_COUNT, 'default params cover every species');
 ok(params.species.every((s) => s !== undefined && s.matureAge > 0), 'every species id has a params block (no matureAge of undefined)');
-ok(params.species[Sp.Coyote].maxAge === 4800 && params.species[Sp.Coyote].initial === 0 && params.species[Sp.PrairieDog].initial === 0, 'coyote and prairie dog start empty');
+ok(params.species[Sp.Coyote].maxAge === 4800 && params.species[Sp.Coyote].initial === 12 && params.species[Sp.PrairieDog].initial === 0, 'v6b: 12 coyote founders, prairie dogs start empty (their founders are the web fields)');
 ok(params.raptors === 0 && params.species[Sp.Eagle].initial === 0 && params.species[Sp.Hawk].initial === 0, 'S7 params are off by default and no raptor founders');
-ok(params.smallPrey === 0 && params.smallGameField === 0 && params.dogClip === 0 && params.dogGrazeBonus === 0, 'S4 params are off by default');
+ok(params.smallPrey === 1 && params.smallGameField === 1 && params.dogClip === 0 && params.dogGrazeBonus === 0, 'v6b: smallPrey and smallGameField are on by default, dogClip and dogGrazeBonus stay off');
 
 // roles
 ok([Sp.Bison, Sp.Deer, Sp.Rabbit].every((s) => isGrazer(s) && isPrey(s)), 'grazers are prey');
@@ -55,6 +59,7 @@ ok(!canHunt(Sp.Wolf, Sp.Raven) && !canHunt(Sp.Wolf, Sp.Cougar) && !canHunt(Sp.Bi
 
 // contract additions
 ok(St.Migrate === 11 && STATE_NAMES[St.Migrate] === 'migrating', 'St.Migrate');
+ok(St.Swim === 12 && STATE_NAMES[St.Swim] === 'swimming' && St.Build === 13 && STATE_NAMES[St.Build] === 'building', 'St.Swim and St.Build (S14)');
 ok(F_MANGE === 32 && F_MIGRANT === 64 && F_STOT === 128, 'flag bits');
 ok(AGENT_STRIDE === 12, 'snapshot stride unchanged');
 

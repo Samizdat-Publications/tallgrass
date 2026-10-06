@@ -74,7 +74,7 @@ export function encodeShare(s: ShareState): string {
   return toBase64Url(JSON.stringify(body));
 }
 
-const IV_KINDS = new Set(['cull', 'remove', 'introduce', 'drought', 'rain', 'fire', 'plague']);
+const IV_KINDS = new Set(['cull', 'remove', 'introduce', 'drought', 'rain', 'fire', 'plague', 'lightning', 'blizzard', 'flood', 'disease', 'grove']);
 
 /** Parse a share code. Throws on a code that is not one (bad base64, bad JSON, missing fields). */
 export function decodeShare(code: string): DecodedShare {

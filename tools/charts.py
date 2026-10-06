@@ -133,7 +133,7 @@ class Scenario:
         self.all_species = [c[4:] for c in first if c.startswith("pop_")]  # header order = registry order
         self.species = [k for k in self.all_species if any(f"pop_{k}" in c and c[f"pop_{k}"][0] > 0 for c in self.cols.values())]
         cols0 = next(iter(self.cols.values()), {})
-        self.trait_cols = [c for c in cols0 if c.startswith("trait_")]
+        self.trait_cols = [c for c in cols0 if c.startswith(("trait_", "coatvar_", "search_"))]  # S9 adds coat variance and the wolves' search image
 
     @property
     def n(self) -> int:
@@ -577,7 +577,7 @@ def chart_traits(sc: Scenario, saved: list[Path]):
     fig, axes = plt.subplots(nrows, ncols, figsize=(5.1 * ncols + 0.4, 2.9 * nrows + 1.0), sharex=True, squeeze=False)
     for i, c in enumerate(cols):
         ax = axes[i // ncols][i % ncols]
-        sp = next((k for k in sc.all_species if c.startswith(f"trait_{k}_")), None)
+        sp = next((k for k in sc.all_species if c.startswith((f"trait_{k}_", f"coatvar_{k}", f"search_{k}"))), None)
         col = COLOR.get(sp, INK)
         m = sc.matrix(c)
         for row in m:
@@ -590,7 +590,7 @@ def chart_traits(sc: Scenario, saved: list[Path]):
         ax.fill_between(t, q1, q3, color=col, alpha=0.22, lw=0, zorder=3)
         ax.plot(t, med, color=col, lw=1.9, zorder=4)
         draw_events(ax, sc, text=False)
-        nice = c.replace("trait_", "").replace("_", " ")
+        nice = c.replace("trait_", "").replace("coatvar_", "coat variance ").replace("search_", "coat search image ").replace("_", " ")
         ax.set_title(nice, loc="left", fontsize=10)
         ax.set_xlim(0, t[-1])
         ax.set_ylabel("population mean")

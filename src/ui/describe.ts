@@ -242,6 +242,14 @@ export function cardRank(kind: string): number {
     case 'townFounded': return 1;
     case 'eaglesArrive': return 1;
     case 'hawksReturn': return 1;
+    case 'hardWinter': return 3;
+    case 'blizzard': return 2;
+    case 'flood': return 3;
+    case 'dustStorm': return 3;
+    case 'grasshopperOutbreak': return 3;
+    case 'springFlood': return 3;
+    case 'grovePlanted': return 1;
+    case 'encroachment': return 2;
     default: return 0;
   }
 }
@@ -275,6 +283,15 @@ export function eventWeight(e: SimEvent): number {
     case 'packLost':
     case 'distemper':
     case 'mesoRelease':
+    case 'hardWinter':
+    case 'flood':
+    case 'dustStorm':
+    case 'grasshopperOutbreak':
+    case 'springFlood':
+    case 'encroachment':
+    case 'pondFilled':
+    case 'damBreached':
+    case 'beaverMeadow':
       return 3;
     case 'immigrated':
       return e.sp === 1 ? 3 : 2;
@@ -286,8 +303,12 @@ export function eventWeight(e: SimEvent): number {
     case 'hareCrash':
     case 'coyotePups':
     case 'storm':
+    case 'blizzard':
     case 'eaglesArrive':
     case 'hawksReturn':
+    case 'grovePlanted':
+    case 'damBuilt':
+    case 'colonyLeft':
       return 2;
     case 'stampede':
       return e.a >= 60 ? 3 : 1;
@@ -443,6 +464,9 @@ export function describeEvent(e: SimEvent, ctx?: DescribeContext): EventText {
       if (e.sp === 10) {
         return { sentence: pick(e, [`${cap(countWord(n))} mule deer slip down into the creek draws from the wider prairie.`, `A group of ${countWord(n)} mule deer finds the groves along the creek and stays.`]) };
       }
+      if (e.sp === 11) {
+        return { sentence: pick(e, ['A pair of beavers swims in along the creek, looking for a place to dam it.', 'Beavers come up the creek from the wider country and go looking for a stand of willows.', 'A pair of beavers arrives on the creek and starts looking over the banks.']) };
+      }
       if (e.sp === 5) {
         return { sentence: n === 2 ? 'A pair of cougars drifts in from the hills and takes up a range along the creek.' : `${cap(countWord(n))} ${n === 1 ? 'cougar arrives' : 'cougars arrive'} from the wider country.` };
       }
@@ -529,10 +553,95 @@ export function describeEvent(e: SimEvent, ctx?: DescribeContext): EventText {
     }
     case 'storm':
       return { sentence: pick(e, ['A thunderstorm rolls across the valley.', 'Thunderheads build over the rim and the storm breaks.', 'A line of storms marches across the prairie.']) };
+    case 'blizzard':
+      return {
+        sentence: pick(e, ['A blizzard blows in, and the valley disappears into white.', 'A blizzard sweeps down from the north, and the snow drives sideways across the prairie.', 'The wind rises and a blizzard closes over the valley.']),
+        card: { title: 'Blizzard', subtitle: when },
+      };
+    case 'hardWinter':
+      return {
+        sentence: pick(e, ['A hard winter settles on the valley: deep snow, bitter cold, and a long wait for the thaw.', 'The snow comes early and stays. This will be a hard winter.', 'A hard winter grips the prairie, and the grass lies buried under the drifts.']),
+        card: { title: 'A hard winter', subtitle: when },
+      };
     case 'lightningFire':
       return {
         sentence: region && region !== 'central' ? `Lightning strikes the ${region} prairie, and the grass catches.` : 'Lightning strikes the dry grass, and it catches.',
         card: { title: 'Lightning fire', subtitle: when },
+      };
+    case 'flood': {
+      const big = e.b >= 0.6;
+      return {
+        sentence: big
+          ? pick(e, ['The creek bursts its banks and the floodwater spreads across the bottomland.', 'Floodwater pours over the banks and drowns the grass along the creek.'])
+          : pick(e, ['The creek rises and spills over its banks.', 'The creek swells and the low ground by the water goes under.']),
+        card: { title: 'The creek floods', subtitle: when },
+      };
+    }
+    case 'springFlood': {
+      const big = e.b >= 0.6;
+      return {
+        sentence: big
+          ? pick(e, ['Snowmelt and rain fill the creek to the brim, and the spring flood spreads across the bottomland.', 'The spring flood comes down the creek, brown and fast, and the low ground by the water disappears.'])
+          : pick(e, ['The thaw swells the creek and the water creeps over the low ground.', 'Meltwater and rain lift the creek over its banks for a few days.']),
+        card: { title: 'Spring flood', subtitle: when },
+      };
+    }
+    case 'dustStorm': {
+      const big = e.b >= 0.8;
+      return {
+        sentence: big
+          ? pick(e, ['A wall of dust rolls across the valley, and the sun goes out behind it.', 'The wind lifts the bare ground into a brown wall, and the whole valley vanishes in dust.'])
+          : pick(e, ['Dust rises off the dry, bare ground, and the valley goes brown and hazy.', 'A dust storm blows across the thin grass, and nothing can be seen far off.']),
+        card: { title: 'Dust storm', subtitle: when },
+      };
+    }
+    case 'grasshopperOutbreak':
+      return {
+        sentence: pick(e, ['Grasshoppers hatch in their millions, and the dry grass hums and shivers with them.', 'A grasshopper outbreak sweeps the prairie, stripping the grass in the hot, dry weather.', 'Grasshoppers swarm the valley, and the ravens, hawks and coyotes feast.']),
+        card: { title: 'Grasshopper outbreak', subtitle: when },
+      };
+    case 'grovePlanted':
+      // sp -2 is a natural grove (S13: cottonwoods rooting on the flood-scoured ground); sp -1 is the one the player planted
+      if (e.sp === -2) return { sentence: pick(e, ['The floodwater leaves bare, wet ground, and a stand of cottonwood seedlings springs up along the creek.', 'Cottonwood seedlings crowd the mud the flood left behind, and a new grove begins.']) };
+      return { sentence: pick(e, ['A grove of young cottonwoods takes root on the prairie.', 'Saplings are planted, and a grove begins to rise from the grass.']) };
+    case 'encroachment':
+      return {
+        sentence: pick(e, ['Junipers are creeping up the ridges, and the open grassland is giving way to cedar.', 'Without fire, junipers spread across the ridgetops, and the prairie slowly closes in.', 'Dark junipers climb the ridges, a little farther each year.']),
+        card: { title: 'Junipers spread', subtitle: when },
+      };
+    // ---- beavers (S14): a = dam id or area, b = colony id or cause ----
+    case 'damBuilt':
+      return {
+        sentence: region && region !== 'central'
+          ? pick(e, [`Beavers wall off the creek in the ${region} reach: a dam of sticks and mud begins to rise.`, `A beaver dam takes shape across the creek on the ${region} side of the valley.`])
+          : pick(e, ['Beavers wall off the creek: a dam of sticks and mud begins to rise.', 'A beaver dam takes shape across the creek.']),
+        card: { title: 'A beaver dam', subtitle: when },
+      };
+    case 'pondFilled': {
+      const m2 = Math.max(0, Math.round(e.a));
+      const size = m2 >= 1200 ? 'a wide pond' : m2 >= 400 ? 'a pond' : 'a small pond';
+      return {
+        sentence: pick(e, [`Water backs up behind the beaver dam and ${size} spreads over the bottomland, drowning the trees at its edge.`, `The dam holds, and ${size} fills behind it. The drowned cottonwoods stand grey in the water.`, `The beaver pond is full: ${size}, still and bright, where the creek ran thin.`]),
+        card: m2 >= 400 ? { title: 'A beaver pond', subtitle: when } : undefined,
+      };
+    }
+    case 'damBreached':
+      return {
+        sentence: e.b === 0
+          ? pick(e, ['The flood tears a hole in the beaver dam, and the pond empties down the creek.', 'Floodwater breaks the beaver dam, and the pond drains away in a rush.'])
+          : pick(e, ['The beaver dam gives way, and the pond drains down the creek.', 'A beaver dam fails in the night, and the water behind it runs out.']),
+        card: { title: 'The dam breaks', subtitle: when },
+      };
+    case 'beaverMeadow':
+      return {
+        sentence: pick(e, ['The pond has drained, and a rich green meadow spreads over the old pond bed.', 'Where the beaver pond stood, only a lush meadow is left, fertile with a few years of silt.', 'The water is gone from behind the old dam, and grass comes up thick and green in the mud.']),
+        card: { title: 'A beaver meadow', subtitle: when },
+      };
+    case 'colonyLeft':
+      return {
+        sentence: e.b === 0
+          ? pick(e, ['With the trees along the creek gnawed down, the beavers leave their lodge, and the dam is left to crumble.', 'The beavers have eaten the bank bare and move on; the dam will not be mended.'])
+          : pick(e, ['The last beaver of the lodge is gone, and the dam is left to the creek.', 'The lodge falls quiet. No one is left to mend the dam.']),
       };
     default:
       return { sentence: 'Something stirs in the valley.' };

@@ -421,7 +421,7 @@ export function heightAt(w: World, x: number, y: number): number {
 }
 
 /** Two-pass chamfer distance transform (meters) from cells where src != 0. */
-function distanceTransform(src: Uint8Array, n: number, cell: number): Float32Array {
+export function distanceTransform(src: Uint8Array, n: number, cell: number): Float32Array {
   const INF = 1e9;
   const d = new Float32Array(n * n);
   for (let k = 0; k < n * n; k++) d[k] = src[k] ? 0 : INF;

@@ -1,0 +1,48 @@
+
+X0  (16 seeds, 180 valley years after burn-in)
+  dust storms per 100 years: 0.0  (seeds 0.0 to 0.0; seeds with any 0/16)
+    drought share of samples 0.033; storms per 100 drought-years 0.0; mean bare share in drought samples 0.00
+  grasshopper outbreaks per 100 years: 0.0  (seeds 0.0 to 0.0); years with an outbreak 0.00
+    hop_peak mean 0.000, highest 0.00; grass eaten 0.000 per valley year (mean-grass units)
+    energy fed per valley year: coyote 0.000, raven 0.000, hawk 0.000
+  spring floods per 100 years: 0.0  (seeds 0.0 to 0.0); young drowned per 100 years 0.0, per flood nan
+
+X1  (16 seeds, 180 valley years after burn-in)
+  dust storms per 100 years: 3.3  (seeds 1.1 to 5.6; seeds with any 16/16)
+    drought share of samples 0.033; storms per 100 drought-years 103.0; mean bare share in drought samples 0.43
+  grasshopper outbreaks per 100 years: 0.0  (seeds 0.0 to 0.0); years with an outbreak 0.00
+    hop_peak mean 0.000, highest 0.00; grass eaten 0.000 per valley year (mean-grass units)
+    energy fed per valley year: coyote 0.000, raven 0.000, hawk 0.000
+  spring floods per 100 years: 0.0  (seeds 0.0 to 0.0); young drowned per 100 years 0.0, per flood nan
+
+X2  (16 seeds, 180 valley years after burn-in)
+  dust storms per 100 years: 0.0  (seeds 0.0 to 0.0; seeds with any 0/16)
+    drought share of samples 0.033; storms per 100 drought-years 0.0; mean bare share in drought samples 0.00
+  grasshopper outbreaks per 100 years: 25.8  (seeds 19.4 to 33.9); years with an outbreak 0.26
+    hop_peak mean 0.087, highest 0.99; grass eaten 0.031 per valley year (mean-grass units)
+    energy fed per valley year: coyote 1.097, raven 1.460, hawk 0.000
+  spring floods per 100 years: 0.0  (seeds 0.0 to 0.0); young drowned per 100 years 0.0, per flood nan
+
+X3  (16 seeds, 180 valley years after burn-in)
+  dust storms per 100 years: 0.0  (seeds 0.0 to 0.0; seeds with any 0/16)
+    drought share of samples 0.033; storms per 100 drought-years 0.0; mean bare share in drought samples 0.00
+  grasshopper outbreaks per 100 years: 0.0  (seeds 0.0 to 0.0); years with an outbreak 0.00
+    hop_peak mean 0.000, highest 0.00; grass eaten 0.000 per valley year (mean-grass units)
+    energy fed per valley year: coyote 0.000, raven 0.000, hawk 0.000
+  spring floods per 100 years: 11.5  (seeds 7.8 to 16.1); young drowned per 100 years 14.2, per flood 1.26
+
+X4  (16 seeds, 180 valley years after burn-in)
+  dust storms per 100 years: 3.6  (seeds 1.7 to 6.1; seeds with any 16/16)
+    drought share of samples 0.033; storms per 100 drought-years 115.1; mean bare share in drought samples 0.63
+  grasshopper outbreaks per 100 years: 25.9  (seeds 19.4 to 33.9); years with an outbreak 0.26
+    hop_peak mean 0.087, highest 0.98; grass eaten 0.030 per valley year (mean-grass units)
+    energy fed per valley year: coyote 0.978, raven 1.604, hawk 0.000
+  spring floods per 100 years: 11.5  (seeds 7.8 to 16.1); young drowned per 100 years 15.0, per flood 1.34
+
+X5  (16 seeds, 180 valley years after burn-in)
+  dust storms per 100 years: 0.0  (seeds 0.0 to 0.0; seeds with any 0/16)
+    drought share of samples 0.033; storms per 100 drought-years 0.0; mean bare share in drought samples 0.00
+  grasshopper outbreaks per 100 years: 0.0  (seeds 0.0 to 0.0); years with an outbreak 0.00
+    hop_peak mean 0.000, highest 0.00; grass eaten 0.000 per valley year (mean-grass units)
+    energy fed per valley year: coyote 0.000, raven 0.000, hawk 0.000
+  spring floods per 100 years: 92.2  (seeds 88.3 to 95.0); young drowned per 100 years 255.0, per flood 2.76

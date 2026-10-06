@@ -49,13 +49,14 @@ ok(REACT[Sp.Bison][Sp.Coyote] === 0 && REACT[Sp.Deer][Sp.Coyote] === 0.3 && REAC
 ok(IS_CANID[Sp.Coyote] === 1 && IS_CANID[Sp.Wolf] === 1, 'coyotes are canids (distemper and mange are shared)');
 ok(near(1 - Math.pow(1 - killHazard(0.3), KILL_EVERY), 0.3, 1e-9) && killHazard(0) === 0 && killHazard(1) === 1, 'the wolf-kill hazard adds up to coyoteKilledByWolf per 20 ticks');
 
-// ---- defaults: no coyotes, columns present, nothing changes
+// ---- coyote.initial 0: no coyotes, columns present, nothing changes
 {
-  const sim = createSim({ seed: 3 });
-  ok(sim.populations()[Sp.Coyote] === 0, 'no coyotes by default');
+  ok(createSim({ seed: 3 }).populations()[Sp.Coyote] === 12, 'v6b default: 12 coyotes at the start');
+  const sim = createSim({ seed: 3, params: { 'coyote.initial': 0 } });
+  ok(sim.populations()[Sp.Coyote] === 0, 'no coyotes with coyote.initial 0');
   sim.step(300);
   const row = sim.sample();
-  for (const k of ['coyote_pairs', 'coyote_floaters', 'coyote_food', 'coyote_kills_by_wolf', 'coyote_fawns', 'coyote_mousing', 'coyote_carrion', 'coyote_litters', 'births_coyote']) ok(k in row && row[k] === 0, `default sample column ${k} is 0`);
+  for (const k of ['coyote_pairs', 'coyote_floaters', 'coyote_food', 'coyote_kills_by_wolf', 'coyote_fawns', 'coyote_mousing', 'coyote_carrion', 'coyote_litters', 'births_coyote']) ok(k in row && row[k] === 0, `coyote.initial 0: sample column ${k} is 0`);
   ok(sim.populations()[Sp.Coyote] === 0, 'still none after 300 ticks (nothing spawns them)');
 }
 

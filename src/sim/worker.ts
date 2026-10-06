@@ -92,9 +92,30 @@ export type FromWorker =
       veg?: Uint8Array;
       /** Small-prey fields (S4), 32 x 32 RGBA bytes: R jackrabbits, G prairie dogs, B town, A plague (scales in Snapshot.small). Sent with veg, only when smallPrey is on. */
       small?: Uint8Array;
+      /** Snow depth (S11), 32 x 32 bytes, 0..255 = depth 0..1, row-major by y then x. Sent with veg, only when snowDepth is on. */
+      snow?: Uint8Array;
       /** Storm cells and the strikes since the last post (only with params.stormCells); layouts in types.ts. */
       storms?: Float32Array;
       strikes?: Float32Array;
+      /** A running flood (god tool, S17): [ticks left, severity 0..1, flooded band width in m from the water]. */
+      flood?: Float32Array;
+      /** Dust storm (S12, params.dustStorms), present only while one runs: [intensity 0..1, direction rad, ticks left, front 0..1, peak]; see Snapshot.dust. */
+      dust?: Float32Array;
+      /** Grasshopper density (S12), 32 x 32 bytes, density x 255, row-major by y then x. Sent with veg, only when grasshoppers is on. */
+      hoppers?: Uint8Array;
+      /** Trees planted by the player's groves (S17), stride 4 like world.trees (x, y, height m, crown radius m), all of them; sent with veg once a grove exists. */
+      groves?: Float32Array;
+      /** Dynamic trees (S13, params.dynamicTrees): the whole tree list (stride 6: x, y, height m, crown radius m, kind, stage), sent with veg when its version changed; see Snapshot.trees. */
+      trees?: Float32Array;
+      treesVersion?: number;
+      /** The cover field of the tree list (cover x 255, n x n), sent with `trees`. */
+      treeCover?: Uint8Array;
+      /** Beaver ponds (S14): see Snapshot.ponds, dams, lodges, drownedTrees and pondVersion in types.ts. Sent with veg when the version changed. */
+      ponds?: Uint8Array;
+      dams?: Float32Array;
+      lodges?: Float32Array;
+      drownedTrees?: Uint32Array;
+      pondVersion?: number;
       /** Trait heatmap, TRAIT_GRID^2 RGBA bytes: R speed relative to the species mean (128 = average), G animal density. Sent with veg. */
       traitGrid?: Uint8Array;
       pop: number[];
@@ -116,7 +137,7 @@ export type FromWorker =
 const HISTORY_EVERY = 60;
 const VEG_EVERY_MS = 200;
 /** Events worth stopping for when the player presses "skip to the next interesting event". */
-const SKIP_KINDS = new Set(['stampede', 'packFounded', 'packLost', 'drought', 'outbreak', 'extinct', 'fire', 'elder', 'record']);
+const SKIP_KINDS = new Set(['stampede', 'packFounded', 'packLost', 'drought', 'outbreak', 'extinct', 'fire', 'elder', 'record', 'dustStorm', 'grasshopperOutbreak', 'springFlood']);
 
 let sim: Sim | null = null;
 let schedule: { tick: number; iv: Intervention }[] = [];
@@ -251,15 +272,26 @@ function post(forceVeg: boolean): void {
   const sel = selectedId !== null ? detail(selectedId) : null;
   const msg: FromWorker = {
     type: 'snap', tick: s.tick, env: s.env, count: s.count, ids: s.ids, agents: s.agents, carcassCount: s.carcassCount,
-    carcasses: s.carcasses, veg: s.veg, small: s.small, storms: s.storms, strikes: s.strikes, traitGrid: withVeg ? traitGrid() : undefined, pop: Array.from(s.pop), events, history, selected: sel,
+    carcasses: s.carcasses, veg: s.veg, small: s.small, snow: s.snow, storms: s.storms, strikes: s.strikes, flood: s.flood, dust: s.dust, hoppers: s.hoppers, groves: s.groves, trees: s.trees, treesVersion: s.treesVersion, treeCover: s.treeCover, ponds: s.ponds, dams: s.dams, lodges: s.lodges, drownedTrees: s.drownedTrees, pondVersion: s.pondVersion, traitGrid: withVeg ? traitGrid() : undefined, pop: Array.from(s.pop), events, history, selected: sel,
     selectedGone: selectedId !== null && sel === null, story: sim.story.slice(), storyId: sim.trackedId, ...packInfo(), speed: skipping ? -1 : speed, ticksPerSec, stepMs: stepMsAvg,
   };
   history = [];
   const transfer: Transferable[] = [s.ids.buffer, s.agents.buffer, s.carcasses.buffer];
   if (s.veg) transfer.push(s.veg.buffer);
   if (s.small) transfer.push(s.small.buffer);
+  if (s.snow) transfer.push(s.snow.buffer);
   if (s.storms) transfer.push(s.storms.buffer);
   if (s.strikes) transfer.push(s.strikes.buffer);
+  if (s.flood) transfer.push(s.flood.buffer);
+  if (s.dust) transfer.push(s.dust.buffer);
+  if (s.hoppers) transfer.push(s.hoppers.buffer);
+  if (s.groves) transfer.push(s.groves.buffer);
+  if (s.trees) transfer.push(s.trees.buffer);
+  if (s.treeCover) transfer.push(s.treeCover.buffer);
+  if (s.ponds) transfer.push(s.ponds.buffer);
+  if (s.dams) transfer.push(s.dams.buffer);
+  if (s.lodges) transfer.push(s.lodges.buffer);
+  if (s.drownedTrees) transfer.push(s.drownedTrees.buffer);
   ctx.postMessage(msg, transfer);
 }
 

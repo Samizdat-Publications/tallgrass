@@ -1,0 +1,17 @@
+== scratch/accept/v7a (baseline, 14 seeds, stats from year 5)
+  persistence: bison 14/14, wolf 14/14, raven 14/14, pronghorn 14/14, rabbit 14/14, cougar 13/14, coyote 14/14, prairiedog 14/14, eagle 7/14, hawk 12/14, muledeer 14/14
+  bison births per capita per year 0.55; deaths: predation 47%, starvation 39%, old age 10%
+  annual means: bison CV 0.48, median year-to-year change bison 35% pronghorn 29%
+  wolves: CV 0.26; best lag behind bison 1 yr (median corr 0.63)
+  presence (share of samples alive): bison 100%, wolf 100%, raven 100%, pronghorn 100%, rabbit 100%, cougar 97%, coyote 100%, prairiedog 91%, muledeer 99%
+  local extinctions per 1,000 yr (mean over seeds): bison 0.0, wolf 0.0, raven 0.0, pronghorn 0.0, rabbit 0.0, cougar 9.7, coyote 0.1, prairiedog 8.8, muledeer 3.6
+  years absent (median over seeds): bison 0.0, wolf 0.0, raven 0.0, pronghorn 0.0, rabbit 0.0, cougar 44.2, coyote 0.0, prairiedog 140.8, muledeer 9.2
+  immigrants / emigrants per century (mean over seeds): wolf 0.0 in, 0.0 out, pronghorn 3794.6 in, 5933.9 out, cougar 5.3 in, 0.0 out, coyote 93.4 in, 1115.0 out, prairiedog 25.8 in, 0.0 out, muledeer 452.6 in, 0.0 out
+  mule deer (S8): mean 12.3, CV of annual means 0.63; deaths: predation 23%, starvation 61%, old age 16%; cougars take 0% of all mule deer deaths
+  cougars (S8): mean 6.9, births 235.7, immigrants 5.0 per century; kills per century 7.0 (mule deer 0.7, pronghorn 4.6, bison 1.9)
+  small-prey web (S4): CV of annual means / of samples: rabbit 0.32 / 0.32, prairiedog 1.00 / 1.00
+  plagues per 100 yr: median 3.3 (per seed 3.3, 2.1, 1.4, 4.5, 2.7, 2.2, 3.3, 3.7, 2.1, 2.4, 4.8, 6.0, 3.3, 4.7); mean towns 0.9; towns founded per 100 yr 17.6; hare booms 4.2 and crashes 3.8 per 100 yr
+  coyotes (S5): mean 56.7, CV of samples 0.39, of annual means 0.39; hare CV 0.32 (annual means 0.32)
+    coyotes follow hares: best corr on half-year means at 0.5 to 2 yr median 0.38 (lag 0.5 yr; 6/14 seeds at 0.4 or more); annual means 0.38
+    per year: pairs with a den (mean) 8.6, births 28.9, fawns taken 4.8, killed by wolves 0.10
+  vagrant ravens: mean 259.5, max 373; arrivals 10376.5 and departures 0.0 per century

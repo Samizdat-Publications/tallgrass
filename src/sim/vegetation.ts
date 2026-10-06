@@ -19,6 +19,8 @@ export class Vegetation {
   /** 0 none; (0, 1] ash fading; > 1 burning (value - 1 = remaining burn fraction). */
   burn: Float32Array;
   burningCells = 0;
+  /** Beaver ponds (S14): 0..1 per cell, how much of a drought's cut in growth and its dieback the cell escapes (the greener bank of a pond). Null until a pond exists. */
+  droughtShield: Float32Array | null = null;
   private landCells: number;
 
   constructor(private w: World, private p: Params, private env: Environment, private rng: Rng) {
@@ -39,6 +41,14 @@ export class Vegetation {
       this.browse[c] = this.browseK[c] * 0.8;
       if (!w.water[c]) land++;
     }
+    this.landCells = land;
+  }
+
+  /** The water mask changed (beaver ponds fill and drain): count the land cells again, for the means. */
+  recountLand(): void {
+    const wat = this.w.water;
+    let land = 0;
+    for (let c = 0; c < wat.length; c++) if (!wat[c]) land++;
     this.landCells = land;
   }
 
@@ -68,7 +78,9 @@ export class Vegetation {
     const rGrow = p.grassGrowth * gf;
     // drought refuges (off at 0): the growth the season would give without the drought, for the wettest cells
     const refuge = drought ? p.droughtRefuge : 0;
-    const rFree = refuge > 0 ? rGrow / Math.max(0.05, 1 - this.env.droughtSeverity) : rGrow;
+    const shield = drought ? this.droughtShield : null;
+    const free = refuge > 0 || shield !== null;
+    const rFree = free ? rGrow / Math.max(0.05, 1 - this.env.droughtSeverity) : rGrow;
     const seed = p.grassSeedFloor * gf;
     const fearKeep = 1 - p.fearDecay * dt;
     const windDir = this.env.state.windDir, windS = this.env.state.windStrength;
@@ -101,10 +113,11 @@ export class Vegetation {
         }
         const moist = 0.55 + 0.9 * w.moisture[c];
         let rg = rGrow, dieF = 0.7;
-        if (refuge > 0) {
-          // 0 on the uplands, up to the refuge share on the wettest ground by the water
+        if (free) {
+          // 0 on the uplands, up to the refuge share on the wettest ground by the water; a beaver pond's bank (S14) escapes by its own shield
           const m = w.moisture[c];
-          const wet = refuge * (m <= 0.55 ? 0 : m >= 0.85 ? 1 : ((m - 0.55) / 0.3) * ((m - 0.55) / 0.3) * (3 - 2 * ((m - 0.55) / 0.3)));
+          let wet = refuge > 0 ? refuge * (m <= 0.55 ? 0 : m >= 0.85 ? 1 : ((m - 0.55) / 0.3) * ((m - 0.55) / 0.3) * (3 - 2 * ((m - 0.55) / 0.3))) : 0;
+          if (shield !== null && shield[c] > wet) wet = shield[c];
           rg = rGrow + (rFree - rGrow) * wet;
           dieF = 0.7 * (1 - wet);
         }
@@ -144,21 +157,24 @@ export class Vegetation {
       const len = k < 4 ? 1 : Math.SQRT2;
       const align = (di * wx + dj * wy) / len;
       const dry = 1 - 0.6 * this.w.moisture[c];
-      const pr = Math.min(0.95, 0.22 * (STRIDE / 8) * seasonDry * dry * Math.min(1, fuel * 1.6) * Math.max(0.15, 1 + 1.8 * windS * align) / len);
+      const pr = Math.min(0.95, this.p.fireSpread * 0.22 * (STRIDE / 8) * seasonDry * dry * Math.min(1, fuel * 1.6) * Math.max(0.15, 1 + 1.8 * windS * align) / len);
       if (this.rng.next() < pr) this.burn[c] = 2;
     }
   }
 
-  ignite(x: number, y: number, r: number): void {
+  /** Set the land cells within r of (x, y) burning. Returns how many caught. */
+  ignite(x: number, y: number, r: number): number {
     const n = this.n, cell = this.cell;
+    let lit = 0;
     const i0 = Math.max(0, Math.floor((x - r) / cell)), i1 = Math.min(n - 1, Math.floor((x + r) / cell));
     const j0 = Math.max(0, Math.floor((y - r) / cell)), j1 = Math.min(n - 1, Math.floor((y + r) / cell));
     for (let j = j0; j <= j1; j++) {
       for (let i = i0; i <= i1; i++) {
         const c = j * n + i;
-        if (!this.w.water[c] && Math.hypot((i + 0.5) * cell - x, (j + 0.5) * cell - y) <= r) this.burn[c] = 2;
+        if (!this.w.water[c] && Math.hypot((i + 0.5) * cell - x, (j + 0.5) * cell - y) <= r) { this.burn[c] = 2; lit++; }
       }
     }
+    return lit;
   }
 
   /** Add to a field in a disc with linear falloff. */

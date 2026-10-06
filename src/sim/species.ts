@@ -4,7 +4,7 @@
 // ambush) stays keyed on `Sp` in sim.ts. This file imports nothing, so types.ts can derive from it.
 //
 // Fixed ids, shared by both tracks: Bison 0, Wolf 1, Raven 2, Pronghorn 3, Rabbit 4 (the jackrabbit), Cougar 5,
-// Coyote 6, PrairieDog 7, Eagle 8, Hawk 9 (S7), MuleDeer 10 (S8). Later work packages append Beaver 11.
+// Coyote 6, PrairieDog 7, Eagle 8, Hawk 9 (S7), MuleDeer 10 (S8), Beaver 11 (S14).
 
 export interface SpeciesDef {
   id: number;
@@ -50,6 +50,9 @@ export const SPECIES: SpeciesDef[] = [
   // Mule deer (S8): a browser of the creek corridor and the groves (src/sim/sp/muledeer.ts). Lives in groups of 3 to 10, hides its fawns, flees in a
   // stotting gait (F_STOT). Wolves and cougars hunt it, coyotes take its hidden fawns. No heritable traits in the history rows, not core.
   { id: 10, key: 'muledeer', name: 'Mule deer', plural: 'Mule deer', repr: 'agent', guild: 'browser', prey: true, threat: 0, flies: false, traits: false, core: false, color: '#9AA37E' },
+  // Beaver (S14): an ecosystem engineer of the creek (src/sim/sp/beaver.ts, src/sim/ponds.ts). Lives in colonies, dams the creek, swims, gnaws the trees and
+  // shrubs near the water; wolves take it on land (prey, so it is in the prey grid), never in the water. Not a grazer, not a threat, not core.
+  { id: 11, key: 'beaver', name: 'Beaver', plural: 'Beavers', repr: 'agent', guild: 'engineer', prey: true, threat: 0, flies: false, traits: false, core: false, color: '#8E6B3E' },
 ];
 
 /** Number of species ids in play. */
@@ -62,7 +65,7 @@ export const REGISTRY_COUNT = SPECIES.length;
 export const DIET: number[][] = (() => {
   const d: number[][] = SPECIES.map(() => SPECIES.map(() => 0));
   const hunts = (pred: number, prey: number[], w = 1): void => { for (const p of prey) d[pred][p] = w; };
-  hunts(1, [0, 3, 4, 10]); // wolf: bison, pronghorn, rabbit, mule deer
+  hunts(1, [0, 3, 4, 10, 11]); // wolf: bison, pronghorn, rabbit, mule deer, beaver (on land only)
   // cougar (S8): mule deer first, pronghorn second, bison (in practice the calves: an adult is far too tough) a poor third
   hunts(5, [10], 1);
   hunts(5, [3], 0.7);
@@ -111,9 +114,9 @@ export function canHunt(predator: number, prey: number): boolean {
 }
 
 /** Base coat darkness of a new founder, by species id (0 pale .. 1 dark). Species not listed use 0.5. */
-export const COAT_BASE: number[] = [0.85, 0.3, 0.97, 0.5, 0.5, 0.5, 0.45, 0.5, 0.8, 0.55, 0.55];
+export const COAT_BASE: number[] = [0.85, 0.3, 0.97, 0.5, 0.5, 0.5, 0.45, 0.5, 0.8, 0.55, 0.55, 0.7];
 /** Coat darkness stays within a species' believable range (bison stay dark, wolves stay pale). Unlisted species use [0, 1]. */
-export const COAT_RANGE: [number, number][] = [[0.62, 1], [0.05, 0.65], [0.85, 1], [0.2, 0.8], [0.2, 0.8], [0.15, 0.6], [0.25, 0.7], [0.2, 0.8], [0.6, 1], [0.3, 0.8], [0.25, 0.8]];
+export const COAT_RANGE: [number, number][] = [[0.62, 1], [0.05, 0.65], [0.85, 1], [0.2, 0.8], [0.2, 0.8], [0.15, 0.6], [0.25, 0.7], [0.2, 0.8], [0.6, 1], [0.3, 0.8], [0.25, 0.8], [0.45, 0.9]];
 
 /** Prefix used for per-species param overrides ("bison.metabolism"). Pronghorn keeps its v1 prefix "deer". */
 export const PARAM_PREFIX: string[] = SPECIES.map((s) => (s.key === 'pronghorn' ? 'deer' : s.key));

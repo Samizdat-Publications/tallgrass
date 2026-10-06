@@ -3,6 +3,7 @@
 // Thresholds were tuned on headless runs of each challenge with no interventions (see DECISIONS.md), so that
 // leaving the valley alone usually fails and a few well-timed tools can save it.
 import { BASE_YEAR_TICKS, Sp, YEAR_TICKS } from './sim/types';
+import { COUGAR_WORLD, MESO_PARAMS, PLAGUETOWN_PARAMS, STORM_PARAMS } from './scenarios';
 
 export interface ChallengeState {
   /** Valley years since the start (fractional). */
@@ -42,7 +43,10 @@ export interface Challenge {
   makeCheck(): (s: ChallengeState) => ChallengeStatus;
 }
 
-const NAMES: Record<number, string> = { [Sp.Bison]: 'bison', [Sp.Wolf]: 'wolves', [Sp.Raven]: 'ravens', [Sp.Deer]: 'pronghorn' };
+const NAMES: Record<number, string> = {
+  [Sp.Bison]: 'bison', [Sp.Wolf]: 'wolves', [Sp.Raven]: 'ravens', [Sp.Deer]: 'pronghorn',
+  [Sp.Rabbit]: 'jackrabbits', [Sp.Cougar]: 'cougars', [Sp.Coyote]: 'coyotes', [Sp.PrairieDog]: 'prairie dogs', [Sp.MuleDeer]: 'mule deer',
+};
 const CORE = [Sp.Bison, Sp.Wolf, Sp.Raven, Sp.Deer];
 
 const yr = (y: number) => Math.floor(y) + 1;
@@ -61,8 +65,8 @@ export const CHALLENGE_PIN: Record<string, number> = {
   wolfPreyRef: 0, wolfRareHalf: 150, leanLitter: 0,
   // small-prey web (S4) and coyotes (S5)
   smallPrey: 0, smallGameField: 0, dogClip: 0, dogGrazeBonus: 0, 'coyote.initial': 0,
-  // storms (S6)
-  stormCells: 0,
+  // storms (S6), fire spread and summer dry spells (S17)
+  stormCells: 0, fireSpread: 1, summerDroughtP: 0.1,
 };
 /** The calendar the challenges were tuned on, with every v2 mechanism pinned off. */
 const CLASSIC = { calendarScale: 1, ...CHALLENGE_PIN };
@@ -175,6 +179,93 @@ export const CHALLENGES: Challenge[] = [
         if (lost) return { state: 'lost', progress: lost, reason: lost };
         if (s.year >= Y(20)) return { state: 'won', progress: 'The rains came back, and so did everyone.', reason: `Every species outlasted ${Y(20)} dry years.` };
         return { state: 'running', progress: `Year ${yr(s.year)} of ${Y(20)}. All four species alive.` };
+      };
+    },
+  },
+  // ---- S17 challenges (tuned on tools/challenge_suite.py; worlds in src/scenarios.ts) ----
+  {
+    id: 'meso',
+    name: 'Mesopredator release',
+    blurb: 'The wolves are trapped out in year 2 and the coyotes, long-lived and unchecked, multiply. Left alone they will eat the hares, the prairie dogs and the pronghorn fawns. Rebalance the valley.',
+    get goals() { return [`Fewer than 100 coyotes from year ${Y(4)} on, and at least 15 prairie dogs from year ${Y(5)}`, `Survive ${Y(12)} years`, 'At most 6 interventions']; },
+    seed: '3', scenario: 'meso', get years() { return Y(12); }, maxTools: 6, params: { ...CLASSIC, ...MESO_PARAMS },
+    makeCheck() {
+      return (s) => {
+        const hares = s.pop[Sp.Rabbit], coy = s.pop[Sp.Coyote];
+        if (s.year >= Y(4) && coy >= 100) {
+          const r = `The coyotes ran away with the valley: ${coy} of them in year ${yr(s.year)}, and ${hares.toLocaleString()} jackrabbits left.`;
+          return { state: 'lost', progress: r, reason: r };
+        }
+        if (s.year >= Y(5) && s.pop[Sp.PrairieDog] < 15) {
+          const r = `The prairie dog towns were gone by year ${yr(s.year)}, with ${coy} coyotes in the valley.`;
+          return { state: 'lost', progress: r, reason: r };
+        }
+        if (s.year >= Y(12)) return { state: 'won', progress: 'The coyotes are back in their place.', reason: `${Y(12)} years, with ${coy} coyotes and ${s.pop[Sp.PrairieDog]} prairie dogs.` };
+        return { state: 'running', progress: `Year ${yr(s.year)} of ${Y(12)}. ${coy} coyotes (under 100), ${hares.toLocaleString()} jackrabbits, ${s.pop[Sp.PrairieDog]} prairie dogs.` };
+      };
+    },
+  },
+  {
+    id: 'town',
+    name: 'The town that came back',
+    blurb: 'Plague has wiped out the prairie dog towns, and in this closed valley nothing returns on its own. Bring a town back before the next plague, in year 6.',
+    get goals() { return [`At least 80 prairie dogs at year ${Y(10)}`, 'Never fewer than 10 once the first are back', 'At most 6 interventions']; },
+    seed: '5', scenario: 'plaguetown', get years() { return Y(10); }, maxTools: 6, params: { ...CLASSIC, ...PLAGUETOWN_PARAMS },
+    makeCheck() {
+      let back = false;
+      return (s) => {
+        const d = s.pop[Sp.PrairieDog];
+        if (d >= 10 && s.year >= Y(1)) back = true;
+        if (s.year >= Y(1.5) && !back) {
+          const r = 'No prairie dogs came back, and the plains stayed empty.';
+          return { state: 'lost', progress: r, reason: r };
+        }
+        if (back && d < 10) {
+          const r = `The town died out again in year ${yr(s.year)}.`;
+          return { state: 'lost', progress: r, reason: r };
+        }
+        if (s.year >= Y(10)) {
+          if (d >= 80) return { state: 'won', progress: 'The town is back.', reason: `${d} prairie dogs at year ${Y(10)}, after two plagues.` };
+          const r = `Only ${d} prairie dogs at year ${Y(10)}.`;
+          return { state: 'lost', progress: r, reason: r };
+        }
+        return { state: 'running', progress: `Year ${yr(s.year)} of ${Y(10)}. ${d.toLocaleString()} prairie dogs${s.year < Y(1.5) ? '; use Add prairie dogs to start' : ', 80 needed'}.` };
+      };
+    },
+  },
+  {
+    id: 'storm',
+    name: 'Storm season',
+    get blurb() { return `Every late summer from year ${Y(1) + 1}, dry lightning rakes the valley and the grass fires run fast. Five storm seasons in a row. Carry every species through ${Y(10)} years.`; },
+    get goals() { return [`Bison, wolves, ravens and pronghorn all alive at year ${Y(10)}`, 'At most 5 interventions']; },
+    seed: '4', scenario: 'stormseason', get years() { return Y(10); }, maxTools: 5, params: { ...CLASSIC, ...STORM_PARAMS },
+    makeCheck() {
+      const guard = extinctionGuard(CORE);
+      return (s) => {
+        const lost = guard(s);
+        if (lost) return { state: 'lost', progress: lost, reason: lost };
+        if (s.year >= Y(10)) return { state: 'won', progress: 'The storms have passed.', reason: `Every species outlasted ${Y(10)} storm seasons.` };
+        return { state: 'running', progress: `Year ${yr(s.year)} of ${Y(10)}. All four species alive.` };
+      };
+    },
+  },
+  {
+    id: 'cats',
+    name: 'Cat country',
+    blurb: 'Six cougars hunt the creek groves and sixty mule deer browse them. In a closed valley the cats and the deer take turns dying out. Keep both alive.',
+    get goals() { return [`Cougars and mule deer both alive at year ${Y(12)}`, 'At least 3 cougars at the end', 'At most 5 interventions']; },
+    seed: '1', scenario: 'cougars', get years() { return Y(12); }, maxTools: 5, params: { ...CLASSIC, ...COUGAR_WORLD },
+    makeCheck() {
+      const guard = extinctionGuard([Sp.Cougar, Sp.MuleDeer]);
+      return (s) => {
+        const lost = guard(s);
+        if (lost) return { state: 'lost', progress: lost, reason: lost };
+        if (s.year >= Y(12)) {
+          if (s.pop[Sp.Cougar] >= 3) return { state: 'won', progress: 'Cats and deer, still here.', reason: `${s.pop[Sp.Cougar]} cougars and ${s.pop[Sp.MuleDeer]} mule deer at year ${Y(12)}.` };
+          const r = `Only ${s.pop[Sp.Cougar]} cougars were left at year ${Y(12)}.`;
+          return { state: 'lost', progress: r, reason: r };
+        }
+        return { state: 'running', progress: `Year ${yr(s.year)} of ${Y(12)}. ${s.pop[Sp.Cougar]} cougars, ${s.pop[Sp.MuleDeer]} mule deer.` };
       };
     },
   },

@@ -1,0 +1,33 @@
+
+T0  (16 seeds, 200 valley years)
+  at                           0%      25%      50%      75%     100%
+  cover (mean of land)      0.0353   0.0353   0.0353   0.0353   0.0353 
+  (dynamicTrees is off in this screen)
+
+T1  (16 seeds, 200 valley years)
+  at                           0%      25%      50%      75%     100%
+  cottonwoods, all             201      216      197      143      113 
+  cw+oak mature+young          200      214      194      137      105 
+  junipers, all                  7       70      375      793     1019 
+  snags                          0        0       16       21       12 
+  cover (mean of land)      0.0353   0.0368   0.0350   0.0291   0.0293 
+  cottonwood (and oak) persistence: 16/16 seeds keep > 25% of their start; end/start ratio mean 0.53, lowest 0.37, highest 0.72
+  junipers at the end: mean 1019, highest seed 1073; ridge share mean 0.0469, highest seed 0.0498, highest of any sample 0.0513
+  encroachment events per seed: mean 1.00; seeds with any 16/16
+  recruits per 100 valley years: cottonwood 87.5, juniper 4072.7
+  deaths per 100 valley years: fire small 0.0, fire mature 0.0, old age 83.0, seedling and sapling hazards 3610.8
+  mean browse slowdown of seedlings and saplings: 0.026
+
+T2  (16 seeds, 200 valley years)
+  at                           0%      25%      50%      75%     100%
+  cottonwoods, all             202      234      222      180      168 
+  cw+oak mature+young          200      226      213      169      153 
+  junipers, all                  7       54      269      692      938 
+  snags                          0        0       17       21       13 
+  cover (mean of land)      0.0353   0.0381   0.0375   0.0327   0.0345 
+  cottonwood (and oak) persistence: 16/16 seeds keep > 25% of their start; end/start ratio mean 0.77, lowest 0.56, highest 0.98
+  junipers at the end: mean 938, highest seed 1044; ridge share mean 0.0433, highest seed 0.0481, highest of any sample 0.0492
+  encroachment events per seed: mean 1.00; seeds with any 16/16
+  recruits per 100 valley years: cottonwood 173.5, juniper 3742.5
+  deaths per 100 valley years: fire small 45.0, fire mature 3.7, old age 81.0, seedling and sapling hazards 3333.7
+  mean browse slowdown of seedlings and saplings: 0.026

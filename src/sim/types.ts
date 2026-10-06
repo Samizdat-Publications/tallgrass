@@ -13,6 +13,7 @@ export const Sp = {
   Eagle: 8,
   Hawk: 9,
   MuleDeer: 10,
+  Beaver: 11,
 } as const;
 export type Sp = (typeof Sp)[keyof typeof Sp];
 // Derived from the registry in species.ts. Keep the `Sp` ids above in step with SPECIES[].id.
@@ -34,9 +35,13 @@ export const St = {
   Fly: 9,
   Stalk: 10,
   Migrate: 11,
+  /** Beaver (S14): moving through water (a swimming animal; the renderer draws the swimming gait and the wake). */
+  Swim: 12,
+  /** Beaver (S14): working on the dam or the lodge (carrying and packing sticks and mud). Gnawing a tree is St.Graze. */
+  Build: 13,
 } as const;
 export type St = (typeof St)[keyof typeof St];
-export const STATE_NAMES = ['idle', 'grazing', 'walking', 'running', 'fleeing', 'chasing', 'feeding', 'drinking', 'resting', 'flying', 'stalking', 'migrating'];
+export const STATE_NAMES = ['idle', 'grazing', 'walking', 'running', 'fleeing', 'chasing', 'feeding', 'drinking', 'resting', 'flying', 'stalking', 'migrating', 'swimming', 'building'];
 
 /** Flag bits in the agent snapshot. */
 export const F_JUVENILE = 1;
@@ -116,6 +121,47 @@ export interface Snapshot {
   storms?: Float32Array;
   /** Lightning strikes since the last snapshot, STRIKE_STRIDE (4) floats each: x, y, tick, ignited (0 or 1). */
   strikes?: Float32Array;
+  /** Snow depth (S11, params.snowDepth), 32 x 32 coarse cells (16 m) like `small`, bytes row-major by y then x: 0..255 = depth 0..1.
+   *  Present only when snowDepth is on and the snapshot carries the vegetation texture. */
+  snow?: Uint8Array;
+  /** Flood (S17 god tool): present only while a flood is running. [ticks left, severity 0..1, flooded band width in m]: every land cell whose
+   *  `world.waterDist` is within the band width is under water. */
+  flood?: Float32Array;
+  /** Grove trees planted by the player (S17), stride 4 like `world.trees` (x, y, height m, crown radius m), all of them, in planting order.
+   *  Present on snapshots that carry the vegetation texture, once at least one grove exists. They are NOT in the renderer's own world.trees. */
+  groves?: Float32Array;
+  /** Dust storm (S12, params.dustStorms): present only while a storm runs. DUST_STRIDE (5) floats: [intensity 0..1, direction the dust travels (rad, 0 = +x, CCW toward +y),
+   *  ticks left, front 0..1 (how far the leading wall has crossed the valley along the direction; 1 once across, reached in the first quarter of the storm), peak intensity]. */
+  dust?: Float32Array;
+  /** Grasshopper density (S12, params.grasshoppers), 32 x 32 coarse cells (16 m) like `snow`, bytes row-major by y then x: density x 255 (1 = a severe outbreak; an
+   *  ordinary summer is 10 to 25). Present only when grasshoppers is on and the snapshot carries the vegetation texture. */
+  hoppers?: Uint8Array;
+  /** Dynamic trees (S13, params.dynamicTrees), the sim's whole tree list: TREE_STRIDE (6) floats per slot, [x, y, height m, crown radius m, kind, stage].
+   *  Slot index = tree id; slots 0 .. N0-1 are the world's own `world.trees` in the same order (the renderer's static list), later slots are new trees or reused
+   *  free slots. kind: 0 cottonwood, 1 juniper, 2 bur oak (draw as a cottonwood). stage: 0 seedling, 1 sapling, 2 young, 3 mature, 4 snag (dead and standing: draw
+   *  charred, no crown), 5 gone (the slot is free: remove the tree; height and radius are 0). Sent with the vegetation texture whenever `treesVersion` changed since
+   *  the last snapshot that carried it (every season, and at once when a fire kills trees or a grove is planted). When present, `groves` is not sent (the
+   *  planted trees are in this list). Diff by slot against what you drew. */
+  trees?: Float32Array;
+  /** Bumped every time the tree list was rebuilt. Present on every snapshot while dynamicTrees is on (and `trees` rides along with the changed ones). */
+  treesVersion?: number;
+  /** The cover field the list makes (shrubs and tree crowns, cover x 255), n x n like `veg`, row-major by y then x. Sent together with `trees`. */
+  treeCover?: Uint8Array;
+  /**
+   * Beaver ponds (S14, params.beavers or beaver.initial). `pondVersion` is on every snapshot while the beaver system is on and is bumped whenever any of the next four changed;
+   * they ride along (with the vegetation texture) in the first snapshot after a bump. Diff by version, redraw the pond surfaces when it moves.
+   *  ponds:  n x n bytes (256 x 256, 2 m cells, row-major by y then x like `veg`): extra water depth in centimetres, 0 = none, 255 = 2.55 m or more. The water surface
+   *          of a cell is the terrain height there (the renderer's own, unchanged) plus depth / 100; the deepened creek is included, not only new water.
+   *  dams:   DAM_STRIDE (8) floats per dam: x, y (m, on the creek), crest (m, 0 to 1.4), state (0 building, 1 holding, 2 breached and draining, 3 abandoned and decaying),
+   *          angle (rad, along the dam wall, across the creek), length (m), level (the pond surface elevation, absolute metres), colony id.
+   *  lodges: stride 4: x, y (in the water above the dam), size 0..1 (members / 8), 1 if the colony still lives there.
+   *  drownedTrees: indices into the renderer's static `world.trees` (stride 4) of the trees the ponds drowned (only with dynamicTrees off; with it on the snags are in `trees`).
+   */
+  ponds?: Uint8Array;
+  dams?: Float32Array;
+  lodges?: Float32Array;
+  drownedTrees?: Uint32Array;
+  pondVersion?: number;
 }
 
 /** Ticks per second of real time at 1x speed. */
@@ -141,7 +187,17 @@ export type Intervention =
   | { kind: 'drought'; ticks: number; severity: number }
   | { kind: 'rain'; ticks: number }
   | { kind: 'fire'; x: number; y: number }
-  | { kind: 'plague'; species: number; fraction: number };
+  | { kind: 'plague'; species: number; fraction: number }
+  /** God tools v2 (S17). A lightning bolt at a point: sets the grass alight (not over water) and kills what stands within 3 m. */
+  | { kind: 'lightning'; x: number; y: number }
+  /** A blizzard for `ticks` (a deep snowfall when snowDepth is on, always a snow spell, high wind and a cold drain on every animal). */
+  | { kind: 'blizzard'; ticks: number }
+  /** The creek and ponds flood for `ticks`: the banks within 12 + 38 x severity m of water drown their grass, animals are pushed out, silt feeds the soil after. */
+  | { kind: 'flood'; ticks: number; severity: number }
+  /** A targeted outbreak: 'fever' infects a fraction of `species` (default bison), 'distemper' a fraction of wolves or coyotes (default wolves), 'plague' is sylvatic plague in the prairie dog towns. */
+  | { kind: 'disease'; disease: 'fever' | 'distemper' | 'plague'; species?: number; fraction?: number }
+  /** Plant a grove: tree cover, browse and trees in a disc (radius clamped to 6..40 m). */
+  | { kind: 'grove'; x: number; y: number; radius: number };
 
 /**
  * What the headless harness needs from a simulation. src/sim/sim.ts exports

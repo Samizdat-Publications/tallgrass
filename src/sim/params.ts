@@ -45,13 +45,16 @@ export interface SpeciesParams {
   hideAge: number;
   /** Most young per birth, however the litter gene evolves (bison almost never twin). */
   maxLitter: number;
+  /** Extra metabolism while running for a fast build (0 = off), for this species: x (1 + sprintCost * (speed^2 - 1)).
+   *  Where this is 0 the global `sprintCost` below applies (S9). */
+  sprintCost: number;
 }
 
 const base = (o: Partial<SpeciesParams>): SpeciesParams => ({
   maxAge: 3000, matureAge: 500, gestation: 150, birthCooldown: 400, litter: 1,
   walkSpeed: 1.4, runSpeed: 9, stamina: 120, sight: 35, metabolism: 1 / 1200, thirst: 1 / 900,
   bite: 0.006, foodValue: 0.42, meat: 1, toughness: 1, initial: 0, herdRadius: 12,
-  wariness: 0.4, defense: 0, camo: 0.5, diet: 0, hideAge: 0, maxLitter: 99,
+  wariness: 0.4, defense: 0, camo: 0.5, diet: 0, hideAge: 0, maxLitter: 99, sprintCost: 0,
   ...o,
 });
 
@@ -95,6 +98,12 @@ export interface Params {
   matingWindow: number;
   /** If > 0, grazing and resting herbivores keep within this many metres of their nearest herd-mate instead of drifting to the herd centre (0 = centre). */
   herdNearest: number;
+  /** If > 0, only this share of the shore (0.6 to 0.8 are the screened values) is a drinking place, in seeded 40 m blocks, so thirsty grazers gather at a few spots
+   *  instead of ringing every pond; a grazer that has drunk its fill also drifts back off the bank. 0 = off: any shore is a drinking place. */
+  drinkSpots: number;
+  /** If > 0, personal space while grazing: a grazing herbivore keeps this multiple of the usual separation (spacing and range) from herd-mates,
+   *  and its cohesion pull is divided by the same factor, so the herd spreads out over the patch (1.6 is the screened value). 0 = off (1 would match the old spacing). */
+  herdSpacingGraze: number;
   /** Amplitude of the slow climate cycle on grass growth (0 = off; 0.3 = +/-30%). */
   climateAmp: number;
   /** Shortens the valley year k-fold (1 = 2,400-tick years). Biology per tick is unchanged, so animals live k times as
@@ -108,6 +117,17 @@ export interface Params {
   /** Extra metabolism while running for a fast build (0 = off): x (1 + sprintCost * (speed^2 - 1)), so a fast gene pays in
    *  every chase and a slow one saves. Meant to stop speed running to its limit within a century. */
   sprintCost: number;
+  /** Master switch for Evolution v2 (S9; 0 = off). When 1, every evolution param below that the caller did not set takes
+   *  the plan's value: per-species sprintCost (bison 0.2, pronghorn 0.05, wolf 0.15, coyote 0.1), bison maxLitter 1,
+   *  herdEyes 1.5 and the wolf coat search image (coatSearch 1). Explicit overrides win, so single parts can be screened. */
+  evolution2: number;
+  /** Wolf coat search image (S9; 0 = off). Each pack keeps, for every prey species, an image of the coat it last killed. */
+  coatSearch: number;
+  /** How far the image moves toward the coat of each kill: image += rate x (coat - image). The first kill sets it. */
+  coatSearchRate: number;
+  /** A prey animal whose coat is within coatSearchWindow of its pack's image is noticed from coatSearchBoost x as far. */
+  coatSearchBoost: number;
+  coatSearchWindow: number;
   /** Herd-minded animals heed their neighbours' alarm more (0 = off): the many-eyes vigilance from neighbours is scaled by
    *  1 + herdEyes * (herding gene - 1), so herding pays against wolves instead of fading. */
   herdEyes: number;
@@ -227,6 +247,40 @@ export interface Params {
   /** With openPrairie on, each spring a group of this many walks in when fewer than muledeerRescueBelow mule deer live here (0 = never). */
   muledeerRescue: number;
   muledeerRescueBelow: number;
+  // beavers (S14, src/sim/sp/beaver.ts and src/sim/ponds.ts): the whole system is off unless `beavers` is above 0 or `beaver.initial` puts founders in the valley.
+  /** Master switch (0 = off). On, new colonies can found themselves on free creek reaches (the founders' dispersers; with openPrairie also pairs arriving from outside) and the god tool works. */
+  beavers: number;
+  /** Colony site: willow or cottonwood food within this many metres of the dam (the food index counts trees within it, shrubs at 0.35). */
+  beaverFoodRadius: number;
+  /** A colony is founded only where the food index is at least this (about this many trees within the radius). */
+  beaverFoodMin: number;
+  /** Colonies and dams keep at least this far (m) apart along the creek. */
+  beaverSpacing: number;
+  /** Founders per colony when `beaver.initial` places them: a breeding pair and yearlings (2 to 6). */
+  beaverColonySize: number;
+  /** The dam crest rises this many metres per season (SEASON_TICKS) while a colony works on it, up to beaverCrestMax. */
+  beaverCrestRate: number;
+  beaverCrestMax: number;
+  /** Food: trees a beaver fells per base year (2,400 ticks), the share of the gap to the full stand that grows back per base year, and the share of the stand left below which the colony moves on. */
+  beaverFoodRate: number;
+  beaverRegrow: number;
+  beaverFoodLeave: number;
+  /** A dam breaches in a flood with chance beaverBreachP x severity x (crest / max crest), and on its own with this chance per valley year. */
+  beaverBreachP: number;
+  beaverBreachYear: number;
+  /** An abandoned dam decays over a random 2 to 4 valley years (min and max) back to nothing, and the pond drains into the meadow. */
+  beaverDecayMin: number;
+  beaverDecayMax: number;
+  /** Greener ribbon: moisture added at the pond's edge (fades to 0 at 30 m), the share of a drought's cut in growth it escapes there, and the meadow's capacity bonus and how many valley years it lasts. */
+  beaverMoisture: number;
+  beaverShield: number;
+  beaverMeadowCap: number;
+  beaverMeadowYears: number;
+  /** Chance per base year that a pair of beavers arrives from outside the valley (needs openPrairie and a free site). */
+  beaverArrival: number;
+  /** Swimming speed (m/s) and how far (m) a beaver wanders from the water to gnaw. */
+  beaverSwim: number;
+  beaverRange: number;
   /** Rate per base year at which a pair of cougars walks in from the wider prairie while fewer than two live here, once cougars have lived here (needs openPrairie; 0 = never). */
   cougarInRate: number;
   /** Storm cells and lightning (0 = off). On, thunderstorm days send cells across the valley; dry lightning can start
@@ -236,6 +290,103 @@ export interface Params {
   lightningRate: number;
   /** Chance a strike in dry, cured grass (season 1.4 to 3.1, grass above 0.3, rain below 0.35) starts a fire. */
   lightningIgnite: number;
+  /** How readily a grass fire spreads to its neighbours, as a multiple of the screened rate (1 = as before; S17 Storm season uses 3 to 4). */
+  fireSpread: number;
+  /** Winter (S11, winter.ts; 0 = off). On, snow builds a depth field on the coarse grid (it drifts into hollows and melts with warmth),
+   *  the grazers lose food to it, moving costs more and wolves kill more easily; `blizzard` and `hardWinter` events fire. The value
+   *  scales how much snow falls (1 = the screened amount). */
+  snowDepth: number;
+  /** Snowfalls per winter, on average (a hard winter has 1.8 times as many). */
+  snowStorms: number;
+  /** Depth added by one full-strength snowfall (before snowDepth; the field is 0..1). */
+  snowFall: number;
+  /** Wind drift: share of a cell's snow moved one cell downwind per season at wind strength 1 on level ground. */
+  snowDrift: number;
+  /** Melt per season of warmth above 0.14 (depth units; hollows melt a little slower). */
+  snowMelt: number;
+  /** Chance a winter is a hard one (more and deeper snowfalls, slow melt). */
+  hardWinterP: number;
+  /** Share of snowfalls that are blizzards (deeper, shorter, wind at 0.85 or more). */
+  blizzardP: number;
+  /** Grazing multiplier is 1 - k x depth: pronghorn, bison, and mule deer (they browse above the snow). */
+  snowGrazePronghorn: number;
+  snowGrazeBison: number;
+  snowGrazeMule: number;
+  /** Movement cost multiplier is 1 + snowMove x depth (ground animals that are moving). */
+  snowMove: number;
+  /** Wolf kill chance multiplier is 1 + snowKill x depth at the prey. */
+  snowKill: number;
+  /** Spring green-up delay in seasons (0 = off; 0.5 = the rise from dormancy begins half a season later, the late-spring peak stays). */
+  greenUpShift: number;
+  /** Chance per day, in summer, that a natural dry spell starts (0.1 = as screened; 0 = none, S17 Storm season). */
+  summerDroughtP: number;
+  /** Dust storms (S12, dust.ts; 0 = off). In a drought, with the wind above dustWind and at least dustBare of the land under dustBareGrass of grass,
+   *  a storm starts (the plan's 0.6 wind and 0.3 grass never met in a drought: the valley's wind is a slow N(0.45, 0.07), so 0.6 is 2% of the time and 0.5 is a quarter of it;
+   *  grass under 0.35 is about 40% of the land in a drought, under 0.3 only 34%) (chance dustP per 10-tick check, at least dustCooldown valley years apart). It lasts 200 to 450 ticks; the bare cells lose dustSoil
+   *  of soil fertility over it, and every animal's sight is multiplied by 1 - (1 - dustVision) x intensity. */
+  dustStorms: number;
+  dustWind: number;
+  dustBare: number;
+  dustBareGrass: number;
+  dustSoil: number;
+  dustVision: number;
+  dustP: number;
+  dustCooldown: number;
+  /** Grasshopper outbreaks (S12, hoppers.ts; 0 = off). A density field on the coarse grid that grows in the summer at hopperR x (dryHot - hopperCrit)
+   *  per valley year (hot dry weather surges, rain suppresses it by hopperRain), dies back at hopperDie in the cold season, is topped up to hopperSeed
+   *  of the cell in summer, and strips grass at hopperEat. `grasshopperOutbreak` fires when the valley mean passes hopperOutbreak. Coyotes (mousing),
+   *  ravens (foraging) and hawks (stooping) feed on it at hopperCoyote, hopperRaven and hopperHawk. */
+  grasshoppers: number;
+  hopperR: number;
+  hopperCrit: number;
+  hopperRain: number;
+  /** Year-to-year swing (+- of the dry-heat index) in egg and nymph survival, a fixed draw per valley year. */
+  hopperYear: number;
+  hopperDie: number;
+  hopperSeed: number;
+  hopperEat: number;
+  hopperOutbreak: number;
+  hopperCoyote: number;
+  hopperRaven: number;
+  hopperHawk: number;
+  /** Spring floods (S12, springflood.ts; 0 = off). Snowmelt (floodMelt) and rain (floodRain) fill a wet index in late winter and spring; at floodThresh the
+   *  land within floodBand m of the water floods for floodSeasons seasons: grass drowns (floodGrass x severity), animals are pushed out, young caught in the
+   *  band drown (floodYoung x severity; adults floodAdult x severity), and the silt adds floodSilt x severity to the soil. */
+  springFloods: number;
+  floodBand: number;
+  floodMelt: number;
+  floodRain: number;
+  floodThresh: number;
+  floodSeasons: number;
+  floodSilt: number;
+  floodGrass: number;
+  floodYoung: number;
+  floodAdult: number;
+  /** Dynamic trees (S13, trees.ts; 0 = off: the world's static tree list). The sim owns a tree list with stages (seedling, sapling, young, mature, snag), growth
+   *  by age in base years (x treeGrowth), a lifespan, and a cover field rebuilt every season from the list. Cottonwoods recruit at the start of summer on moist,
+   *  bare, unshaded ground within 30 m of water, at treeCwRecruit per cell per year x the seed source x bareness, x (1 + treeFloodBoost x severity) in the cells a
+   *  flood covered in the last 1.5 years (a pulse of treeGroveMin or more seedlings raises a grove event). Junipers recruit in autumn on the ridges at
+   *  treeJunRecruit x the seed source + treeJunBg, scaled by years since fire (zero on a burn, full after treeFireFree years) and room under treeJunCap trees;
+   *  `encroachment` is raised when they hold treeEncroach of the ridge cells. Fire kills seedlings and saplings (treeFireSmall), young trees (treeFireYoung) and
+   *  mature trees (treeFireMature, they stand on as snags). Deer in a 16 m cell slow seedlings and saplings by up to treeBrowse (x their density share). Seedlings
+   *  die at treeSeedMort per year (more in drought, in thick grass and under browsing). */
+  dynamicTrees: number;
+  treeGrowth: number;
+  treeCwRecruit: number;
+  treeFloodBoost: number;
+  /** Established cottonwoods (saplings and up) at which cottonwood recruitment has faded to nothing (linear room). */
+  treeCwCap: number;
+  treeGroveMin: number;
+  treeJunRecruit: number;
+  treeJunBg: number;
+  treeJunCap: number;
+  treeFireFree: number;
+  treeFireSmall: number;
+  treeFireYoung: number;
+  treeFireMature: number;
+  treeBrowse: number;
+  treeSeedMort: number;
+  treeEncroach: number;
   // fear
   fearKill: number;
   fearKillRadius: number;
@@ -351,7 +502,7 @@ export function defaultParams(): Params {
   species[Sp.Coyote] = base({
     maxAge: 4800, matureAge: 900, gestation: 0, birthCooldown: 0, litter: 5,
     walkSpeed: 1.3, runSpeed: 11, stamina: 130, sight: 60, metabolism: 1 / 1800, thirst: 1 / 5000,
-    meat: 0.8, toughness: 0.8, initial: 0, herdRadius: 12,
+    meat: 0.8, toughness: 0.8, initial: 12, herdRadius: 12, // v6b: six pairs (was 0)
   });
   // prairie dog: a field species. Only initial (0 = the default colonies) and the smallPrey params apply; the rest keeps the
   // lookup safe for any code that indexes the species table by id
@@ -378,6 +529,14 @@ export function defaultParams(): Params {
     walkSpeed: 1.6, runSpeed: 12.5, stamina: 75, sight: 50, metabolism: 1 / 1300, thirst: 1 / 2000,
     bite: 0.009, foodValue: 0.55, meat: 3, toughness: 0.9, initial: 0, herdRadius: 20,
     wariness: 0.75, defense: 0.1, camo: 0.55, diet: 1, hideAge: 160, maxLitter: 2,
+  });
+  // beaver (S14): the founders and all the colony rules are the beaver* params. A kit is weaned and working at 1,200 ticks (a year); one litter a year, divided by
+  // calendarScale like the wolf's; slow on land (runSpeed 4.5, a wolf runs 12.5) and quick in the water (beaverSwim 3.0); no thirst. Eaten by wolves on land only.
+  species[Sp.Beaver] = base({
+    maxAge: 7200, matureAge: 1200, gestation: 0, birthCooldown: 0, litter: 4.5,
+    walkSpeed: 1.8, runSpeed: 4.5, stamina: 60, sight: 35, metabolism: 1 / 1500, thirst: 0,
+    bite: 0, foodValue: 0.55, meat: 1.4, toughness: 0.9, initial: 0, herdRadius: 0,
+    wariness: 0.5, defense: 0, camo: 0.4, maxLitter: 5,
   });
   // a species id added to the registry before it has a block here gets the defaults, so nothing indexes undefined
   for (let s = 0; s < SPECIES_COUNT; s++) species[s] ??= base({});
@@ -408,16 +567,23 @@ export function defaultParams(): Params {
     loneIndividual: 0,
     matingWindow: 0,
     herdNearest: 0,
+    drinkSpots: 0,
+    herdSpacingGraze: 0,
     climateAmp: 0,
     calendarScale: 2,
     droughtRefuge: 0,
     sprintCost: 0,
     herdEyes: 0,
+    evolution2: 0,
+    coatSearch: 0,
+    coatSearchRate: 0.15,
+    coatSearchBoost: 1.3,
+    coatSearchWindow: 0.1,
     leanLitter: 0.8, // v6 (was 0)
     cougarImmigration: 0,
     fleeMomentum: 0,
     openPrairie: 1, // v6 (was 0)
-    smallPrey: 0,
+    smallPrey: 1, // v6b (was 0)
     hareK: 3,
     hareR: 2.2,
     hareWinterLoss: 0.6,
@@ -425,7 +591,7 @@ export function defaultParams(): Params {
     dogK: 4,
     dogR: 1.0,
     plagueRate: 0.08,
-    smallGameField: 0,
+    smallGameField: 1, // v6b (was 0)
     dogClip: 0,
     dogGrazeBonus: 0,
     wolfInRate: 0.2,
@@ -460,6 +626,27 @@ export function defaultParams(): Params {
     muledeerGroupMax: 10,
     muledeerRescue: 6,
     muledeerRescueBelow: 12,
+    beavers: 0,
+    beaverFoodRadius: 40,
+    beaverFoodMin: 8,
+    beaverSpacing: 90,
+    beaverColonySize: 4,
+    beaverCrestRate: 0.3,
+    beaverCrestMax: 1.4,
+    beaverFoodRate: 3,
+    beaverRegrow: 0.35,
+    beaverFoodLeave: 0.15,
+    beaverBreachP: 0.5,
+    beaverBreachYear: 0.03,
+    beaverDecayMin: 2,
+    beaverDecayMax: 4,
+    beaverMoisture: 0.25,
+    beaverShield: 0.85,
+    beaverMeadowCap: 0.45,
+    beaverMeadowYears: 20,
+    beaverArrival: 0.4,
+    beaverSwim: 3,
+    beaverRange: 40,
     cougarInRate: 1,
     raptors: 0,
     eagleMin: 2,
@@ -474,6 +661,67 @@ export function defaultParams(): Params {
     stormCells: 0,
     lightningRate: 0.05,
     lightningIgnite: 0.5,
+    fireSpread: 1,
+    snowDepth: 0,
+    snowStorms: 4,
+    snowFall: 0.2,
+    snowDrift: 10,
+    snowMelt: 24,
+    hardWinterP: 0.15,
+    blizzardP: 0.25,
+    snowGrazePronghorn: 0.6,
+    snowGrazeBison: 0.3,
+    snowGrazeMule: 0.3,
+    snowMove: 1,
+    snowKill: 0.3,
+    greenUpShift: 0,
+    summerDroughtP: 0.1,
+    dustStorms: 0,
+    dustWind: 0.5,
+    dustBare: 0.35,
+    dustBareGrass: 0.35,
+    dustSoil: 0.02,
+    dustVision: 0.6,
+    dustP: 0.5,
+    dustCooldown: 0.5,
+    grasshoppers: 0,
+    hopperR: 45,
+    hopperCrit: 0.79,
+    hopperRain: 0.9,
+    hopperYear: 0.1,
+    hopperDie: 5,
+    hopperSeed: 0.03,
+    hopperEat: 1.2,
+    hopperOutbreak: 0.3,
+    hopperCoyote: 3,
+    hopperRaven: 4,
+    hopperHawk: 0.6,
+    springFloods: 0,
+    floodBand: 15,
+    floodMelt: 6,
+    floodRain: 1,
+    floodThresh: 0.7,
+    floodSeasons: 0.5,
+    floodSilt: 0.25,
+    floodGrass: 0.5,
+    floodYoung: 0.3,
+    floodAdult: 0.02,
+    dynamicTrees: 0,
+    treeGrowth: 1,
+    treeCwRecruit: 0.0015,
+    treeFloodBoost: 40,
+    treeCwCap: 400,
+    treeGroveMin: 12,
+    treeJunRecruit: 0.03,
+    treeJunBg: 0.0005,
+    treeJunCap: 1500,
+    treeFireFree: 12,
+    treeFireSmall: 0.9,
+    treeFireYoung: 0.4,
+    treeFireMature: 0.1,
+    treeBrowse: 0.7,
+    treeSeedMort: 0.35,
+    treeEncroach: 0.03,
     fearKill: 0.7,
     fearKillRadius: 22,
     fearPredatorStamp: 0.0008,
@@ -546,5 +794,15 @@ export function applyOverrides(p: Params, o: Record<string, number> | undefined)
       (p as unknown as Record<string, number>)[k] = v;
     }
   }
+  if (p.evolution2 > 0) applyEvolution2(p, o);
   return p;
+}
+
+/** The Evolution v2 values (S9). Anything the caller set explicitly (even to 0) is left alone. */
+function applyEvolution2(p: Params, o: Record<string, number>): void {
+  const sprint: [number, number][] = [[Sp.Bison, 0.2], [Sp.Deer, 0.05], [Sp.Wolf, 0.15], [Sp.Coyote, 0.1]];
+  for (const [si, v] of sprint) if (!(`${PARAM_PREFIX[si]}.sprintCost` in o)) p.species[si].sprintCost = v;
+  if (!(`${PARAM_PREFIX[Sp.Bison]}.maxLitter` in o)) p.species[Sp.Bison].maxLitter = 1;
+  if (!('herdEyes' in o)) p.herdEyes = 1.5;
+  if (!('coatSearch' in o)) p.coatSearch = 1;
 }
