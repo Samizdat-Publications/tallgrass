@@ -1,8 +1,8 @@
 # Good morning: Tallgrass overnight report
 
-*(Updated 18:30 Tuesday 2026-10-06. This file is refreshed at every milestone.)*
+*(Updated 16:20 Tuesday 2026-10-06. This file is refreshed at every milestone.)*
 
-## v2 integration (session 2026-10-06 afternoon; live redeployed 15:15, live check clean)
+## v2 integration (session 2026-10-06 afternoon; live redeployed 14:57, live check clean)
 Everything Track S built in the cloud (S0 to S18) is now merged into main and live at https://tallgrass.stewartgregerson.workers.dev.
 
 **How to play:** open the link, or run `npm run dev` and open the local address. The left rail has the god tools; the menu (top right) has New valley, Challenges and the Field guide.
@@ -22,19 +22,19 @@ Everything Track S built in the cloud (S0 to S18) is now merged into main and li
 
 **v7a (raptors, storms, cougars, mule deer, herd spacing) was not adopted.** The full 20-world acceptance passed bison (19 of 20), the other core species, wolf cycles (CV 0.26) and ravens (CV 0.18), but prairie dogs were present at least 90% of the time in only 11 of 20 worlds (v6b: 20 of 20), and one world lost its bison. v6b stays the default; details in `review/stability/v7a-c9c3f5a/RESULT.md`. You can overrule this in DECISIONS.md.
 
-**Rendered since the merge (still off by default in the sim):** per-cell snow depth (drifts in hollows, bare windswept ground) when snowDepth is on; planted groves and floodwater for the grove and flood god tools and spring floods. Redeployed 18:20, live check clean.
+**Rendered since the merge (still off by default in the sim):** per-cell snow depth (drifts in hollows, bare windswept ground) when snowDepth is on; planted groves and floodwater for the grove and flood god tools and spring floods. Redeployed 16:12, live check clean.
 
-![Snow depth from the sim](journey/20261006-171000_still_v2-snowdepth-top.jpg)
-![A flood](journey/20261006-183000_still_v2-flood.jpg)
+![Snow depth from the sim](journey/20261006-154700_still_v2-snowdepth-top.jpg)
+![A flood](journey/20261006-161900_still_v2-flood.jpg)
 
-**More tools on the rail:** lightning (click a spot), blizzard, flood, distemper (wolves and coyotes) and plant grove (click a spot) join the original nine; the rail groups them into columns that fit any screen. Why v7a failed is now known: the eagles and hawks eat too many prairie dogs (without them, towns hold in 31 of 32 worlds). The fix is the next sim job.
+**More tools on the rail:** lightning (click a spot), blizzard, flood, distemper (wolves and coyotes) and plant grove (click a spot) join the original nine; the rail groups them into columns that fit any screen. Why v7a failed is now known: the eagles and hawks eat too many prairie dogs (without them, towns hold in 31 of 32 worlds). A new setting halves, then quarters, their taste for prairie dogs; at a quarter the towns hold as well as with no raptors and the eagles still come every winter. That candidate (v7b) is now in its full 20-world acceptance on this machine.
 
-![The tool rail with the god tools v2](journey/20261006-195000_ui_v2-tools-rail.jpg)
+![The tool rail with the god tools v2](journey/20261006-174800_ui_v2-tools-rail.jpg)
 
 **v6b shock suite (finished):** bison persisted in 20 of 20 worlds and recovered in all of them after a 70% cull, a drought and a wolf wipeout (median recovery 44, 13 and 41 years). v6b stays the default.
 
-![The merged build, live](journey/20261006-152000_ui_v2-live-merged.jpg)
-![The town challenge and the new tool](journey/20261006-150500_ui_v2-town-rail.jpg)
+![The merged build, live](journey/20261006-145900_ui_v2-live-merged.jpg)
+![The town challenge and the new tool](journey/20261006-145600_ui_v2-town-rail.jpg)
 
 ## v2 beta progress (session wrap-up 2026-10-05 ~10:20; live redeployed 10:15, live check clean)
 Since the alpha (below), all merged, live and verified (npm test, build, foot-slip rig, review stills with no errors):
