@@ -30,6 +30,7 @@ import { BEH, BEH_RANGE, BisonBehaviour, newBisonIn, newBisonOut, packBisonA, pa
 import { sunHeight } from '../audio/mix';
 import { injectTerrainShadow } from './common';
 import type { SharedUniforms } from './common';
+import type { SnowDepth } from './snowdepth';
 
 // Per-species render tables are authored by registry key and expanded to arrays indexed by species id, so a species added
 // to SPECIES (src/sim/species.ts) gets a sane default here until it earns its own entry.
@@ -1109,6 +1110,8 @@ export class AnimalLayer {
   }
   /** A capture hook: the dryness of the ground (0..1) the wallow sees, in place of the real one (a still of a wallow must not depend on the soil being dry there). */
   dryOverride: number | null = null;
+  /** S11: the sim's per-cell snow depth (null until the sim sends one). With it a bison's snow-dig reads the depth where it stands, not the global amount. */
+  snowField: SnowDepth | null = null;
   /** The grass biomass (0..1 of the texture) below which the ground reads as bare, from fully bare (0) to not at all (1): a tuning hook. */
   bareGrass0 = 0.1;
   bareGrass1 = 0.45;
@@ -1851,7 +1854,7 @@ export class AnimalLayer {
         bi.dt = dt; bi.running = running; bi.timeScale = this.timeScale; bi.clock = clock; bi.season = season;
         bi.camD = Math.hypot(x - cpb.x, z - cpb.z);
         bi.vs = sc * this.speciesScale[sp];
-        bi.snow = this.dust.snow;
+        bi.snow = this.snowField?.on ? Math.min(1, Math.max(this.snowField.sample(x, z) * 1.15, this.tg?.snowDepthFall.value ?? 0)) : this.dust.snow;
         const near = bi.camD < BEH_RANGE;
         // (the ground under it is only worked out within range and while it is standing about: the wallow is the only thing that asks)
         bi.dry = near && state !== St.Walk && state !== St.Run && state !== St.Flee ? (this.dryOverride ?? this.groundDry(x, z)) * this.dust.dryness : 0;

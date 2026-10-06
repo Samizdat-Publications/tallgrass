@@ -98,8 +98,13 @@ export const DROUGHT = { dry: 0.92, rip: 0.5, ripKeep: 0.6, straw: [1.28, 1.0, 0
  * plus an edge jitter; the potential is compared to a threshold that falls as the snow amount `sn` (the snow uniform, 0..1) rises.
  *   tgSnowThreshold(sn)          the potential above which snow lies
  *   tgSnowCover(potE, sn)        0..1 cover for a (jittered) potential; fades out through flecked ground at a patch edge
+ *   tgSnowLocal(depth, fall)     the effective snow amount where the sim sends a per-cell depth field (S11): the local depth (a little
+ *                                boosted, so a deep drift reads as thick) or the falling snowfall's floor, whichever is more
  */
 export const SNOW_GLSL = /* glsl */ `
+float tgSnowLocal(float depth, float fall) {
+  return clamp(max(depth * 1.15, fall), 0.0, 1.0);
+}
 float tgSnowThreshold(float sn) {
   return 1.78 - 1.74 * pow(clamp(sn, 0.0, 1.0), 0.66);
 }

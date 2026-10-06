@@ -49,6 +49,11 @@ export interface SharedUniforms {
   leafColorB: U<THREE.Color>;
   frost: U<number>;
   snow: U<number>;
+  /** S11 snow depth field: a 32 x 32 single-channel texture (world square, linear filtered), 1 while the sim sends it (snowDepth param on), else 0. */
+  snowDepthTex: U<THREE.Texture | null>;
+  snowDepthOn: U<number>;
+  /** Snow amount (0..1) a falling snowfall alone contributes where the field is on (0.35 x the eased snowfall), so a blizzard still shows. */
+  snowDepthFall: U<number>;
   wet: U<number>;
   /** 0..1 visible rain intensity right now (eased; 0 for snow and dry weather). */
   rain: U<number>;
@@ -108,6 +113,9 @@ export function createSharedUniforms(worldSize: number): SharedUniforms {
     leafColorA: c(), leafColorB: c(),
     frost: { value: 0 },
     snow: { value: 0 },
+    snowDepthTex: { value: null },
+    snowDepthOn: { value: 0 },
+    snowDepthFall: { value: 0 },
     wet: { value: 0 },
     rain: { value: 0 },
     fearOverlay: { value: 0 },

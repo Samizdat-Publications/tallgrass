@@ -8,7 +8,7 @@ import { sampleHeight } from '../sim/world';
 import {
   HEIGHT_GLSL, NOISE_GLSL, POND_GLSL, SharedUniforms, clamp, fbm2, injectSafeOutput, injectTerrainShadow, makePondUniform, smoothstep, vnoise2,
 } from './common';
-import { SEASON_GLSL } from './season';
+import { SEASON_GLSL, SNOW_GLSL } from './season';
 import { SMALL_TEX, TOWN_ON } from './smalltex';
 
 const SHADOW_RES = 512;
@@ -783,6 +783,9 @@ export class Terrain {
       u.uSeason = sh.season;
       u.uFrost = sh.frost;
       u.uSnow = sh.snow;
+      u.uSnowTex = sh.snowDepthTex;
+      u.uSnowOn = sh.snowDepthOn;
+      u.uSnowFall = sh.snowDepthFall;
       u.uWet = sh.wet;
       u.uFear = sh.fearOverlay;
       u.uNight = sh.night;
@@ -888,6 +891,9 @@ uniform vec3 uSoil;
 uniform vec3 uRock;
 uniform float uFrost;
 uniform float uSnow;
+uniform sampler2D uSnowTex;
+uniform float uSnowOn;
+uniform float uSnowFall;
 uniform float uWet;
 uniform float uFear;
 uniform float uNight;
@@ -897,6 +903,7 @@ varying float vTgCurv;
 varying vec4 vTgAsp;
 ${NOISE_GLSL}
 ${SEASON_GLSL}
+${SNOW_GLSL}
 ${POND_GLSL}
 float gTgRough = 0.95;
 float gTgH = 0.0;
@@ -945,6 +952,9 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
   float edgeW = smoothstep(-110.0, 150.0, sd);
   // 1 inside the playable square, 0 a few metres outside: for data that must not repeat (trails, burn, fear, canopy, water distance)
   float inS = 1.0 - smoothstep(0.0, 16.0, sd);
+  // the snow amount here: the one global value, or (S11, uSnowOn = 1) the sim's local depth at this point plus a floor from a falling snowfall
+  float snEff = uSnow;
+  if (uSnowOn > 0.5) snEff = tgSnowLocal(texture2D(uSnowTex, cuv).r, uSnowFall);
 
   // macro mottling (patch tints, dirt, dry-noise) halves from about 60 m out to 220 m: broad bands carry the far hills, not blotches
   float mot = 1.0 - 0.5 * smoothstep(60.0, 220.0, dist);
@@ -1012,7 +1022,7 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
   float f3 = 1.0 - smoothstep(1.2, 3.5, fp);
   float s1 = 0.5, s2 = 0.5, s3 = 0.5;
   if (f1 > 0.002) s1 = tgCombN(wq, ow, 0.6, 0.11, 1.0);
-  if (f2 > 0.002 || uSnow > 0.04) s2 = tgCombN(wq, ow, 0.2, 0.027, 2.0);
+  if (f2 > 0.002 || snEff > 0.04) s2 = tgCombN(wq, ow, 0.2, 0.027, 2.0);
   if (f3 > 0.002) s3 = tgCombN(wq, ow, 0.05, 0.012, 3.0);
   float s4 = tgNoise2(wq * 0.0065 + 4.0);
   // crisp strokes, not mush: push the mid-scale noise through a contrast curve so hills show distinct combed lines
@@ -1185,7 +1195,7 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
     // mid range (the flat mustard band): cropped ground is a patchwork, not one tone. Tussocks the herd left standing (about a
     // metre, pale straw), darker cropped swaths a few metres across, and flecks of bare soil between the stems. Everything fades
     // out by about 260 m so the far field stays calm.
-    float mk = stubA * (1.0 - smoothstep(110.0, 260.0, dist)) * (1.0 - 0.7 * uSnow);
+    float mk = stubA * (1.0 - smoothstep(110.0, 260.0, dist)) * (1.0 - 0.7 * snEff);
     if (mk > 0.002) {
       float t1 = tgDet(xz, 1.1, 2, vec2(0.58)) * 0.6 + tgDet(xz, 3.7, 3, vec2(0.27)) * 0.4;
       float swath = tgDet(xz, 7.5, 1, vec2(0.71));
@@ -1243,7 +1253,7 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
     float tn = tgNoise2(wqT * 0.042 + vec2(11.0, 4.0)) * 0.7 + tgNoise2(wqT * 0.11 + vec2(2.0, 17.0)) * 0.3;
     float trail = 1.0 - smoothstep(0.0, 0.032, abs(tn - 0.5));
     float churn = smoothstep(0.58, 0.82, tgNoise2(xz * 0.21 + 6.0) * 0.65 + tgNoise2(xz * 0.7 + 2.0) * 0.35) * (1.0 - smoothstep(1.5, 10.0, wd));
-    float tk = clamp(trail * prox + churn * 0.7, 0.0, 1.0) * (1.0 - smoothstep(180.0, 320.0, dist)) * inS * (1.0 - 0.8 * uSnow);
+    float tk = clamp(trail * prox + churn * 0.7, 0.0, 1.0) * (1.0 - smoothstep(180.0, 320.0, dist)) * inS * (1.0 - 0.8 * snEff);
     col = mix(col, col * vec3(0.62, 0.54, 0.42) + uSoil * 0.1, tk * 0.5);
     gTgGrass *= 1.0 - 0.3 * tk;
   }
@@ -1312,7 +1322,7 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
   // snowing; the ground shows through grass tips, ridges and rock until it is deep
   float snowCover = 0.0;
   float spark = 0.0;
-  if (uSnow > 0.04) {
+  if (snEff > 0.04) {
     float flatK = smoothstep(0.58, 0.93, nrm.y);
     // Where the snow lies follows the land. The potential is built from terrain features (flatness, hollows against ridges at about
     // 16 m, the aspect to the sun, the lee of the prevailing wind) plus noise that only varies over 40 to 150 m, so a thin pack
@@ -1328,7 +1338,7 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
               + 0.3 * aspect + 0.3 * lee + patchy - trodK * 0.5;
     // The threshold starts above the highest possible potential (about 1.8), so a trace of leftover snow (the eased value never
     // reaches exactly zero) cannot show as isolated white patches on the flattest, wettest spots: nothing settles until there is real snow.
-    float sn1 = clamp(uSnow, 0.0, 1.0);
+    float sn1 = clamp(snEff, 0.0, 1.0);
     float Tsn = 1.78 - 1.74 * pow(sn1, 0.66);
     // The edge of a patch ramps over a wide band of the potential (tens of metres across), jittered by a 12 m term at any range and by
     // two fine scales (about 1.5 m and 40 cm) only near the camera, so a patch fades out through grass-flecked snow instead of ending
@@ -1336,10 +1346,10 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
     float fineK = 1.0 - smoothstep(25.0, 110.0, dist);
     float edgeN = (tgDet(xz, 12.0, 0, vec2(0.45)) - 0.5) * 0.3;
     if (fineK > 0.01) edgeN += ((tgDet(xz, 1.5, 2, vec2(0.7)) - 0.5) * 0.5 + (tgDet(xz, 0.4, 3, vec2(0.2)) - 0.5) * 0.36) * fineK;
-    float edgeW2 = mix(0.3, 0.19, smoothstep(0.2, 0.8, uSnow));
-    float snowAmt = smoothstep(Tsn - 0.2 - edgeW2, Tsn + 0.06 + edgeW2, pot + edgeN) * smoothstep(0.05, 0.16, uSnow);
-    float tipsPoke = (0.3 * gTgGrass * smoothstep(0.45, 0.8, s2 + 0.2 * edgeN)) * (1.0 - smoothstep(0.4, 0.9, uSnow));
-    float packCap = mix(0.86, 0.96, smoothstep(0.1, 0.7, uSnow));
+    float edgeW2 = mix(0.3, 0.19, smoothstep(0.2, 0.8, snEff));
+    float snowAmt = smoothstep(Tsn - 0.2 - edgeW2, Tsn + 0.06 + edgeW2, pot + edgeN) * smoothstep(0.05, 0.16, snEff);
+    float tipsPoke = (0.3 * gTgGrass * smoothstep(0.45, 0.8, s2 + 0.2 * edgeN)) * (1.0 - smoothstep(0.4, 0.9, snEff));
+    float packCap = mix(0.86, 0.96, smoothstep(0.1, 0.7, snEff));
     snowCover = clamp(snowAmt * (packCap - tipsPoke), 0.0, 1.0);
     // Snow stays white and takes the sky in its shade, even under warm sun: the albedo is rebalanced against the key light's
     // colour (a golden sun then lights it cream, not sand), and shadowed or sheltered snow turns cool blue.

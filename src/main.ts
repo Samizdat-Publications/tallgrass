@@ -64,6 +64,7 @@ engine.excludeFromAO(grass.object3D);
 if (q.get('grass') === '0') grass.object3D.visible = false;
 const animals = new AnimalLayer(renderWorld);
 engine.scene.add(animals.object3D);
+animals.snowField = engine.snowDepth;
 engine.cam.preset((q.get('cam') as 'wide' | 'low' | 'top' | null) ?? 'wide', true);
 // captures pin full resolution; players get an automatic render scale that holds 60 fps
 engine.autoScale = q.get('autoscale') !== '0';
@@ -194,6 +195,7 @@ worker.onmessage = (e: MessageEvent<FromWorker>) => {
   pendingEvents = pendingEvents.concat(m.events);
   pendingHistory = pendingHistory.concat(m.history);
   if (m.veg) engine.setVeg(m.veg);
+  if (m.snow) engine.setSnowDepth(m.snow);
   if (m.small) {
     lastSmall = m.small;
     smallprey.setSmall(m.small);
