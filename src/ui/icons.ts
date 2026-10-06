@@ -32,6 +32,11 @@ export const ICONS: Record<string, string> = {
   addWolves: WOLF_HEAD + '<path d="M19.2 2.2v4.4M17 4.4h4.4"/>',
   removeWolves: WOLF_HEAD + '<path d="M3.2 3.2l17.6 17.6"/>',
   addBison: BISON_HEAD + '<path d="M19.2 2.2v4.4M17 4.4h4.4"/>',
+  // a prairie dog sitting up at its burrow mound
+  addPrairieDogs:
+    '<path d="M10.4 5.6c1.6 0 2.6 1.2 2.6 2.6l.6 4.2c.4 2.4.2 4.4-.6 6.2H8.6c-.9-1.8-1-3.8-.6-6.2l.6-4.2c.2-1.4.6-2.6 1.8-2.6z"/>' +
+    '<path d="M9.4 11.4l1.6.8M3 20.6c2.4-2.4 4-2.6 6-2.6h4c2 0 3.6.2 6 2.6M10.4 7.8h.01"/>' +
+    '<path d="M19.2 2.2v4.4M17 4.4h4.4"/>',
 
   pause: '<path d="M8.6 5.8v12.4M15.4 5.8v12.4" stroke-width="2.4"/>',
   next: '<path d="M6.5 6.2v11.6l8.6-5.8z"/><path d="M18.2 6v12"/>',

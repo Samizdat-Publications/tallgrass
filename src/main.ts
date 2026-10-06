@@ -280,6 +280,7 @@ function toolIntervention(tool: ToolId, x?: number, y?: number): Intervention | 
     case 'fire': return x !== undefined && y !== undefined ? { kind: 'fire', x, y } : null;
     case 'addWolves': return { kind: 'introduce', species: Sp.Wolf, count: 6, x, y };
     case 'addBison': return { kind: 'introduce', species: Sp.Bison, count: 40, x, y };
+    case 'addPrairieDogs': return { kind: 'introduce', species: Sp.PrairieDog, count: 30, x, y };
   }
   return null;
 }

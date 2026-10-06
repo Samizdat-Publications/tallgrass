@@ -356,7 +356,7 @@ Phase 3:
 
 ## 7. Phase 1 work packages (v2 alpha, target: before Thursday's reset)
 
-### S0. Foundations [Track S, cloud OK, M]
+### S0. Foundations [Track S, cloud OK, M] (done by Track S, merged 2026-10-06)
 Make the code safe for many new species and for changes that stay identical while off.
 
 **Files:**
@@ -498,7 +498,7 @@ Make the code safe for many new species and for changes that stay identical whil
 - The baseline is committed and the registry check passes.
 - The tone-mapping decision and the concept baseline score are logged.
 
-### S1. Open prairie [Track S, L]
+### S1. Open prairie [Track S, L] (done by Track S, merged 2026-10-06)
 Animals can leave and enter the valley through corridors. All params ship off; S3 decides adoption.
 
 **Files:**
@@ -570,7 +570,7 @@ The existing `wolfImmigration` and `cougarImmigration` stay as they are.
 - With defaults, the golden hash is unchanged.
 - With `openPrairie 1`, a 50-year smoke on seeds 1 to 4 shows immigrants, emigrants and vagrants in the CSVs, with no crash.
 
-### S2. Canid disease: distemper and mange [Track S, M]
+### S2. Canid disease: distemper and mange [Track S, M] (done by Track S, merged 2026-10-06)
 Wolves (and coyotes, from S5) get two real diseases.
 
 **Params (off by default):**
@@ -611,7 +611,7 @@ Wolves (and coyotes, from S5) get two real diseases.
 
 **Gate:** with defaults, the golden hash is unchanged.
 
-### S3 ★. Checkpoint v6: screens, adoption, acceptance [Track S, M + CPU hours]
+### S3 ★. Checkpoint v6: screens, adoption, acceptance [Track S, M + CPU hours] (done by Track S, merged 2026-10-06)
 
 **1. Screens** (each `--seeds 32 --ticks 240000 --sample 600`; params merged with `{"calendarScale":2}`):
 
@@ -765,7 +765,7 @@ Budget for the whole WP: ≤ +1.0 ms at 1440p in every view.
 - The seasons stills set shows no regression at night or in winter.
 - Within budget.
 
-### S4. Small-prey web: jackrabbits, prairie dogs, plague [Track S, L]
+### S4. Small-prey web: jackrabbits, prairie dogs, plague [Track S, L] (done by Track S, merged 2026-10-06)
 **Species:**
 - Rabbit (4) becomes the jackrabbit; PrairieDog is 7.
 - Both are field species on the 32×32 coarse grid (16 m cells), not agents.
@@ -836,7 +836,7 @@ take(x, y, kind, effort, rng): number { // a predator's catch attempt: Holling t
   - median ≥ 1 plague per 100 years
   - core-species persistence within 1 of 32 of v6
 
-### S5. Coyotes [Track S, L]
+### S5. Coyotes [Track S, L] (done by Track S, merged 2026-10-06)
 Coyote is id 6. `coyote.initial` stays 0 until R3's coyote model is on `main`, then becomes 12 (six pairs).
 
 **Files:**
@@ -975,7 +975,7 @@ Merge S2, S4 and S5 first.
 - 30 minutes at 10x with no console errors.
 - Then Track S flips `coyote.initial` to 12 and turns the S4 fields on, per v6b's adoption.
 
-### S6. Storm cells and lightning fires [Track S, M]
+### S6. Storm cells and lightning fires [Track S, M] (done by Track S, merged 2026-10-06)
 
 **Params (off by default):**
 
@@ -1059,7 +1059,7 @@ Merge S6 first.
 
 ### Raptors
 
-**S7. Golden eagles (8) and red-tailed hawks (9)** [S, M]
+**S7. Golden eagles (8) and red-tailed hawks (9)** [S, M] (done by Track S, merged 2026-10-06)
 - **Who and when:**
   - Eagles are winter visitors through the open prairie: 2 to 6, arriving at season 2.5 and leaving at 0.5.
   - Hawks are summer residents: 2 to 4 pairs nesting in cottonwoods (the tree list), raising 1 to 3 young.
@@ -1079,7 +1079,7 @@ Merge S6 first.
 
 ### Mule deer and cougars
 
-**S8. Mule deer (10) and working cougars** [S, L]
+**S8. Mule deer (10) and working cougars** [S, L] (done by Track S, merged 2026-10-06)
 - **Deer behaviour:**
   - browse only where cover > 0.25 and in the draws
   - groups of 3 to 10
@@ -1134,7 +1134,7 @@ Render-side only, driven by sim state plus an id hash; no sim change.
 
 ### Ecology
 
-**S9. Evolution v2** [S, M]
+**S9. Evolution v2** [S, M] (done by Track S, merged 2026-10-06)
 - **Costs and limits:**
   - per-species `sprintCost`: bison 0.2, pronghorn 0.05, wolf 0.15, coyote 0.1
   - bison `maxLitter` 1 with `leanLitter`
@@ -1150,14 +1150,14 @@ Render-side only, driven by sim state plus an id hash; no sim change.
   - persistence within 1 of 32
 - **UI (Track R):** a "Then and now" card in the evolution view: the founders' animal next to today's average animal, rendered with the mean genes.
 
-**S10. Herd shape** [S, M]
+**S10. Herd shape** [S, M] (done by Track S, merged 2026-10-06)
 1. **Drink spots.** Finish `wip/drink-spots`: screen 0.6, 0.7 and 0.8 on 32 seeds, and merge the best if persistence stays within 1 of 32.
 2. **Grazing spacing.** Screen personal space while grazing (`herdSpacingGraze`: 1.6× separation, weaker cohesion).
 3. **Look.** Compare in-game stills the way `scratch/herds` did.
 
 ### Winter
 
-**S11. Winter** [S, M]
+**S11. Winter** [S, M] (done by Track S, merged 2026-10-06)
 - **Snow depth field** on the coarse grid:
   - builds on snow days and drifts into hollows with the wind
   - melts with warmth
@@ -1185,12 +1185,12 @@ Render-side only, driven by sim state plus an id hash; no sim change.
 
 ### Play
 
-**S15. Lineage** [S, M]
+**S15. Lineage** [S, M] (done by Track S, merged 2026-10-06)
 - Keep records of animals that die with at least one offspring or were followed, in a ring of 30,000.
 - Worker request `lineage(id)`: 3 generations up and 2 down.
 - Pack dynasties: alpha pairs over time.
 
-**S16. Share codes and replay** [S, M]
+**S16. Share codes and replay** [S, M] (done by Track S, merged 2026-10-06)
 - The worker logs every intervention with its tick.
 - `?w=` carries base64url JSON: `{v, seed, scenario, params, log}`.
 - Replay applies each intervention at its exact tick.
@@ -1222,7 +1222,7 @@ Render-side only, driven by sim state plus an id hash; no sim change.
 
 ### God tools and challenges
 
-**S17. God tools v2 and challenges** [S, M]
+**S17. God tools v2 and challenges** [S, M] (done by Track S, merged 2026-10-06)
 - **New tools:**
   - lightning strike
   - blizzard
@@ -1246,7 +1246,7 @@ Render-side only, driven by sim state plus an id hash; no sim change.
 
 ### Dust, grasshoppers and floods
 
-**S12. Dust storms, grasshoppers, floods** [S, M]
+**S12. Dust storms, grasshoppers, floods** [S, M] (done by Track S, merged 2026-10-06)
 - **Dust storm:**
   - triggers on drought + bare ground > 35% + wind > 0.6
   - −0.02 soil fertility in bare cells
@@ -1268,7 +1268,7 @@ Render-side only, driven by sim state plus an id hash; no sim change.
 
 ### Trees
 
-**S13. Dynamic trees** [S, L]
+**S13. Dynamic trees** [S, L] (done by Track S, merged 2026-10-06)
 - **Growth:** a tree list with growth stages.
 - **New trees:**
   - cottonwoods recruit on moist bare ground near water after floods
@@ -1305,7 +1305,7 @@ Render-side only, driven by sim state plus an id hash; no sim change.
 
 ## 9. Phase 3 (v2.0)
 
-### S14 ★. Beavers and moving water (Beaver 11) [S, L]
+### S14 ★. Beavers and moving water (Beaver 11) [S, L] (done by Track S, merged 2026-10-06)
 - **Where:** colonies on creek reaches with willow or cottonwood food within 40 m.
 - **Dams and ponds:**
   - The dam crest rises 0.3 m per season, to 1.4 m.
@@ -1330,7 +1330,7 @@ Render-side only, driven by sim state plus an id hash; no sim change.
 - V-wakes behind swimming beavers.
 - Tail-slap splash and sound.
 
-### S18. Chronicle decades and arcs [S, S]
+### S18. Chronicle decades and arcs [S, S] (done by Track S, merged 2026-10-06)
 - Every 10 valley years, a decade line titled from what dominated, for example "The Wolf Decade", "The Dust Years", "The Town That Came Back".
 - Multi-event arcs (drought, dust, fire, green-up) are told as one thread.
 

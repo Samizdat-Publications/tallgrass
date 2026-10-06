@@ -30,6 +30,7 @@ export const TOOL_DEFS: ToolDef[] = [
   { id: 'cull', short: 'Cull', label: 'Cull the herd', hint: 'Thins out the bison', armedHint: '', danger: true, group: 1 },
   { id: 'addWolves', short: 'Add wolves', species: Sp.Wolf, label: 'Bring in wolves', hint: 'Pick a spot on the ground', armedHint: 'Click the ground. Esc cancels', group: 2 },
   { id: 'addBison', short: 'Add bison', species: Sp.Bison, label: 'Bring in bison', hint: 'Pick a spot on the ground', armedHint: 'Click the ground. Esc cancels', group: 2 },
+  { id: 'addPrairieDogs', short: 'Add prairie dogs', species: Sp.PrairieDog, label: 'Start a prairie dog town', hint: 'Pick a spot on open grass', armedHint: 'Click the ground. Esc cancels', group: 2 },
   { id: 'removeWolves', short: 'Remove wolves', species: Sp.Wolf, label: 'Remove the wolves', hint: 'Every wolf leaves the valley', armedHint: '', group: 2 },
 ];
 

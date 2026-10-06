@@ -5,7 +5,7 @@ import type { HistoryRow, AnimalDetail } from '../sim/worker';
 import type { SimEvent, StoryEntry } from '../sim/sim';
 import type { Settings } from './settings';
 
-export type ToolId = 'rain' | 'drought' | 'fire' | 'plague' | 'cull' | 'addWolves' | 'addBison' | 'removeWolves';
+export type ToolId = 'rain' | 'drought' | 'fire' | 'plague' | 'cull' | 'addWolves' | 'addBison' | 'addPrairieDogs' | 'removeWolves';
 export type OverlayId = 'none' | 'vegetation' | 'fear' | 'territory' | 'traits' | 'smallprey';
 
 export interface UIActions {
@@ -79,4 +79,4 @@ export interface UIFrame {
 export const SCENARIOS: { id: string; name: string; blurb: string }[] = GAME_SCENARIOS.map((x) => ({ id: x.id, name: x.name, get blurb() { return x.blurb; } }));
 
 /** Positional tools stay armed until the player clicks the ground; the rest apply instantly. */
-export const POSITIONAL_TOOLS: ReadonlySet<ToolId> = new Set<ToolId>(['fire', 'addWolves', 'addBison']);
+export const POSITIONAL_TOOLS: ReadonlySet<ToolId> = new Set<ToolId>(['fire', 'addWolves', 'addBison', 'addPrairieDogs']);

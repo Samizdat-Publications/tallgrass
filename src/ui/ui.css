@@ -424,10 +424,32 @@
   position: absolute;
   left: var(--m);
   top: calc(var(--m) + 72 * var(--u));
+  /* stop above the population panel; when a challenge card pushes the rail down on a short screen, the tools wrap
+     into a second column instead of running under the panel */
+  bottom: calc(var(--stack) + var(--pop-h, 92 * var(--u)) + 12 * var(--u));
   display: flex;
   flex-direction: column;
+  flex-wrap: wrap;
+  align-content: flex-start;
   align-items: flex-start;
   gap: calc(6 * var(--u));
+  /* the box reaches down to the panel: only the tools themselves take clicks, the ground behind stays clickable */
+  pointer-events: none;
+}
+/* the population panel's height, which the rail stops above */
+.tg-ui:has(.tg-pop[data-rows='2']) {
+  --pop-h: calc(146 * var(--u));
+}
+.tg-ui:has(.tg-pop[data-rows='3']) {
+  --pop-h: calc(200 * var(--u));
+}
+.tg-ui:has(.tg-pop[data-rows='4']) {
+  --pop-h: calc(254 * var(--u));
+}
+.tg-ui:has(.tg-pop.is-open) {
+  --pop-h: calc(300 * var(--u));
+}
+.tg-rail > * {
   pointer-events: auto;
 }
 .tg-rail:hover,
