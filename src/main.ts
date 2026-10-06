@@ -23,7 +23,7 @@ import { Narrator } from './audio/narrator';
 import { countNearby, nearWater01, scanTension } from './audio/inputs';
 import type { TensionSample } from './audio/music';
 import type { Nearby } from './audio/mix';
-import { DAY_TICKS, setCalendarScale, Sp, YEAR_TICKS, type Intervention, type Snapshot } from './sim/types';
+import { DAY_TICKS, SEASON_TICKS, setCalendarScale, Sp, YEAR_TICKS, type Intervention, type Snapshot } from './sim/types';
 import { applyOverrides, defaultParams } from './sim/params';
 import { isPredator } from './sim/species';
 import type { FromWorker, ToWorker } from './sim/worker';
@@ -279,6 +279,12 @@ function toolIntervention(tool: ToolId, x?: number, y?: number): Intervention | 
     case 'rain': return { kind: 'rain', ticks: 1600 };
     case 'drought': return { kind: 'drought', ticks: 2400 * 1.5, severity: 0.85 };
     case 'plague': return { kind: 'plague', species: Sp.Bison, fraction: 0.25 };
+    case 'distemper': return { kind: 'disease', disease: 'distemper', fraction: 0.3 };
+    // god tools v2: a blizzard lasts a little over half a valley season, a flood a few weeks of valley time (both follow the calendar)
+    case 'blizzard': return { kind: 'blizzard', ticks: Math.round(SEASON_TICKS * 0.6) };
+    case 'flood': return { kind: 'flood', ticks: Math.round(YEAR_TICKS / 10), severity: 0.6 };
+    case 'lightning': return x !== undefined && y !== undefined ? { kind: 'lightning', x, y } : null;
+    case 'grove': return x !== undefined && y !== undefined ? { kind: 'grove', x, y, radius: 20 } : null;
     case 'cull': return { kind: 'cull', species: Sp.Bison, fraction: 0.7 };
     case 'removeWolves': return { kind: 'remove', species: Sp.Wolf };
     case 'fire': return x !== undefined && y !== undefined ? { kind: 'fire', x, y } : null;

@@ -5,16 +5,18 @@ import type { HistoryRow, AnimalDetail } from '../sim/worker';
 import type { SimEvent, StoryEntry } from '../sim/sim';
 import type { Settings } from './settings';
 
-export type ToolId = 'rain' | 'drought' | 'fire' | 'plague' | 'cull' | 'addWolves' | 'addBison' | 'addPrairieDogs' | 'removeWolves';
+export type ToolId =
+  | 'rain' | 'drought' | 'fire' | 'plague' | 'cull' | 'addWolves' | 'addBison' | 'addPrairieDogs' | 'removeWolves'
+  | 'blizzard' | 'flood' | 'lightning' | 'distemper' | 'grove';
 export type OverlayId = 'none' | 'vegetation' | 'fear' | 'territory' | 'traits' | 'smallprey';
 
 export interface UIActions {
   /** 0 = pause, 1, 10, 100 */
   setSpeed(speed: number): void;
   skipToEvent(): void;
-  /** Positional tools (fire, addWolves, addBison) are armed; main handles the ground click. null disarms. */
+  /** Positional tools (fire, lightning, grove, addWolves, addBison, addPrairieDogs) are armed; main handles the ground click. null disarms. */
   armTool(tool: ToolId | null): void;
-  /** Instant tools (rain, drought, plague, cull, removeWolves). */
+  /** Instant tools (rain, drought, blizzard, flood, plague, distemper, cull, removeWolves). */
   applyTool(tool: ToolId): void;
   follow(id: number | null): void;
   select(id: number | null): void;
@@ -79,4 +81,4 @@ export interface UIFrame {
 export const SCENARIOS: { id: string; name: string; blurb: string }[] = GAME_SCENARIOS.map((x) => ({ id: x.id, name: x.name, get blurb() { return x.blurb; } }));
 
 /** Positional tools stay armed until the player clicks the ground; the rest apply instantly. */
-export const POSITIONAL_TOOLS: ReadonlySet<ToolId> = new Set<ToolId>(['fire', 'addWolves', 'addBison', 'addPrairieDogs']);
+export const POSITIONAL_TOOLS: ReadonlySet<ToolId> = new Set<ToolId>(['fire', 'lightning', 'grove', 'addWolves', 'addBison', 'addPrairieDogs']);

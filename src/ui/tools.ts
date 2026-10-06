@@ -25,12 +25,17 @@ const INTRO_MS = 120000;
 export const TOOL_DEFS: ToolDef[] = [
   { id: 'rain', short: 'Rain', label: 'Call rain', hint: 'Rain falls across the valley', armedHint: '', group: 0 },
   { id: 'drought', short: 'Drought', label: 'Bring drought', hint: 'The rains fail for a time', armedHint: '', group: 0 },
+  { id: 'blizzard', short: 'Blizzard', label: 'Call a blizzard', hint: 'Snow and a bitter wind cross the valley', armedHint: '', danger: true, group: 0 },
+  { id: 'flood', short: 'Flood', label: 'Flood the creek', hint: 'The creek spills over its banks', armedHint: '', danger: true, group: 0 },
   { id: 'fire', short: 'Fire', label: 'Start a fire', hint: 'Pick a spot on the ground', armedHint: 'Click the ground. Esc cancels', danger: true, group: 1 },
+  { id: 'lightning', short: 'Lightning', label: 'Strike with lightning', hint: 'Pick a spot on the ground', armedHint: 'Click the ground. Esc cancels', danger: true, group: 1 },
   { id: 'plague', short: 'Plague', label: 'Spread plague', hint: 'Sickness runs through the herds', armedHint: '', danger: true, group: 1 },
+  { id: 'distemper', short: 'Distemper', label: 'Spread distemper', hint: 'Sickness runs through wolves and coyotes', armedHint: '', danger: true, group: 1 },
   { id: 'cull', short: 'Cull', label: 'Cull the herd', hint: 'Thins out the bison', armedHint: '', danger: true, group: 1 },
   { id: 'addWolves', short: 'Add wolves', species: Sp.Wolf, label: 'Bring in wolves', hint: 'Pick a spot on the ground', armedHint: 'Click the ground. Esc cancels', group: 2 },
   { id: 'addBison', short: 'Add bison', species: Sp.Bison, label: 'Bring in bison', hint: 'Pick a spot on the ground', armedHint: 'Click the ground. Esc cancels', group: 2 },
   { id: 'addPrairieDogs', short: 'Add prairie dogs', species: Sp.PrairieDog, label: 'Start a prairie dog town', hint: 'Pick a spot on open grass', armedHint: 'Click the ground. Esc cancels', group: 2 },
+  { id: 'grove', short: 'Plant grove', label: 'Plant a grove', hint: 'Pick a spot on the ground', armedHint: 'Click the ground. Esc cancels', group: 2 },
   { id: 'removeWolves', short: 'Remove wolves', species: Sp.Wolf, label: 'Remove the wolves', hint: 'Every wolf leaves the valley', armedHint: '', group: 2 },
 ];
 
@@ -39,6 +44,8 @@ export class ToolRail {
   private armed: ToolId | null = null;
   private wraps = new Map<ToolId, { wrap: HTMLElement; btn: HTMLButtonElement; hint: HTMLElement }>();
   private note: HTMLElement;
+  private groups: HTMLElement[] = [];
+  private lastRoom = -1;
   private disabled = false;
 
   constructor(private actions: UIActions) {
@@ -48,10 +55,14 @@ export class ToolRail {
     // open for a few seconds at the start so the labels are seen once, then settle to icons
     this.el.classList.add('is-intro');
     window.setTimeout(() => this.el.classList.remove('is-intro'), INTRO_MS);
-    let lastGroup = 0;
+    // each visual group sits in its own box: when the rail wraps into more columns the groups stay whole
+    let lastGroup = -1;
+    let groupEl: HTMLElement | null = null;
     for (const t of TOOL_DEFS) {
-      if (t.group !== lastGroup) {
-        this.el.append(h('div', { class: 'tg-rail-gap', 'aria-hidden': 'true' }));
+      if (t.group !== lastGroup || !groupEl) {
+        groupEl = h('div', { class: 'tg-rail-group' });
+        this.groups.push(groupEl);
+        this.el.append(groupEl);
         lastGroup = t.group;
       }
       const btn = button(
@@ -69,9 +80,29 @@ export class ToolRail {
       const hint = h('span', { class: 'tg-tool-hint', text: t.hint });
       const label = h('span', { class: 'tg-tool-label tg-glass' }, h('span', { class: 'tg-tool-name', text: t.label }), hint);
       const wrap = h('div', { class: 'tg-toolwrap' }, btn, label);
-      this.el.append(wrap);
+      groupEl.append(wrap);
       this.wraps.set(t.id, { wrap, btn, hint });
     }
+    // When even the tallest group is taller than the room the rail has (a short window under a challenge card), drop the
+    // groups and let the plain buttons wrap column by column instead, so none runs under the population panel.
+    // The room the rail has changes with the window, the challenge card and the population panel, so look again when the window
+    // resizes and twice a second (cheap: nothing is measured again unless the height changed). A ResizeObserver on the rail would
+    // fire inside the observers that move the card and the panel, and the browser would report a loop.
+    window.addEventListener('resize', () => this.fit(true));
+    window.setInterval(() => this.fit(false), 500);
+    window.requestAnimationFrame(() => this.fit(true));
+  }
+
+  private fit(force: boolean): void {
+    const el = this.el;
+    const room = el.clientHeight;
+    if (room < 40 || (room === this.lastRoom && !force)) return;
+    this.lastRoom = room;
+    el.classList.remove('is-flat');
+    const title = el.querySelector<HTMLElement>('.tg-rail-title');
+    let need = 0;
+    this.groups.forEach((g, i) => { need = Math.max(need, g.offsetHeight + (i === 0 && title ? title.offsetHeight + 8 : 0)); });
+    el.classList.toggle('is-flat', need > room);
   }
 
   private press(t: ToolDef): void {
