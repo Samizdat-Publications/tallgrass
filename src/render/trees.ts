@@ -970,7 +970,7 @@ class Pool {
 interface Part { pool: Pool; slot: number }
 interface Rec { id: number; spec: TreeSpec; part: Part; under: Part[]; grove: number }
 
-const ID_FAR = 1_000_000, ID_FAR_JUNIPER = 2_000_000, ID_VALLEY_JUNIPER = 3_000_000, ID_NEW = 5_000_000;
+const ID_FAR = 1_000_000, ID_FAR_JUNIPER = 2_000_000, ID_VALLEY_JUNIPER = 3_000_000, ID_GROVE = 4_000_000, ID_NEW = 5_000_000;
 
 export class Trees {
   readonly group = new THREE.Group();
@@ -993,6 +993,10 @@ export class Trees {
   private recs = new Map<number, Rec>();
   private grid = new Map<number, number[]>();
   private nextId = ID_NEW;
+  /** How many of the player's planted-grove trees (S17) are standing, ids ID_GROVE + k. */
+  private groveN = 0;
+  /** Planted-grove trees standing (S17), for the bench and tests. */
+  get groveCount(): number { return this.groveN; }
   private dummy = new THREE.Object3D();
   private col = new THREE.Color();
   private dressing: Part[] = [];
@@ -1216,6 +1220,26 @@ export class Trees {
     const key = this.gridKey(rec.spec.x, rec.spec.z), cell = this.grid.get(key);
     if (cell) { const k = cell.indexOf(id); if (k >= 0) cell.splice(k, 1); }
     return true;
+  }
+
+  /**
+   * The player's planted groves (Snapshot.groves, stride 4: x, y, height m, crown radius m): the sim sends the whole list with every
+   * veg frame and it only ever grows, so the trees past the ones already standing are added (same models, LOD and understory as the
+   * valley's own cottonwoods). A shorter list means a different world: the planted trees are cleared and rebuilt. Cheap when
+   * nothing changed (one length compare), and nothing is allocated per frame.
+   */
+  setGroves(g: Float32Array | undefined): void {
+    const n = g ? g.length >> 2 : 0;
+    if (n === this.groveN) return;
+    if (n < this.groveN) {
+      for (let k = 0; k < this.groveN; k++) this.removeTree(ID_GROVE + k);
+      this.groveN = 0;
+    }
+    if (!g) return;
+    for (let k = this.groveN; k < n; k++) {
+      this.addTree({ x: g[k * 4], z: g[k * 4 + 1], h: g[k * 4 + 2], r: g[k * 4 + 3], species: 'cottonwood' }, ID_GROVE + k);
+    }
+    this.groveN = n;
   }
 
   /** Change a tree (size, species, burned, even position): it is re-seated in place and keeps its id. */

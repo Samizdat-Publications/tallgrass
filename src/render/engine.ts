@@ -27,6 +27,7 @@ import { DroneCamera, CameraPreset } from './camera';
 import { grassTint } from './grass';
 import { CURE_KEYS, LEAF_KEYS, PACK_KEYS, keyCurve } from './season';
 import { SnowDepth } from './snowdepth';
+import { Flood } from './flood';
 
 export type { Quality } from './post';
 export { injectTerrainShadow } from './common';
@@ -155,6 +156,8 @@ export class Engine {
   private snowfallSm = 0;
   /** S11 per-cell snow depth (fed by setSnowDepth, only when the sim runs with snowDepth on). */
   readonly snowDepth: SnowDepth;
+  /** Floodwater over the band along the creek (S17 flood tool, S12 spring floods); hidden while no flood runs. */
+  readonly flood: Flood;
   private readonly rainDir = new THREE.Vector3();
   /**
    * Fast-forward softening of the sun. At 10x and 100x the sun laps the sky several times a second, and a hard shadow whipping across
@@ -228,6 +231,7 @@ export class Engine {
     this.terrain = new Terrain(world, this.uniforms);
     this.water = new Water(world, this.uniforms, this.terrain.creekDist);
     this.trees = new Trees(world, this.uniforms, this.terrain.heightAt);
+    this.flood = new Flood(world, this.uniforms);
     this.storms = new Storms(world, this.uniforms, this.terrain.heightAt);
     this.sky = new Sky(this.uniforms, this.storms.uniforms);
     this.cloudShadow = new CloudShadow(this.uniforms, world.size);
@@ -248,10 +252,10 @@ export class Engine {
     this.hemi = new THREE.HemisphereLight(0xffffff, 0x886644, 1);
 
     this.scene.userData.tgUniforms = this.uniforms;
-    this.scene.add(this.sky.mesh, this.terrain.mesh, this.water.mesh, this.trees.group, this.smoke.mesh, this.fireflies.mesh, this.storms.group, this.sun, this.hemi);
+    this.scene.add(this.sky.mesh, this.terrain.mesh, this.water.mesh, this.flood.mesh, this.trees.group, this.smoke.mesh, this.fireflies.mesh, this.storms.group, this.sun, this.hemi);
 
     this.post = new PostFX(renderer, this.scene, this.camera, this.uniforms, this.storms.uniforms);
-    this.post.aoExclude.push(this.sky.mesh, this.water.mesh, this.smoke.mesh, this.fireflies.mesh, ...this.storms.meshes);
+    this.post.aoExclude.push(this.sky.mesh, this.water.mesh, this.flood.mesh, this.smoke.mesh, this.fireflies.mesh, ...this.storms.meshes);
     // GTAO renders its own normal/depth pass with an override material that ignores alpha cut-outs, so a sparse canopy would occlude
     // the sky behind its gaps and show as grey smoke. Keep alpha-cut foliage (crowns and shrubs) out of that pass.
     for (const m of this.trees.meshes) if (m.name.startsWith('cottonwood-crown') || m.name.startsWith('shrubs')) this.post.aoExclude.push(m);
@@ -361,6 +365,16 @@ export class Engine {
   /** A new snow depth frame from the sim (Snapshot.snow: 32 x 32 bytes, depth x 255, row-major by y then x). Eased toward over about a second. */
   setSnowDepth(bytes: Uint8Array): void {
     this.snowDepth.setTarget(bytes);
+  }
+
+  /** The running flood (Snapshot.flood: [ticks left, severity, band width m]) or undefined when none runs. Send every snapshot. */
+  setFlood(f: Float32Array | undefined): void {
+    this.flood.setFrame(f);
+  }
+
+  /** The player's planted groves (Snapshot.groves, stride 4: x, y, height, crown radius), the whole list; new trees are appended. */
+  setGroves(g: Float32Array | undefined): void {
+    this.trees.setGroves(g);
   }
 
   /** Apply the current env immediately without smoothing (call right after setEnv, before the first frame). */
@@ -500,6 +514,7 @@ export class Engine {
     this.post.dispose();
     this.terrain.dispose();
     this.water.dispose();
+    this.flood.dispose();
     this.trees.dispose();
     this.sky.dispose();
     this.cloudShadow.dispose();
@@ -614,6 +629,7 @@ export class Engine {
     // S11: with the sim's per-cell depth field the shaders read the local depth instead (the seasonal pack is the sim's own now);
     // a falling snowfall still contributes a floor so a blizzard shows before the depth has built
     this.snowDepth.update(dt);
+    this.flood.update(dt);
     u.snowDepthOn.value = this.snowDepth.on ? 1 : 0;
     u.snowDepthFall.value = 0.35 * this.snowfallSm;
     u.rain.value = this.rainSm;
