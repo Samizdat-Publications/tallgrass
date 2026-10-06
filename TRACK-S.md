@@ -121,6 +121,8 @@ Only Track S writes this file (V2-PLAN.md section 4.3). Track R reads it with `g
 
 - ALL16 (cloud, **v7 candidate** = v6 + `smallPrey 1, smallGameField 1, coyote.initial 12, cougar.initial 6, muledeer.initial 60, raptors 1, stormCells 1`, frozen a91500b): bison, wolves, ravens, pronghorn, jackrabbits, coyotes, hawks, mule deer 16/16; cougars and prairie dogs 15/16 (cougars present 97%); eagles are seasonal (absent at the final sample by design). Wolf CV 0.28, corr 0.77, pronghorn starvation 43%: eligible. Hare CV 0.33, coyote CV 0.33, coyote-hare corr 0.38 (gate 0.4, 7/16), plague 2.8 per 100 yr, hare booms and crashes 4 each per 100 yr, lightning fires 14.4 per 100 yr. Weak spots: mule deer mean only 19 (annual CV 0.8), prairie dog towns sparse (mean 0.9).
 
+- **v7a candidate** = v6b + `raptors 1, stormCells 1, cougar.initial 6, muledeer.initial 60, herdSpacingGraze 1.6` (only features Track R already renders; snow, dust, hoppers, floods, dynamic trees and beavers stay off until their visuals exist). V7a16 (frozen c9c3f5a): eligible; core species 16/16, wolf CV 0.25, corr 0.67, starvation 41%; cougars present 97%, mule deer 100%, prairie dogs 14/16 at the end but present 100%. Acceptance (20 seeds x 1,000 generations) and shocks running in the cloud (`scratch/run_v7accept.sh`, outputs scratch/accept/v7a*); I adopt v7a if they pass.
+
 ## In progress
 - E8b screen (E8 again at 3bb97a5 with the death columns), scratch/screens/E8b.
 - Screen A16: default params, 16 seeds x 240,000 ticks, frozen at 61455f2, output scratch/screens/A16 (cloud VM only).
