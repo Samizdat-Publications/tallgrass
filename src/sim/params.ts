@@ -247,6 +247,40 @@ export interface Params {
   /** With openPrairie on, each spring a group of this many walks in when fewer than muledeerRescueBelow mule deer live here (0 = never). */
   muledeerRescue: number;
   muledeerRescueBelow: number;
+  // beavers (S14, src/sim/sp/beaver.ts and src/sim/ponds.ts): the whole system is off unless `beavers` is above 0 or `beaver.initial` puts founders in the valley.
+  /** Master switch (0 = off). On, new colonies can found themselves on free creek reaches (the founders' dispersers; with openPrairie also pairs arriving from outside) and the god tool works. */
+  beavers: number;
+  /** Colony site: willow or cottonwood food within this many metres of the dam (the food index counts trees within it, shrubs at 0.35). */
+  beaverFoodRadius: number;
+  /** A colony is founded only where the food index is at least this (about this many trees within the radius). */
+  beaverFoodMin: number;
+  /** Colonies and dams keep at least this far (m) apart along the creek. */
+  beaverSpacing: number;
+  /** Founders per colony when `beaver.initial` places them: a breeding pair and yearlings (2 to 6). */
+  beaverColonySize: number;
+  /** The dam crest rises this many metres per season (SEASON_TICKS) while a colony works on it, up to beaverCrestMax. */
+  beaverCrestRate: number;
+  beaverCrestMax: number;
+  /** Food: trees a beaver fells per base year (2,400 ticks), the share of the gap to the full stand that grows back per base year, and the share of the stand left below which the colony moves on. */
+  beaverFoodRate: number;
+  beaverRegrow: number;
+  beaverFoodLeave: number;
+  /** A dam breaches in a flood with chance beaverBreachP x severity x (crest / max crest), and on its own with this chance per valley year. */
+  beaverBreachP: number;
+  beaverBreachYear: number;
+  /** An abandoned dam decays over a random 2 to 4 valley years (min and max) back to nothing, and the pond drains into the meadow. */
+  beaverDecayMin: number;
+  beaverDecayMax: number;
+  /** Greener ribbon: moisture added at the pond's edge (fades to 0 at 30 m), the share of a drought's cut in growth it escapes there, and the meadow's capacity bonus and how many valley years it lasts. */
+  beaverMoisture: number;
+  beaverShield: number;
+  beaverMeadowCap: number;
+  beaverMeadowYears: number;
+  /** Chance per base year that a pair of beavers arrives from outside the valley (needs openPrairie and a free site). */
+  beaverArrival: number;
+  /** Swimming speed (m/s) and how far (m) a beaver wanders from the water to gnaw. */
+  beaverSwim: number;
+  beaverRange: number;
   /** Rate per base year at which a pair of cougars walks in from the wider prairie while fewer than two live here, once cougars have lived here (needs openPrairie; 0 = never). */
   cougarInRate: number;
   /** Storm cells and lightning (0 = off). On, thunderstorm days send cells across the valley; dry lightning can start
@@ -496,6 +530,14 @@ export function defaultParams(): Params {
     bite: 0.009, foodValue: 0.55, meat: 3, toughness: 0.9, initial: 0, herdRadius: 20,
     wariness: 0.75, defense: 0.1, camo: 0.55, diet: 1, hideAge: 160, maxLitter: 2,
   });
+  // beaver (S14): the founders and all the colony rules are the beaver* params. A kit is weaned and working at 1,200 ticks (a year); one litter a year, divided by
+  // calendarScale like the wolf's; slow on land (runSpeed 4.5, a wolf runs 12.5) and quick in the water (beaverSwim 3.0); no thirst. Eaten by wolves on land only.
+  species[Sp.Beaver] = base({
+    maxAge: 7200, matureAge: 1200, gestation: 0, birthCooldown: 0, litter: 4.5,
+    walkSpeed: 1.8, runSpeed: 4.5, stamina: 60, sight: 35, metabolism: 1 / 1500, thirst: 0,
+    bite: 0, foodValue: 0.55, meat: 1.4, toughness: 0.9, initial: 0, herdRadius: 0,
+    wariness: 0.5, defense: 0, camo: 0.4, maxLitter: 5,
+  });
   // a species id added to the registry before it has a block here gets the defaults, so nothing indexes undefined
   for (let s = 0; s < SPECIES_COUNT; s++) species[s] ??= base({});
   return {
@@ -584,6 +626,27 @@ export function defaultParams(): Params {
     muledeerGroupMax: 10,
     muledeerRescue: 6,
     muledeerRescueBelow: 12,
+    beavers: 0,
+    beaverFoodRadius: 40,
+    beaverFoodMin: 8,
+    beaverSpacing: 90,
+    beaverColonySize: 4,
+    beaverCrestRate: 0.3,
+    beaverCrestMax: 1.4,
+    beaverFoodRate: 3,
+    beaverRegrow: 0.35,
+    beaverFoodLeave: 0.15,
+    beaverBreachP: 0.5,
+    beaverBreachYear: 0.03,
+    beaverDecayMin: 2,
+    beaverDecayMax: 4,
+    beaverMoisture: 0.25,
+    beaverShield: 0.85,
+    beaverMeadowCap: 0.45,
+    beaverMeadowYears: 20,
+    beaverArrival: 0.4,
+    beaverSwim: 3,
+    beaverRange: 40,
     cougarInRate: 1,
     raptors: 0,
     eagleMin: 2,

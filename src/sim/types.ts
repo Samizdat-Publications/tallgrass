@@ -13,6 +13,7 @@ export const Sp = {
   Eagle: 8,
   Hawk: 9,
   MuleDeer: 10,
+  Beaver: 11,
 } as const;
 export type Sp = (typeof Sp)[keyof typeof Sp];
 // Derived from the registry in species.ts. Keep the `Sp` ids above in step with SPECIES[].id.
@@ -34,9 +35,13 @@ export const St = {
   Fly: 9,
   Stalk: 10,
   Migrate: 11,
+  /** Beaver (S14): moving through water (a swimming animal; the renderer draws the swimming gait and the wake). */
+  Swim: 12,
+  /** Beaver (S14): working on the dam or the lodge (carrying and packing sticks and mud). Gnawing a tree is St.Graze. */
+  Build: 13,
 } as const;
 export type St = (typeof St)[keyof typeof St];
-export const STATE_NAMES = ['idle', 'grazing', 'walking', 'running', 'fleeing', 'chasing', 'feeding', 'drinking', 'resting', 'flying', 'stalking', 'migrating'];
+export const STATE_NAMES = ['idle', 'grazing', 'walking', 'running', 'fleeing', 'chasing', 'feeding', 'drinking', 'resting', 'flying', 'stalking', 'migrating', 'swimming', 'building'];
 
 /** Flag bits in the agent snapshot. */
 export const F_JUVENILE = 1;
@@ -142,6 +147,21 @@ export interface Snapshot {
   treesVersion?: number;
   /** The cover field the list makes (shrubs and tree crowns, cover x 255), n x n like `veg`, row-major by y then x. Sent together with `trees`. */
   treeCover?: Uint8Array;
+  /**
+   * Beaver ponds (S14, params.beavers or beaver.initial). `pondVersion` is on every snapshot while the beaver system is on and is bumped whenever any of the next four changed;
+   * they ride along (with the vegetation texture) in the first snapshot after a bump. Diff by version, redraw the pond surfaces when it moves.
+   *  ponds:  n x n bytes (256 x 256, 2 m cells, row-major by y then x like `veg`): extra water depth in centimetres, 0 = none, 255 = 2.55 m or more. The water surface
+   *          of a cell is the terrain height there (the renderer's own, unchanged) plus depth / 100; the deepened creek is included, not only new water.
+   *  dams:   DAM_STRIDE (8) floats per dam: x, y (m, on the creek), crest (m, 0 to 1.4), state (0 building, 1 holding, 2 breached and draining, 3 abandoned and decaying),
+   *          angle (rad, along the dam wall, across the creek), length (m), level (the pond surface elevation, absolute metres), colony id.
+   *  lodges: stride 4: x, y (in the water above the dam), size 0..1 (members / 8), 1 if the colony still lives there.
+   *  drownedTrees: indices into the renderer's static `world.trees` (stride 4) of the trees the ponds drowned (only with dynamicTrees off; with it on the snags are in `trees`).
+   */
+  ponds?: Uint8Array;
+  dams?: Float32Array;
+  lodges?: Float32Array;
+  drownedTrees?: Uint32Array;
+  pondVersion?: number;
 }
 
 /** Ticks per second of real time at 1x speed. */

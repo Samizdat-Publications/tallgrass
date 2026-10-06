@@ -18,6 +18,7 @@ const KINDS: SimEventKind[] = [
   'immigrated', 'emigrated', 'recolonized', 'distemper', 'mange', 'townFounded', 'townLost', 'sylvaticPlague',
   'hareBoom', 'hareCrash', 'coyotePups', 'mesoRelease', 'storm', 'lightningFire', 'eaglesArrive', 'hawksReturn',
   'blizzard', 'hardWinter', 'flood', 'grovePlanted', 'dustStorm', 'grasshopperOutbreak', 'springFlood', 'encroachment',
+  'damBuilt', 'pondFilled', 'damBreached', 'beaverMeadow', 'colonyLeft',
 ];
 const EM_DASH = String.fromCharCode(0x2014);
 

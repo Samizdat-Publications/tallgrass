@@ -19,6 +19,8 @@ export class Vegetation {
   /** 0 none; (0, 1] ash fading; > 1 burning (value - 1 = remaining burn fraction). */
   burn: Float32Array;
   burningCells = 0;
+  /** Beaver ponds (S14): 0..1 per cell, how much of a drought's cut in growth and its dieback the cell escapes (the greener bank of a pond). Null until a pond exists. */
+  droughtShield: Float32Array | null = null;
   private landCells: number;
 
   constructor(private w: World, private p: Params, private env: Environment, private rng: Rng) {
@@ -39,6 +41,14 @@ export class Vegetation {
       this.browse[c] = this.browseK[c] * 0.8;
       if (!w.water[c]) land++;
     }
+    this.landCells = land;
+  }
+
+  /** The water mask changed (beaver ponds fill and drain): count the land cells again, for the means. */
+  recountLand(): void {
+    const wat = this.w.water;
+    let land = 0;
+    for (let c = 0; c < wat.length; c++) if (!wat[c]) land++;
     this.landCells = land;
   }
 
@@ -68,7 +78,9 @@ export class Vegetation {
     const rGrow = p.grassGrowth * gf;
     // drought refuges (off at 0): the growth the season would give without the drought, for the wettest cells
     const refuge = drought ? p.droughtRefuge : 0;
-    const rFree = refuge > 0 ? rGrow / Math.max(0.05, 1 - this.env.droughtSeverity) : rGrow;
+    const shield = drought ? this.droughtShield : null;
+    const free = refuge > 0 || shield !== null;
+    const rFree = free ? rGrow / Math.max(0.05, 1 - this.env.droughtSeverity) : rGrow;
     const seed = p.grassSeedFloor * gf;
     const fearKeep = 1 - p.fearDecay * dt;
     const windDir = this.env.state.windDir, windS = this.env.state.windStrength;
@@ -101,10 +113,11 @@ export class Vegetation {
         }
         const moist = 0.55 + 0.9 * w.moisture[c];
         let rg = rGrow, dieF = 0.7;
-        if (refuge > 0) {
-          // 0 on the uplands, up to the refuge share on the wettest ground by the water
+        if (free) {
+          // 0 on the uplands, up to the refuge share on the wettest ground by the water; a beaver pond's bank (S14) escapes by its own shield
           const m = w.moisture[c];
-          const wet = refuge * (m <= 0.55 ? 0 : m >= 0.85 ? 1 : ((m - 0.55) / 0.3) * ((m - 0.55) / 0.3) * (3 - 2 * ((m - 0.55) / 0.3)));
+          let wet = refuge > 0 ? refuge * (m <= 0.55 ? 0 : m >= 0.85 ? 1 : ((m - 0.55) / 0.3) * ((m - 0.55) / 0.3) * (3 - 2 * ((m - 0.55) / 0.3))) : 0;
+          if (shield !== null && shield[c] > wet) wet = shield[c];
           rg = rGrow + (rFree - rGrow) * wet;
           dieF = 0.7 * (1 - wet);
         }

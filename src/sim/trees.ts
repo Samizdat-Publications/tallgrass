@@ -401,6 +401,26 @@ export class Trees {
     this.host.changed();
   }
 
+  /**
+   * Beaver ponds (S14): every live tree standing in water at least `minDepth` deep drowns and stands as a snag. `depth` is the pond depth field on the cell grid.
+   * Returns how many died. The cover is rebuilt and the list synced at once, so the snags show on the next snapshot.
+   */
+  drown(depth: Float32Array, minDepth = 0.25): number {
+    let n = 0;
+    for (let i = 0; i < this.count; i++) {
+      if (this.stage[i] >= Stage.Snag) continue;
+      if (depth[this.cellOf(this.x[i], this.y[i])] < minDepth) continue;
+      this.snag(i);
+      n++;
+    }
+    if (n > 0) {
+      this.recomputeCover();
+      this.sync();
+      this.host.changed();
+    }
+    return n;
+  }
+
   /** A flood ended: its cells are bare, wet ground for the next year and a half. */
   floodEnded(mask: Uint8Array, sev: number, tick: number): void {
     this.floodMask = mask;

@@ -164,6 +164,57 @@ def s8_table(specs, scenario, burn):
               + "). Cougar country gets the deer instead.")
 
 
+def s14_stats(d, scenario, burn):
+    """Beaver and pond numbers of one screen (S14). Returns None when the CSVs have no pop_beaver column."""
+    files = sorted(glob.glob(os.path.join(d, scenario, 'seed_*.csv')))
+    n = len(files)
+    out = {'n': n, 'bv_any': False, 'bv_present': 0, 'bv_end': 0, 'persist': {sp: 0 for sp in ('bison', 'wolf', 'raven', 'pronghorn')}}
+    acc = {k: [] for k in ('pop', 'colonies', 'ponds', 'area', 'meadow_area', 'built', 'breached', 'meadows', 'left', 'founded', 'wolfkills', 'drowned', 'wdm')}
+    for f in files:
+        rows = list(csv.DictReader(open(f)))
+        if not rows or 'pop_beaver' not in rows[0]:
+            return None
+        y_end = float(rows[-1]['year'])
+        rs = [r for r in rows if float(r['year']) >= burn * y_end] or rows
+        col = lambda k, rr=rs: [float(r.get(k) or 0) for r in rr]
+        bv = col('pop_beaver')
+        out['bv_any'] |= max(float(r['pop_beaver']) for r in rows) > 0
+        out['bv_present'] += sum(v > 0 for v in bv) / len(bv) >= 0.9
+        out['bv_end'] += float(rows[-1]['pop_beaver']) > 0
+        out['persist']['bison'] += float(rows[-1]['pop_bison']) > 0
+        for sp in ('wolf', 'raven', 'pronghorn'):
+            v = [float(r.get(f'pop_{sp}') or 0) for r in rows]
+            out['persist'][sp] += sum(x > 0 for x in v) / len(v) >= 0.9
+        yrs = (float(rs[-1]['year']) - float(rs[0]['year'])) or 1
+        mean = lambda k: sum(col(k)) / len(rs)
+        per100 = lambda k: sum(col(k)) / yrs * 100
+        acc['pop'].append(mean('pop_beaver')); acc['colonies'].append(mean('beaver_colonies')); acc['ponds'].append(mean('beaver_ponds'))
+        acc['area'].append(mean('beaver_pond_area')); acc['meadow_area'].append(mean('beaver_meadow_area'))
+        acc['built'].append(per100('beaver_dams_built')); acc['breached'].append(per100('beaver_dams_breached')); acc['meadows'].append(per100('beaver_meadows'))
+        acc['left'].append(per100('beaver_left')); acc['founded'].append(per100('beaver_founded')); acc['wolfkills'].append(per100('killed_beaver'))
+        acc['drowned'].append(per100('beaver_trees_drowned')); acc['wdm'].append(mean('water_dist_mean'))
+    out['acc'] = {k: (sum(v) / len(v) if v else float('nan')) for k, v in acc.items()}
+    return out
+
+
+def s14_table(specs, scenario, burn):
+    """The S14 table: beaver presence, ponds and meadows, and whether the core species still persist (control = the first screen)."""
+    stats = [(name, s14_stats(d, scenario, burn)) for name, d in specs]
+    if not stats or any(s is None for _, s in stats) or not any(s['bv_any'] for _, s in stats):
+        return
+    ctl_name, ctl = stats[0]
+    print('\nS14: beavers and ponds (control = ' + ctl_name + ')')
+    print('| Screen | Seeds | Beavers present >= 90% / alive at end | Mean beavers | Colonies | Ponds | Pond area m2 | Meadow m2 | Dams built / breached / meadows per century | Colonies founded / left per century | Wolf kills per century | Trees drowned per century | Mean water dist m | Bison | Wolf | Raven | Pronghorn | Worst drop vs control |')
+    print('|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|')
+    for name, s in stats:
+        n, a = s['n'], s['acc']
+        tol = max(1, round(n / 32))
+        drops = {sp: ctl['persist'][sp] - s['persist'][sp] for sp in s['persist']}
+        print(f"| {name} | {n} | {s['bv_present']}/{n} / {s['bv_end']}/{n} | {a['pop']:.1f} | {a['colonies']:.2f} | {a['ponds']:.2f} | {a['area']:.0f} | {a['meadow_area']:.0f} "
+              f"| {a['built']:.1f} / {a['breached']:.1f} / {a['meadows']:.1f} | {a['founded']:.1f} / {a['left']:.1f} | {a['wolfkills']:.1f} | {a['drowned']:.1f} | {a['wdm']:.1f} | "
+              + ' | '.join(f"{s['persist'][sp]}/{n}" for sp in ('bison', 'wolf', 'raven', 'pronghorn')) + f" | {max(drops.values())} (tolerance {tol}) |")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('screens', nargs='+', help='NAME=batch-out-dir, simplest config first')
@@ -195,7 +246,9 @@ def main():
         print(f"| {s['name']} | {s['n']} | {s['years']:.0f} | {s['persist']}/{s['n']} (need {s['need_p']}){mark(g['persist'])} "
               f"| {s['present']}/{s['n']} (need {s['need_pr']}){mark(g['present'])} | {s['starve']:.0%}{mark(g['starve'])} "
               f"| {s['cvw']:.2f} | {s['corr']:.2f}{mark(g['corr'])} | {'yes' if s['eligible'] else 'no'} |")
-    s8_table([(spec.partition('=')[0], spec.partition('=')[2]) if '=' in spec else (os.path.basename(spec.rstrip('/')), spec) for spec in a.screens], a.scenario, a.burn)
+    specs = [(spec.partition('=')[0], spec.partition('=')[2]) if '=' in spec else (os.path.basename(spec.rstrip('/')), spec) for spec in a.screens]
+    s8_table(specs, a.scenario, a.burn)
+    s14_table(specs, a.scenario, a.burn)
     elig = [s for s in rows if s['eligible']]
     if not elig:
         print('\nNo screen meets every gate: keep the current default.')

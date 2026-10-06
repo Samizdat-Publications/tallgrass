@@ -15,6 +15,7 @@ import { RegionalPool } from './region';
 import { SmallPrey, TAKE_KINDS } from './smallprey';
 import { Coyotes } from './sp/coyote';
 import { MuleDeer } from './sp/muledeer';
+import { Beavers, emptyBeaverRow } from './sp/beaver';
 import { flightStep, Raptors } from './sp/raptor';
 import { AGENT_STRIDE, CARCASS_STRIDE, F_ALPHA, F_INFECTED, F_JUVENILE, F_MALE, F_MANGE, F_MIGRANT, F_PREGNANT, F_STOT, Intervention, SimLike, Snapshot, SPECIES_COUNT, SPECIES_KEYS, Sp, St, YEAR_TICKS, SEASON_TICKS, BASE_YEAR_TICKS, setCalendarScale } from './types';
 import { COAT_BASE, COAT_RANGE, DIET, IS_PREY, isGrazer, REACT, SPECIES, THREAT } from './species';
@@ -37,7 +38,8 @@ export type SimEventKind =
   | 'introduced' | 'removed' | 'culled' | 'fire' | 'record' | 'elder' | 'firstKill' | 'plague' | 'rain'
   | 'immigrated' | 'emigrated' | 'recolonized' | 'distemper' | 'mange' | 'townFounded' | 'townLost' | 'sylvaticPlague'
   | 'hareBoom' | 'hareCrash' | 'coyotePups' | 'mesoRelease' | 'storm' | 'lightningFire' | 'eaglesArrive' | 'hawksReturn'
-  | 'blizzard' | 'hardWinter' | 'flood' | 'grovePlanted' | 'dustStorm' | 'grasshopperOutbreak' | 'springFlood' | 'encroachment';
+  | 'blizzard' | 'hardWinter' | 'flood' | 'grovePlanted' | 'dustStorm' | 'grasshopperOutbreak' | 'springFlood' | 'encroachment'
+  | 'damBuilt' | 'pondFilled' | 'damBreached' | 'beaverMeadow' | 'colonyLeft';
 
 export interface SimEvent {
   tick: number;
@@ -93,6 +95,9 @@ export class Sim implements SimLike {
   readonly raptors: Raptors;
   /** Mule deer (S8): the habitat map and founder groups. Inert (never read) while no mule deer lives in the valley. */
   readonly mule: MuleDeer;
+  /** Beavers (S14): colonies, dams, ponds and their effects. Null unless `beavers` or `beaver.initial` is above 0. */
+  beavers: Beavers | null = null;
+  private beaversSent = 0;
   readonly prey: BucketGrid;
   readonly pred: BucketGrid;
   private preyList = new Int32Array(4096);
@@ -226,9 +231,10 @@ export class Sim implements SimLike {
     this.p = applyOverrides(defaultParams(), opts.params);
     setCalendarScale(this.p.calendarScale);
     this.rng = new Rng(this.seed);
-    this.world = opts.world ?? generateWorld(this.seed);
-    // dynamic trees rewrite the cover, capacity and tree arrays: work on a copy, so a world handed in by the caller is never changed
-    if (this.p.dynamicTrees > 0) this.world = { ...this.world, cover: new Float32Array(this.world.cover), capacity: new Float32Array(this.world.capacity), trees: new Float32Array(this.world.trees) };
+    // the sim owns its World object (a shallow copy): the fields that dynamic trees and beaver ponds rewrite are copied when those systems start, so a world handed
+    // in by the caller (or the generator's) is never changed
+    this.world = { ...(opts.world ?? generateWorld(this.seed)) };
+    if (this.p.dynamicTrees > 0) this.copyCover();
     this.env = new Environment(this.rng.fork(11));
     this.env.climateAmp = this.p.climateAmp;
     this.env.greenUpShift = this.p.greenUpShift;
@@ -254,30 +260,8 @@ export class Sim implements SimLike {
     const n = this.world.n;
     this.waterGX = new Float32Array(n * n);
     this.waterGY = new Float32Array(n * n);
-    let wd = this.world.waterDist;
-    if (this.p.drinkSpots > 0) {
-      // keep the water cells in coarse 40 m blocks picked by a seeded hash (no rng draws), so each pond and the creek keep a few drinking places
-      const w = this.world.water, src = new Uint8Array(n * n), blk = Math.max(1, Math.round(40 / this.world.cell));
-      for (let k = 0; k < n * n; k++) {
-        if (!w[k]) continue;
-        const bi = ((k % n) / blk) | 0, bj = ((k / n / blk) | 0);
-        let h = (bi * 73856093) ^ (bj * 19349663) ^ (this.seed * 83492791);
-        h = Math.imul(h ^ (h >>> 13), 1274126177);
-        if (((h >>> 8) & 0xffff) / 0x10000 < this.p.drinkSpots) src[k] = 1;
-      }
-      wd = distanceTransform(src, n, this.world.cell);
-    }
-    this.drinkD = wd;
-    for (let j = 0; j < n; j++) {
-      for (let i = 0; i < n; i++) {
-        const c = j * n + i;
-        const gx = (i < n - 1 ? wd[c + 1] : wd[c]) - (i > 0 ? wd[c - 1] : wd[c]);
-        const gy = (j < n - 1 ? wd[c + n] : wd[c]) - (j > 0 ? wd[c - n] : wd[c]);
-        const l = Math.hypot(gx, gy) || 1;
-        this.waterGX[c] = -gx / l;
-        this.waterGY[c] = -gy / l;
-      }
-    }
+    this.drinkD = this.world.waterDist;
+    this.buildWaterFields();
     this.coyotes = new Coyotes(this.a, this.p, this.env, this.seed, {
       get tick() { return self.tick; },
       get size() { return self.world.size; },
@@ -366,8 +350,10 @@ export class Sim implements SimLike {
         },
       });
     }
+    if (this.p.beavers > 0 || this.p.species[Sp.Beaver].initial > 0) this.startBeavers();
     this.populate();
     this.coyotes.seedFounders();
+    this.beavers?.seedFounders();
     if (this.p.openPrairie > 0 || this.p.ravenVagrants > 0) {
       this.region = new RegionalPool(this.seed, COAT_BASE);
       this.region.seedFrom(this.a.sp, this.a.alive, this.a.genes, this.a.hi);
@@ -381,6 +367,82 @@ export class Sim implements SimLike {
   }
 
   // ------------------------------------------------------------------ setup
+
+  /** Cover, capacity and the tree list are rewritten by dynamic trees and drowned by beaver ponds: the sim works on its own copies. */
+  private ownCover = false;
+  private copyCover(): void {
+    if (this.ownCover) return;
+    this.ownCover = true;
+    const w = this.world;
+    w.cover = new Float32Array(w.cover);
+    w.capacity = new Float32Array(w.capacity);
+    w.trees = new Float32Array(w.trees);
+  }
+
+  /**
+   * Build the beaver system (S14): at the start when `beavers` or `beaver.initial` is on, or the first time the god tool puts a beaver in the valley. It
+   * copies the fields ponds rewrite (the water mask and surface, waterDist, moisture, and cover, capacity and trees for the drowned trees) and finds the sites.
+   */
+  private startBeavers(): Beavers {
+    if (this.beavers !== null) return this.beavers;
+    const w = this.world, self = this;
+    this.copyCover();
+    w.water = new Uint8Array(w.water);
+    w.waterHeight = new Float32Array(w.waterHeight);
+    w.waterDist = new Float32Array(w.waterDist);
+    w.moisture = new Float32Array(w.moisture);
+    if (this.p.drinkSpots <= 0) this.drinkD = w.waterDist; // the drink distance is the world's own waterDist unless drink spots thin it
+    this.beavers = new Beavers(this.a, this.p, this.env, this.seed, this.world, this.veg, {
+      get tick() { return self.tick; },
+      get pred() { return self.pred; },
+      get predList() { return self.predList; },
+      get predN() { return self.predN; },
+      vitals: (i) => this.vitals(i, this.p.species[Sp.Beaver]),
+      water: (x, y, out) => {
+        const c = this.veg.cellAt(x, y);
+        out[0] = this.waterGX[c]; out[1] = this.waterGY[c]; out[2] = this.drinkD[c];
+      },
+      leave: (i) => this.leaveValley(i),
+      noteBirths: (n) => { this.cBirths[Sp.Beaver] += n; },
+      noteArrivals: (n) => { this.cImm[Sp.Beaver] += n; },
+      markPresent: () => { this.everPresent[Sp.Beaver] = 1; },
+      event: (kind, sp, x, y, a, b) => this.event(kind, sp, x, y, a, b),
+    }, {
+      waterChanged: () => { this.buildWaterFields(); this.mule.invalidate(); },
+      drown: this.p.dynamicTrees > 0 ? (depth) => this.trees!.drown(depth) : null,
+      staticTreesChanged: (live) => this.raptors.refreshTrees(live),
+    });
+    return this.beavers;
+  }
+
+  /** The unit vectors toward water and the distance to a place to drink; built at the start and again whenever beaver ponds change the water (S14). */
+  private buildWaterFields(): void {
+    const n = this.world.n;
+    let wd = this.world.waterDist;
+    if (this.p.drinkSpots > 0) {
+      // keep the water cells in coarse 40 m blocks picked by a seeded hash (no rng draws), so each pond and the creek keep a few drinking places
+      const w = this.world.water, src = new Uint8Array(n * n), blk = Math.max(1, Math.round(40 / this.world.cell));
+      for (let k = 0; k < n * n; k++) {
+        if (!w[k]) continue;
+        const bi = ((k % n) / blk) | 0, bj = ((k / n / blk) | 0);
+        let h = (bi * 73856093) ^ (bj * 19349663) ^ (this.seed * 83492791);
+        h = Math.imul(h ^ (h >>> 13), 1274126177);
+        if (((h >>> 8) & 0xffff) / 0x10000 < this.p.drinkSpots) src[k] = 1;
+      }
+      wd = distanceTransform(src, n, this.world.cell);
+    }
+    this.drinkD = wd;
+    for (let j = 0; j < n; j++) {
+      for (let i = 0; i < n; i++) {
+        const c = j * n + i;
+        const gx = (i < n - 1 ? wd[c + 1] : wd[c]) - (i > 0 ? wd[c - 1] : wd[c]);
+        const gy = (j < n - 1 ? wd[c + n] : wd[c]) - (j > 0 ? wd[c - n] : wd[c]);
+        const l = Math.hypot(gx, gy) || 1;
+        this.waterGX[c] = -gx / l;
+        this.waterGY[c] = -gy / l;
+      }
+    }
+  }
 
   private defaultGenes(sp: number, out: Float32Array, o: number): void {
     const r = this.rng;
@@ -465,7 +527,7 @@ export class Sim implements SimLike {
     // above keep their own layouts and draws. Species that live as density fields (prairie dogs, and the jackrabbit when smallPrey
     // is on) are seeded by SmallPrey instead; the jackrabbit is the one field species that still has an agent form (smallPrey off).
     for (const d of SPECIES) {
-      if (d.id === Sp.Bison || d.id === Sp.Deer || d.id === Sp.Wolf || d.id === Sp.Cougar || d.id === Sp.Raven || d.id === Sp.MuleDeer) continue;
+      if (d.id === Sp.Bison || d.id === Sp.Deer || d.id === Sp.Wolf || d.id === Sp.Cougar || d.id === Sp.Raven || d.id === Sp.MuleDeer || d.id === Sp.Beaver) continue;
       if (d.repr === 'field' && (this.p.smallPrey > 0 || d.id !== Sp.Rabbit)) continue;
       let left = P[d.id].initial;
       while (left > 0) {
@@ -675,6 +737,7 @@ export class Sim implements SimLike {
     this.pred.build(this.predList, this.predN, a.x, a.y);
     this.updatePacks();
     if (this.pop[Sp.Coyote] > 0) this.coyotes.step(t);
+    if (this.beavers !== null) this.beavers.step(t);
     if (this.p.raptors > 0 || this.pop[Sp.Eagle] + this.pop[Sp.Hawk] > 0) this.raptors.step(t);
     if (this.region !== null) this.openPrairieStep(t);
     if (this.dis.on) this.dis.step(this.pop[Sp.Wolf]);
@@ -706,6 +769,9 @@ export class Sim implements SimLike {
       } else if (s === Sp.Eagle || s === Sp.Hawk) {
         if ((i + t) % 4 === 0) this.raptors.think(i);
         this.raptors.live(i);
+      } else if (s === Sp.Beaver && this.beavers !== null) {
+        if ((i + t) % 4 === 0) this.beavers.think(i);
+        this.beavers.live(i);
       }
     }
 
@@ -1605,6 +1671,12 @@ export class Sim implements SimLike {
     let tgt = -1;
     if (a.same(a.target[i], a.targetId[i])) tgt = a.target[i];
     else if (pk >= 0 && this.packTarget[pk] >= 0 && a.energy[i] < 0.9 && a.same(this.packTarget[pk], this.packTargetId[pk])) tgt = this.packTarget[pk];
+    if (tgt >= 0 && a.sp[tgt] === Sp.Beaver && this.beavers !== null && this.beavers.safe(tgt)) {
+      // the beaver reached the water: the hunt is off
+      a.target[i] = -1;
+      if (pk >= 0 && this.packTarget[pk] === tgt) this.packTarget[pk] = -1;
+      tgt = -1;
+    }
     const resting = a.timer[i] < 0; // negative timer = exhausted cooldown
     if (resting) a.timer[i] += 3;
 
@@ -1635,6 +1707,8 @@ export class Sim implements SimLike {
             if (dd > reach) continue;
             const dietW = DIET[Sp.Wolf][a.sp[j]];
             if (dietW <= 0) continue;
+            // a beaver in the water is out of reach (S14): wolves take them on land only
+            if (a.sp[j] === Sp.Beaver && this.beavers !== null && this.beavers.safe(j)) continue;
             const Pj = this.p.species[a.sp[j]];
             if (Pj.hideAge > 0 && a.age[j] < Pj.hideAge && a.state[j] === St.Rest && dd > 5) continue;
             const camo = Pj.camo;
@@ -2290,6 +2364,12 @@ export class Sim implements SimLike {
       this.event('introduced', sp, x ?? 0, y ?? 0, 0, 0);
       return;
     }
+    if (sp === Sp.Beaver) {
+      // beavers (S14): set down at the point (or on the creek), they walk to the creek and look for the best free site (the first call builds the beaver system)
+      const n = this.startBeavers().introduce(count, x, y);
+      this.event('introduced', sp, x ?? 0, y ?? 0, n, 0);
+      return;
+    }
     if (sp === Sp.Wolf) {
       let left = count;
       while (left > 0) {
@@ -2442,6 +2522,7 @@ export class Sim implements SimLike {
     const radius = natural !== undefined ? p.floodBand : 12 + 38 * sev;
     const grassHit = natural !== undefined ? p.floodGrass : 0.85;
     const rng = natural ?? this.rng;
+    if (this.beavers !== null) this.beavers.onFlood(sev);
     const mask = new Uint8Array(w.n * w.n);
     for (let c = 0; c < mask.length; c++) {
       if (!w.water[c] && w.waterDist[c] <= radius) {
@@ -3124,6 +3205,15 @@ export class Sim implements SimLike {
     row.raptor_takes_hare = row.takes_hare_eagle + row.takes_hare_hawk;
     row.raptor_takes_dog = row.takes_dog_eagle + row.takes_dog_hawk;
     this.raptors.sampleRow(row);
+    // beaver ponds (S14): colonies, dams, ponds and meadows now and the counts since the last sample (all 0 with the beaver system off), and the mean
+    // distance from a land cell to water (m), which a pond shortens
+    if (this.beavers !== null) this.beavers.sampleRow(row); else emptyBeaverRow(row);
+    {
+      const wd = this.world.waterDist, wat = this.world.water;
+      let s = 0, k = 0;
+      for (let c = 0; c < wd.length; c++) if (!wat[c]) { s += wd[c]; k++; }
+      row.water_dist_mean = k ? s / k : 0;
+    }
     row.fires_lightning = this.cLightning;
     row.storm_cells = this.storms ? this.storms.cells.length : 0;
     // winter (S11): snow now (mean and deepest cell), the highest mean depth since the last sample, and blizzards and hard winters begun since then (all 0 with snowDepth off)
@@ -3268,6 +3358,17 @@ export class Sim implements SimLike {
         snap.trees = this.trees.toArray();
         snap.treeCover = this.trees.coverBytes();
         this.treesSent = this.trees.version;
+      }
+    }
+    if (this.beavers !== null) {
+      // beaver ponds (S14): the depth field, the dams and the lodges, whenever they changed since the last snapshot that carried them (with the vegetation texture)
+      snap.pondVersion = this.beavers.ponds.version;
+      if (withVeg && this.beavers.ponds.version !== this.beaversSent) {
+        snap.ponds = this.beavers.ponds.depthBytes();
+        snap.dams = this.beavers.ponds.damArray();
+        snap.lodges = this.beavers.lodgeArray();
+        snap.drownedTrees = Uint32Array.from(this.beavers.ponds.drownedTrees);
+        this.beaversSent = this.beavers.ponds.version;
       }
     }
     if (this.dust !== null) { const d = this.dust.toArray(); if (d !== null) snap.dust = d; }
