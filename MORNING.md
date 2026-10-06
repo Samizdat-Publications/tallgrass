@@ -285,6 +285,7 @@ Every issue and its triage is in `REVIEWS.md`.
 - **Review images and three review reels are committed** with their critiques (the reels are 185 MB together, the rest is hundreds of PNG stills), so the local `.git` is about 700 MB, mostly loose objects that `git gc` would pack smaller. If you'd rather keep video and stills out of git, gitignore `review/**/*.mp4` from now on; taking existing files out of history needs a force-push, which I never do.
 
 ## Blocked / cut
+- 2026-10-06: updating the making-of artifact (version 12) was denied by this session's permission check, so it still ends at the beta. The new page is generated: `python tools/journey_page.py --artifact --out scratch/making-of/index.html`, then republish it to https://claude.ai/artifact/7jPHUFvbzTv6AUz5UCA3Mu with the seven `journey/20261006-*` images as files. A future session can do it if you allow Artifact publishes.
 - **PixelLab:** no key (blank in Noclip's `.env`). Icons are hand-made SVG.
 - **seked `.env`:** doesn't exist; keys came from Noclip's `.env` plus your `ELEVENLABS_API_KEY` environment variable.
 - **Custom subagent types and the Stop hook:** `SETUP.cmd` hadn't been run, so I installed `.claude/` at 01:00; the custom agent types weren't registered mid-session, so I use general-purpose agents with the same prompts.
