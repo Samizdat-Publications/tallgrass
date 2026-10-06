@@ -17,3 +17,14 @@ S8: mule deer and cougars (control = X0)
 No screen has cougars, so there is no cougar adoption verdict.
 
 Adopt: X0 (wolf CV 0.28; ties within 0.01 go to the simpler config)
+| Screen | Seeds | Years | Bison persist | Presence >= 90% | Pronghorn starve | Wolf CV | Wolf-bison corr (1-3 yr) | Eligible |
+|---|---|---|---|---|---|---|---|---|
+| X5 | 16 | 200 | 16/16 (need 15) | 16/16 (need 15) | 47% | 0.29 | 0.60 | yes |
+
+S8: mule deer and cougars (control = X5)
+| Screen | Seeds | Mule deer present >= 90% | Cougar presence pooled / median / seeds >= 0.8 | Bison | Wolf | Raven | Pronghorn | Worst drop vs control | Cougar kills per century: mule deer / pronghorn / bison |
+|---|---|---|---|---|---|---|---|---|---|
+| X5 | 16 | 0/16 | none | 16/16 | 16/16 | 16/16 | 16/16 | 0 (tolerance 1) | 0.0 / 0.0 / 0.0 |
+No screen has cougars, so there is no cougar adoption verdict.
+
+Adopt: X5 (wolf CV 0.29; ties within 0.01 go to the simpler config)
