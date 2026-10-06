@@ -2135,11 +2135,12 @@ export class AnimalLayer {
       const camP = this.shared.uCamPos.value;
       const camD = Math.hypot(x - camP.x, g0 - camP.y, z - camP.z);
       const sizeBoost = pr.kind === 0 ? legBoost(pr, vs, camD, this.shared.uPxK.value) : 1;
-      // R6 stotting: a mule deer that flees or runs bounds on all four feet at once; the stride (and so the foot lock) follows the weight
+      // R6 stotting: a mule deer bounds on all four feet at once while the sim flags it (F_STOT, set for St.Flee); an unflagged deer
+      // running normally keeps its ordinary gallop. The stride (and so the foot lock) follows the weight
       let stotW = 0;
       if (pr.stot) {
         const fl8 = A[o + 8] | 0;
-        const stT = this.timeScale > 0 && ((fl8 & F_STOT) !== 0 || state === St.Flee || state === St.Run) ? smoothstep(4.5, 8, gaitSpd) : 0;
+        const stT = this.timeScale > 0 && (fl8 & F_STOT) !== 0 ? smoothstep(4.5, 8, gaitSpd) : 0;
         S.stot[slot] += (stT - S.stot[slot]) * (stT > S.stot[slot] ? kStotIn : kStotOut);
         stotW = S.stot[slot];
       }

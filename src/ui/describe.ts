@@ -179,6 +179,11 @@ export function animalCaption(sp: number, male: boolean, age: number, matureAge:
     case 3: name = juvenile ? 'Pronghorn fawn' : male ? 'Pronghorn buck' : 'Pronghorn doe'; break;
     case 4: name = juvenile ? 'Rabbit kit' : male ? 'Rabbit buck' : 'Rabbit doe'; break;
     case 5: name = juvenile ? 'Cougar kitten' : male ? 'Cougar, male' : 'Cougar, female'; break;
+    case 6: name = juvenile ? 'Coyote pup' : male ? 'Male coyote' : 'Female coyote'; break;
+    case 8: name = juvenile ? 'Eaglet' : S; break;
+    case 9: name = juvenile ? 'Hawk fledgling' : S; break;
+    case 10: name = juvenile ? 'Mule deer fawn' : male ? 'Mule deer buck' : 'Mule deer doe'; break;
+    case 11: name = juvenile ? 'Beaver kit' : S; break;
     default: name = S;
   }
   return `${name}, ${ageText(age, sp, maxAge)}`;
