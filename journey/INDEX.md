@@ -104,3 +104,4 @@ Chronological. Use this to cut a progression video or landing page.
 | 2026-10-06 16:19 | still | [20261006-161900_still_v2-planted-grove.jpg](20261006-161900_still_v2-planted-grove.jpg) | A grove planted with the god tool, drawn with the creek grove trees | review/wip/groves-flood |
 | 2026-10-06 16:19 | still | [20261006-161900_still_v2-flood.jpg](20261006-161900_still_v2-flood.jpg) | The creek in flood: standing water over the banks, herds pushed to higher ground | review/wip/groves-flood |
 | 2026-10-06 17:48 | ui | [20261006-174800_ui_v2-tools-rail.jpg](20261006-174800_ui_v2-tools-rail.jpg) | Fourteen god tools in three grouped columns, with the town challenge card | review/wip/tools-v2 |
+| 2026-10-06 19:20 | still | [20261006-192000_still_v2-dynamic-trees.jpg](20261006-192000_still_v2-dynamic-trees.jpg) | Dynamic trees after 30 valley years: young cottonwoods filling in along the creek | review/wip/dyntrees |

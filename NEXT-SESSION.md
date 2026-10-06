@@ -9,7 +9,7 @@
   Diagnosis done (review/stability/v7diag/RESULT.md): raptors cause it, storms do not. New param raptorDogPref (main a6b02bb). v7b = v7a + raptorDogPref 0.25 passed its 32-seed screen (review/stability/v7b/SCREEN.md).
 - RUNNING: v7b acceptance, 20 seeds x 1,000 generations, started 18:38 from scratch/frozen/a6b02bb, log scratch/accept_v7b.log, out scratch/frozen/a6b02bb/review/stability/v7b-a6b02bb/baseline (ETA ~21:40). Then: python tools/dynamics.py on it plus scratch/pdpres.py-style per-world presence check (every species >= 90% in >= 18/20; bison >= 19/20; wolf CV >= 0.2; raven CV >= 0.1). If it passes, shocks from the same worktree: --seeds 20 --ticks 720000 --sample 1500 --scenario cull70,drought,wolfwipe --threads 10, same params; bison recover >= 80%. Then adopt per TRACK-S Handoff item 3 with SIX params (add raptorDogPref 0.25; pin raptorDogPref 1 in CHALLENGE_PIN).
 - Done since: S8 stotting from F_STOT and captions (merged), god tools v2 on the rail with grouped layout (merged), 4-row population panel fix. All deployed 17:44, live check clean.
-- Remaining render gaps from TRACK-S Handoff item 2: S12 dust storms and grasshoppers, S13 dynamic trees (trees/treesVersion/treeCover), S14 ponds/dams/lodges/drownedTrees, grove shade on grass, grove shade.
+- S13 dynamic trees render merged 19:35 (deployed). Remaining render gaps from TRACK-S Handoff item 2: S12 dust storms and grasshoppers, S14 ponds/dams/lodges/drownedTrees, dynamic-tree follow-ups (grove dressing, cougar cover, director), grove shade on grass, grove shade.
 - Quota rule this session (owner): nothing new at 90% weekly, finish a step in progress up to 93%, never extra usage.
 
 ## State
