@@ -274,6 +274,9 @@ uniform float uMoistK;
 uniform float uWindGain;
 uniform float uCopper;
 uniform float uSnow;
+uniform sampler2D uSnowTex;   // S11 per-cell snow depth (world square, linear), used when uSnowOn is 1
+uniform float uSnowOn;
+uniform float uSnowFall;
 ${STORM_GUST_GLSL}
 uniform float uFrostG;
 
@@ -485,7 +488,10 @@ void main() {
   // stand in it: a depth in metres grows with the snow amount and the cover, only blades taller than it show, and what shows is the top
   // of the blade (vBur is the buried fraction), pressed over by the weight. Under deep snow just the tallest culms poke out, bent.
   float snowS = 0.0, snowPress = 0.0, vBur = 0.0, snowPoke = 0.0;
-  if (uSnow > 0.04) {
+  // the snow amount at this blade: the one global value, or (S11, uSnowOn = 1) the sim's local depth plus a floor from a falling snowfall
+  float snEff = uSnow;
+  if (uSnowOn > 0.5) snEff = tgSnowLocal(texture(uSnowTex, clamp(fuv, 0.0, 1.0)).r, uSnowFall);
+  if (snEff > 0.04) {
     vec3 Ng0 = normalize(vec3(-(st0.r * 2.0 - 1.0), 1.0, -(st0.g * 2.0 - 1.0)));
     float slopeG0 = sqrt(max(1.0 - Ng0.y * Ng0.y, 0.0)) / max(Ng0.y, 0.05);
     float aspectS = clamp(Ng0.z * 3.5, -1.0, 1.0) * smoothstep(0.03, 0.2, slopeG0);   // low sun toward -z: north faces hold snow
@@ -496,8 +502,8 @@ void main() {
     float edgeS = ((tusC - 0.5) * 0.5 + (rF - 0.5) * 0.36) * (1.0 - 0.5 * smoothstep(60.0, 400.0, dist));
     float potS = flatS * 0.62 + driftS * 0.5 + 0.28 * max(hr, 0.0) + 0.34 * min(hr, 0.0) + 0.22 * aspectS + patchyS
                - trodK * 0.5 - 0.4 * cover + 0.1 + edgeS;
-    snowS = tgSnowCover(potS, uSnow);
-    float sn1 = clamp(uSnow, 0.0, 1.0);
+    snowS = tgSnowCover(potS, snEff);
+    float sn1 = clamp(snEff, 0.0, 1.0);
     float depthM = snowS * (0.1 + 0.9 * pow(sn1, 0.8)) * 0.6 * uMaxH * (0.75 + 0.5 * u01(pcg(h6 + 9u)));
     // a few percent of the culms stand rooted high on a tussock or in a lee and stay clear of the drift: they poke out, bent over and tan
     snowPoke = step(0.945, u01(pcg(h6 + 10u))) * snowS;
@@ -668,13 +674,13 @@ void main() {
     // rime at dawn: shaded ground and patches only, never a blanket (uFrostG is zero from mid morning)
     rime = uFrostG * (0.25 + 0.75 * (1.0 - clamp(vTS, 0.0, 1.0))) * smoothstep(0.2, 0.7, rD + 0.3 * (patch1 - 0.5)) * (1.0 - snowS);
   }
-  vSn = vec4(snowS, rime, vBur, 0.0);
+  vSn = vec4(snowS, rime, vBur, clamp(snEff, 0.0, 1.0));
 #if LEVEL < 2
   {
     // copper-red bluestem: a share of the blades (stands of it, all the culms that carry a turkey foot) flush copper through autumn.
     // The flush fades out with distance (the ground and the far rings keep the plain cured palette).
     float bs = max(step(fract(rE * 17.0 + rC * 5.0), 0.05 + 0.75 * smoothstep(0.5, 0.74, tusC)), step(seedFlag, 1.5) * step(0.5, seedFlag));
-    vSd.x = uCopper * bs * (1.0 - smoothstep(14.0, 50.0, dist)) * (1.0 - 0.9 * uWinterK) * (1.0 - clamp(uSnow * 2.0, 0.0, 1.0));
+    vSd.x = uCopper * bs * (1.0 - smoothstep(14.0, 50.0, dist)) * (1.0 - 0.9 * uWinterK) * (1.0 - clamp(snEff * 2.0, 0.0, 1.0));
 #if LEVEL == 0
     vSd.y = 0.5 * (0.0075 + seedHW) * min(wScale, 3.0);
     vSd.z = seedHead * H;
@@ -948,7 +954,7 @@ void main() {
   // the foot of a buried blade, so a blade reads as grass standing in snow and never as a white spike. Everything per blade (the
   // cover, the frost, the buried share) comes from the vertex stage, so the snow-free pixel pays one test.
   if (vSn.x + vSn.y > 0.003) {
-    float sn1 = clamp(uSnow, 0.0, 1.0);
+    float sn1 = vSn.w;   // the snow amount at this blade (global, or the local depth with the S11 field), set in the vertex stage
     float capTip = smoothstep(0.86 - 0.36 * sn1, 1.0, v);
     float capUp = clamp((Nf.y - 0.1) * 1.54, 0.0, 1.0) * clamp((v - 0.1) * 1.43, 0.0, 1.0);
     float footK = (1.0 - clamp(v * 3.4, 0.0, 1.0)) * clamp(vSn.z * 5.5, 0.0, 1.0);
@@ -1088,6 +1094,7 @@ export class GrassField {
   private blackTex: THREE.DataTexture;
   private frameNo = 0;
   private snowU: { value: number } | null = null;
+  private snowDepthU: { tex: { value: THREE.Texture | null }; on: { value: number }; fall: { value: number } } | null = null;
   private droughtU: { value: number } | null = null;
   private frostU: { value: number } | null = null;
   private snowTry = 0;
@@ -1162,6 +1169,9 @@ export class GrassField {
       uSat: { value: 1 },
       uBounce: { value: 0.07 },
       uSnow: { value: 0 },
+      uSnowTex: { value: null as THREE.Texture | null },
+      uSnowOn: { value: 0 },
+      uSnowFall: { value: 0 },
       uFrostG: { value: 0 },
       uSpecK: { value: 1 },
       uMoon: { value: 0 },
@@ -1426,14 +1436,18 @@ export class GrassField {
     if (!this.snowU && (this.snowTry++ & 15) === 0) {
       let root: THREE.Object3D = this.object3D;
       while (root.parent) root = root.parent;
-      const tu = root.userData?.tgUniforms as { snow?: { value: number }; drought?: { value: number }; frost?: { value: number }; trailTex?: { value: THREE.Texture | null } } | undefined;
+      const tu = root.userData?.tgUniforms as { snow?: { value: number }; snowDepthTex?: { value: THREE.Texture | null }; snowDepthOn?: { value: number }; snowDepthFall?: { value: number }; drought?: { value: number }; frost?: { value: number }; trailTex?: { value: THREE.Texture | null } } | undefined;
       if (tu?.snow) this.snowU = tu.snow;
+      if (tu?.snowDepthTex && tu.snowDepthOn && tu.snowDepthFall) this.snowDepthU = { tex: tu.snowDepthTex, on: tu.snowDepthOn, fall: tu.snowDepthFall };
       if (tu?.frost) this.frostU = tu.frost;
       if (tu?.drought) this.droughtU = tu.drought;
       if (tu?.trailTex) this.trailU = tu.trailTex;
     }
     u.uTrail.value = this.trailU?.value ?? this.blackTex;
     u.uSnow.value = this.snowU?.value ?? 0;
+    u.uSnowTex.value = this.snowDepthU?.tex.value ?? this.blackTex;
+    u.uSnowOn.value = this.snowDepthU?.on.value ?? 0;
+    u.uSnowFall.value = this.snowDepthU?.fall.value ?? 0;
     // rime on the blades only at dawn (dayFrac below about 0.3): the engine's frost also lingers through the morning and returns at dusk,
     // which would read as a frosted field all day
     u.uFrostG.value = (this.frostU?.value ?? 0) * (1 - smooth01((env.dayFrac - 0.26) / 0.06));

@@ -26,6 +26,7 @@ import { Storms } from './storms';
 import { DroneCamera, CameraPreset } from './camera';
 import { grassTint } from './grass';
 import { CURE_KEYS, LEAF_KEYS, PACK_KEYS, keyCurve } from './season';
+import { SnowDepth } from './snowdepth';
 
 export type { Quality } from './post';
 export { injectTerrainShadow } from './common';
@@ -152,6 +153,8 @@ export class Engine {
   private dustSm = 0;
   /** Falling-snow intensity 0..1: eased faster than the snowpack (flakes start and stop within seconds of the weather). */
   private snowfallSm = 0;
+  /** S11 per-cell snow depth (fed by setSnowDepth, only when the sim runs with snowDepth on). */
+  readonly snowDepth: SnowDepth;
   private readonly rainDir = new THREE.Vector3();
   /**
    * Fast-forward softening of the sun. At 10x and 100x the sun laps the sky several times a second, and a hard shadow whipping across
@@ -189,6 +192,8 @@ export class Engine {
 
     this.camera = new THREE.PerspectiveCamera(45, 16 / 9, 0.5, 9000);
     this.uniforms = createSharedUniforms(world.size);
+    this.snowDepth = new SnowDepth(world.size);
+    this.uniforms.snowDepthTex.value = this.snowDepth.tex;
 
     // vegetation texture: start from capacity so the world looks grassy before the sim sends data
     const n = world.n;
@@ -353,6 +358,11 @@ export class Engine {
     Object.assign(this.env, env);
   }
 
+  /** A new snow depth frame from the sim (Snapshot.snow: 32 x 32 bytes, depth x 255, row-major by y then x). Eased toward over about a second. */
+  setSnowDepth(bytes: Uint8Array): void {
+    this.snowDepth.setTarget(bytes);
+  }
+
   /** Apply the current env immediately without smoothing (call right after setEnv, before the first frame). */
   applyEnvNow(): void {
     this.firstFrame = true;
@@ -497,6 +507,7 @@ export class Engine {
     this.fireflies.dispose();
     this.storms.dispose();
     this.vegTexture.dispose();
+    this.snowDepth.dispose();
     this.renderer.dispose();
     this.renderer.domElement.remove();
   }
@@ -600,6 +611,11 @@ export class Engine {
     // effective snow: the weather's own snowfall, or the seasonal pack that lies on a deep-winter valley even when it is not snowing
     // (the pack follows the calendar directly; it is a slow curve, so it needs no easing of its own)
     u.snow.value = Math.max(sm.snow, keyCurve(PACK_KEYS, u.season.value));
+    // S11: with the sim's per-cell depth field the shaders read the local depth instead (the seasonal pack is the sim's own now);
+    // a falling snowfall still contributes a floor so a blizzard shows before the depth has built
+    this.snowDepth.update(dt);
+    u.snowDepthOn.value = this.snowDepth.on ? 1 : 0;
+    u.snowDepthFall.value = 0.35 * this.snowfallSm;
     u.rain.value = this.rainSm;
     // the streak volume (rain.ts) reads as rain from a side-on view; looking steeply down (the map view) it would be a scatter of
     // dashes in front of the lens, so it fades out there and the wet ground carries the rain alone (it also thins with altitude)
