@@ -1,6 +1,29 @@
 # Good morning: Tallgrass overnight report
 
-*(Updated 11:57 Sunday. I keep working until the deadline in `.claude/hooks/run_until.txt` (Sunday 12:00); this file is refreshed at every milestone.)*
+*(Updated 15:20 Tuesday 2026-10-06. This file is refreshed at every milestone.)*
+
+## v2 integration (session 2026-10-06 afternoon; live redeployed 15:15, live check clean)
+Everything Track S built in the cloud (S0 to S18) is now merged into main and live at https://tallgrass.stewartgregerson.workers.dev.
+
+**How to play:** open the link, or run `npm run dev` and open the local address. The left rail has the god tools; the menu (top right) has New valley, Challenges and the Field guide.
+
+**What's new since the beta**
+- Play: an Add prairie dogs tool starts a town where you click, so "The town that came back" can now be won. Four new challenges: meso (coyotes run wild after the wolves are trapped out), town, storm (five dry-lightning seasons) and cats (cougars and mule deer in a closed valley).
+- UI: on short screens with a challenge card, the tool rail now wraps into a second column instead of running under the population panel.
+- Ecology (all in the sim, merged): canid distemper and mange, open-prairie migrants, coyotes, jackrabbit and prairie dog fields with plague, storm cells and lightning fires, raptors, mule deer and working cougars, evolution v2, herd spacing, winter snow depth, dust storms, grasshoppers and spring floods, dynamic trees, beavers and moving water, lineage, share codes and replay, decade chronicle lines.
+- Checked: npm test (golden hashes 340c052c, 714770ae, 617dea6c), typecheck and build pass; a GPU playtest (2 min at 1x, 5 min at 10x, every new god tool, all four new challenges) and the live site show no console or page errors.
+
+**On by default (checkpoint v6b):** coyotes, jackrabbits, prairie dog towns with plague, open-prairie migrants, distemper and mange.
+
+**Still off by default, and why**
+- Raptors, storm cells, cougars, mule deer and herd spacing: this is the v7a candidate. Its acceptance (20 worlds x 1,000 generations, then the shock suite) is running on this machine now. They flip on only if it passes.
+- Snow depth, dust storms, grasshoppers, spring floods, dynamic trees, beavers, evolution v2: the renderer does not draw their fields yet (snow cover, groves, floods, ponds), or they have not had their own 32-world screen. Each stays off until it both draws and passes.
+- Lightning, blizzard, flood, disease and grove god tools work in the sim but have no toolbar buttons yet (R13).
+
+**v6b shock suite (finished):** bison persisted in 20 of 20 worlds and recovered in all of them after a 70% cull, a drought and a wolf wipeout (median recovery 44, 13 and 41 years). v6b stays the default.
+
+![The merged build, live](journey/20261006-152000_ui_v2-live-merged.jpg)
+![The town challenge and the new tool](journey/20261006-150500_ui_v2-town-rail.jpg)
 
 ## v2 beta progress (session wrap-up 2026-10-05 ~10:20; live redeployed 10:15, live check clean)
 Since the alpha (below), all merged, live and verified (npm test, build, foot-slip rig, review stills with no errors):

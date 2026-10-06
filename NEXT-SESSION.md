@@ -2,6 +2,13 @@
 
 **Updated:** 2026-10-04 afternoon, at the end of the v2 planning session. v1 is finished and live; v2 starts now. The plan is `V2-PLAN.md`.
 
+## State now (2026-10-06 15:25, single-mode lead session, weekly 85%)
+- Phase 1 done: origin/v2-sim (S0 to S18) merged into main, tests and build green, GPU playtest clean (tools/playtest.ts), deployed 15:15, live check clean. Added the Add prairie dogs tool and the wrapping tool rail.
+- Running: v7a acceptance, last 6 seeds (15 to 20), from frozen worktree scratch/frozen/c9c3f5a, log scratch/accept_v7a_rest6.log, output scratch/frozen/c9c3f5a/review/stability/v7a-c9c3f5a-rest6/baseline (inside the worktree). Seeds 1 to 14 are in review/stability/v7a-c9c3f5a-partial14/baseline.
+- Next: copy all 20 CSVs to review/stability/v7a-c9c3f5a/baseline, run python tools/dynamics.py on it; gates: core species in at least 18 of 20, bison at least 19 of 20, wolf CV at least 0.2, ravens CV at least 0.1. If it passes, run the shock suite from the same worktree (--seeds 20 --ticks 720000 --sample 1500 --scenario cull70,drought,wolfwipe, same params, --threads 10); bison must recover at least 80% after each shock. Then adopt v7a per TRACK-S.md Handoff item 3.
+- After that (quota permitting): TRACK-S Handoff item 2, render the new frame fields: S11 snow first, then S17 groves and flood, then S8 F_STOT and palette entries.
+- Quota rule this session (owner): nothing new at 90% weekly, finish a step in progress up to 93%, never extra usage.
+
 ## State
 - `main`: v1 ends at 0873cd1. The handoff commit after it adds V2-PLAN.md, these notes, TRACK-S.md, REQUESTS-R.md and a per-session Stop hook deadline. No v2 code yet.
 - Branch `v2-sim` (same commit) is for a cloud Track S session (V2-PLAN.md sections 0 and 4). The owner's credit dialog says the $250 applies automatically to cloud sessions; the owner checks the meters on the first cloud run.
