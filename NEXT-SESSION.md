@@ -2,11 +2,13 @@
 
 **Updated:** 2026-10-04 afternoon, at the end of the v2 planning session. v1 is finished and live; v2 starts now. The plan is `V2-PLAN.md`.
 
-## State now (2026-10-06 15:25, single-mode lead session, weekly 85%)
-- Phase 1 done: origin/v2-sim (S0 to S18) merged into main, tests and build green, GPU playtest clean (tools/playtest.ts), deployed 15:15, live check clean. Added the Add prairie dogs tool and the wrapping tool rail.
-- Running: v7a acceptance, last 6 seeds (15 to 20), from frozen worktree scratch/frozen/c9c3f5a, log scratch/accept_v7a_rest6.log, output scratch/frozen/c9c3f5a/review/stability/v7a-c9c3f5a-rest6/baseline (inside the worktree). Seeds 1 to 14 are in review/stability/v7a-c9c3f5a-partial14/baseline.
-- Next: copy all 20 CSVs to review/stability/v7a-c9c3f5a/baseline, run python tools/dynamics.py on it; gates: core species in at least 18 of 20, bison at least 19 of 20, wolf CV at least 0.2, ravens CV at least 0.1. If it passes, run the shock suite from the same worktree (--seeds 20 --ticks 720000 --sample 1500 --scenario cull70,drought,wolfwipe, same params, --threads 10); bison must recover at least 80% after each shock. Then adopt v7a per TRACK-S.md Handoff item 3.
-- After that (quota permitting): TRACK-S Handoff item 2, render the new frame fields: S11 snow first, then S17 groves and flood, then S8 F_STOT and palette entries.
+## State now (2026-10-06 18:35, single-mode lead session, weekly 86%)
+- Main is merged with v2-sim (S0 to S18), live and checked (last deploy 18:20). Added: Add prairie dogs tool, wrapping tool rail, snow depth render (S11), planted groves and floodwater render (S17). Default world is still v6b.
+- v7a acceptance finished (20 seeds): FAILED the presence gate on prairie dogs (11/20 worlds at >= 90% vs 20/20 for v6b; seed 15 lost its bison in year 948). Not adopted, shocks not run. review/stability/v7a-c9c3f5a/RESULT.md.
+  If the owner overrules: shock suite from scratch/frozen/c9c3f5a: npx tsx src/headless/batch.ts --seeds 20 --ticks 720000 --sample 1500 --scenario cull70,drought,wolfwipe --threads 10 --params "{\"raptors\":1,\"stormCells\":1,\"cougar.initial\":6,\"muledeer.initial\":60,\"herdSpacingGraze\":1.6}" --out review/stability/v7a-c9c3f5a-shocks
+  Better: find which v7a param hurts the towns (a 32-seed screen with raptors off, or with stormCells off), then a v7b candidate.
+- In flight: builder on branch r-stot-palette (S8 F_STOT stotting from the sim flag; species colours and names for ids 8 to 11 everywhere). Review its stills, merge, playtest, deploy.
+- Remaining render gaps from TRACK-S Handoff item 2: S12 dust storms and grasshoppers, S13 dynamic trees (trees/treesVersion/treeCover), S14 ponds/dams/lodges/drownedTrees, grove shade on grass, R13 toolbar buttons for lightning, blizzard, flood, disease and grove.
 - Quota rule this session (owner): nothing new at 90% weekly, finish a step in progress up to 93%, never extra usage.
 
 ## State

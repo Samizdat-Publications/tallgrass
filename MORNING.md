@@ -1,6 +1,6 @@
 # Good morning: Tallgrass overnight report
 
-*(Updated 15:20 Tuesday 2026-10-06. This file is refreshed at every milestone.)*
+*(Updated 18:30 Tuesday 2026-10-06. This file is refreshed at every milestone.)*
 
 ## v2 integration (session 2026-10-06 afternoon; live redeployed 15:15, live check clean)
 Everything Track S built in the cloud (S0 to S18) is now merged into main and live at https://tallgrass.stewartgregerson.workers.dev.
@@ -16,9 +16,16 @@ Everything Track S built in the cloud (S0 to S18) is now merged into main and li
 **On by default (checkpoint v6b):** coyotes, jackrabbits, prairie dog towns with plague, open-prairie migrants, distemper and mange.
 
 **Still off by default, and why**
-- Raptors, storm cells, cougars, mule deer and herd spacing: this is the v7a candidate. Its acceptance (20 worlds x 1,000 generations, then the shock suite) is running on this machine now. They flip on only if it passes.
+- Raptors, storm cells, cougars, mule deer and herd spacing (the v7a candidate): its acceptance failed on prairie dogs (see below).
 - Snow depth, dust storms, grasshoppers, spring floods, dynamic trees, beavers, evolution v2: the renderer does not draw their fields yet (snow cover, groves, floods, ponds), or they have not had their own 32-world screen. Each stays off until it both draws and passes.
 - Lightning, blizzard, flood, disease and grove god tools work in the sim but have no toolbar buttons yet (R13).
+
+**v7a (raptors, storms, cougars, mule deer, herd spacing) was not adopted.** The full 20-world acceptance passed bison (19 of 20), the other core species, wolf cycles (CV 0.26) and ravens (CV 0.18), but prairie dogs were present at least 90% of the time in only 11 of 20 worlds (v6b: 20 of 20), and one world lost its bison. v6b stays the default; details in `review/stability/v7a-c9c3f5a/RESULT.md`. You can overrule this in DECISIONS.md.
+
+**Rendered since the merge (still off by default in the sim):** per-cell snow depth (drifts in hollows, bare windswept ground) when snowDepth is on; planted groves and floodwater for the grove and flood god tools and spring floods. Redeployed 18:20, live check clean.
+
+![Snow depth from the sim](journey/20261006-171000_still_v2-snowdepth-top.jpg)
+![A flood](journey/20261006-183000_still_v2-flood.jpg)
 
 **v6b shock suite (finished):** bison persisted in 20 of 20 worlds and recovered in all of them after a 70% cull, a drought and a wolf wipeout (median recovery 44, 13 and 41 years). v6b stays the default.
 
