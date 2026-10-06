@@ -286,6 +286,48 @@ export interface Params {
   greenUpShift: number;
   /** Chance per day, in summer, that a natural dry spell starts (0.1 = as screened; 0 = none, S17 Storm season). */
   summerDroughtP: number;
+  /** Dust storms (S12, dust.ts; 0 = off). In a drought, with the wind above dustWind and at least dustBare of the land under dustBareGrass of grass,
+   *  a storm starts (the plan's 0.6 wind and 0.3 grass never met in a drought: the valley's wind is a slow N(0.45, 0.07), so 0.6 is 2% of the time and 0.5 is a quarter of it;
+   *  grass under 0.35 is about 40% of the land in a drought, under 0.3 only 34%) (chance dustP per 10-tick check, at least dustCooldown valley years apart). It lasts 200 to 450 ticks; the bare cells lose dustSoil
+   *  of soil fertility over it, and every animal's sight is multiplied by 1 - (1 - dustVision) x intensity. */
+  dustStorms: number;
+  dustWind: number;
+  dustBare: number;
+  dustBareGrass: number;
+  dustSoil: number;
+  dustVision: number;
+  dustP: number;
+  dustCooldown: number;
+  /** Grasshopper outbreaks (S12, hoppers.ts; 0 = off). A density field on the coarse grid that grows in the summer at hopperR x (dryHot - hopperCrit)
+   *  per valley year (hot dry weather surges, rain suppresses it by hopperRain), dies back at hopperDie in the cold season, is topped up to hopperSeed
+   *  of the cell in summer, and strips grass at hopperEat. `grasshopperOutbreak` fires when the valley mean passes hopperOutbreak. Coyotes (mousing),
+   *  ravens (foraging) and hawks (stooping) feed on it at hopperCoyote, hopperRaven and hopperHawk. */
+  grasshoppers: number;
+  hopperR: number;
+  hopperCrit: number;
+  hopperRain: number;
+  /** Year-to-year swing (+- of the dry-heat index) in egg and nymph survival, a fixed draw per valley year. */
+  hopperYear: number;
+  hopperDie: number;
+  hopperSeed: number;
+  hopperEat: number;
+  hopperOutbreak: number;
+  hopperCoyote: number;
+  hopperRaven: number;
+  hopperHawk: number;
+  /** Spring floods (S12, springflood.ts; 0 = off). Snowmelt (floodMelt) and rain (floodRain) fill a wet index in late winter and spring; at floodThresh the
+   *  land within floodBand m of the water floods for floodSeasons seasons: grass drowns (floodGrass x severity), animals are pushed out, young caught in the
+   *  band drown (floodYoung x severity; adults floodAdult x severity), and the silt adds floodSilt x severity to the soil. */
+  springFloods: number;
+  floodBand: number;
+  floodMelt: number;
+  floodRain: number;
+  floodThresh: number;
+  floodSeasons: number;
+  floodSilt: number;
+  floodGrass: number;
+  floodYoung: number;
+  floodAdult: number;
   // fear
   fearKill: number;
   fearKillRadius: number;
@@ -546,6 +588,36 @@ export function defaultParams(): Params {
     snowKill: 0.3,
     greenUpShift: 0,
     summerDroughtP: 0.1,
+    dustStorms: 0,
+    dustWind: 0.5,
+    dustBare: 0.35,
+    dustBareGrass: 0.35,
+    dustSoil: 0.02,
+    dustVision: 0.6,
+    dustP: 0.5,
+    dustCooldown: 0.5,
+    grasshoppers: 0,
+    hopperR: 45,
+    hopperCrit: 0.79,
+    hopperRain: 0.9,
+    hopperYear: 0.1,
+    hopperDie: 5,
+    hopperSeed: 0.03,
+    hopperEat: 1.2,
+    hopperOutbreak: 0.3,
+    hopperCoyote: 3,
+    hopperRaven: 4,
+    hopperHawk: 0.6,
+    springFloods: 0,
+    floodBand: 15,
+    floodMelt: 6,
+    floodRain: 1,
+    floodThresh: 0.7,
+    floodSeasons: 0.5,
+    floodSilt: 0.25,
+    floodGrass: 0.5,
+    floodYoung: 0.3,
+    floodAdult: 0.02,
     fearKill: 0.7,
     fearKillRadius: 22,
     fearPredatorStamp: 0.0008,

@@ -7,6 +7,9 @@ import { BucketGrid } from './grid';
 import { applyOverrides, defaultParams, Params, SpeciesParams } from './params';
 import { hashSeed, Rng } from './rng';
 import { StormCells } from './storms';
+import { DustStorms, DUST_STEP } from './dust';
+import { Hoppers } from './hoppers';
+import { SpringFloods, FLOOD_STEP } from './springflood';
 import { RegionalPool } from './region';
 import { SmallPrey, TAKE_KINDS } from './smallprey';
 import { Coyotes } from './sp/coyote';
@@ -30,7 +33,7 @@ export type SimEventKind =
   | 'introduced' | 'removed' | 'culled' | 'fire' | 'record' | 'elder' | 'firstKill' | 'plague' | 'rain'
   | 'immigrated' | 'emigrated' | 'recolonized' | 'distemper' | 'mange' | 'townFounded' | 'townLost' | 'sylvaticPlague'
   | 'hareBoom' | 'hareCrash' | 'coyotePups' | 'mesoRelease' | 'storm' | 'lightningFire' | 'eaglesArrive' | 'hawksReturn'
-  | 'blizzard' | 'hardWinter' | 'flood' | 'grovePlanted';
+  | 'blizzard' | 'hardWinter' | 'flood' | 'grovePlanted' | 'dustStorm' | 'grasshopperOutbreak' | 'springFlood';
 
 export interface SimEvent {
   tick: number;
@@ -192,7 +195,15 @@ export class Sim implements SimLike {
   /** Snow depth, drift and melt (params.snowDepth; null when off). */
   winter: Winter | null = null;
   /** God tools v2 (S17). A running flood (null when none): ticks left, severity, flooded band width (m) and the cell mask. */
-  flood: { left: number; sev: number; radius: number; mask: Uint8Array } | null = null;
+  flood: { left: number; sev: number; radius: number; mask: Uint8Array; silt: number } | null = null;
+  /** Dust storms (S12; params.dustStorms, null when off), grasshoppers (params.grasshoppers) and natural spring floods (params.springFloods). */
+  dust: DustStorms | null = null;
+  hoppers: Hoppers | null = null;
+  springFloods: SpringFloods | null = null;
+  /** The multiplier on every animal's sight this tick: 1, less while a dust storm blows. */
+  visMul = 1;
+  private cSpringFloods = 0;
+  private cFawnsDrowned = 0;
   /** Ticks left of a blizzard god tool: every animal pays a cold drain (BLIZZARD_COLD) while it blows. */
   private blizzardLeft = 0;
   /** Strikes made by the lightning tool while no storm cells exist (drained by snapshot()). */
@@ -216,6 +227,9 @@ export class Sim implements SimLike {
     this.veg = new Vegetation(this.world, this.p, this.env, this.rng.fork(12));
     if (this.p.stormCells > 0) this.storms = new StormCells(this.seed, this.world.size, this.p, DT);
     if (this.p.snowDepth > 0) this.winter = new Winter(this.seed, this.world, this.p, this.env, { event: (kind, sp, x, y, a, b) => this.event(kind, sp, x, y, a, b) });
+    if (this.p.dustStorms > 0) this.dust = new DustStorms(this.seed, this.p, this.env, this.world, this.veg, { event: (kind, sp, x, y, a, b) => this.event(kind, sp, x, y, a, b) });
+    if (this.p.grasshoppers > 0) this.hoppers = new Hoppers(this.seed, this.p, this.world, this.env, this.coarseGrass, this.veg, { event: (kind, sp, x, y, a, b) => this.event(kind, sp, x, y, a, b) });
+    if (this.p.springFloods > 0) { const wn = this.winter; this.springFloods = new SpringFloods(this.seed, this.p, this.env, wn !== null ? () => wn.meanDepth() : null); }
     this.a = new Agents(4096);
     this.lineage = new Lineage(this.a, { alive: this.packAlive, serial: this.packSerial, alphaF: this.packAlphaF, alphaM: this.packAlphaM });
     this.dis = new Disease(this.a, this.p, this.env, this.seed, {
@@ -265,6 +279,8 @@ export class Sim implements SimLike {
       get pop() { return self.pop; },
       get groundB() { return self.groundB; },
       get small() { return self.small; },
+      get hoppers() { return self.hoppers; },
+      get visMul() { return self.visMul; },
       get dis() { return self.dis; },
       get cN() { return self.cN; },
       get cX() { return self.cX; },
@@ -298,6 +314,7 @@ export class Sim implements SimLike {
       get tick() { return self.tick; },
       get pop() { return self.pop; },
       get small() { return self.small; },
+      get hoppers() { return self.hoppers; },
       get cN() { return self.cN; },
       get cX() { return self.cX; },
       get cY() { return self.cY; },
@@ -577,6 +594,14 @@ export class Sim implements SimLike {
     if (this.flood !== null) this.floodStep();
     if (this.storms) this.stepStorms(t);
     if (this.winter !== null && t % WINTER_STEP === 0) this.winter.step();
+    if (this.dust !== null) {
+      if (t % DUST_STEP === 0) this.dust.step(t);
+      this.visMul = this.dust.visionMul();
+    }
+    if (this.springFloods !== null && t % FLOOD_STEP === 0) {
+      const call = this.springFloods.step(this.flood !== null);
+      if (call !== null) this.startFlood(call.ticks, call.severity, this.springFloods.rng);
+    }
     this.veg.step(t);
     this.groundB = grassBrightness(this.env.state.season);
 
@@ -620,6 +645,7 @@ export class Sim implements SimLike {
     if (t % 50 === 0) {
       this.refreshCoarse();
       if (this.small !== null) this.small.step(t); // the web reads the map just refreshed, so it is never stale
+      if (this.hoppers !== null) this.hoppers.step(t);
       if (this.small !== null) this.coyotes.tickPrey(t);
       if (this.pop[Sp.MuleDeer] > 0) this.mule.refresh(this.veg.browse, this.veg.grass);
     }
@@ -1216,7 +1242,7 @@ export class Sim implements SimLike {
     const fearHere = this.veg.fear[this.veg.cellAt(x, y)];
     // --- predators: detection with vigilance (more eyes, earlier warning)
     const night = this.env.isNight();
-    const sight = P.sight * a.genes[o + G_SIGHT] * (night ? 0.65 : 1);
+    const sight = P.sight * a.genes[o + G_SIGHT] * (night ? 0.65 : 1) * this.visMul;
     const pg = this.pred;
     const rr = Math.ceil(sight / bs);
     let threat = -1, threatD = 1e9;
@@ -1565,7 +1591,7 @@ export class Sim implements SimLike {
     const scented = pk < 0 || this.packScentHit[pk] === 1 || this.p.huntNeedsScent === 0;
     if (tgt < 0 && (a.energy[i] < hungerLine || opportunist) && !resting && (scented || opportunist)) {
       // look for the most vulnerable prey in sight
-      const sight = P.sight * a.genes[o + G_SIGHT] * (night ? 0.75 : 1);
+      const sight = P.sight * a.genes[o + G_SIGHT] * (night ? 0.75 : 1) * this.visMul;
       const g = this.prey, nb = g.nb, bs = g.bs;
       const bx = Math.min(nb - 1, Math.max(0, (x / bs) | 0)), by = Math.min(nb - 1, Math.max(0, (y / bs) | 0));
       // coat search image (S9): a matching coat is noticed from further off, so the scan reaches that far too
@@ -2098,7 +2124,12 @@ export class Sim implements SimLike {
     let state: number = St.Fly;
     const k = this.nearestCarcass(x, y, P.sight);
     const fly = P.walkSpeed;
-    if (k >= 0) {
+    // a hungry raven over a thick grasshopper patch drops in and feeds on it, unless a carcass is right there (S12)
+    const hopGraze = this.hoppers !== null && a.energy[i] < 0.9 && this.hoppers.densAt(x, y) > 0.25
+      && !(k >= 0 && Math.abs(this.cX[k] - x) + Math.abs(this.cY[k] - y) < 25);
+    if (hopGraze) {
+      state = St.Graze;
+    } else if (k >= 0) {
       const dx = this.cX[k] - x, dy = this.cY[k] - y, d = Math.sqrt(dx * dx + dy * dy) + 0.01;
       if (a.energy[i] < 0.9) {
         a.timer[i] = k;
@@ -2159,6 +2190,7 @@ export class Sim implements SimLike {
       a.alt[i] = Math.max(0, a.alt[i] - 0.5);
     } else if (st === St.Graze) {
       a.energy[i] = Math.min(1, a.energy[i] + P.metabolism * 1.15);
+      if (this.hoppers !== null) a.energy[i] = Math.min(1, a.energy[i] + this.hoppers.feed(a.x[i], a.y[i], 'raven', P.metabolism));
       a.vx[i] *= 0.5; a.vy[i] *= 0.5;
       a.alt[i] = Math.max(0, a.alt[i] - 0.4);
     } else {
@@ -2381,15 +2413,18 @@ export class Sim implements SimLike {
    * severity; adults 5% x severity; counted as culled). While it lasts, ground animals in the band are pushed away from the water
    * (drinkers are left alone). When it recedes the silt feeds the soil (+0.2 x severity).
    */
-  private startFlood(ticks: number, severity: number): void {
-    const w = this.world, v = this.veg, a = this.a;
+  private startFlood(ticks: number, severity: number, natural?: Rng): void {
+    const w = this.world, v = this.veg, a = this.a, p = this.p;
     const sev = Math.min(1, Math.max(0.1, severity));
-    const radius = 12 + 38 * sev;
+    // a natural spring flood (S12) is the same machinery with a narrower band, its own params and its own generator
+    const radius = natural !== undefined ? p.floodBand : 12 + 38 * sev;
+    const grassHit = natural !== undefined ? p.floodGrass : 0.85;
+    const rng = natural ?? this.rng;
     const mask = new Uint8Array(w.n * w.n);
     for (let c = 0; c < mask.length; c++) {
       if (!w.water[c] && w.waterDist[c] <= radius) {
         mask[c] = 1;
-        v.grass[c] *= 1 - 0.85 * sev;
+        v.grass[c] *= 1 - grassHit * sev;
         v.browse[c] *= 1 - 0.5 * sev;
         v.burn[c] = 0;
       }
@@ -2398,17 +2433,21 @@ export class Sim implements SimLike {
       if (!a.alive[i] || SPECIES[a.sp[i]].flies || a.state[i] === St.Migrate) continue;
       if (!mask[v.cellAt(a.x[i], a.y[i])]) continue;
       const young = a.age[i] < this.p.species[a.sp[i]].matureAge;
-      if (this.rng.next() < (young ? 0.4 : 0.05) * sev) this.die(i, 'culled');
+      if (rng.next() < (natural !== undefined ? (young ? p.floodYoung : p.floodAdult) : young ? 0.4 : 0.05) * sev) {
+        if (young) this.cFawnsDrowned++;
+        this.die(i, 'culled');
+      }
     }
-    this.flood = { left: Math.max(10, Math.round(ticks)), sev, radius, mask };
-    this.event('flood', -1, w.size / 2, w.size / 2, this.flood.left, sev);
+    this.flood = { left: Math.max(10, Math.round(ticks)), sev, radius, mask, silt: natural !== undefined ? p.floodSilt : 0.2 };
+    if (natural !== undefined) this.cSpringFloods++;
+    this.event(natural !== undefined ? 'springFlood' : 'flood', -1, w.size / 2, w.size / 2, this.flood.left, sev);
   }
 
   private floodStep(): void {
     const f = this.flood!;
     const w = this.world, v = this.veg, a = this.a, n = w.n, wd = w.waterDist;
     if (--f.left <= 0) {
-      for (let c = 0; c < f.mask.length; c++) if (f.mask[c]) v.soil[c] = Math.min(1.4, v.soil[c] + 0.2 * f.sev);
+      for (let c = 0; c < f.mask.length; c++) if (f.mask[c]) v.soil[c] = Math.min(1.4, v.soil[c] + f.silt * f.sev);
       this.flood = null;
       return;
     }
@@ -3064,6 +3103,23 @@ export class Sim implements SimLike {
     row.snow_peak = wd ? wd.peak : 0;
     row.blizzards = wd ? wd.blizzards : 0;
     row.hard_winters = wd ? wd.hardWinters : 0;
+    // S12: dust storms begun, the bare share of the land (0 when dustStorms is off), grasshoppers (field total, densest cell, outbreaks begun, grass eaten as
+    // mean-grass units, energy fed to coyotes, ravens and hawks), spring floods begun, flood now (0/1) and young animals drowned by any flood since the last sample
+    const du = this.dust !== null ? this.dust.drainSample() : null;
+    row.dust_storms = du ? du.storms : 0;
+    row.dust_now = this.dust !== null ? this.dust.intensity() : 0;
+    row.dust_bare = this.dust !== null ? this.dust.bareShare() : 0;
+    const hd = this.hoppers !== null ? this.hoppers.drainSample() : null;
+    row.hop_total = this.hoppers !== null ? this.hoppers.total() : 0;
+    row.hop_peak = this.hoppers !== null ? this.hoppers.maxDensity() : 0;
+    row.hop_outbreaks = hd ? hd.outbreaks : 0;
+    row.hop_eaten = hd ? hd.eaten : 0;
+    row.hop_fed_coyote = hd ? hd.fed[0] : 0;
+    row.hop_fed_raven = hd ? hd.fed[1] : 0;
+    row.hop_fed_hawk = hd ? hd.fed[2] : 0;
+    row.spring_floods = this.cSpringFloods;
+    row.flood_now = this.flood !== null ? 1 : 0;
+    row.fawns_drowned = this.cFawnsDrowned;
     this.cKills = 0;
     this.cKillsDeer = 0;
     this.cStrife = 0;
@@ -3082,6 +3138,8 @@ export class Sim implements SimLike {
     this.cVagIn = 0;
     this.cVagOut = 0;
     this.cLightning = 0;
+    this.cSpringFloods = 0;
+    this.cFawnsDrowned = 0;
     return row;
   }
 
@@ -3156,6 +3214,11 @@ export class Sim implements SimLike {
     }
     if (this.flood !== null) snap.flood = Float32Array.of(this.flood.left, this.flood.sev, this.flood.radius);
     if (withVeg && this.groveBase >= 0) snap.groves = this.world.trees.slice(this.groveBase);
+    if (this.dust !== null) { const d = this.dust.toArray(); if (d !== null) snap.dust = d; }
+    if (withVeg && this.hoppers !== null) {
+      snap.hoppers = new Uint8Array(32 * 32);
+      this.hoppers.fillTexture(snap.hoppers);
+    }
     return snap;
   }
 }

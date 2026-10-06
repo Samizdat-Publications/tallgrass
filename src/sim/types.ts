@@ -125,6 +125,12 @@ export interface Snapshot {
   /** Grove trees planted by the player (S17), stride 4 like `world.trees` (x, y, height m, crown radius m), all of them, in planting order.
    *  Present on snapshots that carry the vegetation texture, once at least one grove exists. They are NOT in the renderer's own world.trees. */
   groves?: Float32Array;
+  /** Dust storm (S12, params.dustStorms): present only while a storm runs. DUST_STRIDE (5) floats: [intensity 0..1, direction the dust travels (rad, 0 = +x, CCW toward +y),
+   *  ticks left, front 0..1 (how far the leading wall has crossed the valley along the direction; 1 once across, reached in the first quarter of the storm), peak intensity]. */
+  dust?: Float32Array;
+  /** Grasshopper density (S12, params.grasshoppers), 32 x 32 coarse cells (16 m) like `snow`, bytes row-major by y then x: density x 255 (1 = a severe outbreak; an
+   *  ordinary summer is 10 to 25). Present only when grasshoppers is on and the snapshot carries the vegetation texture. */
+  hoppers?: Uint8Array;
 }
 
 /** Ticks per second of real time at 1x speed. */

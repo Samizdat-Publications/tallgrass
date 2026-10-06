@@ -47,6 +47,7 @@ import type { BucketGrid } from '../grid';
 import type { Params, SpeciesParams } from '../params';
 import { hashSeed, Rng } from '../rng';
 import type { SimEventKind } from '../sim';
+import type { Hoppers } from '../hoppers';
 import { PREF, type SmallPrey } from '../smallprey';
 import { BASE_YEAR_TICKS, Sp, St, YEAR_TICKS } from '../types';
 
@@ -67,6 +68,8 @@ const FAWN_COOL = 240;
 const HUNT_REACH = 4;
 const MOUSE_MIN = 0.3;
 const MOUSE_PATIENCE = 150;
+/** A cell's grasshopper density counts this many hares-worth in the coyote's choice of where to mouse (S12). */
+const HOP_PULL = 1.5;
 const MATE_RANGE = 300;
 /** Two unpaired adults this close pair up. */
 const PAIR_DIST = 40;
@@ -109,6 +112,10 @@ export interface CoyoteHost {
   readonly pop: Int32Array;
   readonly groundB: number;
   readonly small: SmallPrey | null;
+  /** Grasshoppers (S12), null unless params.grasshoppers is on: a mousing coyote eats them, and thick patches draw it. */
+  readonly hoppers: Hoppers | null;
+  /** Multiplier on sight this tick (1; less in a dust storm, S12). */
+  readonly visMul: number;
   readonly dis: Disease;
   readonly cN: number;
   readonly cX: Float32Array;
@@ -693,7 +700,7 @@ export class Coyotes {
     const hx = hasDen ? this.denX[i] : x, hy = hasDen ? this.denY[i] : y;
     const toHome = hasDen ? Math.hypot(hx - x, hy - y) : 0;
     const night = this.env.isNight();
-    const sight = P.sight * a.genes[o + G_SIGHT] * (night ? 0.75 : 1);
+    const sight = P.sight * a.genes[o + G_SIGHT] * (night ? 0.75 : 1) * h.visMul;
 
     // committed to a fawn: keep after it
     if (a.same(a.target[i], a.targetId[i]) && a.target[i] >= 0) {
@@ -823,7 +830,8 @@ export class Coyotes {
     if (sm !== null) {
       const N = sm.cells, cs = sm.cellSize;
       const c = sm.cellOf(x, y), cx = c % N, cy = (c / N) | 0;
-      const dens = (cc: number): number => sm.hare[cc] * PREF.coyote.hare + sm.dog[cc] * PREF.coyote.dog;
+      const hop = h.hoppers;
+      const dens = (cc: number): number => sm.hare[cc] * PREF.coyote.hare + sm.dog[cc] * PREF.coyote.dog + (hop !== null ? hop.d[cc] * HOP_PULL : 0);
       const here = dens(c);
       const patient = this.mouseT[i] < MOUSE_PATIENCE;
       let best = -1, bestV = patient && here >= MOUSE_MIN ? here * 1.3 + 0.1 : 0.05;
@@ -885,6 +893,11 @@ export class Coyotes {
       if (h.small !== null) {
         const g = h.small.take(a.x[i], a.y[i], 'coyote', 1, this.rng);
         if (g > 0) { a.energy[i] = Math.min(1, a.energy[i] + g); gain += g; this.cMouse++; this.mouseT[i] = 0; } else this.mouseT[i]++;
+        if (h.hoppers !== null) {
+          // a grasshopper surge feeds a mousing coyote (S12)
+          const gh = h.hoppers.feed(a.x[i], a.y[i], 'coyote', P.metabolism);
+          if (gh > 0) { a.energy[i] = Math.min(1, a.energy[i] + gh); gain += gh; }
+        }
       } else {
         const g = P.metabolism * p.coyoteSmallGame;
         a.energy[i] = Math.min(0.7, a.energy[i] + g);

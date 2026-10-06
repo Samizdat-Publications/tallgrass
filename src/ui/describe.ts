@@ -245,6 +245,9 @@ export function cardRank(kind: string): number {
     case 'hardWinter': return 3;
     case 'blizzard': return 2;
     case 'flood': return 3;
+    case 'dustStorm': return 3;
+    case 'grasshopperOutbreak': return 3;
+    case 'springFlood': return 3;
     case 'grovePlanted': return 1;
     default: return 0;
   }
@@ -281,6 +284,9 @@ export function eventWeight(e: SimEvent): number {
     case 'mesoRelease':
     case 'hardWinter':
     case 'flood':
+    case 'dustStorm':
+    case 'grasshopperOutbreak':
+    case 'springFlood':
       return 3;
     case 'immigrated':
       return e.sp === 1 ? 3 : 2;
@@ -561,6 +567,29 @@ export function describeEvent(e: SimEvent, ctx?: DescribeContext): EventText {
         card: { title: 'The creek floods', subtitle: when },
       };
     }
+    case 'springFlood': {
+      const big = e.b >= 0.6;
+      return {
+        sentence: big
+          ? pick(e, ['Snowmelt and rain fill the creek to the brim, and the spring flood spreads across the bottomland.', 'The spring flood comes down the creek, brown and fast, and the low ground by the water disappears.'])
+          : pick(e, ['The thaw swells the creek and the water creeps over the low ground.', 'Meltwater and rain lift the creek over its banks for a few days.']),
+        card: { title: 'Spring flood', subtitle: when },
+      };
+    }
+    case 'dustStorm': {
+      const big = e.b >= 0.8;
+      return {
+        sentence: big
+          ? pick(e, ['A wall of dust rolls across the valley, and the sun goes out behind it.', 'The wind lifts the bare ground into a brown wall, and the whole valley vanishes in dust.'])
+          : pick(e, ['Dust rises off the dry, bare ground, and the valley goes brown and hazy.', 'A dust storm blows across the thin grass, and nothing can be seen far off.']),
+        card: { title: 'Dust storm', subtitle: when },
+      };
+    }
+    case 'grasshopperOutbreak':
+      return {
+        sentence: pick(e, ['Grasshoppers hatch in their millions, and the dry grass hums and shivers with them.', 'A grasshopper outbreak sweeps the prairie, stripping the grass in the hot, dry weather.', 'Grasshoppers swarm the valley, and the ravens, hawks and coyotes feast.']),
+        card: { title: 'Grasshopper outbreak', subtitle: when },
+      };
     case 'grovePlanted':
       return { sentence: pick(e, ['A grove of young cottonwoods takes root on the prairie.', 'Saplings are planted, and a grove begins to rise from the grass.']) };
     default:
