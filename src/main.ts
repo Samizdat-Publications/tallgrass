@@ -196,6 +196,8 @@ worker.onmessage = (e: MessageEvent<FromWorker>) => {
   pendingHistory = pendingHistory.concat(m.history);
   if (m.veg) engine.setVeg(m.veg);
   if (m.snow) engine.setSnowDepth(m.snow);
+  if (m.veg) engine.setGroves(m.groves);
+  engine.setFlood(m.flood);
   if (m.small) {
     lastSmall = m.small;
     smallprey.setSmall(m.small);
