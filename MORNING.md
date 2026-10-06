@@ -27,6 +27,10 @@ Everything Track S built in the cloud (S0 to S18) is now merged into main and li
 ![Snow depth from the sim](journey/20261006-171000_still_v2-snowdepth-top.jpg)
 ![A flood](journey/20261006-183000_still_v2-flood.jpg)
 
+**More tools on the rail:** lightning (click a spot), blizzard, flood, distemper (wolves and coyotes) and plant grove (click a spot) join the original nine; the rail groups them into columns that fit any screen. Why v7a failed is now known: the eagles and hawks eat too many prairie dogs (without them, towns hold in 31 of 32 worlds). The fix is the next sim job.
+
+![The tool rail with the god tools v2](journey/20261006-195000_ui_v2-tools-rail.jpg)
+
 **v6b shock suite (finished):** bison persisted in 20 of 20 worlds and recovered in all of them after a 70% cull, a drought and a wolf wipeout (median recovery 44, 13 and 41 years). v6b stays the default.
 
 ![The merged build, live](journey/20261006-152000_ui_v2-live-merged.jpg)

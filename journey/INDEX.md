@@ -103,3 +103,4 @@ Chronological. Use this to cut a progression video or landing page.
 | 2026-10-06 17:10 | still | [20261006-171000_still_v2-snowdepth-mid.jpg](20261006-171000_still_v2-snowdepth-mid.jpg) | Snow depth, mid view: patchy cover over the winter grass by the creek | review/wip/snowdepth (r-snowdepth worktree) |
 | 2026-10-06 18:30 | still | [20261006-183000_still_v2-planted-grove.jpg](20261006-183000_still_v2-planted-grove.jpg) | A grove planted with the god tool, drawn with the creek grove trees | review/wip/groves-flood |
 | 2026-10-06 18:30 | still | [20261006-183000_still_v2-flood.jpg](20261006-183000_still_v2-flood.jpg) | The creek in flood: standing water over the banks, herds pushed to higher ground | review/wip/groves-flood |
+| 2026-10-06 19:50 | ui | [20261006-195000_ui_v2-tools-rail.jpg](20261006-195000_ui_v2-tools-rail.jpg) | Fourteen god tools in three grouped columns, with the town challenge card | review/wip/tools-v2 |
