@@ -6,6 +6,8 @@ import type { World } from '../sim/world';
 import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 import { NOISE_GLSL, OCCLUDE_GLSL, SharedUniforms, clamp, fbm2, hash2, injectSafeOutput, injectTerrainShadow, smoothstep, vnoise2 } from './common';
 
+/** Floats per tree in Snapshot.trees (sim/trees.ts TREE_STRIDE): x, y, height m, crown radius m, kind, stage. */
+const TREE_STRIDE = 6;
 const R0 = 6; // nominal crown radius in meters the unit crown is designed for
 const H0 = 14; // nominal tree height
 const VARIANTS = 6;
@@ -817,6 +819,8 @@ export interface TreeSpec {
   burned?: boolean;
   /** Beyond the playable rim: no grove merging with the valley, no understory. */
   far?: boolean;
+  /** A seedling or sapling (S13): no understory thicket under it. */
+  young?: boolean;
 }
 
 const BAND_CROWN = [60, 190, Infinity];
@@ -995,6 +999,10 @@ export class Trees {
   private nextId = ID_NEW;
   /** How many of the player's planted-grove trees (S17) are standing, ids ID_GROVE + k. */
   private groveN = 0;
+  /** S13 dynamic trees: set once the sim sends its list (then the renderer's own fire hook and the groves field stay out of it), the version drawn, slots seen. */
+  private dynamic = false;
+  private dynVersion = -1;
+  private dynN = 0;
   /** Planted-grove trees standing (S17), for the bench and tests. */
   get groveCount(): number { return this.groveN; }
   private dummy = new THREE.Object3D();
@@ -1229,6 +1237,7 @@ export class Trees {
    * nothing changed (one length compare), and nothing is allocated per frame.
    */
   setGroves(g: Float32Array | undefined): void {
+    if (this.dynamic) return; // planted groves ride in the dynamic list
     const n = g ? g.length >> 2 : 0;
     if (n === this.groveN) return;
     if (n < this.groveN) {
@@ -1240,6 +1249,41 @@ export class Trees {
       this.addTree({ x: g[k * 4], z: g[k * 4 + 1], h: g[k * 4 + 2], r: g[k * 4 + 3], species: 'cottonwood' }, ID_GROVE + k);
     }
     this.groveN = n;
+  }
+
+  /**
+   * Dynamic trees (S13, sim param dynamicTrees): drive the instances from the sim's own list instead of the static one. `list` is
+   * Snapshot.trees (stride 6: x, y, height m, crown radius m, kind, stage), slot index = tree id; it is sent only when `version`
+   * changed, so this runs on a version change and is a no-op otherwise. Each slot is diffed against what stands: a tree is re-seated only
+   * when its size moved by more than a few percent, its kind or its snag state changed; stage 5 (gone) removes it. Height and crown
+   * radius already carry the growth stage (a seedling is a metre of twig, a mature tree full size); a snag is the charred trunk with
+   * no crown (the R11 look). Nothing is allocated per frame, and a rebuild touches only the trees that changed.
+   */
+  setDynamic(list: Float32Array | undefined, version: number | undefined): void {
+    if (version === undefined) return;
+    this.dynamic = true;
+    if (!list || version === this.dynVersion) return;
+    this.dynVersion = version;
+    const n = Math.floor(list.length / TREE_STRIDE);
+    for (let s = 0; s < n; s++) {
+      const o = s * TREE_STRIDE;
+      const stage = list[o + 5];
+      const rec = this.recs.get(s);
+      if (stage >= 5 || list[o + 2] <= 0) { if (rec) this.removeTree(s); continue; }
+      const h = Math.max(0.25, list[o + 2]), r = Math.max(0.1, list[o + 3]);
+      const species = list[o + 4] === 1 ? 'juniper' : 'cottonwood';
+      const burned = stage === 4;
+      if (rec) {
+        const p = rec.spec;
+        if (p.species === species && !!p.burned === burned && Math.abs(p.x - list[o]) < 0.05 && Math.abs(p.z - list[o + 1]) < 0.05
+          && Math.abs(p.h - h) <= 0.03 * h + 0.02 && Math.abs(p.r - r) <= 0.03 * r + 0.02) continue;
+      }
+      // a young tree has no thicket under it yet: only a standing tree of some size gets the understory (place() skips it for snags)
+      this.addTree({ x: list[o], z: list[o + 1], h, r, species, burned, young: h < 4 }, s);
+    }
+    // slots past the end of this list (a shorter list, a different world): nothing stands there
+    for (let s = n; s < this.dynN; s++) this.removeTree(s);
+    this.dynN = n;
   }
 
   /** Change a tree (size, species, burned, even position): it is re-seated in place and keeps its id. */
@@ -1281,6 +1325,7 @@ export class Trees {
    * ashed dies about half the time (decided by its id, so it is the same every run) and stands on as a charred snag.
    */
   setBurn(veg: Uint8Array, n: number): void {
+    if (this.dynamic) return; // the sim's list carries its own fire deaths (snags)
     const cell = this.world.size / n;
     const hit: number[] = [];
     for (const rec of this.recs.values()) {
@@ -1377,7 +1422,7 @@ export class Trees {
     pool.barkOn[slot] = 1;
     pool.crownOn[slot] = spec.burned ? 0 : 1;
     pool.tuftOn[slot] = spec.burned ? 0 : 1;
-    if (!spec.far && !spec.burned) this.understory(rec);
+    if (!spec.far && !spec.burned && !spec.young) this.understory(rec);
   }
 
   /** One willow thicket instance (render-only). */

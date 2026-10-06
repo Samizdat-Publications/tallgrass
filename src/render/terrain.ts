@@ -836,6 +836,15 @@ export class Terrain {
     return mesh;
   }
 
+  /** Dynamic trees (S13): the cover field the sim's tree list makes (bytes, cover x 255, n x n like world.cover). Replaces the baked shade channel. */
+  setCover(bytes: Uint8Array): void {
+    const d = this.staticTex.image.data as Uint8Array;
+    const n = this.world.n * this.world.n;
+    if (bytes.length < n) return;
+    for (let k = 0; k < n; k++) d[k * 4 + 1] = bytes[k];
+    this.staticTex.needsUpdate = true;
+  }
+
   dispose(): void {
     this.mesh.geometry.dispose();
     this.material.dispose();

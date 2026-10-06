@@ -1359,6 +1359,15 @@ export class GrassField {
     }
   }
 
+  /** Dynamic trees (S13): the cover field the sim's tree list makes (bytes, cover x 255, n x n like world.cover), replacing the baked one in the static texture. */
+  setCover(bytes: Uint8Array): void {
+    const d = this.stat0.image.data as Uint8Array;
+    const n = this.world.n * this.world.n;
+    if (bytes.length < n) return;
+    for (let k = 0; k < n; k++) d[k * 4 + 2] = bytes[k];
+    this.stat0.needsUpdate = true;
+  }
+
   private rebuildStatics(): void {
     this.rebuildVegMax();
     this.vegVersion = this.veg.version;
