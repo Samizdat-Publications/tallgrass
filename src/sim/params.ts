@@ -183,6 +183,8 @@ export interface Params {
   plagueRate: number;
   /** 1 = wolf mousing success comes from SmallPrey.take on the local hare and dog density (needs smallPrey), 0 = the flat wolfSmallGame trickle. */
   smallGameField: number;
+  /** Multiplier on the eagles' and hawks' preference for prairie dogs, in where they hunt and what they catch (v7b). 1 = the S7 tables. */
+  raptorDogPref: number;
   /** Grass in prairie dog towns is clipped short: the share of grass above the clip height removed per 50 ticks in a full town (0 = off). */
   dogClip: number;
   /** Bison migration and grazing prefer the edges of towns by this much grass-equivalent (0 = off). */
@@ -592,6 +594,7 @@ export function defaultParams(): Params {
     dogR: 1.0,
     plagueRate: 0.08,
     smallGameField: 1, // v6b (was 0)
+    raptorDogPref: 1,
     dogClip: 0,
     dogGrazeBonus: 0,
     wolfInRate: 0.2,

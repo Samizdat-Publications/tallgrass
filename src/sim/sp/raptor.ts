@@ -742,7 +742,7 @@ export class Raptors {
         if (d > reach) continue;
         if (home && Math.hypot(ccx - hx, ccy - hy) > HAWK_RANGE) continue;
         const nc = ny * N + nx;
-        const v = (sm.hare[nc] * pref.hare + sm.dog[nc] * pref.dog + (hop !== null ? hop.d[nc] * this.p.hopperHawk : 0)) / (1 + d / 100);
+        const v = (sm.hare[nc] * pref.hare + sm.dog[nc] * pref.dog * this.p.raptorDogPref + (hop !== null ? hop.d[nc] * this.p.hopperHawk : 0)) / (1 + d / 100);
         if (v > bestV) { bestV = v; best = nc; }
       }
     }

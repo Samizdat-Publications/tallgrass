@@ -320,7 +320,9 @@ export class SmallPrey {
    */
   take(x: number, y: number, kind: TakeKind, effort: number, rng: Rng): number {
     const c = this.cellOf(x, y);
-    const H = this.hare[c] * PREF[kind].hare, D = this.dog[c] * PREF[kind].dog, dens = H + D;
+    // raptorDogPref scales the eagles' and hawks' taste for prairie dogs (v7b; 1 = the S7 tables)
+    const dp = kind === 'eagle' || kind === 'hawk' ? PREF[kind].dog * this.p.raptorDogPref : PREF[kind].dog;
+    const H = this.hare[c] * PREF[kind].hare, D = this.dog[c] * dp, dens = H + D;
     if (dens < 0.01) return 0;
     if (rng.next() >= SmallPrey.successChance(kind, dens, effort)) return 0;
     if (rng.next() * dens < H) {
