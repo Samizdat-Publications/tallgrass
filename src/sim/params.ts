@@ -328,6 +328,31 @@ export interface Params {
   floodGrass: number;
   floodYoung: number;
   floodAdult: number;
+  /** Dynamic trees (S13, trees.ts; 0 = off: the world's static tree list). The sim owns a tree list with stages (seedling, sapling, young, mature, snag), growth
+   *  by age in base years (x treeGrowth), a lifespan, and a cover field rebuilt every season from the list. Cottonwoods recruit at the start of summer on moist,
+   *  bare, unshaded ground within 30 m of water, at treeCwRecruit per cell per year x the seed source x bareness, x (1 + treeFloodBoost x severity) in the cells a
+   *  flood covered in the last 1.5 years (a pulse of treeGroveMin or more seedlings raises a grove event). Junipers recruit in autumn on the ridges at
+   *  treeJunRecruit x the seed source + treeJunBg, scaled by years since fire (zero on a burn, full after treeFireFree years) and room under treeJunCap trees;
+   *  `encroachment` is raised when they hold treeEncroach of the ridge cells. Fire kills seedlings and saplings (treeFireSmall), young trees (treeFireYoung) and
+   *  mature trees (treeFireMature, they stand on as snags). Deer in a 16 m cell slow seedlings and saplings by up to treeBrowse (x their density share). Seedlings
+   *  die at treeSeedMort per year (more in drought, in thick grass and under browsing). */
+  dynamicTrees: number;
+  treeGrowth: number;
+  treeCwRecruit: number;
+  treeFloodBoost: number;
+  /** Established cottonwoods (saplings and up) at which cottonwood recruitment has faded to nothing (linear room). */
+  treeCwCap: number;
+  treeGroveMin: number;
+  treeJunRecruit: number;
+  treeJunBg: number;
+  treeJunCap: number;
+  treeFireFree: number;
+  treeFireSmall: number;
+  treeFireYoung: number;
+  treeFireMature: number;
+  treeBrowse: number;
+  treeSeedMort: number;
+  treeEncroach: number;
   // fear
   fearKill: number;
   fearKillRadius: number;
@@ -618,6 +643,22 @@ export function defaultParams(): Params {
     floodGrass: 0.5,
     floodYoung: 0.3,
     floodAdult: 0.02,
+    dynamicTrees: 0,
+    treeGrowth: 1,
+    treeCwRecruit: 0.0015,
+    treeFloodBoost: 40,
+    treeCwCap: 400,
+    treeGroveMin: 12,
+    treeJunRecruit: 0.03,
+    treeJunBg: 0.0005,
+    treeJunCap: 1500,
+    treeFireFree: 12,
+    treeFireSmall: 0.9,
+    treeFireYoung: 0.4,
+    treeFireMature: 0.1,
+    treeBrowse: 0.7,
+    treeSeedMort: 0.35,
+    treeEncroach: 0.03,
     fearKill: 0.7,
     fearKillRadius: 22,
     fearPredatorStamp: 0.0008,

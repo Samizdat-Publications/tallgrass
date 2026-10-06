@@ -17,12 +17,12 @@ const KINDS: SimEventKind[] = [
   'fire', 'record', 'elder', 'firstKill', 'plague', 'rain',
   'immigrated', 'emigrated', 'recolonized', 'distemper', 'mange', 'townFounded', 'townLost', 'sylvaticPlague',
   'hareBoom', 'hareCrash', 'coyotePups', 'mesoRelease', 'storm', 'lightningFire', 'eaglesArrive', 'hawksReturn',
-  'blizzard', 'hardWinter', 'flood', 'grovePlanted', 'dustStorm', 'grasshopperOutbreak', 'springFlood',
+  'blizzard', 'hardWinter', 'flood', 'grovePlanted', 'dustStorm', 'grasshopperOutbreak', 'springFlood', 'encroachment',
 ];
 const EM_DASH = String.fromCharCode(0x2014);
 
 for (const kind of KINDS) {
-  for (const sp of [-1, 0, 1, 3, 5, 6, 7, 10, 11, 40]) {
+  for (const sp of [-2, -1, 0, 1, 3, 5, 6, 7, 10, 11, 40]) {
     for (const [a, b] of [[0, 0], [1, 0], [2, 3], [17, 1]]) {
       for (const tick of [0, 1234, 98765]) {
         const e: SimEvent = { tick, kind, sp, x: tick % 2 ? 50 : 0, y: tick % 2 ? 470 : 0, a, b };

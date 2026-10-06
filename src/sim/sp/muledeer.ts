@@ -41,6 +41,11 @@ export class MuleDeer {
     this.rng = new Rng(hashSeed(seed + ':muledeer'));
   }
 
+  /** The cover field changed (dynamic trees, S13): the habitat map is built again on next use. */
+  invalidate(): void {
+    this.habMap = null;
+  }
+
   /** Habitat suitability 0..1 per vegetation cell (n x n, row-major y then x). Built on first use. */
   get hab(): Float32Array {
     if (this.habMap === null) this.habMap = this.buildHabitat();

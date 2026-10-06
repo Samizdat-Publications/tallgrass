@@ -249,6 +249,7 @@ export function cardRank(kind: string): number {
     case 'grasshopperOutbreak': return 3;
     case 'springFlood': return 3;
     case 'grovePlanted': return 1;
+    case 'encroachment': return 2;
     default: return 0;
   }
 }
@@ -287,6 +288,7 @@ export function eventWeight(e: SimEvent): number {
     case 'dustStorm':
     case 'grasshopperOutbreak':
     case 'springFlood':
+    case 'encroachment':
       return 3;
     case 'immigrated':
       return e.sp === 1 ? 3 : 2;
@@ -591,7 +593,14 @@ export function describeEvent(e: SimEvent, ctx?: DescribeContext): EventText {
         card: { title: 'Grasshopper outbreak', subtitle: when },
       };
     case 'grovePlanted':
+      // sp -2 is a natural grove (S13: cottonwoods rooting on the flood-scoured ground); sp -1 is the one the player planted
+      if (e.sp === -2) return { sentence: pick(e, ['The floodwater leaves bare, wet ground, and a stand of cottonwood seedlings springs up along the creek.', 'Cottonwood seedlings crowd the mud the flood left behind, and a new grove begins.']) };
       return { sentence: pick(e, ['A grove of young cottonwoods takes root on the prairie.', 'Saplings are planted, and a grove begins to rise from the grass.']) };
+    case 'encroachment':
+      return {
+        sentence: pick(e, ['Junipers are creeping up the ridges, and the open grassland is giving way to cedar.', 'Without fire, junipers spread across the ridgetops, and the prairie slowly closes in.', 'Dark junipers climb the ridges, a little farther each year.']),
+        card: { title: 'Junipers spread', subtitle: when },
+      };
     default:
       return { sentence: 'Something stirs in the valley.' };
   }

@@ -215,6 +215,26 @@ export class Raptors {
     this.nTree.fill(-1);
   }
 
+  /** The nest trees a hawk may use, one flag per tree of world.trees (dynamic trees, S13: a snag or a gone tree is no nest); null = all of them. */
+  private liveTrees: Uint8Array | null = null;
+
+  /**
+   * Dynamic trees (S13): world.trees was rebuilt (heights grew, trees died, new ones took root). The perch table and the list of nest trees are made again
+   * from it; `live` says which slots hold a living tree (a snag still serves as a perch but never as a nest).
+   */
+  refreshTrees(live: Uint8Array): void {
+    this.liveTrees = live;
+    this.ttH.fill(0);
+    this.nestTrees.length = 0;
+    const t = this.world.trees;
+    for (let k = 0; k + 3 < t.length; k += 4) {
+      if (t[k + 2] <= 0) continue;
+      const c = this.coarse(t[k], t[k + 1]);
+      if (t[k + 2] > this.ttH[c]) { this.ttH[c] = t[k + 2]; this.ttX[c] = t[k]; this.ttY[c] = t[k + 1]; }
+      if (t[k + 2] >= NEST_TREE_MIN && live[k / 4]) this.nestTrees.push(k / 4);
+    }
+  }
+
   private coarse(x: number, y: number): number {
     let i = Math.floor(x / this.cs), j = Math.floor(y / this.cs);
     if (i < 0) i = 0; else if (i >= COARSE_N) i = COARSE_N - 1;
@@ -389,7 +409,8 @@ export class Raptors {
       }
       return true;
     };
-    for (const ti of this.oldSites) if (chosen.length < n && ok(ti)) chosen.push(ti);
+    const lt = this.liveTrees;
+    for (const ti of this.oldSites) if (chosen.length < n && (lt === null || (lt[ti] === 1 && w[ti * 4 + 2] >= NEST_TREE_MIN)) && ok(ti)) chosen.push(ti);
     for (let tries = 0; tries < 120 && chosen.length < n && this.nestTrees.length > 0; tries++) {
       const ti = this.nestTrees[r.int(this.nestTrees.length)];
       if (ok(ti)) chosen.push(ti);

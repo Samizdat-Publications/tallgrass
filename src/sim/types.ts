@@ -131,6 +131,17 @@ export interface Snapshot {
   /** Grasshopper density (S12, params.grasshoppers), 32 x 32 coarse cells (16 m) like `snow`, bytes row-major by y then x: density x 255 (1 = a severe outbreak; an
    *  ordinary summer is 10 to 25). Present only when grasshoppers is on and the snapshot carries the vegetation texture. */
   hoppers?: Uint8Array;
+  /** Dynamic trees (S13, params.dynamicTrees), the sim's whole tree list: TREE_STRIDE (6) floats per slot, [x, y, height m, crown radius m, kind, stage].
+   *  Slot index = tree id; slots 0 .. N0-1 are the world's own `world.trees` in the same order (the renderer's static list), later slots are new trees or reused
+   *  free slots. kind: 0 cottonwood, 1 juniper, 2 bur oak (draw as a cottonwood). stage: 0 seedling, 1 sapling, 2 young, 3 mature, 4 snag (dead and standing: draw
+   *  charred, no crown), 5 gone (the slot is free: remove the tree; height and radius are 0). Sent with the vegetation texture whenever `treesVersion` changed since
+   *  the last snapshot that carried it (every season, and at once when a fire kills trees or a grove is planted). When present, `groves` is not sent (the
+   *  planted trees are in this list). Diff by slot against what you drew. */
+  trees?: Float32Array;
+  /** Bumped every time the tree list was rebuilt. Present on every snapshot while dynamicTrees is on (and `trees` rides along with the changed ones). */
+  treesVersion?: number;
+  /** The cover field the list makes (shrubs and tree crowns, cover x 255), n x n like `veg`, row-major by y then x. Sent together with `trees`. */
+  treeCover?: Uint8Array;
 }
 
 /** Ticks per second of real time at 1x speed. */

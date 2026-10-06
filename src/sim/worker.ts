@@ -105,6 +105,11 @@ export type FromWorker =
       hoppers?: Uint8Array;
       /** Trees planted by the player's groves (S17), stride 4 like world.trees (x, y, height m, crown radius m), all of them; sent with veg once a grove exists. */
       groves?: Float32Array;
+      /** Dynamic trees (S13, params.dynamicTrees): the whole tree list (stride 6: x, y, height m, crown radius m, kind, stage), sent with veg when its version changed; see Snapshot.trees. */
+      trees?: Float32Array;
+      treesVersion?: number;
+      /** The cover field of the tree list (cover x 255, n x n), sent with `trees`. */
+      treeCover?: Uint8Array;
       /** Trait heatmap, TRAIT_GRID^2 RGBA bytes: R speed relative to the species mean (128 = average), G animal density. Sent with veg. */
       traitGrid?: Uint8Array;
       pop: number[];
@@ -261,7 +266,7 @@ function post(forceVeg: boolean): void {
   const sel = selectedId !== null ? detail(selectedId) : null;
   const msg: FromWorker = {
     type: 'snap', tick: s.tick, env: s.env, count: s.count, ids: s.ids, agents: s.agents, carcassCount: s.carcassCount,
-    carcasses: s.carcasses, veg: s.veg, small: s.small, snow: s.snow, storms: s.storms, strikes: s.strikes, flood: s.flood, dust: s.dust, hoppers: s.hoppers, groves: s.groves, traitGrid: withVeg ? traitGrid() : undefined, pop: Array.from(s.pop), events, history, selected: sel,
+    carcasses: s.carcasses, veg: s.veg, small: s.small, snow: s.snow, storms: s.storms, strikes: s.strikes, flood: s.flood, dust: s.dust, hoppers: s.hoppers, groves: s.groves, trees: s.trees, treesVersion: s.treesVersion, treeCover: s.treeCover, traitGrid: withVeg ? traitGrid() : undefined, pop: Array.from(s.pop), events, history, selected: sel,
     selectedGone: selectedId !== null && sel === null, story: sim.story.slice(), storyId: sim.trackedId, ...packInfo(), speed: skipping ? -1 : speed, ticksPerSec, stepMs: stepMsAvg,
   };
   history = [];
@@ -275,6 +280,8 @@ function post(forceVeg: boolean): void {
   if (s.dust) transfer.push(s.dust.buffer);
   if (s.hoppers) transfer.push(s.hoppers.buffer);
   if (s.groves) transfer.push(s.groves.buffer);
+  if (s.trees) transfer.push(s.trees.buffer);
+  if (s.treeCover) transfer.push(s.treeCover.buffer);
   ctx.postMessage(msg, transfer);
 }
 

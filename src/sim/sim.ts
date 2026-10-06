@@ -10,6 +10,7 @@ import { StormCells } from './storms';
 import { DustStorms, DUST_STEP } from './dust';
 import { Hoppers } from './hoppers';
 import { SpringFloods, FLOOD_STEP } from './springflood';
+import { Trees, TREE_STEP } from './trees';
 import { RegionalPool } from './region';
 import { SmallPrey, TAKE_KINDS } from './smallprey';
 import { Coyotes } from './sp/coyote';
@@ -27,13 +28,16 @@ const MAX_PACKS = 64;
 /** Energy drain multiplier while a blizzard god tool is blowing (S17). */
 const BLIZZARD_COLD = 1.6;
 const MAX_GROVES = 24;
+/** CSV column parts for the tree counts (S13): kind (cottonwood, juniper, bur oak) and stage (seedling .. snag). */
+const TREE_KIND_KEYS = ['cw', 'jun', 'oak'];
+const TREE_STAGE_KEYS = ['seedling', 'sapling', 'young', 'mature', 'snag'];
 
 export type SimEventKind =
   | 'packFounded' | 'packLost' | 'drought' | 'droughtEnd' | 'outbreak' | 'stampede' | 'extinct'
   | 'introduced' | 'removed' | 'culled' | 'fire' | 'record' | 'elder' | 'firstKill' | 'plague' | 'rain'
   | 'immigrated' | 'emigrated' | 'recolonized' | 'distemper' | 'mange' | 'townFounded' | 'townLost' | 'sylvaticPlague'
   | 'hareBoom' | 'hareCrash' | 'coyotePups' | 'mesoRelease' | 'storm' | 'lightningFire' | 'eaglesArrive' | 'hawksReturn'
-  | 'blizzard' | 'hardWinter' | 'flood' | 'grovePlanted' | 'dustStorm' | 'grasshopperOutbreak' | 'springFlood';
+  | 'blizzard' | 'hardWinter' | 'flood' | 'grovePlanted' | 'dustStorm' | 'grasshopperOutbreak' | 'springFlood' | 'encroachment';
 
 export interface SimEvent {
   tick: number;
@@ -200,6 +204,9 @@ export class Sim implements SimLike {
   dust: DustStorms | null = null;
   hoppers: Hoppers | null = null;
   springFloods: SpringFloods | null = null;
+  /** Dynamic trees (S13; params.dynamicTrees, null when off): the sim's own tree list, stages, recruitment, fire and browse. */
+  trees: Trees | null = null;
+  private treesSent = 0;
   /** The multiplier on every animal's sight this tick: 1, less while a dust storm blows. */
   visMul = 1;
   private cSpringFloods = 0;
@@ -220,6 +227,8 @@ export class Sim implements SimLike {
     setCalendarScale(this.p.calendarScale);
     this.rng = new Rng(this.seed);
     this.world = opts.world ?? generateWorld(this.seed);
+    // dynamic trees rewrite the cover, capacity and tree arrays: work on a copy, so a world handed in by the caller is never changed
+    if (this.p.dynamicTrees > 0) this.world = { ...this.world, cover: new Float32Array(this.world.cover), capacity: new Float32Array(this.world.capacity), trees: new Float32Array(this.world.trees) };
     this.env = new Environment(this.rng.fork(11));
     this.env.climateAmp = this.p.climateAmp;
     this.env.greenUpShift = this.p.greenUpShift;
@@ -348,6 +357,15 @@ export class Sim implements SimLike {
       event: (kind, sp, x, y, a, b) => this.event(kind, sp, x, y, a, b),
     });
     this.mule = new MuleDeer(this.seed, this.world, this.p);
+    if (this.p.dynamicTrees > 0) {
+      this.trees = new Trees(this.seed, this.p, this.env, this.world, this.veg, this.a, {
+        event: (kind, sp, x, y, a, b) => this.event(kind, sp, x, y, a, b),
+        changed: () => {
+          this.mule.invalidate();
+          this.raptors.refreshTrees(this.trees!.live);
+        },
+      });
+    }
     this.populate();
     this.coyotes.seedFounders();
     if (this.p.openPrairie > 0 || this.p.ravenVagrants > 0) {
@@ -603,6 +621,10 @@ export class Sim implements SimLike {
       if (call !== null) this.startFlood(call.ticks, call.severity, this.springFloods.rng);
     }
     this.veg.step(t);
+    if (this.trees !== null) {
+      this.trees.noteBurning(this.veg.burningCells);
+      if (t % TREE_STEP === 0) this.trees.step(t);
+    }
     this.groundB = grassBrightness(this.env.state.season);
 
     // lists, grids, pack bookkeeping
@@ -2448,6 +2470,7 @@ export class Sim implements SimLike {
     const w = this.world, v = this.veg, a = this.a, n = w.n, wd = w.waterDist;
     if (--f.left <= 0) {
       for (let c = 0; c < f.mask.length; c++) if (f.mask[c]) v.soil[c] = Math.min(1.4, v.soil[c] + f.silt * f.sev);
+      if (this.trees !== null) this.trees.floodEnded(f.mask, f.sev, this.tick);
       this.flood = null;
       return;
     }
@@ -2507,6 +2530,14 @@ export class Sim implements SimLike {
     const r = Math.min(40, Math.max(6, radius));
     x = Math.min(w.size - 2, Math.max(2, x));
     y = Math.min(w.size - 2, Math.max(2, y));
+    if (this.trees !== null) {
+      // dynamic trees (S13): the grove is young cottonwoods in the tree list, and the cover is rebuilt from it
+      this.groveRng ??= new Rng(hashSeed(this.seed + ':groves'));
+      const made = this.trees.plant(x, y, r, Math.min(40, Math.max(3, Math.round((Math.PI * r * r) / 110))), this.groveRng);
+      this.groveCount++;
+      this.event('grovePlanted', -1, x, y, r, made);
+      return;
+    }
     const n = w.n, cell = w.cell;
     const i0 = Math.max(0, Math.floor((x - r) / cell)), i1 = Math.min(n - 1, Math.floor((x + r) / cell));
     const j0 = Math.max(0, Math.floor((y - r) / cell)), j1 = Math.min(n - 1, Math.floor((y + r) / cell));
@@ -3120,6 +3151,22 @@ export class Sim implements SimLike {
     row.spring_floods = this.cSpringFloods;
     row.flood_now = this.flood !== null ? 1 : 0;
     row.fawns_drowned = this.cFawnsDrowned;
+    // S13: trees by kind and stage now (0 with dynamicTrees off), recruits, fire deaths, mean cover of the land (always), juniper share of the ridges
+    const tc = this.trees !== null ? this.trees.counts() : null;
+    const td = this.trees !== null ? this.trees.drainSample() : null;
+    for (let k = 0; k < 3; k++) for (let s = 0; s < 5; s++) row[`tr_${TREE_KIND_KEYS[k]}_${TREE_STAGE_KEYS[s]}`] = tc ? tc.n[k][s] : 0;
+    row.tr_live = tc ? tc.total : 0;
+    row.tr_rec_cw = td ? td.recCw : 0;
+    row.tr_rec_jun = td ? td.recJun : 0;
+    row.tr_fire_small = td ? td.fireSmall : 0;
+    row.tr_fire_mature = td ? td.fireMature : 0;
+    row.tr_old = td ? td.old : 0;
+    row.tr_hazard = td ? td.hazard : 0;
+    row.tr_planted = td ? td.planted : 0;
+    row.tr_encroach = td ? td.encroach : 0;
+    row.tr_browse_slow = td ? td.slow : 0;
+    row.tr_jun_ridge = this.trees !== null ? this.trees.ridgeShare() : 0;
+    row.cover_mean = this.veg.meanOf(this.world.cover);
     this.cKills = 0;
     this.cKillsDeer = 0;
     this.cStrife = 0;
@@ -3213,7 +3260,16 @@ export class Sim implements SimLike {
       this.godStrikes.length = 0;
     }
     if (this.flood !== null) snap.flood = Float32Array.of(this.flood.left, this.flood.sev, this.flood.radius);
-    if (withVeg && this.groveBase >= 0) snap.groves = this.world.trees.slice(this.groveBase);
+    if (withVeg && this.groveBase >= 0 && this.trees === null) snap.groves = this.world.trees.slice(this.groveBase);
+    if (this.trees !== null) {
+      // dynamic trees (S13): the whole list, and the cover field it makes, whenever the list changed since the last snapshot that carried them
+      snap.treesVersion = this.trees.version;
+      if (withVeg && this.trees.version !== this.treesSent) {
+        snap.trees = this.trees.toArray();
+        snap.treeCover = this.trees.coverBytes();
+        this.treesSent = this.trees.version;
+      }
+    }
     if (this.dust !== null) { const d = this.dust.toArray(); if (d !== null) snap.dust = d; }
     if (withVeg && this.hoppers !== null) {
       snap.hoppers = new Uint8Array(32 * 32);
