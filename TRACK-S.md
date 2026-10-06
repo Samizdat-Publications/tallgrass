@@ -123,10 +123,20 @@ Only Track S writes this file (V2-PLAN.md section 4.3). Track R reads it with `g
 
 - **v7a candidate** = v6b + `raptors 1, stormCells 1, cougar.initial 6, muledeer.initial 60, herdSpacingGraze 1.6` (only features Track R already renders; snow, dust, hoppers, floods, dynamic trees and beavers stay off until their visuals exist). V7a16 (frozen c9c3f5a): eligible; core species 16/16, wolf CV 0.25, corr 0.67, starvation 41%; cougars present 97%, mule deer 100%, prairie dogs 14/16 at the end but present 100%. Acceptance (20 seeds x 1,000 generations) and shocks running in the cloud (`scratch/run_v7accept.sh`, outputs scratch/accept/v7a*); I adopt v7a if they pass.
 
-## In progress
-- E8b screen (E8 again at 3bb97a5 with the death columns), scratch/screens/E8b.
-- Screen A16: default params, 16 seeds x 240,000 ticks, frozen at 61455f2, output scratch/screens/A16 (cloud VM only).
+## Handoff (cloud Track S session ends 2026-10-06, credits used up)
 
-## Next
-1. Merge S1 and S2, run 16-seed screens B, C, D (S3), ask Track R for the 32-seed versions.
-2. S4 once R0 item 2 is on main.
+**State.** Every Track S WP in V2-PLAN section 6 is done and on `v2-sim`: S0 to S18 (see Done). Default world = checkpoint **v6b** (golden 340c052c, 714770ae, 617dea6c). Everything newer is behind params, off by default, with `npm test` green. Draft PR: Samizdat-Publications/tallgrass#2 (v2-sim -> main).
+
+**Running when this session stopped:** the v7a acceptance (20 seeds x 1,000 generations, frozen `scratch/frozen/c9c3f5a`, params `{"raptors":1,"stormCells":1,"cougar.initial":6,"muledeer.initial":60,"herdSpacingGraze":1.6}`) on the cloud VM; its result is recorded below if it finished before the session ended. The cloud scratch/ folder is not in git: if the container is gone, rerun it locally.
+
+**For the lead (Track R / single mode), in order:**
+1. Merge `origin/v2-sim` into main (PR #2), `npm test`, `npm run build`, two minutes in the live game, deploy.
+2. Wire the new frame fields the renderer does not draw yet (each documented in Done): S11 `snow`, S12 dust/hoppers/natural `flood`, S13 `trees`/`treesVersion`/`treeCover`, S14 `ponds`/`dams`/`lodges`/`drownedTrees`, S17 `groves` and tool `flood`; S8 `F_STOT`; palette entries for mule deer, eagle, hawk; story text for new death causes if wanted.
+3. v7a adoption: if the v7a acceptance passed (below, or rerun it locally with the command above), run the shock suite (`--scenario cull70,drought,wolfwipe --seeds 20 --ticks 720000 --sample 1500`, same params). If bison recover >= 80% after each shock, flip those five params into the defaults, re-record tools/golden.json (`npx tsx src/headless/hash.ts --seed N --ticks 24000` for 3, 7, 11), make tests that assume them off pass them explicitly, and extend `CHALLENGE_PIN` (src/challenges.ts) with `raptors 0, stormCells 0, cougar.initial 0, muledeer.initial 0, herdSpacingGraze 0` (most are already pinned; check), then `python tools/challenge_suite.py`.
+4. Later checkpoints, once their visuals exist: `snowDepth 1` (S11), S12 hazards, `dynamicTrees 1` with `treeCwRecruit` about 0.003 (S13), beavers as a scenario (S14). Each needs a 32-seed screen and an acceptance first (`tools/adoption.py`).
+5. Open ecology items: evolution2 (S9) lowers wolf CV below 0.2 with the plan's bison sprint cost; try a lighter one. greenUpShift 0.5 cost bison and prairie dogs; try 0.25. Coyote-hare correlation is 0.34 to 0.38 (gate 0.4). Wolves recover in only 75% of worlds after a wipeout.
+
+**Notes for the next cloud session:** the container restarts without warning (3 times in this session): run long batches as detached scripts that skip finished outputs; builders die with the session or on a user interrupt; never `pkill` by a pattern that matches your own shell; `pgrep` loops that wait on a script name can match the wrapper that launched them.
+
+## In progress
+- v7a acceptance (see Handoff).
