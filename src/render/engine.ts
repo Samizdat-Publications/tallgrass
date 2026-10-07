@@ -28,6 +28,8 @@ import { grassTint } from './grass';
 import { CURE_KEYS, LEAF_KEYS, PACK_KEYS, keyCurve } from './season';
 import { SnowDepth } from './snowdepth';
 import { Flood } from './flood';
+import { DustStorm } from './dust';
+import { Hoppers } from './hoppers';
 
 export type { Quality } from './post';
 export { injectTerrainShadow } from './common';
@@ -52,6 +54,8 @@ const DEFAULT_ENV: EnvState = {
 interface SeasonKey {
   s: number; lush: string; cured: string; stub: string; soil: string; gH: number; gL: number; leaf: number; lA: string; lB: string;
 }
+/** Scratch colour for applyDustStorm. */
+const DUST_TMP = new THREE.Color();
 const SEASONS: SeasonKey[] = [
   { s: 0.0, lush: '#6f9138', cured: '#a99a5a', stub: '#8f7d4c', soil: '#5e4630', gH: 0.85, gL: 1.0, leaf: 0.45, lA: '#6e7f38', lB: '#8d9a42' },
   { s: 0.5, lush: '#63852f', cured: '#b09b52', stub: '#8f7d4c', soil: '#5e4630', gH: 0.9, gL: 1.0, leaf: 0.85, lA: '#55692c', lB: '#76863a' },
@@ -125,6 +129,9 @@ export class Engine {
   readonly cloudShadow: CloudShadow;
   readonly smoke: Smoke;
   readonly fireflies: Fireflies;
+  /** S12 dust storm (blowing dust, eased storm level) and grasshopper swarm; both idle and invisible unless the sim sends their fields. */
+  readonly dustStorm: DustStorm;
+  readonly hoppers: Hoppers;
   /** Storm visuals (R4): cloud masses, rain shafts, lightning, rainbow. Fed by setStorms(). */
   readonly storms: Storms;
   readonly post: PostFX;
@@ -237,6 +244,8 @@ export class Engine {
     this.cloudShadow = new CloudShadow(this.uniforms, world.size);
     this.smoke = new Smoke(world, this.uniforms, this.terrain.heightAt);
     this.fireflies = new Fireflies(world, this.uniforms.time, this.terrain.heightAt);
+    this.dustStorm = new DustStorm(world.size, this.uniforms, world.hn, world.cell);
+    this.hoppers = new Hoppers(world.size, this.uniforms, world.hn, world.cell);
 
     this.sun = new SunLight(0xffffff, 1);
     // two cascades with a wide blend band, so the drop in shadow resolution fades in instead of showing as a line (see sunshadow.ts)
@@ -252,10 +261,10 @@ export class Engine {
     this.hemi = new THREE.HemisphereLight(0xffffff, 0x886644, 1);
 
     this.scene.userData.tgUniforms = this.uniforms;
-    this.scene.add(this.sky.mesh, this.terrain.mesh, this.water.mesh, this.flood.mesh, this.trees.group, this.smoke.mesh, this.fireflies.mesh, this.storms.group, this.sun, this.hemi);
+    this.scene.add(this.sky.mesh, this.terrain.mesh, this.water.mesh, this.flood.mesh, this.trees.group, this.smoke.mesh, this.fireflies.mesh, this.dustStorm.mesh, this.hoppers.mesh, this.storms.group, this.sun, this.hemi);
 
     this.post = new PostFX(renderer, this.scene, this.camera, this.uniforms, this.storms.uniforms);
-    this.post.aoExclude.push(this.sky.mesh, this.water.mesh, this.flood.mesh, this.smoke.mesh, this.fireflies.mesh, ...this.storms.meshes);
+    this.post.aoExclude.push(this.sky.mesh, this.water.mesh, this.flood.mesh, this.smoke.mesh, this.fireflies.mesh, this.dustStorm.mesh, this.hoppers.mesh, ...this.storms.meshes);
     // GTAO renders its own normal/depth pass with an override material that ignores alpha cut-outs, so a sparse canopy would occlude
     // the sky behind its gaps and show as grey smoke. Keep alpha-cut foliage (crowns and shrubs) out of that pass.
     for (const m of this.trees.meshes) if (m.name.startsWith('cottonwood-crown') || m.name.startsWith('shrubs')) this.post.aoExclude.push(m);
@@ -370,6 +379,16 @@ export class Engine {
   /** The running flood (Snapshot.flood: [ticks left, severity, band width m]) or undefined when none runs. Send every snapshot. */
   setFlood(f: Float32Array | undefined): void {
     this.flood.setFrame(f);
+  }
+
+  /** The running dust storm (Snapshot.dust: [intensity, direction rad, ticks left, front, peak]) or undefined when none runs. Send every snapshot. */
+  setDust(d: Float32Array | undefined): void {
+    this.dustStorm.setFrame(d);
+  }
+
+  /** The grasshopper density field (Snapshot.hoppers, 32 x 32 bytes); undefined on frames without the vegetation texture (the last field stays). */
+  setHoppers(h: Uint8Array | undefined): void {
+    this.hoppers.setField(h);
   }
 
   /** The player's planted groves (Snapshot.groves, stride 4: x, y, height, crown radius), the whole list; new trees are appended. */
@@ -531,6 +550,8 @@ export class Engine {
     this.cloudShadow.dispose();
     this.smoke.dispose();
     this.fireflies.dispose();
+    this.dustStorm.dispose();
+    this.hoppers.dispose();
     this.storms.dispose();
     this.vegTexture.dispose();
     this.snowDepth.dispose();
@@ -589,7 +610,12 @@ export class Engine {
     // drought dust for the aerial haze (weather 2), eased slowly so the valley hazes over and clears with the dry spell
     this.dustSm = ease(this.dustSm, w === 2 ? 1 : 0, 120);
     if (w !== 2 && this.dustSm < 0.02) this.dustSm = 0;
-    this.post.dust = this.dustSm;
+    // S12 dust storm: the eased storm level at the camera (0 and untouched without the sim's dust field)
+    const focus0 = this.cam.getFocus(this._focus);
+    this.dustStorm.update(dt, focus0.x, focus0.z, this.cam.distance, clamp(1.2 / Math.max(1, this.simSpeed / 2), 0.25, 1.2), this.firstFrame);
+    const storm = this.dustStorm.amount;
+    this.post.dust = Math.max(this.dustSm, 0.85 * storm);
+    this.post.dustStorm = storm;
     u.drought.value = this.dustSm;   // the same eased value drives the ground and blade shaders' straw bleach (season.ts DROUGHT)
     sm.snow = ease(sm.snow, snowTarget, snowTarget > sm.snow ? 320 : 220, snowTarget > sm.snow ? 7 : 9);
     sm.wet = ease(sm.wet, wetTarget, wetTarget > sm.wet ? 90 : 200);
@@ -620,6 +646,7 @@ export class Engine {
       if (fast > 0) { Object.assign(this.envDisp, env); this.envDisp.dayFrac = d; atmoEnv = this.envDisp; }
     }
     computeAtmosphere(atmoEnv, sm, u, this.lighting);
+    if (storm > 0.002) this.applyDustStorm(storm);
     if (fast > 0) {
       // the key light's direction is the harshest part of a fast-forward: it laps the sky (and swings through the zenith where the
       // moon takes over) faster than a shadow can read. The sky and the sun disc keep their true motion; the light that casts the
@@ -658,8 +685,8 @@ export class Engine {
     // contrast alike), the shadow map's edge widens and its depth drops. All of it is exactly zero at 1x.
     const softKey = 1 - 0.38 * fast;
     u.lightColor.value.multiplyScalar(softKey);
-    this.sun.shadow.intensity = 0.92 * (1 - 0.82 * sm.overcast) * (1 - 0.55 * fast);
-    this.sun.shadow.radius = 1.8 + 2.4 * sm.overcast + 3.2 * fast;
+    this.sun.shadow.intensity = 0.92 * (1 - 0.82 * sm.overcast) * (1 - 0.55 * fast) * (1 - 0.7 * storm);
+    this.sun.shadow.radius = 1.8 + 2.4 * sm.overcast + 3.2 * fast + 3 * storm;
     this.sun.position.copy(u.lightDir.value);
     this.sun.color.copy(u.lightColor.value);
     this.sun.intensity = 1;
@@ -719,9 +746,39 @@ export class Engine {
 
     this.terrain.updateShadow(this.renderer, u.lightDir.value);
     this.cloudShadow.update(this.renderer, dt, this.firstFrame);
+    this.hoppers.update(dt, focus0.x, focus0.z, this.camera.position.x, camY, this.camera.position.z, camY - aboveGround, this.renderer.domElement.height, this.camera.fov);
     this.post.updateSnow(dt, this.snowfallSm, env, aboveGround, L);
     this.post.updateRain(dt, L.rain, env, aboveGround, L);
     this.post.apply(L);
+  }
+
+  /**
+   * A dust storm at strength `a` (0..1 at the camera): the sky and the haze go brown-ochre at about the brightness they had, the sun is
+   * dimmed and turned red-orange (a disc seen through dust), the ambient light follows, and the sun disc and glow fade. The fog's own
+   * density and colour are in the post pass (post.dustStorm). Called right after computeAtmosphere, so it only ever lays over that frame.
+   */
+  private applyDustStorm(a: number): void {
+    const u = this.uniforms, L = this.lighting;
+    const lum = (c: THREE.Color): number => 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b;
+    const k = Math.min(1, a * 1.15);
+    const tint = (c: THREE.Color, r: number, g: number, b: number, dim: number): void => {
+      const o = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+      c.lerp(DUST_TMP.setRGB(r, g, b).multiplyScalar(lum(c) * dim / o), k);
+    };
+    // ochre, normalised below to the luminance of the colour it replaces
+    tint(u.skyHorizon.value, 0.62, 0.40, 0.2, 0.74);
+    tint(u.skyMid.value, 0.5, 0.33, 0.18, 0.62);
+    tint(u.skyZenith.value, 0.4, 0.27, 0.16, 0.52);
+    tint(u.sunGlow.value, 0.7, 0.42, 0.18, 0.7);
+    u.sunDiskColor.value.multiplyScalar(1 - 0.8 * k);
+    tint(L.hemiSky, 0.55, 0.4, 0.24, 0.9);
+    tint(L.hemiGround, 0.5, 0.36, 0.2, 0.9);
+    L.hemiIntensity *= 1 - 0.18 * k;
+    // the key light: dimmed hard and reddened
+    u.lightColor.value.multiply(DUST_TMP.setRGB(1 - 0.6 * k, 1 - 0.72 * k, 1 - 0.84 * k));
+    L.exposure *= 1 + 0.18 * k;   // the eye adapts: not as dark as the light meter says
+    L.gradeSat -= 0.1 * k;
+    L.gradeContrast -= 0.08 * k;
   }
 
   private applySeason(season: number): void {

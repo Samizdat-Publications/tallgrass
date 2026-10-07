@@ -113,6 +113,9 @@ class FogPass extends Pass {
         uSunTint: { value: new THREE.Color(1, 0.8, 0.55) },
         uHorGlow: { value: 0.0 },
         uDust: { value: 0.0 },
+        // S12 dust storm: strength at the camera 0..1 (0 = no storm, the extra terms are skipped) and the colour of the dust-laden air
+        uDustStorm: { value: 0.0 },
+        uDustCol: { value: new THREE.Color(0.3, 0.2, 0.1) },
         uAerialWarm: { value: 0.0 },
         uAerialNight: { value: 0.0 },
         // dawn pool (R2.8): mist density (extinction per metre at the valley floor), height falloff, and the clock and wind that drift it
@@ -149,6 +152,8 @@ class FogPass extends Pass {
         uniform vec3 uSunTint;
         uniform float uHorGlow;
         uniform float uDust;
+        uniform float uDustStorm;
+        uniform vec3 uDustCol;
         uniform float uAerialWarm;
         uniform float uAerialNight;
         uniform float uDawn;
@@ -210,6 +215,19 @@ class FogPass extends Pass {
             mistOd = uMist * e0 * dist;
           }
           mistOd = min(max(mistOd, 0.0), 0.9);
+          // Dust storm: a ground-hugging haze (density falling off with height, scale about 35 m) added to the extinction, so the valley
+          // closes in to a hundred metres or so at ground level and thins with the camera's height. Same analytic form as the mist.
+          float dustOd = 0.0;
+          if (uDustStorm > 0.002) {
+            float kd = 0.03;
+            float k0 = 0.032 * pow(uDustStorm, 1.15);
+            float ed0 = exp(clamp(-kd * y0, -60.0, 60.0));
+            if (abs(dy * kd) > 1e-4) {
+              float ed1 = exp(clamp(-kd * (y0 + dy * dist), -60.0, 60.0));
+              dustOd = k0 * (ed0 - ed1) / (kd * dy);
+            } else dustOd = k0 * ed0 * dist;
+            dustOd = min(max(dustOd, 0.0), 8.0);
+          }
           // Dawn pool: after a clear, calm night mist lies in the low ground. The pool surface is read from a coarse map of the valley
           // floor (tPool: the local lowest ground a few metres up, built once from the terrain), so it fills creek valleys and swales
           // and leaves hilltops and upper slopes clear above a soft top surface. The ray is marched a few steps through the part of it
@@ -249,7 +267,7 @@ class FogPass extends Pass {
           float aerOd = max(dist - 90.0, 0.0) * uAerial * alt * (1.0 + 0.9 * uDust);
           float cosS = dot(dir, uSunDir);
           float aerFog = 1.0 - exp(-aerOd);
-          float fog0 = min(1.0 - exp(-(od + mistOd + dawnOd)), uFogMax);
+          float fog0 = min(1.0 - exp(-(od + mistOd + dawnOd + dustOd)), uFogMax);
           float fog = min(1.0 - (1.0 - fog0) * (1.0 - aerFog), uFogMax);
 
           vec3 fdir = normalize(vec3(dir.x, max(dir.y, 0.0) * 0.5 + 0.015, dir.z));
@@ -273,6 +291,11 @@ class FogPass extends Pass {
           // golden light turns the haze itself gold (saturated, not grey): push the fog colour toward amber in proportion to the aerial share
           fc = mix(fc, fc * vec3(1.22, 1.0, 0.68) + uSunTint * 0.02, uAerialWarm * aerShare * (0.4 + 0.6 * lobe));
           fc = mix(fc, fc * vec3(1.18, 0.98, 0.7) + uSunTint * 0.04, uDust * aerShare * 0.6);
+          // the dust itself: brown-ochre air, a little lighter toward the sun (forward scatter)
+          if (dustOd > 0.0) {
+            float dsh = dustOd / (od + mistOd + dawnOd + dustOd + 1e-5);
+            fc = mix(fc, uDustCol * (0.85 + 0.5 * tgHGn(cosS, 0.5) * sunUp), clamp(dsh * 0.92, 0.0, 1.0));
+          }
           // horizon glow: the far terrain that meets the sky catches a warm band, strongest on the sun's side
           float horBand = exp(-abs(dir.y) * 26.0) * smoothstep(500.0, 3000.0, dist);
           vec2 shd = normalize(uSunDir.xz + vec2(1e-4)), dhd = normalize(dir.xz + vec2(1e-4));
@@ -1054,7 +1077,13 @@ export class PostFX {
     // (a ground-level whiteout: it thins with the camera's height, so the drone view still sees the valley through it)
     const bz = this.blizzard * (0.22 + 0.78 * Math.exp(-this.camAbove / 55));
     f.uHaze.value = L.hazeDensity + (Math.max(L.hazeDensity, 0.0065) - L.hazeDensity) * bz;
-    f.uFogMax.value = 0.94 + 0.035 * bz;
+    f.uFogMax.value = 0.94 + 0.035 * bz + 0.03 * this.dustStorm;
+    f.uDustStorm.value = this.dustStorm;
+    if (this.dustStorm > 0.002) {
+      // the dust-laden air takes the (already ochre) horizon colour of the sky, a touch browner
+      const hc = this.shared.skyHorizon.value;
+      (f.uDustCol.value as THREE.Color).setRGB(hc.r * 0.92, hc.g * 0.8, hc.b * 0.64);
+    }
     f.uMist.value = L.mistDensity;
     // dawn pool: density at the valley floor, and a falloff that tightens toward the ground as it burns off
     f.uDawn.value = this.dawnNow * DAWN_DENSITY;
@@ -1076,6 +1105,8 @@ export class PostFX {
    * eased value here (it stays 0 until something calls this).
    */
   dust = 0;
+  /** S12 dust storm strength at the camera 0..1 (set by the engine each frame). */
+  dustStorm = 0;
   /** Blizzard amount 0..1 (snowing with wind past 0.6), set by updateSnow. Thickens the fog. */
   blizzard = 0;
   private camAbove = 0;

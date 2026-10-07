@@ -203,6 +203,8 @@ worker.onmessage = (e: MessageEvent<FromWorker>) => {
   if (m.snow) engine.setSnowDepth(m.snow);
   if (m.veg) engine.setGroves(m.groves);
   engine.setFlood(m.flood);
+  engine.setDust(m.dust);
+  engine.setHoppers(m.hoppers);
   if (m.small) {
     lastSmall = m.small;
     smallprey.setSmall(m.small);
