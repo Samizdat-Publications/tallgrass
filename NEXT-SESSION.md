@@ -2,7 +2,14 @@
 
 **Updated:** 2026-10-04 afternoon, at the end of the v2 planning session. v1 is finished and live; v2 starts now. The plan is `V2-PLAN.md`.
 
-## State now (2026-10-07 13:20, after the v7c adoption)
+## State now (2026-10-07 evening, owner allowed work up to 97% weekly; start nothing new at 95%)
+- Live = main with today's review fixes (overlay, chronicle, field-note camera, canopy clearance, night, beaver model and marsh, grounding, calm UI, wide-view terrain). Default world still v7c (golden 2cabdb62, 5ad21d26, 904ebf61).
+- RUNNING: v8 acceptance (v7c + snowDepth 1 + dynamicTrees 1 + treeCwRecruit 0.003), 20 x 1,000 generations, from scratch/frozen/a009c8e, log scratch/accept_v8.log, out scratch/frozen/a009c8e/review/stability/v8-a009c8e/baseline (slow: about 350 ticks/s per worker, several hours). Check with tools/dynamics.py plus per-world presence (scratch/pdpres.py is a quick helper). If it passes: shocks from the same worktree (--seeds 20 --ticks 720000 --sample 1500 --scenario cull70,drought,wolfwipe --threads 10, params {"snowDepth":1,"dynamicTrees":1,"treeCwRecruit":0.003}); bison recover >= 80%; then adopt like v7c (flip defaults, re-record golden, add the three to V7C_OFF in src/sim/testpins.ts or a V8_OFF, pin snowDepth 0 and dynamicTrees 0 in CHALLENGE_PIN, challenge_suite, playtest, deploy).
+- Paused, to run after v8: 32-seed screens hyv12 (hareYearVar 1.2), csg07 (coyoteSmallGame 0.7), gus025 (greenUpShift 0.25) from scratch/frozen/a009c8e; script scratch/eco2screen.sh (remove its snowtrees line first).
+- Screens done (scratch/frozen/a009c8e/review/stability/v8screen): control, snow, trees, hazards (fail: prairie dogs 21/32), all (fail), snowtrees (pass).
+- Builders in flight at 19:40: r-heading (heading follows travel, softer night rim, drop hareBoom shot), r-winter-trees (living winter trees vs snags, bison clipping). Merge rule: rmdir the worktree's node_modules junction FIRST, confirm, then git worktree remove.
+
+### 2026-10-07 13:20, after the v7c adoption)
 - Default world is checkpoint v7c (v6b + raptors, storm cells, 6 cougars, 60 mule deer, herd spacing 1.6, raptorDogPref 0.1). Golden 2cabdb62, 5ad21d26, 904ebf61. Live at https://tallgrass.stewartgregerson.workers.dev.
 - Every Track S WP (S0 to S18) is merged, and every new frame field draws (snow depth, dynamic trees, dust, grasshoppers, floods, groves, beaver ponds). Off by default and each needing its own 32-seed screen plus acceptance: snowDepth, dynamicTrees (with treeCwRecruit about 0.003), dustStorms, grasshoppers, springFloods, beavers, evolution2, greenUpShift.
 - Next phase: to be planned by a fresh Opus session. Inputs: this file, MORNING.md 'Next 5', TRACK-S.md Handoff items 4 and 5, MAYBE-WANTS.md (owner's later ideas).

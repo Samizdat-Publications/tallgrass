@@ -2,6 +2,21 @@
 
 *(Updated 22:10 Tuesday 2026-10-06. This file is refreshed at every milestone.)*
 
+## 2026-10-07 afternoon and evening: review round and fixes (all live)
+A fresh blind critic (stills) and a Gemini video review looked at the v7c world (`review/round-15`, `review/round-16-video`). Fixed and deployed:
+- Territory overlay: every pack's range now shows as a lit, softly bordered colour patch with its name and den (it was nearly invisible by day and a flat blob at night).
+- Chronicle: no more word-for-word repeats; arrivals in the same year fold into one line.
+- Documentary camera: cuts to the subject of each field note and headline event (a close pronghorn, the carcass the ravens are on, the prairie dog town).
+- Camera no longer hugs tree crowns; foliage dissolves near the lens. Night herds are readable.
+- Real beaver model that swims, marsh edges on beaver ponds, browner floodwater.
+- Animals plant their feet better and lean with the slope.
+- Calmer population panel at 10x and 100x, honest sparkline scales, a labelled graph legend, and a tool rail that no longer reshuffles.
+- Wide views: snow follows the land, creek banks show, less haze in the middle distance, no hard map edge from above.
+
+Left for your planner (design calls): about 1,000 bison crowding the wide views (the video reviewer liked the scale, the still critic did not), long-run cycles that read as jitter, mule deer settling near 10, and the slow first decades.
+
+**Next checkpoint (v8):** snow depth plus living trees passed a 32-world test (prairie dogs did even better than now); its 20-world acceptance is running overnight, then the shock tests. Dust storms, grasshoppers and spring floods failed (they wipe out prairie dog towns) and stay off. The 'wolves recover in only 75% of worlds' item turned out to be a measuring quirk: wolves came back in all 20.
+
 ## v7c is the default world (adopted 2026-10-07 13:20, live)
 Golden eagles (winter visitors), red-tailed hawks, six cougars, sixty mule deer, storm cells with lightning fires and herd spacing are now part of every new valley. It passed the full 20-world acceptance (every species held; prairie dogs in 18 of 20 worlds, at the gate) and all three shock tests (bison recovered in every world after a 70% cull, a drought and a wolf wipeout). The challenges still play as they were designed (those six settings are pinned off for them).
 
