@@ -28,6 +28,52 @@ export const LEG_FLEX = [0.035, 0.06, 0.09];
 /** The IK fades out between these camera distances (m): beyond it a leg aims at flat ground (the cheap path). */
 export const IK_NEAR = 40;
 export const IK_FAR = 45;
+/**
+ * Fixed-point passes the body-motion compensation of a leg target takes (GLSL: one tgBodyFwd call each in the leg branch). One pass
+ * leaves a planted foot sliding 15 to 25% of the body's travel once the distance cues of a gallop (bound, spine arch, pitch) are
+ * big, three bring it under 8%.
+ */
+export const IK_PASSES = 3;
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Slope response (GLSL: tgSlope in tgAnimate). Everything is derived from the instance's own terrain pitch and roll, which the animal
+// layer writes into the instance matrix, so no instance attribute is needed. The body-frame pitch and roll below are applied in
+// bodyFwd (not in the instance matrix), so the legs' IK takes them back out of the foot targets and a planted foot stays planted.
+
+/** Share of the terrain pitch and roll added again at the drone view (smoothstep(25, 140, camera distance)): a herd rides the swells. */
+export const FAR_TILT = 0.35;
+/** Uphill the body leans in (steeper than the ground by this share of the slope) and strides shorten; downhill it sits back and braces. */
+export const LEAN_IN = 0.18;
+export const LEAN_BRACE = 0.12;
+export const STRIDE_UP = 0.3;
+export const STRIDE_DOWN = 0.1;
+/** Share of the body's total pitch that the head cancels (the head stays nearer level than the body on a slope). */
+export const HEAD_COUNTER = 0.3;
+
+export interface SlopeResponse {
+  /** Extra body-frame pitch and roll (rad) on top of the instance's terrain pitch and roll. */
+  dp: number;
+  dr: number;
+  /** Stride multiplier (1 on the flat, 0.7 steep uphill, 0.9 steep downhill). */
+  strideK: number;
+  /** Head pitch correction (rad): added to the head angle, so it is negative when the body pitches up. */
+  head: number;
+}
+/** Slope response for an instance at terrain pitch `ip` (+ = nose up, uphill) and roll `ir`, seen from camera distance `camD`. */
+export function slopeResponse(ip: number, ir: number, camD: number, out?: SlopeResponse): SlopeResponse {
+  const o = out ?? { dp: 0, dr: 0, strideK: 1, head: 0 };
+  const fk = sstep(25, 140, camD);
+  const up = sstep(0.12, 0.4, ip), dn = sstep(0.12, 0.4, -ip);
+  o.dp = ip * FAR_TILT * fk + (ip > 0 ? LEAN_IN * ip * up : -LEAN_BRACE * ip * dn);
+  o.dr = ir * FAR_TILT * fk;
+  o.strideK = 1 - STRIDE_UP * up - STRIDE_DOWN * dn;
+  o.head = -HEAD_COUNTER * (ip + o.dp);
+  return o;
+}
+/** Stride multiplier of a terrain pitch (what the animal layer divides the distance by to advance the phase). */
+export function slopeStrideK(ip: number): number {
+  return 1 - STRIDE_UP * sstep(0.12, 0.4, ip) - STRIDE_DOWN * sstep(0.12, 0.4, -ip);
+}
 
 export const clamp = (x: number, a: number, b: number): number => (x < a ? a : x > b ? b : x);
 export const sstep = (a: number, b: number, x: number): number => {
@@ -106,7 +152,7 @@ export function gaitWeights(p: AnimParams, spd: number): { wW: number; wT: numbe
   return { wW: sstep(0.08, 0.4, spd) * (1 - s1), wT: s1 * (1 - wG), wG, s1 };
 }
 
-export function gaitMix(p: AnimParams, spd: number, stot = 0): GaitMix {
+export function gaitMix(p: AnimParams, spd: number, stot = 0, strideK = 1): GaitMix {
   const { wW, wT, wG } = gaitWeights(p, spd);
   const sum = wW + wT + wG;
   const n: [number, number, number] = sum < 1e-3 ? [1, 0, 0] : [wW / sum, wT / sum, wG / sum];
@@ -125,6 +171,7 @@ export function gaitMix(p: AnimParams, spd: number, stot = 0): GaitMix {
     lift = mix(lift, LIFT_K * L * st.knee, stot);
     off = off.map((o, i) => mix(o, st.off[i], stot)) as GaitMix['off'];
   }
+  stride *= strideK; // slope: shorter steps uphill (see slopeResponse)
   return { w: [wW, wT, wG], sum, n, amt: Math.min(sum, 1), beta, stride, lift, flex, off };
 }
 
@@ -132,14 +179,14 @@ export function gaitMix(p: AnimParams, spd: number, stot = 0): GaitMix {
  * Metres of ground per leg cycle at a gait pace (the phase advances by distance / this, see AnimalLayer.update). The same number
  * as gaitMix(p, spd).stride, without allocating (it runs for every animal every frame).
  */
-export function gaitStride(p: AnimParams, spd: number, stot = 0): number {
+export function gaitStride(p: AnimParams, spd: number, stot = 0, strideK = 1): number {
   const s1 = sstep(p.trot0, p.trot1, spd);
   const wG = sstep(p.gal0, p.gal1, spd);
   const wT = s1 * (1 - wG);
   const wW = sstep(0.08, 0.4, spd) * (1 - s1);
   const sum = wW + wT + wG;
   const base = sum < 1e-3 ? plantedStride(p, 0) : (wW * plantedStride(p, 0) + wT * plantedStride(p, 1) + wG * plantedStride(p, 2, spd)) / sum;
-  return stot > 0 && p.stot ? mix(base, stotStride(p), stot) : base;
+  return (stot > 0 && p.stot ? mix(base, stotStride(p), stot) : base) * strideK;
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -229,9 +276,10 @@ export function rotZ(x: number, y: number, cx: number, cy: number, a: number): [
 // body-height offset from the terrain. The IK aims at a point and takes this motion back out, so the foot lands where asked.
 
 export interface BodyMotion {
-  /** Vertical offset of the body (bob + terrain offset, m) and its pitch (rad) about (0, comY). */
+  /** Vertical offset of the body (bob + terrain offset, m) and its pitch (rad) about (0, comY), plus the slope's extra roll (rad, about the body axis). */
   yoff: number;
   pitch: number;
+  roll: number;
   /** R6 stotting weight 0..1 (the whole-body cues of the gallop give way to the bounds' own bob and pitch). */
   stot: number;
   /** Distance cue strength 0..1 (smoothstep(20, 110, camera distance)), the body length used to size the cues, and gait weights. */
@@ -245,7 +293,7 @@ export interface BodyMotion {
  * Bob, pitch and sink of the body for a gait (the faded weights gm.w, GLSL: bob, pitch and flex in tgAnimate), plus the vertical
  * body offset `dy` from the terrain.
  */
-export function bodyMotion(p: AnimParams, gm: GaitMix, ph: number, farK: number, dy: number, stot = 0): BodyMotion {
+export function bodyMotion(p: AnimParams, gm: GaitMix, ph: number, farK: number, dy: number, stot = 0, dp = 0, dr = 0): BodyMotion {
   const w = gm.w;
   const cyc = TAU * ph;
   let bob = w[0] * p.bobW * Math.cos(2 * cyc) + w[1] * p.bobT * Math.cos(2 * cyc) + w[2] * p.bobG * Math.cos(cyc - 0.5);
@@ -268,7 +316,7 @@ export function bodyMotion(p: AnimParams, gm: GaitMix, ph: number, farK: number,
     bob = mix(bob, sb, stot);
     pitch = mix(pitch, sp, stot);
   }
-  return { yoff: bob - gm.flex + dy, pitch, stot, farK, bl: p.boostLen, w, cyc };
+  return { yoff: bob - gm.flex + dy, pitch: pitch + dp, roll: dr, stot, farK, bl: p.boostLen, w, cyc };
 }
 
 /** Forward body transform of a model-space point (x, y, z). */
@@ -276,6 +324,12 @@ export function bodyFwd(p: AnimParams, m: BodyMotion, pt: [number, number, numbe
   let [x, y, z] = pt;
   y += m.yoff;
   [x, y] = rotZ(x, y, 0, p.comY, m.pitch);
+  if (m.roll !== 0) {
+    // the slope's roll (tgRotX about (0, comY)): the legs' y shift from it is taken back out by the IK, like the pitch
+    const cs = Math.cos(m.roll), sn = Math.sin(m.roll);
+    const dy = y - p.comY;
+    [y, z] = [p.comY + cs * dy - sn * z, sn * dy + cs * z];
+  }
   if (m.farK > 0.001) {
     const k1 = 1 - m.stot; // (the bounds of a stot have their own rise and fall)
     const wW = m.w[0] * k1, wT = m.w[1] * k1, wG = m.w[2] * k1;
@@ -311,7 +365,7 @@ export interface LegAim {
  * cheap flat path. The target is raised by the swing lift, and the body's own motion is taken back out with one correction step.
  */
 export function aimLeg(
-  p: AnimParams, rig: LegRig, gm: GaitMix, ph: number, leg: number, z: number, groundY: number, bm: BodyMotion, calmK = 1,
+  p: AnimParams, rig: LegRig, gm: GaitMix, ph: number, leg: number, z: number, groundY: number, bm: BodyMotion, calmK = 1, passes = IK_PASSES,
 ): LegAim {
   const front = leg < 2;
   const b = front ? rig.front : rig.hind;
@@ -319,7 +373,14 @@ export function aimLeg(
   const tx = b.foot[0] + path.footX;
   const target: [number, number, number] = [tx, b.foot[1] + groundY + path.lift, z];
   const f = bodyFwd(p, bm, target);
-  const sol = solveLeg(b, front, target[0] - (f[0] - target[0]), target[1] - (f[1] - target[1]));
+  let sx = target[0] - (f[0] - target[0]), sy = target[1] - (f[1] - target[1]);
+  for (let it = 1; it < passes; it++) {
+    // further fixed-point passes (GLSL: the extra tgBodyFwd calls in the leg branch): s <- s - (bodyFwd(s) - target)
+    const g = bodyFwd(p, bm, [sx, sy, z]);
+    sx -= g[0] - target[0];
+    sy -= g[1] - target[1];
+  }
+  const sol = solveLeg(b, front, sx, sy);
   return { target, sol, path };
 }
 

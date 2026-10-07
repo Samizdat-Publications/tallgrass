@@ -293,6 +293,24 @@ float tgPounce;
 float tgHold;   // 0..1: holding the prey (takedown), braced back on the hind feet
 float tgFeedB;  // 0..1: the haul of the feeding cycle, the forequarters pulled back
 float tgHowl;   // 0..1: sitting up to howl (R3): the body pitches up about the shoulders, the haunches drop
+float tgRollB;  // the slope's extra roll (rad), body frame (legmath.ts slopeResponse)
+float tgStrideK; // stride multiplier of the slope (shorter steps uphill)
+float tgHeadK;  // head pitch correction of the slope (rad)
+// legmath.ts slopeResponse: the slope response is derived from the instance's own terrain pitch and roll (they are in the instance
+// matrix), so it needs no instance attribute. The extra pitch and roll are body-frame motion (the legs' IK takes them back out of
+// the foot targets, so planted feet stay planted); uphill the body leans in and the stride shortens, downhill it sits back and braces.
+void tgSlope(float camD, out float dp, out float dr, out float strideK, out float head) {
+  float isc0 = length(vec3(instanceMatrix[0]));
+  float ip = asin(clamp(instanceMatrix[0].y / isc0, -1.0, 1.0));
+  float ir = atan(-instanceMatrix[2].y, instanceMatrix[1].y);
+  float fk = smoothstep(25.0, 140.0, camD);
+  float up = smoothstep(0.12, 0.4, ip);
+  float dn = smoothstep(0.12, 0.4, -ip);
+  dp = ip * 0.35 * fk + (ip > 0.0 ? 0.18 * ip * up : -0.12 * ip * dn);
+  dr = ir * 0.35 * fk;
+  strideK = 1.0 - 0.3 * up - 0.1 * dn;
+  head = -0.3 * (ip + dp);
+}
 #if BEHAV
 float tgWallow;  // R8 bison: 0..1 wallowing (rolling on the ground) and the roll angle it is at (rad, about the body axis)
 float tgRollA;
@@ -306,6 +324,7 @@ vec3 tgGW;
 void tgBodyFwd(inout vec3 p, inout vec3 n) {
   p.y += tgYoff;
   tgRotZ(p, n, vec3(0.0, COM_Y, 0.0), tgPitchB);
+  if (tgRollB != 0.0) tgRotX(p, n, vec3(0.0, COM_Y, 0.0), tgRollB);
   if (tgFarK > 0.001) {
     // Whole-body gait cues sized as a fraction of the body length, so they stay readable at 15 to 40 px: a bound (the body
     // rises and falls once per stride in a gallop), the spine arching and stretching, a lateral snake, and the body pitching.
@@ -607,7 +626,14 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
   tgYoff -= frzW * crouchBody * CROUCH_DROP * 0.14;
   pitch -= frzW * crouchBody * 0.1;
 #endif
-  tgPitchB = pitch;
+  {
+    float sDp = 0.0, sDr = 0.0, sK = 1.0, sHd = 0.0;
+    if (!dead) tgSlope(camD, sDp, sDr, sK, sHd);
+    tgPitchB = pitch + sDp;
+    tgRollB = sDr;
+    tgStrideK = sK;
+    tgHeadK = sHd;
+  }
   tgFarK = dead ? 0.0 : farK;
   tgCyc = cyc;
   tgPounce = leapW;
@@ -652,6 +678,7 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
       gLift = mix(gLift, STOT_LIFT, stotK);
       oB = mix(oB, STOT_OFF, stotK);
 #endif
+      gStride *= tgStrideK; // legmath.ts gaitMix: shorter steps uphill
       float ofs = part == 1 ? oB.x : (part == 2 ? oB.y : (part == 3 ? oB.z : oB.w));
       // legmath.ts footPath: the foot's offset along the body from its rest position, and its swing lift
       vec2 lw = tgLegWave(ph + ofs, gBeta);
@@ -672,7 +699,18 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
       vec3 tq = tg;
       vec3 tqn = vec3(0.0, 1.0, 0.0);
       tgBodyFwd(tq, tqn);
-      vec3 sol = tgSolveLeg(hipP, kneeP, footP, front ? -1.0 : 1.0, 2.0 * tg.xy - tq.xy);
+      // legmath.ts IK_PASSES = 3: two more fixed-point passes (s <- s - (bodyFwd(s) - target)) so the big distance cues of a gallop
+      // (bound, spine arch, pitch) come out of the foot target exactly and a planted foot stays on the ground
+      vec2 sTg = 2.0 * tg.xy - tq.xy;
+      if (tgFarK > 0.001 || tgPitchB != 0.0) {
+        for (int ip2 = 0; ip2 < 2; ip2++) {
+          vec3 tq2 = vec3(sTg, zf);
+          vec3 tn2 = vec3(0.0, 1.0, 0.0);
+          tgBodyFwd(tq2, tn2);
+          sTg -= tq2.xy - tg.xy;
+        }
+      }
+      vec3 sol = tgSolveLeg(hipP, kneeP, footP, front ? -1.0 : 1.0, sTg);
       hip = sol.x;
       knee = sol.y;
       stretch = mix(1.0, sol.z, moveK);
@@ -873,6 +911,9 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
     // from the drone view the head pumps harder so a trot or a gallop reads as a body moving, not sliding
     float pump = farK * (wWalk * 0.1 * sin(2.0 * cyc + 1.0) + wTrot * 0.16 * sin(2.0 * cyc + 1.0) + wGal * 0.32 * sin(cyc + 2.0));
     ang += pump;
+#if KIND == 0
+    ang += tgHeadK; // legmath.ts slopeResponse: on a slope the head cancels part of the body's pitch (nearer level than the body)
+#endif
 #if RAPTOR
     ang -= perchW * PERCH_PITCH * 0.8; // the body sits upright on its perch: the head tips down to look ahead
     ang += stoopW * 0.55;              // in a stoop the head is held up out of the dive, eyes on the prey

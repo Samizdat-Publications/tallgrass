@@ -19,7 +19,7 @@ import { getModel } from './models';
 import { antlerOf, deerSeason } from './models/muledeer';
 import type { DeerSeason } from './models/muledeer';
 import type { AnimParams, ModelDef } from './models';
-import { IK_FAR, IK_NEAR, gaitMix, gaitStride, legRigOf, stanceBodyDy, timelapseGaitSpd, timelapseHz, timelapseK } from './models/legmath';
+import { IK_FAR, IK_NEAR, gaitMix, gaitStride, legRigOf, slopeStrideK, stanceBodyDy, timelapseGaitSpd, timelapseHz, timelapseK } from './models/legmath';
 import type { LegRig } from './models/legmath';
 import { ContactShadows } from './models/contact';
 import { R8_SHADER, makeAnimalMaterials } from './models/shader';
@@ -1964,6 +1964,7 @@ export class AnimalLayer {
         S.flap[slot] = flapT;
         S.tug[slot] = 0;
         S.hunt[slot] = 0;
+        if (!FLIES[sp]) S.pitch[slot] = -9; // (a ground animal's smoothed terrain pitch: -9 = not set yet)
       }
       // The distance actually drawn since the last frame. The legs are locked to it (cadence = distance / stride), so a
       // planted foot stands still on the ground whatever the sim rate, time scale or snapshot jitter.
@@ -2148,17 +2149,7 @@ export class AnimalLayer {
         S.stot[slot] += (stT - S.stot[slot]) * (stT > S.stot[slot] ? kStotIn : kStotOut);
         stotW = S.stot[slot];
       }
-      let dph = Math.min(dsGround / (strideFor(pr, gaitSpd, stotW) * vs * sizeBoost), MAX_CADENCE * dt);
-      if (tlK > 0) {
-        // the bound rate replaces the distance lock as the time-lapse takes over: a readable few Hz (each animal a little off the
-        // others so a herd does not bound in step) that runs only while the animal is actually travelling
-        const hz = this.tlHz[sp] * (0.88 + 0.24 * hash01(id * 7 + 3));
-        dph += (hz * dt * smoothstep(1.5, 5, S.vis[slot]) - dph) * tlK;
-      }
-      const phPrev = S.phase[slot];
-      S.phase[slot] = (S.phase[slot] + dph) % 1;
-      // a stot lands once per cycle (the phase wraps): a small puff of dust where the four feet come down
-      if (stotW > 0.6 && S.phase[slot] < phPrev && dt > 1e-4 && this.timeScale <= 3 && camD < 160) this.landingPuff(x, z, vs * 1.1);
+      // (the leg cycle is advanced further down, once the pose is known: the stride depends on the slope the instance is written with)
 
       // R6 the rush: the spring from the ambush throws up a puff of dust behind the hind feet
       if (sp === Sp.Cougar) {
@@ -2235,17 +2226,18 @@ export class AnimalLayer {
         const hl = pr.length * 0.3 * vs, hw = 0.12 * Math.max(pr.length, 1) * vs + 0.05;
         const hF = sampleHeight(H, hn, cell, x + ch * hl, z + sh * hl);
         const hB = sampleHeight(H, hn, cell, x - ch * hl, z - sh * hl);
-        pitch = Math.atan2(hF - hB, 2 * hl);
+        // the terrain pitch under the body (front and back samples along the heading), smoothed over about 0.1 s of sim time so a
+        // step in the height field does not snap the body (the first frame of an animal takes the raw value)
+        const pRaw = Math.atan2(hF - hB, 2 * hl);
+        if (S.pitch[slot] < -8) S.pitch[slot] = pRaw;
+        else S.pitch[slot] += (pRaw - S.pitch[slot]) * (1 - Math.exp(-dt * 10 * Math.max(1, Math.min(this.timeScale, 12))));
+        pitch = S.pitch[slot];
         const hR = sampleHeight(H, hn, cell, x - sh * hw, z + ch * hw);
         const hL = sampleHeight(H, hn, cell, x + sh * hw, z - ch * hw);
         roll = -Math.atan2(hR - hL, 2 * hw);
         y = (hF + hB + hR + hL) * 0.25 * 0.5 + ground * 0.5; // sit between the footprint average and the centre
-        // from the drone view the body follows the ground more emphatically (up to +60%), so a herd visibly rides the swells
-        // and dips of the land even when its legs are two pixels tall
-        const cpv = this.shared.uCamPos.value;
-        const fkT = smoothstep(25, 140, Math.hypot(x - cpv.x, ground - cpv.y, z - cpv.z));
-        pitch *= 1 + 0.6 * fkT;
-        roll *= 1 + 0.6 * fkT;
+        // (the instance carries the true terrain pitch and roll. The extra tilt at the drone view, the lean into a slope and the
+        // head's counter-pitch are body-frame motion in the vertex shader, derived from these two angles: legmath.ts slopeResponse)
         // lean into the turn like a rider on a bend (tan = v * omega / g), only once it is actually running
         const vv = S.vis[slot];
         const lean = clamp(Math.atan((vv * turnRate) / 9.81) * 0.85, -BANK_MAX[sp], BANK_MAX[sp]) * smoothstep(1.5, 5, vv);
@@ -2306,6 +2298,21 @@ export class AnimalLayer {
           }
         }
       }
+      // The leg cycle. Locked to the distance drawn along the ground, over the stride of the blended gait that the vertex shader's foot
+      // path uses, shortened on a slope exactly as the shader shortens it (both read the pitch the instance is written with), so a
+      // planted foot stands still on the ground whatever the incline.
+      const strideK = pr.kind === 0 ? slopeStrideK(pitch) : 1;
+      let dph = Math.min(dsGround / (strideFor(pr, gaitSpd, stotW) * strideK * vs * sizeBoost), MAX_CADENCE * dt);
+      if (tlK > 0) {
+        // the bound rate replaces the distance lock as the time-lapse takes over: a readable few Hz (each animal a little off the
+        // others so a herd does not bound in step) that runs only while the animal is actually travelling
+        const hz = this.tlHz[sp] * (0.88 + 0.24 * hash01(id * 7 + 3));
+        dph += (hz * dt * smoothstep(1.5, 5, S.vis[slot]) - dph) * tlK;
+      }
+      const phPrev = S.phase[slot];
+      S.phase[slot] = (S.phase[slot] + dph) % 1;
+      // a stot lands once per cycle (the phase wraps): a small puff of dust where the four feet come down
+      if (stotW > 0.6 && S.phase[slot] < phPrev && dt > 1e-4 && this.timeScale <= 3 && camD < 160) this.landingPuff(x, z, vs * 1.1);
       this.writeInstance(b, x, y, z, ch, sh, pitch, roll, vs);
       // Body height: the body rides at the mean height of the ground under the stance feet (within 45 m of the camera, where the
       // legs reach for the real ground; eased to 0 beyond, and while lying). The shader raises the whole body by it.
@@ -2313,7 +2320,7 @@ export class AnimalLayer {
         const ikK = 1 - smoothstep(IK_NEAR, IK_FAR, camD);
         let bT = 0;
         if (ikK > 0.001 && S.lie[slot] < 0.98) {
-          bT = stanceBodyDy(pr, this.rigs[sp]!, gaitMix(pr, gaitSpd, stotW), S.phase[slot], { x, y, z, ch, sh, pitch, roll, s: vs }, groundAt) * ikK * (1 - S.lie[slot]) * (1 - cnO.air) * (1 - cnO.howl) * (1 - (boOn ? bo.air : 0));
+          bT = stanceBodyDy(pr, this.rigs[sp]!, gaitMix(pr, gaitSpd, stotW, strideK), S.phase[slot], { x, y, z, ch, sh, pitch, roll, s: vs }, groundAt) * ikK * (1 - S.lie[slot]) * (1 - cnO.air) * (1 - cnO.howl) * (1 - (boOn ? bo.air : 0));
         }
         S.bdy[slot] += (bT - S.bdy[slot]) * kBdy;
       }
