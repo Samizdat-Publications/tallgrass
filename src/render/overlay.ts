@@ -10,8 +10,8 @@ const SEG = 192;
 const LIFT = 1.1;
 const MAX_PACKS = 16;
 const FADE_S = 0.35;
-/** Pack colors: muted and earthy, so a range reads as a tint on the land, not as an interface drawn over it. Still eight distinct hues. */
-const PACK_HEX = ['#d4a85c', '#8aa8c8', '#dd7f63', '#a0bb84', '#b2a2cc', '#7fb5a8', '#dcc88e', '#c4925f'];
+/** Pack colors: eight clearly different hues, saturated enough to read on green turf, tan grass, snow and moonlit ground. The tint is lit like the land (see the shader), so it sits in the scene. */
+const PACK_HEX = ['#f0a030', '#3d8fe0', '#d9453b', '#8e63d6', '#1fb5ad', '#e060a8', '#c2cc3a', '#8a4f2c'];
 const MODE_ID: Record<OverlayMode, number> = { none: 0, vegetation: 1, fear: 2, territory: 3, traits: 4 };
 
 const LEGENDS: Record<OverlayMode, { title: string; lo: string; hi: string; ramp: string } | null> = {
@@ -24,9 +24,11 @@ const LEGENDS: Record<OverlayMode, { title: string; lo: string; hi: string; ramp
 
 const VERT = /* glsl */ `
 varying vec2 vXZ;
+varying vec3 vNormal;
 void main() {
   vec4 wp = modelMatrix * vec4(position, 1.0);
   vXZ = wp.xz;
+  vNormal = normal;
   gl_Position = projectionMatrix * viewMatrix * wp;
 }`;
 
@@ -42,9 +44,16 @@ uniform float uNight;
 uniform vec4 uPacks[${MAX_PACKS}];
 uniform vec3 uPackCol[${MAX_PACKS}];
 uniform int uPackN;
+uniform vec3 uLightDir;
+uniform vec3 uLightCol;
 varying vec2 vXZ;
+varying vec3 vNormal;
 
-vec4 over(vec4 dst, vec3 c, float a) { return vec4(mix(dst.rgb, c, a), a + dst.a * (1.0 - a)); }
+// straight-alpha "over": the old form mixed from black at low alpha, which darkened the tint twice (the output is blended again) and washed every range out
+vec4 over(vec4 dst, vec3 c, float a) {
+  float oa = a + dst.a * (1.0 - a);
+  return vec4((c * a + dst.rgb * dst.a * (1.0 - a)) / max(oa, 1e-4), oa);
+}
 
 float hash21(vec2 p) {
   p = fract(p * vec2(123.34, 456.21));
@@ -71,6 +80,10 @@ void main() {
     vec3 c = mix(vec3(0.94, 0.60, 0.24), vec3(0.82, 0.10, 0.07), smoothstep(0.15, 0.7, f));
     col = vec4(c, smoothstep(0.02, 0.5, f) * 0.78);
   } else if (uMode == 3) {
+    // how the ground is lit here: the tint is a stain on the land, so it shades with the slopes and dims with the light
+    // (kept off black, or a night range would vanish)
+    float lum = dot(uLightCol, vec3(0.3, 0.55, 0.15));
+    float lit = clamp(0.52 + 0.48 * max(dot(normalize(vNormal), uLightDir), 0.0) * min(1.0, lum * 0.8), 0.52, 1.0);
     for (int i = 0; i < ${MAX_PACKS}; i++) {
       if (i >= uPackN) break;
       vec4 p = uPacks[i];
@@ -83,23 +96,28 @@ void main() {
       float fi = float(i);
       float wob = (vnoise(dir * 1.5 + fi * 3.1) - 0.5) * 0.36 + (vnoise(dir * 4.1 + 9.0 + fi * 1.7) - 0.5) * 0.12;
       float R = p.z * (1.0 + wob);
-      // a feathered tint over the range, a little denser toward the edge like a stain that has soaked in
       float r = d / max(R, 1.0);
-      float inside = 1.0 - smoothstep(0.74, 1.04, r);
-      float wash = inside * (0.30 + 0.12 * smoothstep(0.25, 0.98, r));
-      // a thin, soft edge line that comes and goes along the border instead of a drawn circle
-      float soft = max(1.7, aa * 1.5);
-      float le = (d - R) / soft;
-      float line = exp(-le * le) * (0.30 + 0.26 * vnoise(dir * 5.0 + fi * 2.3));
+      // a feathered tint over the range, mottled a little like a stain that has soaked into the turf, denser toward the edge
+      float inside = 1.0 - smoothstep(0.80, 1.02, r);
+      float mott = 0.84 + 0.32 * vnoise(vXZ * 0.11 + fi * 5.0);
+      float wash = inside * (0.27 + 0.13 * smoothstep(0.2, 0.95, r)) * mott;
       // the den: a small dot and a faint breathing ring
       float dr = 3.2 + 0.5 * sin(uTime * 1.6 + fi);
       float de = (d - dr) / max(0.9, aa);
-      float den = (1.0 - smoothstep(0.7, 0.7 + aa, d)) * 0.8 + exp(-de * de) * 0.32;
-      // the tint is the range; the edge line only crisps it up (blended, not maxed, so it never outshouts the fill)
-      col = over(col, uPackCol[i], clamp(wash + line * 0.6 * (1.0 - wash) + den, 0.0, 0.85));
+      float den = (1.0 - smoothstep(0.7, 0.7 + aa, d)) * 0.85 + exp(-de * de) * 0.35;
+      // the pack's own colour, lit like the ground under it; the border and the den are a brighter tone of it
+      vec3 base = uPackCol[i] * lit;
+      vec3 bright = mix(uPackCol[i], vec3(1.0), 0.45);
+      col = over(col, base, clamp(wash, 0.0, 0.7));
+      // a thin border that follows the range's own outline, a little broken along its length, never a drawn circle
+      float soft = max(1.1, aa * 1.2);
+      float le = (d - R * 0.985) / soft;
+      float line = exp(-le * le) * (0.62 + 0.3 * vnoise(dir * 6.0 + fi * 2.3));
+      col = over(col, bright, clamp(line, 0.0, 0.85));
+      col = over(col, bright, clamp(den, 0.0, 0.9));
     }
-    // a tint on the land has to hold at night too: a little more opaque, and not darkened by the night grade below
-    col.a = min(col.a * (1.0 + 0.9 * uNight), 0.85);
+    // at night the ground is dark and the tint needs a little more body to hold
+    col.a = min(col.a * (1.0 + 0.35 * uNight), 0.88);
   } else if (uMode == 4) {
     // five soft taps, so the 16 m cells read as regions rather than tiles
     float o = 0.8 / 32.0;
@@ -114,8 +132,7 @@ void main() {
   // keep the ponds and the creek clear (static A = distance to water / 64 m)
   if (uMode != 3) edge *= smoothstep(0.004, 0.035, texture2D(tStatic, uv).a);
   // the night grade cools and lifts everything; keep overlay colours saturated and a little darker so they stay legible
-  if (uMode == 3) col.rgb = col.rgb * (1.0 - 0.12 * uNight);
-  else col.rgb = pow(max(col.rgb, vec3(0.0)), vec3(1.0 + 1.3 * uNight)) * (1.0 - 0.3 * uNight);
+  if (uMode != 3) col.rgb = pow(max(col.rgb, vec3(0.0)), vec3(1.0 + 1.3 * uNight)) * (1.0 - 0.3 * uNight);
   gl_FragColor = vec4(col.rgb, col.a * uAlpha * edge);
 }`;
 
@@ -139,6 +156,7 @@ export class OverlayLayer {
     geo.translate(worldSize / 2, 0, worldSize / 2);
     const pos = geo.attributes.position as THREE.BufferAttribute;
     for (let i = 0; i < pos.count; i++) pos.setY(i, heightAt(pos.getX(i), pos.getZ(i)) + LIFT);
+    geo.computeVertexNormals(); // the tint shades with the slope it lies on
     geo.computeBoundingSphere();
 
     this.traitTex = new THREE.DataTexture(new Uint8Array(32 * 32 * 4), 32, 32, THREE.RGBAFormat, THREE.UnsignedByteType);
@@ -160,6 +178,8 @@ export class OverlayLayer {
         uAlpha: { value: 0 },
         uTime: shared.time,
         uNight: shared.night,
+        uLightDir: shared.lightDir,
+        uLightCol: shared.lightColor,
         uPacks: { value: packs },
         uPackCol: { value: cols },
         uPackN: { value: 0 },
@@ -202,14 +222,38 @@ export class OverlayLayer {
     const u = this.mat.uniforms;
     const arr = u.uPacks.value as THREE.Vector4[];
     const cols = u.uPackCol.value as THREE.Color[];
+    this.assignColors(names, n);
     for (let i = 0; i < n; i++) {
       arr[i].set(packs[i * 4], packs[i * 4 + 1], packs[i * 4 + 2], packs[i * 4 + 3]);
-      cols[i].set(PACK_HEX[this.colorIndex(names[i]) % PACK_HEX.length]);
+      cols[i].set(this.hexOf(names[i]));
     }
     u.uPackN.value = n;
   }
 
-  /** A pack keeps its color for life: derived from its name, not its slot. */
+  /** Pack name to its palette slot. A pack keeps its color for life, and no two living packs share one (up to eight). */
+  private slotOf = new Map<string, number>();
+
+  private assignColors(names: string[], n: number): void {
+    const live = new Set<string>();
+    for (let i = 0; i < n; i++) live.add(names[i] ?? '');
+    // a pack that is gone frees its color
+    for (const k of this.slotOf.keys()) if (!live.has(k)) this.slotOf.delete(k);
+    const used = new Set(this.slotOf.values());
+    for (let i = 0; i < n; i++) {
+      const name = names[i] ?? '';
+      if (this.slotOf.has(name)) continue;
+      let s = this.colorIndex(name) % PACK_HEX.length;
+      for (let tries = 0; tries < PACK_HEX.length && used.has(s); tries++) s = (s + 1) % PACK_HEX.length;
+      used.add(s);
+      this.slotOf.set(name, s);
+    }
+  }
+
+  private hexOf(name: string | undefined): string {
+    return PACK_HEX[this.slotOf.get(name ?? '') ?? this.colorIndex(name) % PACK_HEX.length];
+  }
+
+  /** Name hash: where a pack's search for a free color starts. */
   private colorIndex(name: string | undefined): number {
     let h = 0;
     for (const ch of name ?? '') h = (h * 31 + ch.charCodeAt(0)) >>> 0;
@@ -279,7 +323,7 @@ export class OverlayLayer {
       el.style.display = '';
       el.style.opacity = String(this.alpha);
       el.style.transform = `translate(${((this.v.x + 1) / 2) * w}px, ${((1 - this.v.y) / 2) * h}px) translate(-50%, calc(-100% - 10px))`;
-      el.style.color = PACK_HEX[this.colorIndex(this.names[i]) % PACK_HEX.length];
+      el.style.color = this.hexOf(this.names[i]);
       const name = `${this.names[i] ?? 'Unnamed'} pack`;
       const count = `${size | 0} ${size === 1 ? 'wolf' : 'wolves'}`;
       if (el.firstChild!.textContent !== name) el.firstChild!.textContent = name;

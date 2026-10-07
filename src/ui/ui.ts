@@ -31,7 +31,7 @@ import { DEFAULT_SETTINGS, SettingsPanel, loadSettings, type Settings } from './
 import { SetupPanel } from './setup';
 import { FirstRunTips, TitleCard } from './title';
 import { Toast } from './toast';
-import { cardRank, describeEvent, eventWeight, seasonName, seasonOfTick, yearOfTick, type DescribeContext } from './describe';
+import { cardRank, ChronicleVoice, describeEvent, describeFolded, eventWeight, foldKey, foldWindow, seasonName, seasonOfTick, yearOfTick, type DescribeContext } from './describe';
 import { FeedFilter } from './feed';
 import { DecadeLines, SeasonLines } from './seasonlines';
 import { button, h, unitPx } from './dom';
@@ -156,6 +156,9 @@ export class GameUI {
   private speed = 1;
   private queued: QueuedCard | null = null;
   private feed = new FeedFilter();
+  /** Writes the chronicle's event lines without repeating itself; and the open runs of arrivals and departures that fold into one line. */
+  private voice = new ChronicleVoice();
+  private folds = new Map<string, { entry: ChronicleEntry; total: number; runs: number; first: number }>();
   private seasons = new SeasonLines();
   private decades = new DecadeLines();
   private keyDown: (e: KeyboardEvent) => void;
@@ -824,6 +827,8 @@ export class GameUI {
     this.chapterCard.clear();
     this.queued = null;
     this.feed.reset();
+    this.voice.reset();
+    this.folds.clear();
     this.lastCardAt = performance.now() - CARD_COOLDOWN_MS + 2500; // let the world settle before the first card
   }
 
@@ -854,6 +859,7 @@ export class GameUI {
     const entries: ChronicleEntry[] = [];
     const markers: Marker[] = [];
     let best: { title: string; subtitle: string; rank: number; tick: number } | null = null;
+    let refolded = false;
 
     // A pack that is founded and lost within a blink is a dispersal that never took: it is not news.
     const flash = new Set<number>();
@@ -869,9 +875,25 @@ export class GameUI {
         const before = this.pop.popAtOrBefore(1, e.tick);
         if (before !== null) ctx = { wolvesFell: before - (pop[1] ?? 0) >= 2 };
       }
-      const d = describeEvent(e, ctx);
+      // a run of arrivals (or departures) of one species within a year reads as one growing line, not a list of near-copies
+      const fk = foldKey(e);
+      const open = fk ? this.folds.get(fk) : undefined;
+      if (fk && open && e.tick >= open.entry.tick && e.tick - open.first < foldWindow() && yearOfTick(e.tick) === open.entry.year) {
+        open.total += Math.max(1, Math.round(e.a));
+        open.runs++;
+        open.entry.sentence = describeFolded(e, open.total, open.runs);
+        open.entry.tick = e.tick;
+        open.entry.x = e.x;
+        open.entry.y = e.y;
+        this.voice.note(e, open.entry.sentence);
+        refolded = true;
+        continue;
+      }
+      const d = this.voice.describe(e, ctx);
       const major = !!d.card;
-      entries.push({ tick: e.tick, year: yearOfTick(e.tick), sentence: d.sentence, x: e.x, y: e.y, sp: e.sp, major, weight: eventWeight(e) });
+      const entry: ChronicleEntry = { tick: e.tick, year: yearOfTick(e.tick), sentence: d.sentence, x: e.x, y: e.y, sp: e.sp, major, weight: eventWeight(e) };
+      entries.push(entry);
+      if (fk) this.folds.set(fk, { entry, total: Math.max(1, Math.round(e.a)), runs: 1, first: e.tick });
       if (MARK_KINDS.has(e.kind)) markers.push({ tick: e.tick, sentence: d.sentence, major });
       if (d.card && tick - e.tick <= STALE_TICKS) {
         const rank = cardRank(e.kind);
@@ -879,6 +901,7 @@ export class GameUI {
       }
     }
 
+    if (refolded && !entries.length) this.chron.refresh();
     this.chron.add(entries, entries.length <= 4);
     this.pop.addMarkers(markers);
 

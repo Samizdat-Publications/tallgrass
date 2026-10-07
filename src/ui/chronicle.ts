@@ -120,6 +120,11 @@ export class Chronicle {
     this.render();
   }
 
+  /** Redraw after an entry's text changed in place (a run of arrivals folded into one line). */
+  refresh(): void {
+    this.render();
+  }
+
   /** Add entries oldest-first. `animate` is false for a bulk fill. */
   add(items: ChronicleEntry[], animate = true): void {
     if (!items.length) return;

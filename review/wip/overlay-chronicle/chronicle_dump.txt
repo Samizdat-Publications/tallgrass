@@ -1,0 +1,103 @@
+  1  Y 1  The first cases appear in the southeastern herd, in a crowd of 40.
+  2  Y 1  Panic takes the herd, and 73 bison thunder across the eastern plain.
+  3  Y 1  The valley sees its first kill: a wolf takes down a bison.
+  4  Y 1  Two coyotes slip in from the open country and start looking for a den.
+  5  Y 1  Three golden eagles take up their winter perches along the ridges.
+  6  Y 1  53 pronghorn drift out of the valley ahead of winter.
+  7  Y 1  A kind autumn: the pronghorn climb from 350 to 444.
+  8  Y 1  The bison come through autumn stronger: 800 to 900.
+  9  Y 2  A coyote den fills with three yipping pups.
+ 10  Y 2  Four coyote pups see daylight for the first time.
+ 11  Y 2  A new pack, the Hollow, stakes out a range.
+ 12  Y 2  A new pack, the Cottonwood, stakes out a range.
+ 13  Y 2  The Bluff pack gives up its range; its wolves go on elsewhere.
+ 14  Y 2  Red-tailed hawks are back for the summer: three pairs, each to a cottonwood.
+ 15  Y 2  Pups at the dens: 17 wolves to 21.
+ 16  Y 2  Fawns on the grass: 414 pronghorn become 461.
+ 17  Y 2  The ravens gather: 30 become 112.
+ 18  Y 2  Golden eagles are back for the winter: four of them, riding the cold air in from the north.
+ 19  Y 2  106 pronghorn turn their backs on the valley and head for the plains.
+ 20  Y 2  The pronghorn come through autumn stronger: 463 to 532.
+ 21  Y 3  A new pack, the Switchgrass, stakes out a range.
+ 22  Y 3  Three pairs of red-tails wheel over the creek, and the old nests are mended.
+ 23  Y 3  The most wolves yet: 26, more than the valley has ever held.
+ 24  Y 3  Pups at the dens, and the wolves rise from 17 to 25.
+ 25  Y 3  Two coyotes drift in across the grass and stay.
+ 26  Y 3  An elder pronghorn dies at 11 years, a great age.
+ 27  Y 3  A fever runs through the eastern herd, and 40 crowded animals are the first to feel it.
+ 28  Y 3  Panic takes the herd, and 110 bison thunder across the plain.
+ 29  Y 3  The Switchgrass pack falls apart, and the valley has fewer wolves for it.
+ 30  Y 3  Three golden eagles settle in for the cold months.
+ 31  Y 3  144 pronghorn turn their backs on the valley and head for the plains.
+ 32  Y 3  A hard winter for the pronghorn: 550 down to 434.
+ 33  Y 4  The hawks return, three pairs of them, and the cottonwood nests fill again.
+ 34  Y 4  Pups at the dens: 18 wolves to 28.
+ 35  Y 4  Two coyotes trot in from the rim, noses down.
+ 36  Y 4  The first snow brings four golden eagles down from the north.
+ 37  Y 4  A band of 120 pronghorn leaves for kinder country.
+ 38  Y 4  Winter thins the pronghorn: 480 to 370.
+ 39  Y 5  A new pack, the Sandstone, stakes out a range.
+ 40  Y 5  The northern dog town goes quiet, and the burrows stand open.
+ 41  Y 5  The pronghorn return: ten file in from the open prairie.
+ 42  Y 5  The hawks return, two pairs of them, and the cottonwood nests fill again.
+ 43  Y 5  Two stray coyotes turn up in the valley.
+ 44  Y 5  The northwestern dog town goes quiet, and the burrows stand open.
+ 45  Y 5  The Willow pack claims its first territory.
+ 46  Y 5  The most wolves yet: 42, more than the valley has ever held.
+ 47  Y 5  Pups at the dens, and the wolves rise from 28 to 41.
+ 48  Y 5  The Bluestem pack is founded.
+ 49  Y 5  A dry spell parches the valley.
+ 50  Y 5  Dust rises over the eastern plain as 49 bison break into a run.
+ 51  Y 5  The first cases appear in the northern herd, in a crowd of 41.
+ 52  Y 5  Three golden eagles arrive over the open prairie to winter in the valley.
+ 53  Y 5  57 pronghorn drift out of the valley ahead of winter.
+ 54  Y 5  A hard winter for the pronghorn: 355 down to 304.
+ 55  Y 6  The drought of years 5 to 6, one year long; the grass came back the same year.
+ 56  Y 6  A band of 39 pronghorn crosses the rim and spreads over the grass.
+ 57  Y 6  A high thin cry over the creek: three pairs of red-tailed hawks are home.
+ 58  Y 6  The dry spell ends at last.
+ 59  Y 6  Pups at the dens: 32 wolves to 45.
+ 60  Y 6  Fawns on the grass: 304 pronghorn become 364.
+ 61  Y 6  Plague sweeps the prairie dog towns, and 25 prairie dogs die.
+ 62  Y 6  Winter sends the valley three golden eagles, wide-winged and patient.
+ 63  Y 6  74 pronghorn turn their backs on the valley and head for the plains.
+ 64  Y 6  Distemper runs through the coyotes, and it takes one adult.
+ 65  Y 6  Winter thins the pronghorn: 367 to 282.
+ 66  Y 6  A hard winter for the bison: 1,175 down to 1,037.
+ 67  Y 7  56 pronghorn come back over the rim for spring.
+ 68  Y 7  Spring brings the red-tails back to the cottonwoods: three pairs.
+ 69  Y 7  At 12 years, one old pronghorn dies, having outlived most of its kin.
+ 70  Y 7  The most wolves yet: 65, more than the valley has ever held.
+ 71  Y 7  Pups at the dens, and the wolves rise from 42 to 64.
+ 72  Y 7  A hard summer: the bison fall from 777 to 687.
+ 73  Y 7  Dust rises over the plain as 118 bison break into a run.
+ 74  Y 7  Distemper runs through the coyotes, and every animal pulls through.
+ 75  Y 7  Winter sends the valley four golden eagles, wide-winged and patient.
+ 76  Y 7  The browse runs short, and 52 pronghorn leave for the open prairie.
+ 77  Y 7  Autumn takes its toll on the pronghorn: 358 to 308.
+ 78  Y 7  The first cases appear in the northern herd, in a crowd of 34.
+ 79  Y 8  A band of 60 pronghorn crosses the rim and spreads over the grass.
+ 80  Y 8  Spring brings the red-tails back to the cottonwoods: two pairs.
+ 81  Y 8  Fawns on the grass: 254 pronghorn become 310.
+ 82  Y 8  A lean spring: the bison fall from 510 to 433.
+ 83  Y 8  Golden eagles are back for the winter: three of them, riding the cold air in from the north.
+ 84  Y 8  A band of 38 pronghorn leaves for kinder country.
+ 85  Y 8  Two coyotes arrive from the wider prairie.
+ 86  Y 8  The pronghorn dwindle through autumn: 332 down to 275.
+ 87  Y 8  Autumn takes its toll on the bison: 402 to 354.
+ 88  Y 9  The pronghorn return: 60 file in from the open prairie.
+ 89  Y 9  Three pairs of red-tailed hawks return to nest in the cottonwoods.
+ 90  Y 9  Pups at the dens, and the wolves rise from 53 to 64.
+ 91  Y 9  Spring is hard on the bison: 315 to 274.
+ 92  Y 9  Two stray coyotes turn up in the valley.
+ 93  Y 9  The first snow brings three golden eagles down from the north.
+ 94  Y 9  Some 50 bison bolt across the plain.
+ 95  Y10  60 pronghorn come back over the rim for spring.
+ 96  Y10  Red-tailed hawks are back for the summer: two pairs, each to a cottonwood.
+ 97  Y10  Thunderheads build over the rim and the storm breaks.
+ 98  Y10  Fawns are born, and the pronghorn pass 250.
+ 99  Y10  A lean spring: the bison fall from 245 to 219.
+100  Y10  Four golden eagles take up their winter perches along the ridges.
+101  Y10  Three pronghorn turn their backs on the valley and head for the plains.
+102  Y10  The pronghorn dwindle through autumn: 303 down to 262.
+103  Y10  Years 1 to 10, the Raven Years: the ravens gathered, 30 to 312, and wolves rose from 18 to 51, and six new packs took ranges.
