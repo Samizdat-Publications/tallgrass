@@ -15,8 +15,12 @@ export interface TreeSource {
   forEachCrown(fn: (m: Float32Array, o: number, bounds: readonly number[], kind: CrownKind) => void): void;
 }
 
-/** Lumps and leaf tufts poke past the ellipsoid inscribed in the crown's bounding box (shrubs and thickets are lumpier still). */
-const K: Record<CrownKind, number> = { tree: 1.1, juniper: 1.12, thicket: 1.1, shrub: 1.1 };
+/**
+ * Lumps and leaf tufts poke past the ellipsoid inscribed in the crown's bounding box (shrubs and thickets are lumpier still). Measured on the
+ * real crown meshes (tools/camgeo.mjs): the 99th percentile of the vertices lies at 1.07 to 1.2 of the ellipsoid and the farthest at 1.2 to 1.3
+ * (junipers 1.33 to 1.4), so 1.2 and 1.3 hold the leaves where 1.1 let the longest lumps through.
+ */
+const K: Record<CrownKind, number> = { tree: 1.2, juniper: 1.3, thicket: 1.2, shrub: 1.1 };
 /** Thickets and shrubs are low, soft and everywhere: they keep the camera a smaller margin away than a tree does. */
 const MARGIN_SCALE: Record<CrownKind, number> = { tree: 1, juniper: 1, thicket: 0.55, shrub: 0.4 };
 /** Which crowns are solid to the camera. */

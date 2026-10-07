@@ -15,10 +15,14 @@ const MIN_PITCH = 1.5 * DEG;
 const MAX_PITCH = 89.6 * DEG;
 const MIN_DIST = 2.5;
 const MAX_DIST = 1500;
-/** Clearance (m) the camera keeps from a crown or trunk. The near plane is 0.25 to 0.65 m at tree height, so this keeps leaves out of the lens. */
-const TREE_MARGIN = 1.5;
+/**
+ * Clearance (m) the camera keeps from a crown or trunk. The near plane is 0.25 to 0.65 m at tree height, so this keeps leaves out of the lens.
+ * It was 1.5 m; a video review found the camera "pushing through the canopy": at 1 to 1.5 m from the leaves a lump of foliage fills the whole
+ * frame and the hollow shell shows, so the standoff is wide enough that the canopy reads as a canopy.
+ */
+const TREE_MARGIN = 2.2;
 /** The berth the avoidance decisions use (so the swing round a tree starts before the camera is anywhere near its limit). */
-const DECIDE_MARGIN = 4;
+const DECIDE_MARGIN = 4.5;
 /** The boom (target to camera) is clear when this much of it is; beyond that it is shortened or swung. */
 const CLEAR = 0.97;
 /** Below this clear fraction the subject is taken to be deep in a grove (see reachEff). */

@@ -212,7 +212,10 @@ uniform vec3 uOccCam;
 uniform vec3 uOccFocus;
 uniform vec3 uOccParams;
 float tgOcclusionFade(vec3 wp){
-  if (uOccParams.z <= 0.001) return 1.0;
+  // last line of defence for the camera: foliage and bark within a few metres of the lens dissolve (the camera keeps clear of the
+  // crowns, see camcollide.ts, but a lump that still reaches the lens would show the hollow shell). Always on, whatever the occlusion fade does.
+  float nearK = smoothstep(1.0, 3.0, length(wp - uOccCam));
+  if (uOccParams.z <= 0.001) return nearK;
   vec3 ab = uOccFocus - uOccCam;
   float l2 = max(dot(ab, ab), 1e-3);
   float t = dot(wp - uOccCam, ab) / l2;
@@ -220,7 +223,7 @@ float tgOcclusionFade(vec3 wp){
   vec3 q = uOccCam + ab * clamp(t, 0.0, 1.0);
   float d = length(wp - q);
   float hole = 1.0 - smoothstep(uOccParams.x, uOccParams.y, d);
-  return 1.0 - hole * between * uOccParams.z;
+  return (1.0 - hole * between * uOccParams.z) * nearK;
 }
 `;
 
