@@ -256,6 +256,7 @@ const smallprey = new SmallPreyLayer(renderWorld, { ...smallCaps, shared: engine
 // where a dog yips or an alarm wave starts: the audio places it in the world
 smallprey.onBark = (kind, x, y, z) => {
   audio.onSmallPrey(kind, x, y, z);
+  if (kind === 'alarm') director.markWhere('alarm', x, z); // where the wave began, for the documentary camera if a note is earned from it
   // field note: an alarm wave sweeping a town the camera is near
   if (kind === 'alarm' && Math.hypot(x - engine.camera.position.x, z - engine.camera.position.z) < 200) ui.fieldNotes.earn('alarmWave', ui.fieldNotes.yearNow);
 };
@@ -754,6 +755,11 @@ w.__lastSmall = () => lastSmall; // dev hook: the latest small-prey fields (the 
 w.__apply = (iv: Intervention) => send({ type: 'apply', iv });
 w.__audio = audio;
 w.__narrator = narrator;
+// the documentary camera goes to a field note as it is earned (a kill, a stampede, an alarm wave, pups...), unless the player has the camera
+{
+  const toast = ui.fieldNotes.onEarn;
+  ui.fieldNotes.onEarn = (def, e) => { toast(def, e); director.noteEarned(def.id); };
+}
 // dev hook: window.__fieldnotes.debugEarn('fire') ticks a field note as if it had just happened
 w.__fieldnotes = ui.fieldNotes;
 // dev hook: speak one line by id, bypassing the narrator's rules (the audio must be unlocked by a click)
