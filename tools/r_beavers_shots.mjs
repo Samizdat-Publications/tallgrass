@@ -15,6 +15,8 @@ const out = resolve(arg('out', 'review/wip/beavers'));
 const [W, H] = arg('size', '1600x900').split('x').map(Number);
 const maxYears = Number(arg('years', '10'));
 const params = arg('p', 'beavers:1,beaver.initial:6');
+const hide = arg('hide', ''); // debug: --hide water hides the water mesh in every view
+const only = arg('views', '').split(',').filter(Boolean); // e.g. --views pond_top,beaver_swim_close (default: all)
 const kill = setTimeout(() => { console.error('r_beavers_shots: hard timeout'); process.exit(2); }, 14 * 60 * 1000);
 const server = await createServer({
   configFile: resolve('vite.config.ts'), cacheDir: resolve('scratch/.vitecache-beavers'),
@@ -93,33 +95,88 @@ try {
     ['lodge_close', lx, ly, -40, 12, 11, 0.7],
   ];
   if (mode === 'on') {
-    // a swimming beaver near the lodge, if the snapshot has one
-    const bv = await page.evaluate(({ lx, ly }) => {
-      const m = window.__snap();
-      let best = null, bd = 1e9;
+    // beavers (R-marsh): one swimming in open water and one on land, with their headings (the camera sits at their side)
+    const classify = () => page.evaluate(({ lx, ly }) => {
+      const m = window.__snap(), e = window.__engine;
+      const sw = [], ln = [];
       for (let k = 0; k < m.count; k++) {
         const o = k * 12;
         if (m.agents[o] !== 11) continue;
-        const d = Math.hypot(m.agents[o + 1] - lx, m.agents[o + 2] - ly);
-        if (d < bd) { bd = d; best = [m.agents[o + 1], m.agents[o + 2]]; }
+        const x = m.agents[o + 1], z = m.agents[o + 2], hd = m.agents[o + 3];
+        const lw = e.water.levelAt(x, z);
+        const lv = lw === lw ? lw : e.beaverWorks.surfaceAt(x, z);
+        const g = e.beaverWorks.heightAt(x, z);
+        // distance to the nearest dam or lodge (a camera inside their sticks sees nothing)
+        let ds = 1e9;
+        const D = e.beaverWorks.lastDams, L = e.beaverWorks.lastLodges;
+        if (D) for (let q = 0; q < D.length; q += 8) ds = Math.min(ds, Math.hypot(x - D[q], z - D[q + 1]));
+        if (L) for (let q = 0; q < L.length; q += 4) ds = Math.min(ds, Math.hypot(x - L[q], z - L[q + 1]));
+        // distance to the nearest other animal (a bison next to the camera fills the frame)
+        let na = 1e9;
+        for (let j = 0; j < m.count; j++) { if (j === k) continue; const q = j * 12; na = Math.min(na, Math.hypot(m.agents[q + 1] - x, m.agents[q + 2] - z)); }
+        const rec = { x, z, hd, ds, na, d: Math.hypot(x - lx, z - ly), depth: lv === lv ? lv - g : -1, g, lv, pondCm: e.beaverWorks.lastPonds ? e.beaverWorks.lastPonds[Math.min(e.world.n - 1, Math.floor(z / e.world.cell)) * e.world.n + Math.min(e.world.n - 1, Math.floor(x / e.world.cell))] : -1 };
+        if (lv === lv && lv - g > 0.1) sw.push(rec); else if (!(lv === lv)) ln.push(rec);
       }
-      return best;
+      // swimmers in open water (a camera next to the lodge sits inside its sticks): 7 m or more from the lodge, nearest first
+      const open = sw.slice().sort((a, b) => b.ds - a.ds); // (the one farthest from any dam or lodge first)
+      sw.sort((a, b) => a.d - b.d); ln.sort((a, b) => (b.ds > 6 ? 1 : 0) - (a.ds > 6 ? 1 : 0) || a.d - b.d);
+      return { sw: (open.length ? open : sw).slice(0, 3), ln: ln.slice(0, 3), n: m.count, swAll: sw.length };
     }, { lx, ly });
-    if (bv) VIEWS.push(['beaver_close', bv[0], bv[1], -60, 14, 6, 0.4]);
+    let bv = await classify();
+    // a beaver on land: when none is out of the water, step the sim a little at a time until one is (they come ashore to gnaw and to graze)
+    for (let k = 0; k < 14 && !bv.ln.length; k++) {
+      await page.evaluate(() => window.__step(250));
+      await page.waitForTimeout(1500);
+      bv = await classify();
+    }
+    console.log('beavers swimming', JSON.stringify(bv.sw), 'land', JSON.stringify(bv.ln), 'all swimming', bv.swAll);
+    // [name, record, side offset deg from the heading, pitch, distance, lift]
+    if (bv.sw[0]) VIEWS.push(['beaver_swim_close', bv.sw[0], 'side', 9, 2.4, 0.1]);
+    if (bv.sw[0]) VIEWS.push(['beaver_swim_front', bv.sw[0], 'front', 26, 2.6, 0.1]);
+    if (bv.sw[0]) VIEWS.push(['beaver_swim_high', bv.sw[0], 'side', 34, 2.2, 0.05]);
+    if (bv.sw[0]) VIEWS.push(['beaver_swim_mid', bv.sw[0], 'side', 18, 7, 0.15]);
+    if (bv.sw[0]) VIEWS.push(['beaver_swim_top', bv.sw[0], 'side', 68, 4, 0]);
+    if (bv.ln[0]) VIEWS.push(['beaver_land_close', bv.ln[0], 'side', 28, 2.4, 0.3]);
+    if (bv.ln[0]) VIEWS.push(['beaver_land_walk', bv.ln[0], 'front', 35, 3.2, 0.2]);
+    if (bv.ln[0]) VIEWS.push(['beaver_land_bare', bv.ln[0], 'side', 12, 2.6, 0.2]); // (the grass hidden, for the model)
   }
   const tag = mode === 'on' ? 'on' : 'off';
   const timing = {};
-  for (const [name, tx, ty, yawOff, pitch, dist, lift] of VIEWS) {
-    await page.evaluate(({ tx, ty, yaw, pitch, dist, lift }) => {
+  for (const view of VIEWS) {
+    if (only.length && !only.includes(view[0])) continue;
+    let [name, tx, ty, yawOff, pitch, dist, lift] = view;
+    let heading = null;
+    if (typeof ty === 'string') { heading = { rec: tx, mode: ty }; [name, , , pitch, dist, lift] = view; tx = heading.rec.x; ty = heading.rec.z; yawOff = 0; }
+    const bare = name.endsWith('_bare');
+    await page.evaluate(({ tx, ty, yaw, pitch, dist, lift, heading, bare, hide }) => {
       const e = window.__engine;
       Object.assign(e.env, { dayFrac: 0.4, season: 1.7, weather: 0, rain: 0, windStrength: 0.25 });
       e.setEnv = () => {};
       e.sm.snow = 0;
       e.applyEnvNow();
+      if (heading) {
+        // find the yaw that puts the camera at the beaver's side (or in front of its nose): sample the orbit at two yaws
+        const off = (y) => { e.cam.setView({ x: tx, y: ty, yawDeg: y, pitchDeg: 10, distance: 10 }, true); e.renderOnce(0.016); return [e.camera.position.x - tx, e.camera.position.z - ty]; };
+        const o0 = off(0), o1 = off(90);
+        const want = heading.mode === 'front' ? [Math.cos(heading.rec.hd) * 0.8 - Math.sin(heading.rec.hd) * 0.6, Math.sin(heading.rec.hd) * 0.8 + Math.cos(heading.rec.hd) * 0.6] : [-Math.sin(heading.rec.hd), Math.cos(heading.rec.hd)];
+        let best = 0, bd = -2;
+        for (let y = 0; y < 360; y += 5) {
+          const c = Math.cos(y * Math.PI / 180), s = Math.sin(y * Math.PI / 180);
+          // offset(y) is a rotation of o0 by y, whose sense is told by o1
+          const sense = Math.sign(o0[0] * o1[1] - o0[1] * o1[0]) || 1;
+          const ox = o0[0] * c - sense * o0[1] * s, oz = sense * o0[0] * s + o0[1] * c;
+          const dd = (ox * want[0] + oz * want[1]) / Math.hypot(ox, oz);
+          if (dd > bd) { bd = dd; best = y; }
+        }
+        yaw = best;
+      }
       e.cam.setView({ x: tx, y: ty, yawDeg: yaw, pitchDeg: pitch, distance: dist }, true);
-      e.cam.goal.lift = lift;
-      for (let i = 0; i < 10; i++) e.renderOnce(0.016);
-    }, { tx, ty, yaw: yawDeg + yawOff, pitch, dist, lift });
+      // (a swimmer's view looks at the water surface above the bed it is over: the lift is the water depth plus a little)
+      e.cam.goal.lift = lift + (heading ? Math.max(0, heading.rec.depth) : 0);
+      window.__grass.object3D.visible = !bare;
+      e.water.mesh.visible = !hide.includes('water');
+      for (let i = 0; i < 40; i++) e.renderOnce(0.016);
+    }, { tx, ty, yaw: yawDeg + yawOff, pitch, dist, lift, heading, bare, hide });
     await page.waitForTimeout(500);
     await page.evaluate(() => { for (let i = 0; i < 4; i++) window.__engine.renderOnce(0.016); });
     const p = `${out}/${tag}_${name}.jpg`;
@@ -146,6 +203,31 @@ try {
       });
       timing[name] = t;
       console.log('timing', name, JSON.stringify(t));
+    }
+    if (mode === 'on' && process.argv.includes('--gpu') && (name === 'pond_mid' || name === 'pond_top' || name === 'pond_close' || name === 'beaver_swim_mid')) {
+      // GPU time of the whole frame at this camera (EXT_disjoint_timer_query, the median of three rounds of 40 frames): compare two builds
+      const g = await page.evaluate(async () => {
+        const e = window.__engine, gl = e.renderer.getContext();
+        const ext = gl.getExtension('EXT_disjoint_timer_query_webgl2');
+        if (!ext) return { error: 'no timer query' };
+        const measure = async () => {
+          for (let i = 0; i < 8; i++) e.renderOnce(0.016);
+          const qs = [];
+          for (let i = 0; i < 40; i++) {
+            const q = gl.createQuery(); gl.beginQuery(ext.TIME_ELAPSED_EXT, q); e.renderOnce(0.016); gl.endQuery(ext.TIME_ELAPSED_EXT); qs.push(q);
+            if (i % 8 === 7) await new Promise((r) => setTimeout(r, 30));
+          }
+          for (let t = 0; t < 400 && !gl.getQueryParameter(qs[qs.length - 1], gl.QUERY_RESULT_AVAILABLE); t++) await new Promise((r) => setTimeout(r, 25));
+          const v = qs.map((q) => gl.getQueryParameter(q, gl.QUERY_RESULT) / 1e6).filter((x) => Number.isFinite(x)).sort((a, b) => a - b);
+          return v[Math.floor(v.length / 2)];
+        };
+        const r = [];
+        for (let k = 0; k < 3; k++) r.push(await measure());
+        r.sort((a, b) => a - b);
+        return { gpuMs: +r[1].toFixed(3), all: r.map((x) => +x.toFixed(3)) };
+      });
+      timing[name + '_gpu'] = g;
+      console.log('gpu', name, JSON.stringify(g));
     }
   }
   if (mode === 'on') {

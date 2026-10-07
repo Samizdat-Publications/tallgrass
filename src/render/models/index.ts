@@ -9,18 +9,10 @@ import { buildCoyote } from './coyote';
 import { buildEagle } from './eagle';
 import { buildHawk } from './hawk';
 import { buildMuleDeer } from './muledeer';
-import { lin } from './builder';
+import { buildBeaver } from './beaver';
 import type { ModelDef } from './types';
 
 export type { ModelDef, AnimParams } from './types';
-
-/**
- * Beaver (S14): no model of its own yet, so it borrows the rabbit's (the closest small animal on four legs) in a dark chestnut coat;
- * the animal layer draws it twice the rabbit's size (speciesScale in animals.ts). The paddle tail and the swimming pose are still to do.
- */
-function buildBeaver(): ModelDef {
-  return { ...buildRabbit(), coatPale: lin(0x6a4a2d), coatDark: lin(0x2f2217) };
-}
 
 /** Model builders by registry key. A species with no entry here has no model and is not drawn (no crash, no placeholder). */
 const BUILDERS: Record<string, () => ModelDef> = {

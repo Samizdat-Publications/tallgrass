@@ -164,21 +164,23 @@ export class Flood {
           vec3 R = reflect(-V, N);
           vec3 sky = tgSkyBase(normalize(vec3(R.x, max(R.y, 0.04), R.z)));
           // silty body: brown where it is shallow and stirred, a slate green-brown where it is deep
-          vec3 bodyC = mix(vec3(0.15, 0.105, 0.058), vec3(0.07, 0.06, 0.04), smoothstep(0.1, 0.9, depth01));
+          vec3 bodyC = mix(vec3(0.19, 0.122, 0.062), vec3(0.105, 0.072, 0.04), smoothstep(0.1, 0.9, depth01));
           bodyC *= 0.85 + 0.3 * tgNoise2(p * 0.4 + 2.0);
           vec3 body = bodyC * INV_PI * irr * 0.9;
-          float Fm = F * 0.42;
-          vec3 src = sky * vec3(0.85, 0.82, 0.75) * Fm + body * (1.0 - Fm);
+          // turbid floodwater scatters the light in the first centimetres and mirrors little: Fresnel is capped and weak, and what is
+          // mirrored is tinted brown, so it reads as muddy water from every angle, never as a pale silver sheet at a glance
+          float Fm = min(F, 0.5) * 0.17;
+          vec3 src = sky * vec3(0.62, 0.5, 0.36) * Fm + body * (1.0 - Fm);
           // sun glitter on the chop
           float rd = max(dot(R, uLightDir), 0.0);
-          src += uLightColor * (pow(rd, 90.0) * 0.5 + pow(rd, 700.0) * 2.0) * shadow * (1.0 - uOvercast * 0.8) * (0.4 + 0.6 * smoothstep(0.0, 0.3, h0));
+          src += uLightColor * (pow(rd, 90.0) * 0.3 + pow(rd, 700.0) * 1.4) * shadow * (1.0 - uOvercast * 0.8) * (0.4 + 0.6 * smoothstep(0.0, 0.3, h0));
           // dead grass and debris slick on the surface near the edge
           float scum = smoothstep(0.55, 0.8, tgNoise2(p * 1.3 + 17.0)) * (1.0 - depth01) * 0.4;
-          src = mix(src, vec3(0.2, 0.17, 0.09) * INV_PI * irr, scum);
+          src = mix(src, vec3(0.15, 0.108, 0.058) * INV_PI * irr, scum);
           // a thin pale line of foam and trash where the water meets the bank
           float shore = smoothstep(uBand - 3.0, uBand - 0.8, d) * (1.0 - smoothstep(uBand - 0.8, uBand + 0.4, d));
           src = mix(src, vec3(0.42, 0.36, 0.24) * INV_PI * irr, shore * 0.5 * smoothstep(0.2, 0.7, tgNoise2(p * 1.9 + 7.0)));
-          float wA = water * mix(0.62, 0.9, smoothstep(0.0, 0.5, depth01)) * (0.85 + 0.15 * (1.0 - F));
+          float wA = water * mix(0.74, 0.94, smoothstep(0.0, 0.5, depth01)) * (0.85 + 0.15 * (1.0 - F));
 
           // water over wet mud: composite the water on the mud, then output premultiplied
           float a = wA + mudA * (1.0 - wA);

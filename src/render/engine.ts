@@ -404,6 +404,7 @@ export class Engine {
     if (f.pondVersion === undefined || !f.ponds || f.pondVersion === this.pondVersion) return;
     this.pondVersion = f.pondVersion;
     this.water.setPonds(f.ponds);
+    this.terrain.setPondField(f.ponds);
     this.beaverWorks.setField(f.ponds, f.dams, f.lodges, f.pondVersion);
     this.trees.setDrowned(f.drownedTrees);
   }

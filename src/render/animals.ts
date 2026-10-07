@@ -687,7 +687,7 @@ export class AnimalLayer {
   /** Water surface (m) at a point, NaN on dry land: lets swimmers ride the water (set by main.ts from the engine; null = none). */
   swimLevelAt: ((x: number, z: number) => number) | null = null;
   /** Per species visual size multiplier by species id (readability boost for small animals: wolf 1.35 (the concept art wolves read at ~0.65 of a bison), raven 1.7 (circling ravens are the "kill here" tell), rabbit 1.2, cougar 1.05). */
-  readonly speciesScale: number[] = byId({ bison: 1, wolf: 1.35, raven: 1.7, pronghorn: 1, rabbit: 1.2, cougar: 1.05, coyote: 1.35, eagle: 1.7, hawk: 1.6, muledeer: 1.05, beaver: 2.2 }, () => 1);
+  readonly speciesScale: number[] = byId({ bison: 1, wolf: 1.35, raven: 1.7, pronghorn: 1, rabbit: 1.2, cougar: 1.05, coyote: 1.35, eagle: 1.7, hawk: 1.6, muledeer: 1.05, beaver: 1.25 }, () => 1);
   /**
    * The season (0 early spring .. 4) the deer's antlers and coat follow; null: the snapshot's own. A capture hook (the engine's rendered
    * season is separate, and a still of a rutting buck in autumn must not wait for the valley year to come round).
@@ -2189,6 +2189,7 @@ export class AnimalLayer {
       const ground = g0;
       let pitch = 0, roll = 0, y = ground;
       let swimming = false; // a beaver riding the surface of a pond (below): the wading rule leaves it alone
+      let swimT = 0; // how far a swimmer floats (0 wading on the bed .. 1 riding the surface): the swim pose and its wake
       if (FLIES[sp]) {
         y = ground + alt;
         if (raptor && state === St.Eat && alt < 1) {
@@ -2263,10 +2264,19 @@ export class AnimalLayer {
           pitch = clamp(pitch, -0.12, 0.12);
           roll = clamp(roll, -0.15, 0.15);
         }
-        // a swimmer (beaver, S14) rides the surface of the pond or creek it is in, level, instead of walking on the bed under the water
+        // a swimmer (beaver, S14) rides the surface of the pond or creek it is in, level, instead of walking on the bed under the water.
+        // Its origin sits `sink` below the surface (only the crown of the back and the head show); in water too shallow for that it stands
+        // on the bed (y never goes below the ground pose), and the swim pose (legs tucked, wake) eases in as the water gets deep enough.
         if (SWIMS[sp] && this.swimLevelAt) {
           const lv = this.swimLevelAt(x, z);
-          if (lv === lv && lv > y - 0.05) { y = lv - 0.05 * vs; pitch *= 0.15; roll *= 0.15; swimming = true; }
+          if (lv === lv && lv > y + 0.005) {
+            const sk = (pr.swim ? pr.swim.sink : 0.05) * vs;
+            swimT = pr.swim ? smoothstep(0.6, 1.0, (lv - y) / sk) : 1;
+            y = Math.max(y, lv - sk);
+            pitch *= 1 - 0.85 * swimT;
+            roll *= 1 - 0.85 * swimT;
+            swimming = true;
+          }
         }
       }
       if (cnO.lift > 0 || cnO.pitch !== 0) {
@@ -2317,7 +2327,7 @@ export class AnimalLayer {
       }
       // Contact shadow: a soft blob at knee height under every ground animal (models/contact.ts). It is as long as the body, a
       // little wider, and grows with the distance readability boost so a herd seen from afar keeps its grounding.
-      if (pr.kind <= 1 && camD < 150 && fadeQ < 8) {
+      if (pr.kind <= 1 && camD < 150 && fadeQ < 8 && !swimming) {
         const cw = sampleHeight(H, hn, cell, x, z);
         const wcell = Math.min(world.n - 1, Math.max(0, Math.floor(z / cell))) * world.n + Math.min(world.n - 1, Math.max(0, Math.floor(x / cell)));
         if (!world.water[wcell]) {
@@ -2406,7 +2416,8 @@ export class AnimalLayer {
       fx[gp] = flier ? S.tug[slot] * (1 - S.mv[slot]) : S.tug[slot]; // a raven stops pecking while it hops or walks
       fx[gp + 1] = FLIES[sp] ? alt : pr.kind === 0 ? S.bdy[slot] : 0;
       fx[gp + 2] = pr.behave ? packBisonB(bo) : S.hunt[slot]; // (a bison: bellow, play and spar, R8, see packBison)
-      fx[gp + 3] = raptor ? S.stoop[slot] : pr.flare ? S.flare[slot] : pounceE; // (a raptor: the stoop; a pronghorn: the rump flare, R8)
+      if (pr.swim) S.flare[slot] += (swimT - S.flare[slot]) * (1 - Math.exp(-Math.min(dt, 0.1) * 8)); // (a swimmer's weight, eased; the slot is otherwise the pronghorn's flare)
+      fx[gp + 3] = raptor ? S.stoop[slot] : pr.swim ? S.flare[slot] : pr.flare ? S.flare[slot] : pounceE; // (a raptor: the stoop; a swimmer: the swim weight; a pronghorn: the rump flare, R8)
       // aFx2: a quadruped (hold on the prey 0..1, feeding cycle phase), a raven (hop 0..1 or -1, walk phase or -1, seconds into a
       // takeoff or -1, flutter 0..1)
       const fx2 = b.fx2.array as Float32Array;
