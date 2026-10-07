@@ -144,6 +144,7 @@ function defines(p: AnimParams, far: ModelDef['far'] | undefined, geometry: Mode
     `#define FLARE ${R8_SHADER.on && R8_SHADER.flare && p.kind === 0 && p.flare ? 1 : 0}`,
     `#define CLASP ${f(p.clasp ?? 0)}`,
     `#define STALK ${p.kind === 0 && p.stalk ? 1 : 0}`,
+    `#define SWIM ${p.kind === 0 && p.swim ? 1 : 0}`, `#define SWIM_SINK ${f(p.swim?.sink ?? 0)}`, `#define SWIM_NOSE ${f(p.swim?.nose ?? 0)}`, `#define SWIM_WAKE ${f(p.swim?.wake ?? 1)}`,
     ...stotDefines(p),
     `#define MANGE ${p.hunts && p.kind === 0 ? 1 : 0}`, // canids can have mange: a patchy coat (the fragment stage mottles it)
     ...lodDefines(def, variant),
@@ -208,6 +209,10 @@ float tgMangeOf() {
   return 0.0;
 #endif
 }
+
+// R-marsh swimmer (SWIM): the stipple level of the wake vertices (1 = solid; the body is always 1) and 1 on a wake vertex (it casts no shadow)
+float tgSwimFade = 1.0;
+float tgIsWake = 0.0;
 
 void tgRotZ(inout vec3 p, inout vec3 n, vec3 c, float a) {
   float cs = cos(a), sn = sin(a);
@@ -385,6 +390,23 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
   int part = int(aPart.x + 0.5);
   float spd = aGait.y;
   bool dead = spd < -0.5;
+#if SWIM
+  if (aPart.w > 6.5) {
+    // R-marsh: the V wake of a swimmer (vertices tagged 7 in aPart.w, authored lying along the surface behind the nose). It exists only
+    // while swimming (collapsed to a point otherwise), grows with the pace, rides on the water plane and dissolves (stipple) along its length.
+    float sw = dead ? 0.0 : clamp(aFx.w, 0.0, 1.0);
+    tgIsWake = 1.0;
+    n = vec3(0.0, 1.0, 0.0);
+    if (sw < 0.01) { p = vec3(0.0); tgSwimFade = 0.0; return; }
+    float k = sw * (0.4 + 0.6 * smoothstep(0.1, 0.9, spd));
+    float along = clamp((SWIM_NOSE - p.x) / SWIM_WAKE, 0.0, 1.0);
+    p.x = SWIM_NOSE + (p.x - SWIM_NOSE) * k;
+    p.z *= 0.45 + 0.55 * k;
+    p.y = SWIM_SINK + 0.004 + 0.003 * sin(uTime * 3.0 + along * 9.0 + aLook.y * 20.0);
+    tgSwimFade = sw * (0.55 + 0.45 * k) * (1.0 - smoothstep(0.1, 1.0, along));
+    return;
+  }
+#endif
   // aFx2 (see the top of the file); species without it get the "nothing happening" values, which the compiler folds away
 #if FX2
   vec4 fx2 = aFx2;
@@ -408,6 +430,12 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
 #endif
   float sick = dead ? 0.0 : fract(aLook.w);
   float lie = dead ? 0.0 : aGait.w;
+  // R-marsh: a swimmer's weight rides in aFx.w (a beaver never pounces); swimming tucks the legs under it like lying does
+  float swimW = 0.0;
+#if SWIM
+  swimW = dead ? 0.0 : clamp(aFx.w, 0.0, 1.0);
+  lie = max(lie, swimW);
+#endif
   // R5 raptors: a bird has no lie weight, so aGait.w carries how upright it sits on its perch (0..1) and aFx.w the stoop (0..1)
   float perchW = 0.0;
   float stoopW = 0.0;
@@ -436,8 +464,8 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
   // at drone and map range the legs swing less: their splay makes a ragged outline that reads as crumpled paper
   float calmK = 1.0 - LEG_CALM * smoothstep(150.0, 380.0, camD);
   float pounce = dead ? 0.0 : aFx.w;
-#if RAPTOR || BEHAV || FLARE
-  pounce = 0.0; // (aFx.w is the stoop weight of a raptor and the rump flare of a pronghorn)
+#if RAPTOR || BEHAV || FLARE || SWIM
+  pounce = 0.0; // (aFx.w is the stoop weight of a raptor, the rump flare of a pronghorn and the swim weight of a beaver)
 #endif
 
   // gait weights from speed
@@ -895,6 +923,9 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
     }
 #endif
     ang = mix(ang, 0.15, lie * 0.7);
+#if SWIM
+    ang += swimW * (0.2 + 0.03 * sin(t * 1.3 + seed * 9.0)); // swimming: the nose comes up out of the water
+#endif
 #if KIND == 0
     if (CURL > 0.0) {
       // curled rest: the head turns back toward the tail side and drops onto the paws
@@ -965,8 +996,17 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
       tgRotY(p, n, vec3(aPivot.x - 0.3, aPivot.y, 0.0), twi * tipK);
     }
 #endif
+#if SWIM
+    // swimming: the paddle lies flat at the surface behind the animal and only trails a little side to side
+    lift = mix(lift, -0.2, swimW);
+    sway *= 1.0 - 0.6 * swimW;
+    sway += swimW * 0.12 * sin(t * 2.3 + seed * 5.0);
+#endif
     tgRotZ(p, n, aPivot, lift);
     tgRotY(p, n, aPivot, sway);
+#if SWIM
+    p.y += swimW * 0.075;
+#endif
   } else if (part == 7 || part == 8) {
 #if RAPTOR
     if (!dead) {
@@ -1311,7 +1351,7 @@ void tgShade(vec3 on) {
   vTgColor = col;
   float tgFl = tgFlagsOf();
   vTgSel = tgFl - 2.0 * floor(tgFl * 0.5);
-  vTgFade = dead ? 1.0 : tgFadeOf();
+  vTgFade = dead ? 1.0 : tgFadeOf() * tgSwimFade;
   // distance readability: 0 close up, 1 from the wide view (see ModelDef.far)
   vTgFar = smoothstep(FAR_NEAR, FAR_FAR, distance(uCamPos, vec3(instanceMatrix[3])));
 #if BEHAV
@@ -1650,7 +1690,7 @@ export function makeAnimalMaterials(sp: number, def: ModelDef, shared: AnimalSha
       .replace('#include <common>', `#include <common>\n${defsDepth}\n${COMMON_DECL}\nvarying float vTgFade;`)
       // a bird in flight casts no shadow (collapse it to a point): at the boost the wide view needs, it would sweep a huge
       // blocky smudge across the ground. A raptor below 40 m and within 170 m of the camera does cast one (R5)
-      .replace('#include <begin_vertex>', `vec3 tgP = position;\n vec3 tgN = vec3(0.0, 1.0, 0.0);\n tgAnimate(tgP, tgN);\n vTgFade = aGait.y < -0.5 ? 1.0 : tgFadeOf();\n#if KIND == 2\n#if RAPTOR\n if (aFx.y > 40.0 || distance(uCamPos, vec3(instanceMatrix[3])) > 170.0) tgP = vec3(0.0);\n#else\n if (aFx.y > 1.0) tgP = vec3(0.0);\n#endif\n#endif\n vec3 transformed = tgP;`);
+      .replace('#include <begin_vertex>', `vec3 tgP = position;\n vec3 tgN = vec3(0.0, 1.0, 0.0);\n tgAnimate(tgP, tgN);\n vTgFade = aGait.y < -0.5 ? 1.0 : tgFadeOf() * (1.0 - tgIsWake);\n#if KIND == 2\n#if RAPTOR\n if (aFx.y > 40.0 || distance(uCamPos, vec3(instanceMatrix[3])) > 170.0) tgP = vec3(0.0);\n#else\n if (aFx.y > 1.0) tgP = vec3(0.0);\n#endif\n#endif\n vec3 transformed = tgP;`);
     // the stippled border fade casts a stippled shadow too
     shader.fragmentShader = shader.fragmentShader
       .replace('#include <clipping_planes_fragment>', '#include <clipping_planes_fragment>\n if (tgFadeDiscard(vTgFade)) discard;')

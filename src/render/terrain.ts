@@ -181,6 +181,9 @@ export class Terrain {
   /** Baked periodic macro-variation maps (see bakeMacro): R/G/B/A fields of tgGround, 2 m texels over a 4096 m repeating tile. */
   private macroRT: THREE.WebGLRenderTarget[] = [];
   private macroBaked = false;
+  /** R-marsh: the beaver pond field (n x n bytes, extra water depth in cm; Engine.setBeavers), so the ground under and round a pond reads as wet marsh, not bare orange soil. */
+  private pondTex!: THREE.DataTexture;
+  private readonly pondOn = { value: 0 };
   /** Small tileable random texture (4 independent channels) the ground shader samples for fine grain instead of evaluating hash noise. */
   private detailTex!: THREE.DataTexture;
   private shadowQuad: FullScreenQuad;
@@ -756,10 +759,22 @@ export class Terrain {
     const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.95, metalness: 0 });
     const sh = this.shared;
     const pondU = makePondUniform(this.world.ponds);
+    {
+      const pn = this.world.n;
+      this.pondTex = new THREE.DataTexture(new Uint8Array(pn * pn), pn, pn, THREE.RedFormat, THREE.UnsignedByteType);
+      this.pondTex.minFilter = this.pondTex.magFilter = THREE.LinearFilter;
+      this.pondTex.wrapS = this.pondTex.wrapT = THREE.ClampToEdgeWrapping;
+      this.pondTex.generateMipmaps = false;
+      this.pondTex.flipY = false;
+      this.pondTex.needsUpdate = true;
+      this.pondTex.name = 'terrain.pondDepth';
+    }
     mat.onBeforeCompile = (shader) => {
       injectTerrainShadow(shader, sh);
       const u = shader.uniforms;
       u.uPonds = pondU;
+      u.tPondD = { value: this.pondTex };
+      u.uPondOn = this.pondOn;
       u.tVeg = sh.vegTex;
       u.tSmall = SMALL_TEX; // prairie dog towns (smallprey.ts)
       u.uTownOn = TOWN_ON;
@@ -845,9 +860,32 @@ export class Terrain {
     this.staticTex.needsUpdate = true;
   }
 
+  /** Beaver ponds (Snapshot.ponds, centimetres of extra water per cell) or undefined for none: the ground in and round them takes the wet-marsh look. */
+  setPondField(depth: Uint8Array | undefined): void {
+    const data = this.pondTex.image.data as Uint8Array;
+    if (depth && depth.length === data.length) {
+      // the field plus a halo: a cell beside a flooded one takes 0.6 of its depth, so the marsh look reaches a couple of metres past the water
+      const pn = this.world.n;
+      for (let j = 0; j < pn; j++) {
+        for (let i = 0; i < pn; i++) {
+          const c = j * pn + i;
+          let m = 0;
+          if (i > 0) m = Math.max(m, depth[c - 1]);
+          if (i < pn - 1) m = Math.max(m, depth[c + 1]);
+          if (j > 0) m = Math.max(m, depth[c - pn]);
+          if (j < pn - 1) m = Math.max(m, depth[c + pn]);
+          data[c] = Math.max(depth[c], Math.round(m * 0.6));
+        }
+      }
+      this.pondOn.value = 1;
+    } else { data.fill(0); this.pondOn.value = 0; }
+    this.pondTex.needsUpdate = true;
+  }
+
   dispose(): void {
     this.mesh.geometry.dispose();
     this.material.dispose();
+    this.pondTex.dispose();
     this.heightTex.dispose();
     this.staticTex.dispose();
     this.shadowRT.dispose();
@@ -866,6 +904,8 @@ const MACRO_RES = 2048;
 
 const GROUND_PARS = /* glsl */ `
 uniform sampler2D tVeg;
+uniform sampler2D tPondD;
+uniform float uPondOn;
 uniform sampler2D tStatic;
 uniform sampler2D tTrail;
 uniform sampler2D tSmall;
@@ -1193,6 +1233,15 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
   soilShow = clamp(soilShow + uDrought * 0.14 * (0.4 + 0.6 * nM1) * (1.0 - riparian), 0.0, 1.0);   // a drought thins the sward: more ground shows
   // the bare apron on the shaded side of a pond (common.ts): trampled, dusty ground between the waterline and the grass
   float apron = tgPondApron(xz, wd);
+  // R-marsh: ground in and round a beaver pond (the field is the flooded cells' extra depth in cm, R8 so cm / 255): wet dark soil and sedge in
+  // a band a couple of metres wider than the water, where the sim has drowned the grass and the bare soil would show as an orange rim
+  float pondW = 0.0;
+  if (uPondOn > 0.5) {
+    // (the texture is already dilated by a cell on the CPU, Terrain.setPondField: one tap here)
+    pondW = smoothstep(0.0, 0.02, texture2D(tPondD, xz / uWorldSize).r);
+    apron *= 1.0 - pondW;
+    soilShow *= 1.0 - 0.75 * pondW;
+  }
   soilShow = max(soilShow, apron);
   vec3 shortGrass = mix(grassCol, grassCol * vec3(0.9, 0.84, 0.74) + uSoil * 0.12, stubA * 0.5);
   // grazed ground is stubble, not a smooth plane: short blade flecks (dark gaps, pale cut ends) at close and middle range
@@ -1234,6 +1283,13 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
     // sparse hoof pits and cracked-mud flecks near the camera
     dust *= 1.0 - 0.3 * smoothstep(0.6, 0.85, tgNoise2(xz * 3.7 + 11.0)) * (1.0 - smoothstep(30.0, 140.0, dist));
     col = mix(col, dust, apron * 0.82);
+  }
+  if (pondW > 0.003) {
+    float mc = tgNoise2(xz * 0.8 + 6.0) * 0.6 + tgNoise2(xz * 2.9 + 2.0) * 0.4;
+    float sedgeT = smoothstep(0.4, 0.7, tgNoise2(xz * 0.5 + 12.0) * 0.7 + mc * 0.3);
+    vec3 marsh = mix(vec3(0.07, 0.052, 0.036), vec3(0.085, 0.12, 0.042), sedgeT) * (0.75 + 0.5 * mc);
+    col = mix(col, marsh, pondW * 0.82 * (1.0 - 0.7 * winterK));
+    soilShow *= 1.0 - pondW;
   }
   gTgGrass = 1.0 - soilShow;
 

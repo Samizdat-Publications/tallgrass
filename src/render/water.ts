@@ -39,6 +39,10 @@ export class Water {
   private buildMesh: (pond: Uint8Array | null) => THREE.BufferGeometry;
   /** Pond cells (S14) in the field drawn now, for the bench and tests. */
   pondCells = 0;
+  /** The surface the water mesh is drawn at, per height vertex (NaN where there is no water), for swimmers: see levelAt. */
+  private surf = new Float32Array(0);
+  private surfHn = 0;
+  private surfCell = 1;
 
   constructor(world: World, shared: SharedUniforms, creekDist: Float32Array) {
     const { n, hn, cell, size } = world;
@@ -343,6 +347,13 @@ export class Water {
       const lvl: number[] = [];
       const flw: number[] = [];
       const flw2: number[] = [];
+      const mrs: number[] = []; // 1 on beaver-pond vertices (the wet-marsh look, R-marsh), 0 on the creek and the static ponds
+      // (the plane the mesh is drawn at: vert() below puts each vertex at max(level, ground + 4 cm))
+      const surf = new Float32Array(hn * hn).fill(NaN);
+      for (let v = 0; v < hn * hn; v++) if (!Number.isNaN(level[v])) surf[v] = Math.max(level[v], rh[v] + 0.04);
+      this.surf = surf;
+      this.surfHn = hn;
+      this.surfCell = cell;
       const remap = new Int32Array(hn * hn).fill(-1);
       const idx: number[] = [];
       const vert = (i: number, j: number): number => {
@@ -354,6 +365,8 @@ export class Water {
         const f = inPond[v] ? ZERO_FRAME : frameAt(v, i, j);
         flw.push(f[0], f[1], f[2], f[3]);
         flw2.push(f[4], f[5], f[6], f[7]);
+        // (the ring filled in past the wet cells is 0.5 so the pond's outer edge fades out; a creek vertex there keeps the creek's own edge)
+        mrs.push(inPond[v] ? (ext && ext[v] && Number.isNaN(wy[v]) ? 0.5 : 1.0) : 0.0);
         return remap[v];
       };
       for (let j = 0; j < hn - 1; j++) {
@@ -370,6 +383,7 @@ export class Water {
       g.setAttribute('aLevel', new THREE.Float32BufferAttribute(lvl, 1));
       g.setAttribute('aFlow', new THREE.Float32BufferAttribute(flw, 4));
       g.setAttribute('aFlow2', new THREE.Float32BufferAttribute(flw2, 4));
+      g.setAttribute('aMarsh', new THREE.Float32BufferAttribute(mrs, 1));
       g.setIndex(idx);
       g.boundingSphere = new THREE.Sphere(new THREE.Vector3(world.size / 2, 10, world.size / 2), world.size);
       return g;
@@ -413,11 +427,14 @@ export class Water {
         attribute float aLevel;
         attribute vec4 aFlow;
         attribute vec4 aFlow2;
+        attribute float aMarsh;
         varying vec3 vWorld;
         varying float vLevel;
         varying vec4 vFlow;
         varying vec4 vFlow2;
+        varying float vMarsh;
         void main() {
+          vMarsh = aMarsh;
           vec4 wp = modelMatrix * vec4(position, 1.0);
           vWorld = wp.xyz;
           vLevel = aLevel;
@@ -431,6 +448,7 @@ export class Water {
         varying float vLevel;
         varying vec4 vFlow;   // travel coordinate along the creek (m), signed offset across it (m), tangent (x, z)
         varying vec4 vFlow2;  // speed relative to the mean, riffle amount, bend (+ turns toward positive offset), half-width (m)
+        varying float vMarsh; // 1 over a beaver pond (R-marsh: shallows read as wet marsh, not as a pale sand bed), 0 elsewhere
         uniform float uTime;
         uniform vec3 uLightDir;
         uniform vec3 uLightColor;
@@ -567,6 +585,11 @@ export class Water {
 
         void main() {
           vec2 p = vWorld.xz;
+          // beaver pond marsh look (aMarsh: 1 over the wet cells, 0.5 on the ring of vertices filled in past them, 0 on the creek and the
+          // static ponds): mA is how much of the marsh look applies, rimFade softens the outer edge of the pond mesh so the pond never ends
+          // on the straight line of a mesh cell
+          float mA = smoothstep(0.0, 0.45, vMarsh);
+          float rimFade = vMarsh > 0.01 ? smoothstep(0.5, 0.95, vMarsh) : 1.0;
           float isCreek = step(0.25, dot(vFlow.zw, vFlow.zw));
           float terr = tgHeightAt(p);
           // Pond shores: the reshaped basin steps up a few centimetres right at the shoreline, which a 2 m height grid turns into
@@ -577,7 +600,7 @@ export class Water {
           float depth = vLevel - terr;
           // the waterline wanders a little (undercut banks, trampled mud, grass leaning in), so the edge is not a drawn contour
           float wig = tgNoise2(p * 0.31 + 2.0) * 0.6 + tgNoise2(p * 1.1 + 8.0) * 0.4 - 0.5;
-          depth += wig * 0.1 * (1.0 - smoothstep(0.08, 0.4, abs(depth)));
+          depth += wig * mix(0.1, 0.2, mA) * (1.0 - smoothstep(0.08, 0.4, abs(depth)));
           if (depth < -0.55) discard;
 
           vec3 toCam = cameraPosition - vWorld;
@@ -660,7 +683,18 @@ export class Water {
               src = mix(src, vec3(0.7, 0.68, 0.62) * INV_PI * irr, foam);
               a = mix(a, 1.0, foam);
             }
-            gl_FragColor = vec4(min(max(src, vec3(0.0)), vec3(32.0)), clamp(a, 0.0, 1.0)) * worldFade;
+            if (mA > 0.01) {
+              // beaver pond bank: wet dark soil with sedge clumps in a soft band that fades up the bank, so the pond edge is a marsh and
+              // not a bare orange rim (the terrain's own colour is the bare soil of the flooded ground)
+              float mk = 1.0 - smoothstep(0.0, 0.42, hA);
+              float cl = tgNoise2(p * 0.9 + 6.0) * 0.6 + tgNoise2(p * 3.3 + 2.0) * 0.4;
+              float sedgeM = smoothstep(0.42, 0.7, tgNoise2(p * 0.55 + 12.0) * 0.7 + cl * 0.3);
+              vec3 marshC = mix(vec3(0.05, 0.039, 0.027), vec3(0.058, 0.086, 0.03), sedgeM) * (0.75 + 0.5 * cl) * INV_PI * irr * (1.0 - 0.75 * uSnow);
+              float am = mk * mix(0.55, 0.8, sedgeM) * (0.55 + 0.45 * cl) * mA * (1.0 - dry);
+              src = src * (1.0 - am) + marshC * am;
+              a = a + (1.0 - a) * am;
+            }
+            gl_FragColor = vec4(min(max(src, vec3(0.0)), vec3(32.0)), clamp(a, 0.0, 1.0)) * worldFade * rimFade;
             return;
           }
 
@@ -697,7 +731,7 @@ export class Water {
             barC *= 1.0 - 0.25 * riffle * smoothstep(0.55, 0.8, n2) * w3;
             barC = mix(barC, vec3(0.9, 0.91, 0.93), clamp(uSnow * 1.2, 0.0, 1.0) * smoothstep(0.0, 0.05, barTop));
             vec3 src = barC * INV_PI * irr * (1.0 - 0.3 * rain);
-            gl_FragColor = vec4(min(max(src, vec3(0.0)), vec3(32.0)), 1.0) * worldFade;
+            gl_FragColor = vec4(min(max(src, vec3(0.0)), vec3(32.0)), 1.0) * worldFade * rimFade;
             return;
           }
 
@@ -772,6 +806,9 @@ export class Water {
           sky = mix(sky, vec3(dot(sky, vec3(0.3333))), 0.5 * rain);
           vec4 hit = F > 0.03 ? mirrorHit(p, R, vLevel, ambC, farK) : vec4(0.0);
           hit.a *= 1.0 - 0.5 * rain;
+          // (a beaver pond's far bank mirrors as muted olive sedge, not the sunlit gold of the dry grass beyond: with the low sun in front that
+          // golden reflection ran along the far shore as an orange rim)
+          hit.rgb = mix(hit.rgb, vec3(dot(hit.rgb, vec3(0.2126, 0.7152, 0.0722))) * vec3(0.82, 1.0, 0.7) * 0.8, 0.6 * mA);
           // from the drone a stream is mostly mirrored sky: the thin strips of bank and grass in it blur into the sky's light
           hit.a *= 1.0 - 0.6 * mirK;
           vec3 refl = mix(sky, hit.rgb, hit.a);
@@ -840,7 +877,16 @@ export class Water {
             float gravel = smoothstep(0.5, 0.9, n3) * smoothstep(0.35, 0.65, n2) * isCreek * w3;
             bedAlb *= 1.0 - 0.22 * gravel;
             // wet mud right at the waterline, so the bed meets the bank without a seam
-            bedAlb = mix(vec3(0.17, 0.14, 0.1), bedAlb, smoothstep(0.0, mix(0.1, 0.26, midK * isCreek), depth));
+            // (a beaver pond's shallows are wet dark soil with sedge, not a pale sand bed: the sand would show through the clear
+            // shallow water as a grey slab with the cell grid for its outline)
+            if (mA > 0.01 && depth < 0.8) {
+              float shM = 1.0 - smoothstep(0.22, 0.8, depth);
+              float sedgeK = smoothstep(0.42, 0.72, n1 * 0.6 + n2 * 0.4);
+              vec3 soilM = vec3(0.05, 0.038, 0.026) * (0.75 + 0.5 * n2);
+              vec3 sedgeB = vec3(0.058, 0.09, 0.032) * (0.8 + 0.4 * n3);
+              bedAlb = mix(bedAlb, mix(soilM, sedgeB, sedgeK * smoothstep(0.02, 0.14, depth)), shM * mA);
+            }
+            bedAlb = mix(mix(vec3(0.17, 0.14, 0.1), vec3(0.055, 0.042, 0.03), mA), bedAlb, smoothstep(0.0, mix(0.1, 0.26, midK * isCreek), depth));
             // caustics: where two drifting noise fields cross, a web of focused light (near the camera, fading as the water deepens)
             float caus = 0.0;
             if (w3 > 0.01) {
@@ -864,6 +910,8 @@ export class Water {
           }
           // a pond seen from high above shows a little more of its clear teal depth (not a black hole)
           scatC *= 1.0 + 0.6 * farK * (1.0 - isCreek);
+          // (a beaver pond's shallows are stained brown-green by the leaf litter and the soil)
+          scatC = mix(scatC, vec3(0.03, 0.04, 0.022), 0.65 * mA * (1.0 - smoothstep(0.3, 1.0, depth)));
           // (mid range: the water's own light is less blue than the sky's, so the middle reads slate-olive, not ultramarine)
           vec3 irrBody = mix(irr, vec3(dot(irr, vec3(0.2126, 0.7152, 0.0722))) * vec3(1.0, 1.0, 0.95), 0.35 * midK * isCreek);
           bodyC += scatC * INV_PI * irrBody * (1.0 - Tr);
@@ -884,6 +932,12 @@ export class Water {
           float lipW = (1.0 - edgeA) * mix(0.5, 0.8, isCreek) * (1.0 - dry);
           src = src * (1.0 - lipW) + refl * F * lipW;
           a = mix(a, 1.0, lipW);
+          if (mA > 0.01 && depth < 0.45) {
+            // sedge and floating litter in the shallows of a beaver pond, in soft clumps that thin out with depth
+            float reed = smoothstep(0.52, 0.78, tgNoise2(p * 1.35 + 21.0) * 0.65 + tgNoise2(p * 4.2 + 5.0) * 0.35) * (1.0 - smoothstep(0.08, 0.42, depth)) * mA * (1.0 - dry);
+            src = mix(src, vec3(0.07, 0.1, 0.035) * INV_PI * irr, reed * 0.55);
+            a = mix(a, 1.0, reed * 0.55);
+          }
 
           // ---- sun and moon glitter, a broad sheen, and a silver path under the moon
           float rd = max(dot(R, uLightDir), 0.0);
@@ -996,7 +1050,7 @@ export class Water {
             // ice and snow lying on it keep their own brightness (snow on the land is far brighter than this bound)
             src *= mix(sLum > 1e-5 ? capS * (1.0 - exp(-sLum / capS)) / sLum : 1.0, 1.0, ice);
           }
-          gl_FragColor = vec4(min(max(src, vec3(0.0)), vec3(32.0)), clamp(a, 0.0, 1.0)) * worldFade;
+          gl_FragColor = vec4(min(max(src, vec3(0.0)), vec3(32.0)), clamp(a, 0.0, 1.0)) * worldFade * rimFade;
         }`,
       transparent: true,
       premultipliedAlpha: true,
@@ -1019,6 +1073,25 @@ export class Water {
       this.windOff.x += w.x * s * dt;
       this.windOff.y += w.y * s * dt;
     };
+  }
+
+  /**
+   * Height of the water surface as drawn (creek, static ponds and beaver ponds alike) at a world position, bilinear over the mesh vertices;
+   * NaN where the mesh has no water. A swimmer rides this (not the sim's own water height, which differs from the drawn surface by up to a
+   * decimetre or two in the static ponds and was what left a swimming beaver under the water).
+   */
+  levelAt(x: number, z: number): number {
+    const s = this.surf, hn = this.surfHn;
+    if (!s.length) return NaN;
+    const fx = Math.min(hn - 1.001, Math.max(0, x / this.surfCell)), fz = Math.min(hn - 1.001, Math.max(0, z / this.surfCell));
+    const i = Math.floor(fx), j = Math.floor(fz), tx = fx - i, tz = fz - j;
+    let sw = 0, sum = 0;
+    const add = (v: number, w: number): void => { const h = s[v]; if (h === h && w > 0) { sw += w; sum += h * w; } };
+    add(j * hn + i, (1 - tx) * (1 - tz));
+    add(j * hn + i + 1, tx * (1 - tz));
+    add((j + 1) * hn + i, (1 - tx) * tz);
+    add((j + 1) * hn + i + 1, tx * tz);
+    return sw > 1e-6 ? sum / sw : NaN;
   }
 
   /**

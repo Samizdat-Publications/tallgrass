@@ -71,6 +71,13 @@ export interface AnimParams {
    * attribute aFx3 (snow dig, bellow, calf play, spar phase), see models/shader.ts. Unset: the shader has none of that code.
    */
   behave?: boolean;
+  /**
+   * R-marsh swimmer (beaver): the animal layer rides the model on the water surface with its origin `sink` model metres below the surface
+   * and writes the swim weight 0..1 into aFx.w. The shader then tucks the legs, lifts the head and lays the tail flat, and the vertices
+   * tagged 7 in aPart.w (the V wake, see models/beaver.ts) are drawn at the surface and fade out along their length; at weight 0 the wake
+   * is collapsed to a point. Unset: the species never swims and its shader has none of that code.
+   */
+  swim?: { sink: number; /** x of the nose, where the wake starts, and how far the wake runs back from it (model m). */ nose: number; wake: number };
   /** R8 pronghorn: aFx2.x is the rump flare weight on alarm (the white patch spreads and brightens). */
   flare?: boolean;
   /** 0 quadruped, 1 hopper, 2 bird. */

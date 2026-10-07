@@ -14,6 +14,7 @@ const arg = (k, d) => { const i = argv.indexOf('--' + k); return i >= 0 && argv[
 const out = resolve(arg('out', 'review/wip/groves-flood'));
 const [W, H] = arg('size', '1600x900').split('x').map(Number);
 const skipTime = argv.includes('--skip-time');
+const floodOnly = argv.includes('--flood-only'); // R-marsh: skip the default and grove stills, and stop after the peak stills (with the grazing views)
 const kill = setTimeout(() => { console.error('r_groves_flood: hard timeout'); process.exit(2); }, 10 * 60 * 1000);
 const server = await createServer({
   configFile: resolve('vite.config.ts'), cacheDir: resolve('scratch/.vitecache-gf'),
@@ -83,15 +84,18 @@ try {
   const frames = (k, dt = 0.05) => page.evaluate(({ k, dt }) => { const e = window.__engine; for (let i = 0; i < k; i++) e.renderOnce(dt); }, { k, dt });
 
   // ---- 0. the default world, no tool used
+  if (!floodOnly) {
   await page.evaluate(() => { window.__engine.cam.preset('wide', true); });
   await frames(8); await settle(400);
   await shot('00_default_wide');
   await page.evaluate(() => { window.__engine.cam.preset('low', true); });
   await frames(8); await settle(400);
   await shot('01_default_low');
+  }
 
   // ---- 1. a grove, right after planting
   const t0 = Date.now();
+  if (!floodOnly) {
   await page.evaluate(({ gx, gy }) => { window.__apply({ kind: 'grove', x: gx, y: gy, radius: 22 }); window.__step(4); }, { gx, gy });
   // poll until the grove's trees stand (the sim's frame carries them with the next veg frame, within about 200 ms)
   const seen = await page.evaluate(async () => {
@@ -118,6 +122,7 @@ try {
   await view({ x: gx, y: gy, yawDeg: 25, pitchDeg: 9, distance: 52 });
   await frames(6); await settle(300);
   await shot('12_grove_after_600_ticks');
+  }
 
   // ---- 2. a flood: peak (low and top), mid-drain, drained
   await page.evaluate(() => { window.__apply({ kind: 'flood', ticks: 1200, severity: 0.8 }); window.__step(30); });
@@ -133,9 +138,14 @@ try {
   await view({ x: fx, y: fy, yawDeg: fyaw, pitchDeg: 20, distance: 110 });
   await frames(6); await settle(300);
   await shot('22_flood_peak_mid');
+  for (const [nm, yawOff, pitch, dist] of [['23_flood_peak_grazing_a', 0, 3.5, 70], ['24_flood_peak_grazing_b', 180, 3.5, 70], ['25_flood_peak_grazing_c', 90, 2.5, 110]]) {
+    await view({ x: fx, y: fy, yawDeg: fyaw + yawOff, pitchDeg: pitch, distance: dist });
+    await frames(6); await settle(300);
+    await shot(nm);
+  }
   console.log('flood state at peak', JSON.stringify(await page.evaluate(() => { const f = window.__engine.flood; return { level: +f.level.toFixed(3), wet: +f.wet.toFixed(3), visible: f.mesh.visible }; })));
 
-  if (!skipTime) {
+  if (!skipTime && !floodOnly) {
     // GPU time with and without the flood, the same two cameras
     const res = await page.evaluate(async () => {
       const e = window.__engine, gl = e.renderer.getContext();
@@ -178,6 +188,7 @@ try {
     await page.evaluate(() => { const e = window.__engine; for (let i = 0; i < 80; i++) e.renderOnce(0.1); });
   }
 
+  if (!floodOnly) {
   // drain: run the sim to the end of the flood, then ease out in real time
   await page.evaluate(() => window.__step(1300));
   await page.waitForFunction(() => { const s = window.__snap(); return s && !s.flood; }, null, { timeout: 120000 });
@@ -199,6 +210,7 @@ try {
   await settle(300);
   await shot('33_flood_dry_low');
   console.log('dry', JSON.stringify(await page.evaluate(() => { const f = window.__engine.flood; return { level: f.level, wet: f.wet, visible: f.mesh.visible }; })));
+  }
 } catch (e) {
   console.error('r_groves_flood failed:', e.message);
   code = 1;
