@@ -166,6 +166,10 @@ export class GameUI {
 
   constructor(root: HTMLElement, private actions: UIActions) {
     this.tools = new ToolRail(actions);
+    this.tools.onCols = (n, wide) => {
+      this.ui.style.setProperty('--rail-cols', String(n));
+      this.ui.style.setProperty('--rail-col-w', wide ? 'calc(146 * var(--u))' : 'calc(42 * var(--u))');
+    };
     this.time = new TimeBar(actions);
     this.chron = new Chronicle((x, y) => actions.flyTo(x, y));
     this.family = new FamilyPanel(actions);
@@ -365,7 +369,7 @@ export class GameUI {
     }
     if (f.history.length || f.events.length) this.addDecadeLines(f.history, f.events);
     if (f.events.length) this.handleEvents(f.events, now, f.tick, f.pop);
-    this.pop.update(now, f.pop);
+    this.pop.update(now, f.pop, f.speed);
     this.inspector.update(f.selected, f.following, f.story, f.storyId);
     if (f.selected) this.family.noteDetail(f.selected);
     this.family.frame(f.tick, f.selected ? f.selected.id : null);
