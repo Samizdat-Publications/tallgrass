@@ -106,3 +106,4 @@ Chronological. Use this to cut a progression video or landing page.
 | 2026-10-06 17:48 | ui | [20261006-174800_ui_v2-tools-rail.jpg](20261006-174800_ui_v2-tools-rail.jpg) | Fourteen god tools in three grouped columns, with the town challenge card | review/wip/tools-v2 |
 | 2026-10-06 19:20 | still | [20261006-192000_still_v2-dynamic-trees.jpg](20261006-192000_still_v2-dynamic-trees.jpg) | Dynamic trees after 30 valley years: young cottonwoods filling in along the creek | review/wip/dyntrees |
 | 2026-10-06 20:30 | still | [20261006-203000_still_v2-dust-storm.jpg](20261006-203000_still_v2-dust-storm.jpg) | A dust storm closing in over the valley (dustStorms on) | review/wip/dust-hoppers |
+| 2026-10-06 21:54 | still | [20261006-215400_still_v2-beaver-pond.jpg](20261006-215400_still_v2-beaver-pond.jpg) | A beaver pond backed up behind a dam, a lodge in the middle (beavers on) | review/wip/beavers |

@@ -22,7 +22,7 @@ Everything Track S built in the cloud (S0 to S18) is now merged into main and li
 
 **v7a (raptors, storms, cougars, mule deer, herd spacing) was not adopted.** The full 20-world acceptance passed bison (19 of 20), the other core species, wolf cycles (CV 0.26) and ravens (CV 0.18), but prairie dogs were present at least 90% of the time in only 11 of 20 worlds (v6b: 20 of 20), and one world lost its bison. v6b stays the default; details in `review/stability/v7a-c9c3f5a/RESULT.md`. You can overrule this in DECISIONS.md.
 
-**Rendered since the merge (still off by default in the sim):** per-cell snow depth (drifts in hollows, bare windswept ground) when snowDepth is on; living trees that seed, grow, burn to snags and fall when dynamicTrees is on; dust storms and grasshopper swarms; planted groves and floodwater for the grove and flood god tools and spring floods. Redeployed 16:12, live check clean.
+**Rendered since the merge (still off by default in the sim):** per-cell snow depth (drifts in hollows, bare windswept ground) when snowDepth is on; living trees that seed, grow, burn to snags and fall when dynamicTrees is on; dust storms and grasshopper swarms; beaver ponds, dams and lodges (the beavers themselves are a stand-in for now); planted groves and floodwater for the grove and flood god tools and spring floods. Redeployed 16:12, live check clean.
 
 ![Snow depth from the sim](journey/20261006-154700_still_v2-snowdepth-top.jpg)
 ![A flood](journey/20261006-161900_still_v2-flood.jpg)
