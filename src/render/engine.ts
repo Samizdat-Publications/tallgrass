@@ -30,6 +30,7 @@ import { SnowDepth } from './snowdepth';
 import { Flood } from './flood';
 import { DustStorm } from './dust';
 import { Hoppers } from './hoppers';
+import { BeaverWorks } from './beaverworks';
 
 export type { Quality } from './post';
 export { injectTerrainShadow } from './common';
@@ -132,6 +133,8 @@ export class Engine {
   /** S12 dust storm (blowing dust, eased storm level) and grasshopper swarm; both idle and invisible unless the sim sends their fields. */
   readonly dustStorm: DustStorm;
   readonly hoppers: Hoppers;
+  /** Beaver dams and lodges (S14); empty until the sim sends the pond field. */
+  readonly beaverWorks: BeaverWorks;
   /** Storm visuals (R4): cloud masses, rain shafts, lightning, rainbow. Fed by setStorms(). */
   readonly storms: Storms;
   readonly post: PostFX;
@@ -246,6 +249,7 @@ export class Engine {
     this.fireflies = new Fireflies(world, this.uniforms.time, this.terrain.heightAt);
     this.dustStorm = new DustStorm(world.size, this.uniforms, world.hn, world.cell);
     this.hoppers = new Hoppers(world.size, this.uniforms, world.hn, world.cell);
+    this.beaverWorks = new BeaverWorks(world, this.uniforms, this.terrain.heightAt);
 
     this.sun = new SunLight(0xffffff, 1);
     // two cascades with a wide blend band, so the drop in shadow resolution fades in instead of showing as a line (see sunshadow.ts)
@@ -261,7 +265,7 @@ export class Engine {
     this.hemi = new THREE.HemisphereLight(0xffffff, 0x886644, 1);
 
     this.scene.userData.tgUniforms = this.uniforms;
-    this.scene.add(this.sky.mesh, this.terrain.mesh, this.water.mesh, this.flood.mesh, this.trees.group, this.smoke.mesh, this.fireflies.mesh, this.dustStorm.mesh, this.hoppers.mesh, this.storms.group, this.sun, this.hemi);
+    this.scene.add(this.sky.mesh, this.terrain.mesh, this.water.mesh, this.flood.mesh, this.trees.group, this.beaverWorks.group, this.smoke.mesh, this.fireflies.mesh, this.dustStorm.mesh, this.hoppers.mesh, this.storms.group, this.sun, this.hemi);
 
     this.post = new PostFX(renderer, this.scene, this.camera, this.uniforms, this.storms.uniforms);
     this.post.aoExclude.push(this.sky.mesh, this.water.mesh, this.flood.mesh, this.smoke.mesh, this.fireflies.mesh, this.dustStorm.mesh, this.hoppers.mesh, ...this.storms.meshes);
@@ -390,6 +394,20 @@ export class Engine {
   setHoppers(h: Uint8Array | undefined): void {
     this.hoppers.setField(h);
   }
+
+  /**
+   * Beaver ponds (S14): Snapshot.ponds (n x n bytes, extra depth in cm), dams, lodges, drownedTrees and pondVersion. Call with every snapshot;
+   * the fields come with the vegetation texture and only when the version changed, so this is a no-op on every other frame. A change redraws
+   * the pond water (Water.setPonds), the dams and lodges, and stands the newly drowned static trees as snags.
+   */
+  setBeavers(f: { ponds?: Uint8Array; dams?: Float32Array; lodges?: Float32Array; drownedTrees?: Uint32Array; pondVersion?: number }): void {
+    if (f.pondVersion === undefined || !f.ponds || f.pondVersion === this.pondVersion) return;
+    this.pondVersion = f.pondVersion;
+    this.water.setPonds(f.ponds);
+    this.beaverWorks.setField(f.ponds, f.dams, f.lodges, f.pondVersion);
+    this.trees.setDrowned(f.drownedTrees);
+  }
+  private pondVersion = -1;
 
   /** The player's planted groves (Snapshot.groves, stride 4: x, y, height, crown radius), the whole list; new trees are appended. */
   setGroves(g: Float32Array | undefined): void {
@@ -552,6 +570,7 @@ export class Engine {
     this.fireflies.dispose();
     this.dustStorm.dispose();
     this.hoppers.dispose();
+    this.beaverWorks.dispose();
     this.storms.dispose();
     this.vegTexture.dispose();
     this.snowDepth.dispose();

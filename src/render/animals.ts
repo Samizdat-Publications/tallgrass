@@ -50,6 +50,8 @@ const CANID: boolean[] = SPECIES.map((s) => s.key === 'wolf' || s.key === 'coyot
 const BISON: boolean[] = SPECIES.map((s) => s.key === 'bison');
 const PRONGHORN: boolean[] = SPECIES.map((s) => s.key === 'pronghorn');
 const RAVEN: boolean[] = SPECIES.map((s) => s.key === 'raven');
+/** Animals that swim on the water's surface where there is water (the beaver, S14). */
+const SWIMS: boolean[] = SPECIES.map((s) => s.key === 'beaver');
 /** Real (clock) seconds without a bellow from the audio before the layer makes bellows of its own. */
 const BELLOW_QUIET = 150;
 /** A bellow is only heard from, and a wolf chorus only sung at, this far from the camera (m). */
@@ -682,8 +684,10 @@ export class AnimalLayer {
   readonly object3D = new THREE.Group();
   /** Sim speed multiplier (1 = real time, 0 = paused). Scales gait frequency so legs match visible speed. */
   timeScale = 1;
+  /** Water surface (m) at a point, NaN on dry land: lets swimmers ride the water (set by main.ts from the engine; null = none). */
+  swimLevelAt: ((x: number, z: number) => number) | null = null;
   /** Per species visual size multiplier by species id (readability boost for small animals: wolf 1.35 (the concept art wolves read at ~0.65 of a bison), raven 1.7 (circling ravens are the "kill here" tell), rabbit 1.2, cougar 1.05). */
-  readonly speciesScale: number[] = byId({ bison: 1, wolf: 1.35, raven: 1.7, pronghorn: 1, rabbit: 1.2, cougar: 1.05, coyote: 1.35, eagle: 1.7, hawk: 1.6, muledeer: 1.05 }, () => 1);
+  readonly speciesScale: number[] = byId({ bison: 1, wolf: 1.35, raven: 1.7, pronghorn: 1, rabbit: 1.2, cougar: 1.05, coyote: 1.35, eagle: 1.7, hawk: 1.6, muledeer: 1.05, beaver: 2.2 }, () => 1);
   /**
    * The season (0 early spring .. 4) the deer's antlers and coat follow; null: the snapshot's own. A capture hook (the engine's rendered
    * season is separate, and a still of a rutting buck in autumn must not wait for the valley year to come round).
@@ -2184,6 +2188,7 @@ export class AnimalLayer {
       const ch = Math.cos(hd), sh = Math.sin(hd);
       const ground = g0;
       let pitch = 0, roll = 0, y = ground;
+      let swimming = false; // a beaver riding the surface of a pond (below): the wading rule leaves it alone
       if (FLIES[sp]) {
         y = ground + alt;
         if (raptor && state === St.Eat && alt < 1) {
@@ -2258,6 +2263,11 @@ export class AnimalLayer {
           pitch = clamp(pitch, -0.12, 0.12);
           roll = clamp(roll, -0.15, 0.15);
         }
+        // a swimmer (beaver, S14) rides the surface of the pond or creek it is in, level, instead of walking on the bed under the water
+        if (SWIMS[sp] && this.swimLevelAt) {
+          const lv = this.swimLevelAt(x, z);
+          if (lv === lv && lv > y - 0.05) { y = lv - 0.05 * vs; pitch *= 0.15; roll *= 0.15; swimming = true; }
+        }
       }
       if (cnO.lift > 0 || cnO.pitch !== 0) {
         // the mousing leap: lifted off the ground, nose up at the spring and down at the landing; the end that dips is kept above the
@@ -2274,7 +2284,7 @@ export class AnimalLayer {
       }
       // wading: in a water cell the animal stands on the bed while the water is shallower than its belly; in deeper
       // water it rides with the belly at the surface (a gentle bob, level pose) instead of looking like it stands on it
-      if (!FLIES[sp] || alt <= 0.3) {
+      if (!swimming && (!FLIES[sp] || alt <= 0.3)) {
         const wc = Math.min(world.n - 1, Math.max(0, Math.floor(z / cell))) * world.n + Math.min(world.n - 1, Math.max(0, Math.floor(x / cell)));
         if (world.water[wc]) {
           const surf = world.waterHeight[wc];

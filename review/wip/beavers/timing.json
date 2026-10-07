@@ -1,0 +1,24 @@
+{
+ "timing": {
+  "pond_mid": {
+   "withMs": 14.275,
+   "withoutMs": 13.985,
+   "restored": true
+  },
+  "pond_top": {
+   "withMs": 7.325,
+   "withoutMs": 9.393,
+   "restored": true
+  }
+ },
+ "info": {
+  "fps": 59,
+  "pondCells": 1066,
+  "dams": 3,
+  "lodges": 3,
+  "beavers": 22,
+  "drowned": 2,
+  "tris": 1,
+  "calls": 1
+ }
+}

@@ -1337,6 +1337,24 @@ export class Trees {
     for (const id of hit) this.updateTree(id, { burned: true });
   }
 
+  /** How many entries of the sim's drowned-tree list (S14) are already standing as snags. */
+  private drownedDone = 0;
+
+  /**
+   * Beaver ponds (S14, Snapshot.drownedTrees, only sent with dynamicTrees off): indices of the valley's static trees (the same ids as
+   * `world.trees / 4`) that the water drowned. Each one becomes the standing snag of the fire look, in place. The list only grows, so
+   * only the new entries are applied; with dynamic trees the snags arrive in the sim's own tree list and this does nothing.
+   */
+  setDrowned(list: Uint32Array | undefined): void {
+    if (this.dynamic || !list) return;
+    if (list.length < this.drownedDone) this.drownedDone = 0; // a shorter list: a different world
+    for (let k = this.drownedDone; k < list.length; k++) {
+      const rec = this.recs.get(list[k]);
+      if (rec && !rec.spec.burned) this.updateTree(list[k], { burned: true });
+    }
+    this.drownedDone = list.length;
+  }
+
   private gridKey(x: number, z: number): number {
     return (Math.floor(x / 24) + 512) * 2048 + (Math.floor(z / 24) + 512);
   }
