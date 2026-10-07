@@ -26,7 +26,7 @@ Everything Track S built in the cloud (S0 to S18) is now merged into main and li
 ![Snow depth from the sim](journey/20261006-154700_still_v2-snowdepth-top.jpg)
 ![A flood](journey/20261006-161900_still_v2-flood.jpg)
 
-**More tools on the rail:** lightning (click a spot), blizzard, flood, distemper (wolves and coyotes) and plant grove (click a spot) join the original nine; the rail groups them into columns that fit any screen. Why v7a failed is now known: the eagles and hawks eat too many prairie dogs (without them, towns hold in 31 of 32 worlds). A new setting halves, then quarters, their taste for prairie dogs; at a quarter the towns hold as well as with no raptors and the eagles still come every winter. That candidate (v7b) then missed the 20-world acceptance by a single world: prairie dogs held in 17 of 20 (the gate is 18; v7a managed 11), everything else passed. v6b stays the default. A gentler setting (v7c) is running its acceptance now for the next session.
+**More tools on the rail:** lightning (click a spot), blizzard, flood, distemper (wolves and coyotes) and plant grove (click a spot) join the original nine; the rail groups them into columns that fit any screen. Why v7a failed is now known: the eagles and hawks eat too many prairie dogs (without them, towns hold in 31 of 32 worlds). A new setting halves, then quarters, their taste for prairie dogs; at a quarter the towns hold as well as with no raptors and the eagles still come every winter. That candidate (v7b) then missed the 20-world acceptance by a single world: prairie dogs held in 17 of 20 (the gate is 18; v7a managed 11), everything else passed. v6b stays the default. A gentler setting (v7c, raptor taste for prairie dogs at a tenth) then passed the full acceptance: every species held, prairie dogs in 18 of 20 worlds, right at the gate. Its shock suite (cull, drought, wolf wipeout) was started at 23:17 and finishes after this session; if bison recover, the next session makes v7c the default (raptors, storm cells, cougars, mule deer and herd spacing on).
 
 ![The tool rail with the god tools v2](journey/20261006-174800_ui_v2-tools-rail.jpg)
 
@@ -36,7 +36,7 @@ Everything Track S built in the cloud (S0 to S18) is now merged into main and li
 ![The town challenge and the new tool](journey/20261006-145600_ui_v2-town-rail.jpg)
 
 **Next 5:**
-1. Read the v7c acceptance (running, ends about 23:45); if it passes every gate, run its shock suite and adopt it (NEXT-SESSION.md has the commands).
+1. Read the v7c shock suite (running, ends about 01:15); if bison recover in at least 80% of worlds after each shock, adopt v7c (NEXT-SESSION.md has the exact steps).
 2. If prairie dogs still miss, screen cougars, mule deer and herd spacing one at a time over long runs.
 3. A real beaver model with a swim pose (the render uses a rabbit stand-in), and a marsh tint for shallow flooded ground.
 4. 32-world screens for snowDepth 1 and dynamicTrees 1 (now that both draw), toward the next checkpoint.
