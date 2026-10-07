@@ -6,7 +6,7 @@
 - Default world is checkpoint v7c (v6b + raptors, storm cells, 6 cougars, 60 mule deer, herd spacing 1.6, raptorDogPref 0.1). Golden 2cabdb62, 5ad21d26, 904ebf61. Live at https://tallgrass.stewartgregerson.workers.dev.
 - Every Track S WP (S0 to S18) is merged, and every new frame field draws (snow depth, dynamic trees, dust, grasshoppers, floods, groves, beaver ponds). Off by default and each needing its own 32-seed screen plus acceptance: snowDepth, dynamicTrees (with treeCwRecruit about 0.003), dustStorms, grasshoppers, springFloods, beavers, evolution2, greenUpShift.
 - Next phase: to be planned by a fresh Opus session. Inputs: this file, MORNING.md 'Next 5', TRACK-S.md Handoff items 4 and 5, MAYBE-WANTS.md (owner's later ideas).
-- Known follow-ups: real beaver model with swim pose (rabbit stand-in; swimming beavers not visible); marsh tint for shallow ponds; wolves recover in only 75% of worlds after a wipeout; coyote-hare correlation 0.38 (gate 0.4); making-of artifact republish (blocked by permission, steps in MORNING.md); cougar cover and director still read static trees when dynamicTrees is on.
+- Known follow-ups: real beaver model with swim pose (rabbit stand-in; swimming beavers not visible); marsh tint for shallow ponds; wolves recover in only 75% of worlds after a wipeout; coyote-hare correlation 0.38 (gate 0.4);  cougar cover and director still read static trees when dynamicTrees is on.
 - Session hygiene: wait loops must match a line the tool really prints (batch.ts ends with 'done in', not 'N/N seeds done'), and never wait on a clock hour.
 
 ## Earlier state (2026-10-06 session, kept for history)
@@ -35,7 +35,7 @@
 - Still running on the CPU (node workers outlive the session): v6b shock suite -> review/stability/v6b-b51d880-shocks300 (log scratch/accept_v6b_shocks.log). Post its result to REQUESTS-R next session.
 - Next Track R WPs: R10 (after S12), R13 (after S17), R16 (after S14), R17 performance presets (low_golden 15.5 ms; dense herd near LOD +2 ms), M2 milestone (blind critic + Gemini video round, deploy, MORNING).
 - Polish backlog: grey band at the storm cloud base in drone views; blocky thickets up close; coyote slightly pale; deer ears; camera view-rate spikes near groves; aurora +0.44 ms.
-- Making-of artifact: version 12 (https://claude.ai/artifact/7jPHUFvbzTv6AUz5UCA3Mu); publish new journey images at each milestone (read the url first).
+- Making-of artifact: version 13 (2026-10-07) (https://claude.ai/artifact/7jPHUFvbzTv6AUz5UCA3Mu); publish new journey images at each milestone (read the url first).
 - Owner rulings today: quality over shareability (engine port allowed; staying on Three.js); per-commit bullets by category; keep the making-of artifact updated; stop near 85% weekly.
 - Builders' reports sometimes name the wrong branch: use `git branch --contains <commit>`. node_modules is shared via junctions: never rm -rf a junction; restore with `npm install`.
 

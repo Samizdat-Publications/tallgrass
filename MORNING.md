@@ -45,7 +45,7 @@ Everything Track S built in the cloud (S0 to S18) is now merged into main and li
 2. If prairie dogs still miss, screen cougars, mule deer and herd spacing one at a time over long runs.
 3. A real beaver model with a swim pose (the render uses a rabbit stand-in), and a marsh tint for shallow flooded ground.
 4. 32-world screens for snowDepth 1 and dynamicTrees 1 (now that both draw), toward the next checkpoint.
-5. Republish the making-of page (blocked by a permission check this session; steps under Blocked).
+5. Keep the making-of page current: `python tools/journey_page.py --artifact --out scratch/making-of/index.html`, then republish with the new journey images (version 13 now).
 
 ## v2 beta progress (session wrap-up 2026-10-05 ~10:20; live redeployed 10:15, live check clean)
 Since the alpha (below), all merged, live and verified (npm test, build, foot-slip rig, review stills with no errors):
@@ -296,7 +296,7 @@ Every issue and its triage is in `REVIEWS.md`.
 - **Review images and three review reels are committed** with their critiques (the reels are 185 MB together, the rest is hundreds of PNG stills), so the local `.git` is about 700 MB, mostly loose objects that `git gc` would pack smaller. If you'd rather keep video and stills out of git, gitignore `review/**/*.mp4` from now on; taking existing files out of history needs a force-push, which I never do.
 
 ## Blocked / cut
-- 2026-10-06: updating the making-of artifact (version 12) was denied by this session's permission check, so it still ends at the beta. The new page is generated: `python tools/journey_page.py --artifact --out scratch/making-of/index.html`, then republish it to https://claude.ai/artifact/7jPHUFvbzTv6AUz5UCA3Mu with the seven `journey/20261006-*` images as files. A future session can do it if you allow Artifact publishes.
+- (Resolved 2026-10-07) The making-of artifact update was blocked by a permission check; the owner added an Artifact allow rule and it is now at version 13 with this session's ten images.
 - **PixelLab:** no key (blank in Noclip's `.env`). Icons are hand-made SVG.
 - **seked `.env`:** doesn't exist; keys came from Noclip's `.env` plus your `ELEVENLABS_API_KEY` environment variable.
 - **Custom subagent types and the Stop hook:** `SETUP.cmd` hadn't been run, so I installed `.claude/` at 01:00; the custom agent types weren't registered mid-session, so I use general-purpose agents with the same prompts.
