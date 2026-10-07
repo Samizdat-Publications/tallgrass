@@ -36,7 +36,7 @@ Everything Track S built in the cloud (S0 to S18) is now merged into main and li
 ![The town challenge and the new tool](journey/20261006-145600_ui_v2-town-rail.jpg)
 
 **Next 5:**
-1. Read the v7c shock suite (running, ends about 01:15); if bison recover in at least 80% of worlds after each shock, adopt v7c (NEXT-SESSION.md has the exact steps).
+1. Read the v7c shock suite (running, ends about 01:35); if bison recover in at least 80% of worlds after each shock, adopt v7c (NEXT-SESSION.md has the exact steps).
 2. If prairie dogs still miss, screen cougars, mule deer and herd spacing one at a time over long runs.
 3. A real beaver model with a swim pose (the render uses a rabbit stand-in), and a marsh tint for shallow flooded ground.
 4. 32-world screens for snowDepth 1 and dynamicTrees 1 (now that both draw), toward the next checkpoint.
