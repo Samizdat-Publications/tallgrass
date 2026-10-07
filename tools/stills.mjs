@@ -35,6 +35,29 @@ const SETS = {
     { name: '10_ui_graph_fast', eval: "window.__focusHerd(); window.__speed(100); document.dispatchEvent(new KeyboardEvent('keydown', { key: 'g', bubbles: true }))", wait: 9000 },
     { name: '11_overlay_territories', eval: "document.dispatchEvent(new KeyboardEvent('keydown', { key: 'g', bubbles: true })); window.__speed(1); window.__timeOfDay(0.62); window.__cam('wide'); window.__overlay.setMode('territory')", wait: 4500 },
   ],
+  // R-wideview: deterministic wide, mid and top views (seasons and light held by __env, the sim keeps running underneath) for the
+  // landform snow, creek banks, mid-range haze and map-edge checks. Compare the same-named shots before and after a change.
+  wideview: [
+    { name: 'wv_00_setup', eval: `(() => {
+      const e = window.__engine;
+      window.__env = (o) => {
+        window.__envO = Object.assign({ season: 1.8, weather: 0, warmth: 0.7, rain: 0, dayFrac: 0.4 }, o);
+        if (!window.__envHook) window.__envHook = e.onFrame(() => e.setEnv(window.__envO));
+        e.setEnv(window.__envO); e.applyEnvNow();
+      };
+      window.__speed(1); window.__followId(null); window.__env({ season: 1.3, dayFrac: 0.62 }); window.__cam('wide');
+    })()`, wait: 3000 },
+    { name: 'wv_01_summer_wide', eval: '', wait: 2500 },
+    { name: 'wv_02_summer_mid', eval: "window.__engine.cam.setView({ distance: 170, pitchDeg: 26 })", wait: 3000 },
+    { name: 'wv_03_summer_top', eval: "window.__cam('top')", wait: 3000 },
+    { name: 'wv_04_autumn_wide', eval: "window.__env({ season: 2.4, dayFrac: 0.45 }); window.__cam('wide')", wait: 3000 },
+    { name: 'wv_05_winter_wide', eval: "window.__env({ season: 3.5, dayFrac: 0.4 })", wait: 3000 },
+    { name: 'wv_06_winter_mid', eval: "window.__engine.cam.setView({ distance: 170, pitchDeg: 26 })", wait: 3000 },
+    { name: 'wv_07_winter_top', eval: "window.__cam('top')", wait: 3000 },
+    { name: 'wv_08_winter_dusk_wide', eval: "window.__env({ season: 3.3, dayFrac: 0.7 }); window.__cam('wide')", wait: 3000 },
+    { name: 'wv_09_winter_night_wide', eval: "window.__env({ season: 3.4, dayFrac: 0.95 })", wait: 3000 },
+    { name: 'wv_10_winter_night_top', eval: "window.__cam('top')", wait: 3000 },
+  ],
   // snow vs calendar: fast-forward through a winter, then drop to 1x and check the ground matches the header's season
   // herd shape: run a few valley-years, then look at the herds from the drone, mid range and above (compare ?p=herdNearest:6)
   herds: [
@@ -152,7 +175,7 @@ const SETS = {
 const steps = SETS[set];
 if (!steps) { console.error('unknown set', set); process.exit(1); }
 const kill = setTimeout(() => { console.error('stills: hard timeout'); process.exit(2); }, 10 * 60 * 1000 + 2 * loadTimeout);
-const server = await createServer({ configFile: resolve('vite.config.ts'), server: { port: 5300 + Math.floor(Math.random() * 600), strictPort: false, hmr: false }, logLevel: 'error' });
+const server = await createServer({ configFile: resolve('vite.config.ts'), server: { port: 5300 + Math.floor(Math.random() * 600), strictPort: false, hmr: false }, logLevel: 'error', cacheDir: arg('cache', undefined) });
 await server.listen();
 const base = server.resolvedUrls.local[0].replace(/\/$/, '');
 const browser = await chromium.launch({ headless: true, args: ['--disable-backgrounding-occluded-windows', '--disable-renderer-backgrounding', '--disable-background-timer-throttling', '--enable-gpu', '--ignore-gpu-blocklist', '--use-angle=d3d11'] });

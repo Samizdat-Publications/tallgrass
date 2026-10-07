@@ -200,6 +200,11 @@ class FogPass extends Pass {
           float sunAlign = max(dot(dir, uSunDir), 0.0);
           float fwd = 1.0 + 1.6 * pow(sunAlign, 6.0) * (1.0 - smoothstep(0.1, 0.5, uSunDir.y));
           float nearOd = (dist * uHaze * alt) * (dist * uHaze * alt) * fwd;
+          // the middle distance (about 150 to 1500 m: the far side of the valley from the wide view) keeps its contrast: this quadratic
+          // term is thinned there by up to 55%. Beyond about 2 km it is back at full strength (and the far and aerial terms are untouched),
+          // so the rim still melts into the sky, and near the camera it is too small to matter.
+          // (A blizzard raises uHaze past 0.003 and keeps its full close-in fog.)
+          nearOd *= 1.0 - 0.55 * smoothstep(120.0, 420.0, dist) * (1.0 - smoothstep(900.0, 2300.0, dist)) * (1.0 - smoothstep(0.0012, 0.003, uHaze));
           float dFar = dist / 3500.0;
           float farOd = dFar * dFar * dFar;
           float od = nearOd + farOd;
@@ -264,7 +269,10 @@ class FogPass extends Pass {
           }
           // Aerial perspective: Beer-Lambert extinction over the whole view ray (thinning with altitude like the near term), so the
           // mid and far hills visibly lose contrast and take on the colour of the light scattered into the ray.
-          float aerOd = max(dist - 90.0, 0.0) * uAerial * alt * (1.0 + 0.9 * uDust);
+          // The middle distance (about 300 m to 2 km, the far side of the valley from the wide views) carries 40% less of it, easing back
+          // to the full density by about 2.6 km, so the rim and the far hills keep their aerial perspective but the mid hills keep contrast.
+          float aerMid = 0.6 + 0.4 * smoothstep(300.0, 2600.0, dist);
+          float aerOd = max(dist - 90.0, 0.0) * uAerial * alt * (1.0 + 0.9 * uDust) * aerMid;
           float cosS = dot(dir, uSunDir);
           float aerFog = 1.0 - exp(-aerOd);
           float fog0 = min(1.0 - exp(-(od + mistOd + dawnOd + dustOd)), uFogMax);

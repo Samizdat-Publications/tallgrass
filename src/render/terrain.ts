@@ -9,6 +9,7 @@ import {
   HEIGHT_GLSL, NOISE_GLSL, POND_GLSL, SharedUniforms, clamp, fbm2, injectSafeOutput, injectTerrainShadow, makePondUniform, smoothstep, vnoise2,
 } from './common';
 import { SEASON_GLSL, SNOW_GLSL } from './season';
+import { buildSnowLand } from './snowland';
 import { SMALL_TEX, TOWN_ON } from './smalltex';
 
 const SHADOW_RES = 512;
@@ -240,10 +241,12 @@ export class Terrain {
 
     const n = world.n;
     const st = new Uint8Array(n * n * 4);
+    // blue: the landform snow field (hollows and sheltered faces hold snow, crests and exposed faces shed it; see snowland.ts)
+    const snowLand = buildSnowLand(world);
     for (let k = 0; k < n * n; k++) {
       st[k * 4] = Math.round(clamp(world.moisture[k], 0, 1) * 255);
       st[k * 4 + 1] = Math.round(clamp(world.cover[k], 0, 1) * 255);
-      st[k * 4 + 2] = Math.round(clamp(world.capacity[k], 0, 1) * 255);
+      st[k * 4 + 2] = snowLand[k];
       st[k * 4 + 3] = Math.round(clamp(world.waterDist[k] / 64, 0, 1) * 255);
     }
     this.staticTex = new THREE.DataTexture(st, n, n, THREE.RGBAFormat, THREE.UnsignedByteType);
@@ -998,7 +1001,7 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
   // far-field look across the edge so no rectangle shows from any angle
   vec2 qd = abs(xz - 0.5 * uWorldSize) - 0.5 * uWorldSize;
   float sd = max(qd.x, qd.y);
-  float edgeW = smoothstep(-110.0, 150.0, sd);
+  float edgeW = smoothstep(-150.0, 190.0, sd);
   // 1 inside the playable square, 0 a few metres outside: for data that must not repeat (trails, burn, fear, canopy, water distance)
   float inS = 1.0 - smoothstep(0.0, 16.0, sd);
   // the snow amount here: the one global value, or (S11, uSnowOn = 1) the sim's local depth at this point plus a floor from a falling snowfall
@@ -1041,7 +1044,12 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
   float moist = mix(st.r, farMoist, edgeW);
   moist = clamp(moist + 0.28 * draw * (1.0 - edgeW) - 0.1 * highGround * (1.0 - edgeW), 0.0, 1.0);
   float cover = st.g * inS;
-  float wd = mix(90.0, st.a * 64.0, inS);
+  // (water's-edge effects fade out over the last 70 m before the world edge, where the creek's water dissolves too: a bare mud stub
+  // ending in a straight line shows from the map view otherwise)
+  float wd = mix(90.0, st.a * 64.0, 1.0 - smoothstep(-70.0, 0.0, sd));
+  // the riparian belt dissolves over the last 90 m before the world edge (the creek data stops there, so a belt cut at 16 m left a green
+  // rectangle ending in a straight line, which the map view shows); the close-water effects keep the sharp wd
+  float wdR = mix(90.0, st.a * 64.0, 1.0 - smoothstep(-95.0, 6.0, sd));
 
   float slopeG = sqrt(max(1.0 - nrm.y * nrm.y, 0.0)) / max(nrm.y, 0.05);
   float winterK = tgWinterK(uSeason);
@@ -1106,10 +1114,10 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
   // season shapes it: full in the green months, still greener than the uplands through the cure, dull under winter, and drier where
   // drought or grazing has cut the grass back (the stubble term). The blade layer (grass.ts) runs the same function, so near and far field agree.
   float riparian = 0.0;
-  if (wd < 58.0) {   // the belt never reaches past about 57 m (the distance texture holds 64), so the open prairie skips the noise
+  if (wdR < 58.0) {   // the belt never reaches past about 57 m (the distance texture holds 64), so the open prairie skips the noise
     float ripBroad = tgNoise2(xz * 0.011 + vec2(31.7, 12.3)) * 0.6 + tgNoise2(xz * 0.027 + vec2(7.3, 55.1)) * 0.4;
     float ripW = mix(20.0, 50.0, smoothstep(0.22, 0.66, ripBroad)) * (0.85 + 0.3 * tgNoise2(xz * 0.07 + vec2(3.1, 91.7)));
-    riparian = tgRiparian(1.0 - smoothstep(0.3 * ripW, ripW, wd), uCure, winterK);
+    riparian = tgRiparian(1.0 - smoothstep(0.3 * ripW, ripW, wdR), uCure, winterK);
     riparian = tgDroughtRip(riparian, uDrought);
   }
   float dry = clamp(uCure + (0.55 - moist) * 1.1 + stubA * 0.55 + 0.3 * up + ((nB - 0.5) * 0.24 + (nM2 - 0.5) * 0.26 - 0.2 * (nM1 - 0.5)) * mot - mix(0.5, 0.3, edgeW) * draw * (0.4 + 0.6 * (1.0 - uCure)), 0.0, 1.0);
@@ -1398,9 +1406,13 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
     float aspect = clamp(nrm.z * 3.5, -1.0, 1.0) * slopeW;
     // lee: slopes that face downwind collect what the wind carries off the windward side and the crests
     float lee = clamp(dot(nrm.xz, wv) * 4.5, -1.0, 1.0) * slopeW;
-    float patchy = (nM1 - 0.5) * 0.4 + (nM2 - 0.5) * 0.3 + (nE - 0.5) * 0.2;
-    float pot = 0.14 + flatK * 0.45 + drift * 0.3 + hollowK * 0.62 - ridgeK * 0.5 - rock * 0.5 - charAmt * 0.6 + 0.1 * gTgGrass
-              + 0.3 * aspect + 0.3 * lee + patchy - trodK * 0.5;
+    // the noise terms are kept small (they only break the pattern up); the landform field (st.b: hollows and sheltered hillsides against
+    // crests and exposed faces over 20 to 100 m, baked from the heights in snowland.ts) carries where the pack lies, so from the drone
+    // the snow follows the hills instead of drifting as big noise blobs
+    float patchy = ((nM1 - 0.5) * 0.4 + (nM2 - 0.5) * 0.3 + (nE - 0.5) * 0.2) * 0.4;
+    float landF = (st.b - 0.5) * 2.0;
+    float pot = 0.24 + flatK * 0.45 + drift * 0.1 + hollowK * 0.62 - ridgeK * 0.5 - rock * 0.5 - charAmt * 0.6 + 0.1 * gTgGrass
+              + 0.3 * aspect + 0.3 * lee + patchy + 0.85 * landF - trodK * 0.5;
     // The threshold starts above the highest possible potential (about 1.8), so a trace of leftover snow (the eased value never
     // reaches exactly zero) cannot show as isolated white patches on the flattest, wettest spots: nothing settles until there is real snow.
     float sn1 = clamp(snEff, 0.0, 1.0);
@@ -1410,6 +1422,8 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
     // on a cut line; a thin pack is also never fully opaque.
     float fineK = 1.0 - smoothstep(25.0, 110.0, dist);
     float edgeN = (tgDet(xz, 12.0, 0, vec2(0.45)) - 0.5) * 0.3;
+    // finer breakup that survives into the wide views (a 5 m octave, faded by about 600 m where it would shimmer): the edge of a drift is ragged, not a smooth contour
+    edgeN += (tgDet(xz, 5.0, 1, vec2(0.13)) - 0.5) * 0.24 * (1.0 - smoothstep(160.0, 600.0, dist));
     if (fineK > 0.01) edgeN += ((tgDet(xz, 1.5, 2, vec2(0.7)) - 0.5) * 0.5 + (tgDet(xz, 0.4, 3, vec2(0.2)) - 0.5) * 0.36) * fineK;
     float edgeW2 = mix(0.3, 0.19, smoothstep(0.2, 0.8, snEff));
     float snowAmt = smoothstep(Tsn - 0.2 - edgeW2, Tsn + 0.06 + edgeW2, pot + edgeN) * smoothstep(0.05, 0.16, snEff);
@@ -1450,6 +1464,23 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
 
   // bare winter ground at dusk and dawn is adapted the same way, more gently (summer keeps its golden dusk)
   if (winterK > 0.01) col *= mix(vec3(1.0), tgAdapt(nrm, ts), 0.62 * winterK * (1.0 - snowCover));
+
+  // ---- creek banks from the drone. The close-range mud lip and damp band are a metre or two wide, which is a pixel or less from a
+  // hundred metres up, so in the wide views the water would sit on the grass like a painted ribbon. From about 70 m out a bank
+  // builds: a band of dark wet soil along the waterline that widens with distance (so it stays several pixels across), a shaded cut
+  // bank right at the edge, and pale gravel in ragged patches on the inside of the bends. Ragged along the reach, not a drawn line.
+  if (wd < 22.0 && dist > 60.0) {
+    float bankK = smoothstep(60.0, 200.0, dist) * (1.0 - smoothstep(1400.0, 3000.0, dist)) * inS;
+    float bn = tgNoise2(xz * 0.06 + vec2(5.0, 9.0)) * 0.6 + tgNoise2(xz * 0.21 + vec2(1.0, 4.0)) * 0.4;
+    float wetW = 5.5 + 9.0 * smoothstep(120.0, 800.0, dist);
+    float wetB = 1.0 - smoothstep(0.3 * wetW, wetW, wd + (bn - 0.5) * 0.9 * wetW);
+    col = mix(col, col * vec3(0.5, 0.43, 0.35), wetB * 0.72 * bankK * (1.0 - 0.2 * snowCover));
+    float cutB = 1.0 - smoothstep(0.0, mix(1.4, 3.6, smoothstep(120.0, 700.0, dist)), wd);
+    col *= 1.0 - 0.38 * cutB * bankK;
+    float gravN = smoothstep(0.52, 0.76, tgNoise2(xz * 0.045 + vec2(21.0, 7.0)) * 0.6 + tgNoise2(xz * 0.16 + vec2(3.0, 13.0)) * 0.4);
+    float gravB = gravN * smoothstep(0.1, 0.6, wd) * (1.0 - smoothstep(0.3 * wetW, 0.8 * wetW, wd));
+    col = mix(col, vec3(0.43, 0.37, 0.27) * (0.85 + 0.3 * nA), gravB * 0.55 * bankK * (1.0 - 0.5 * snowCover));
+  }
 
   // moonlit meadow: grass stays grass, cooler and darker, and the combed strokes stay readable
   if (uNight > 0.02) {

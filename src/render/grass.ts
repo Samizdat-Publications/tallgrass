@@ -19,6 +19,7 @@
 import * as THREE from 'three';
 import type { World } from '../sim/world';
 import type { EnvState } from '../sim/types';
+import { buildSnowLand } from './snowland';
 import { COPPER_KEYS, CURE_KEYS, SEED_KEYS, SEASON_GLSL, SNOW_GLSL, keyCurve, smooth01, winterK } from './season';
 import { CLOUD_SHADOW_GLSL, POND_GLSL, cloudShadowUniforms, makePondUniform, type SharedUniforms } from './common';
 import { STORM_GUST_GLSL, stormGustUniform } from './storms';
@@ -497,11 +498,13 @@ void main() {
     float aspectS = clamp(Ng0.z * 3.5, -1.0, 1.0) * smoothstep(0.03, 0.2, slopeG0);   // low sun toward -z: north faces hold snow
     float flatS = smoothstep(0.58, 0.93, Ng0.y);
     float hr = clamp((moist - 0.5) * 3.0, -1.0, 1.0);                                   // wet hollows catch it, dry convex ground sheds it
-    float driftS = 0.6 * texture(uBig, pn + 0.19).r + 0.4 * patch1;
-    float patchyS = (texture(uBig, pn * 0.35 + 0.61).g - 0.5) * 0.55 + (texture(uBig, pn + 0.43).r - 0.5) * 0.4;
+    // the noise terms are small (pattern breakup only); the landform field (uStat1.a, baked from the heights in snowland.ts) says where the
+    // pack lies, the same field the ground shader reads, so grass and ground agree and the snow follows the hills
+    float driftS = (0.6 * texture(uBig, pn + 0.19).r + 0.4 * patch1) * 0.4;
+    float patchyS = ((texture(uBig, pn * 0.35 + 0.61).g - 0.5) * 0.55 + (texture(uBig, pn + 0.43).r - 0.5) * 0.4) * 0.4 + 0.85 * (st1.a * 2.0 - 1.0);
     float edgeS = ((tusC - 0.5) * 0.5 + (rF - 0.5) * 0.36) * (1.0 - 0.5 * smoothstep(60.0, 400.0, dist));
     float potS = flatS * 0.62 + driftS * 0.5 + 0.28 * max(hr, 0.0) + 0.34 * min(hr, 0.0) + 0.22 * aspectS + patchyS
-               - trodK * 0.5 - 0.4 * cover + 0.1 + edgeS;
+               - trodK * 0.5 - 0.4 * cover + 0.25 + edgeS;
     snowS = tgSnowCover(potS, snEff);
     float sn1 = clamp(snEff, 0.0, 1.0);
     float depthM = snowS * (0.1 + 0.9 * pow(sn1, 0.8)) * 0.6 * uMaxH * (0.75 + 0.5 * u01(pcg(h6 + 9u)));
@@ -1220,6 +1223,7 @@ export class GrassField {
     const a = new Uint8Array(n * n * 4);
     const b = new Uint8Array(n * n * 4);
     const hn = w.hn;
+    const snowLand = buildSnowLand(w);   // landform snow field, in uStat1.a
     const clamp8 = (v: number) => Math.max(0, Math.min(255, Math.round(v)));
     for (let j = 0; j < n; j++) {
       for (let i = 0; i < n; i++) {
@@ -1235,7 +1239,7 @@ export class GrassField {
         b[c * 4 + 0] = clamp8(w.moisture[c] * 255);
         b[c * 4 + 1] = clamp8(Math.exp(-w.waterDist[c] / 16) * 255);
         b[c * 4 + 2] = clamp8(w.soilBase[c] * 255);
-        b[c * 4 + 3] = 255;
+        b[c * 4 + 3] = snowLand[c];
       }
     }
     const mk = (d: Uint8Array) => {
