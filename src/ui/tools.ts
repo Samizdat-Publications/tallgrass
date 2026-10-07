@@ -46,7 +46,10 @@ export class ToolRail {
   private note: HTMLElement;
   private groups: HTMLElement[] = [];
   private lastRoom = -1;
+  private lastCols = -1;
   private disabled = false;
+  /** Told how many columns the rail currently has, and whether its labels are showing (the opening intro), so the open graph can sit beside it instead of over it. */
+  onCols?: (n: number, wide: boolean) => void;
 
   constructor(private actions: UIActions) {
     this.el = h('nav', { class: 'tg-rail', 'aria-label': 'God tools', role: 'toolbar' });
@@ -88,9 +91,21 @@ export class ToolRail {
     // The room the rail has changes with the window, the challenge card and the population panel, so look again when the window
     // resizes and twice a second (cheap: nothing is measured again unless the height changed). A ResizeObserver on the rail would
     // fire inside the observers that move the card and the panel, and the browser would report a loop.
-    window.addEventListener('resize', () => this.fit(true));
-    window.setInterval(() => this.fit(false), 500);
-    window.requestAnimationFrame(() => this.fit(true));
+    window.addEventListener('resize', () => { this.fit(true); this.syncCols(); });
+    window.setInterval(() => { this.fit(false); this.syncCols(); }, 500);
+    window.requestAnimationFrame(() => { this.fit(true); this.syncCols(); });
+  }
+
+  /** How many columns the buttons sit in right now (one for a tall window, more when the rail wraps). */
+  private syncCols(): void {
+    const lefts = new Set<number>();
+    for (const w of this.wraps.values()) lefts.add(w.wrap.offsetLeft);
+    const n = Math.max(1, lefts.size);
+    const wide = this.el.classList.contains('is-intro');
+    const key = n * 2 + (wide ? 1 : 0);
+    if (key === this.lastCols) return;
+    this.lastCols = key;
+    this.onCols?.(n, wide);
   }
 
   private fit(force: boolean): void {

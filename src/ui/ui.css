@@ -426,7 +426,7 @@
   top: calc(var(--m) + 72 * var(--u));
   /* stop above the population panel; when a challenge card pushes the rail down on a short screen, the tools wrap
      into a second column instead of running under the panel */
-  bottom: calc(var(--stack) + var(--pop-h, 92 * var(--u)) + 12 * var(--u));
+  bottom: calc(var(--stack) + var(--rail-h, 92 * var(--u)) + 12 * var(--u));
   display: flex;
   flex-direction: column;
   flex-wrap: wrap;
@@ -436,15 +436,20 @@
   /* the box reaches down to the panel: only the tools themselves take clicks, the ground behind stays clickable */
   pointer-events: none;
 }
-/* the population panel's height, which the rail stops above */
+/* The population panel's collapsed height, which the rail stops above. It does not change when the graph opens: the open panel
+   overlays the rail instead, so the rail keeps the same columns whether the graph is open or not. (--pop-h, set from the
+   measured panel, is what the toasts ride above.) */
 .tg-ui:has(.tg-pop[data-rows='2']) {
   --pop-h: calc(146 * var(--u));
+  --rail-h: calc(146 * var(--u));
 }
 .tg-ui:has(.tg-pop[data-rows='3']) {
   --pop-h: calc(202 * var(--u));
+  --rail-h: calc(202 * var(--u));
 }
 .tg-ui:has(.tg-pop[data-rows='4']) {
   --pop-h: calc(258 * var(--u));
+  --rail-h: calc(258 * var(--u));
 }
 .tg-ui:has(.tg-pop.is-open) {
   --pop-h: calc(300 * var(--u));
@@ -885,20 +890,27 @@ button.tg-ent-b:hover {
   row-gap: calc(3 * var(--u));
 }
 .tg-pop.is-open {
-  width: min(calc(640 * var(--u)), calc(100vw - 2 * var(--m)));
   height: calc(300 * var(--u));
+  /* the open panel sits beside the tool rail, whatever number of columns the rail has (ToolRail.onCols sets --rail-cols), and the
+     rail keeps its layout while the graph is open */
+  left: calc(var(--m) + var(--rail-cols, 1) * var(--rail-col-w, 42 * var(--u)) + 6 * var(--u));
+  width: min(calc(640 * var(--u)), calc(100vw - 2 * var(--m) - var(--rail-cols, 1) * var(--rail-col-w, 42 * var(--u)) - 6 * var(--u) - var(--right-w) - 12 * var(--u)));
+}
+/* the population view also carries a legend strip of species names: one row's worth more height */
+.tg-pop.is-open[data-view='pop'] {
+  height: calc(326 * var(--u));
 }
 /* four or more species rows need a little more height to keep every row readable */
 .tg-pop.is-open[data-view='pop'][data-rows='2'],
 .tg-pop.is-open[data-view='pop'][data-rows='3'],
 .tg-pop.is-open[data-view='pop'][data-rows='4'],
 .tg-pop.is-open[data-view='pop'][data-cols='2'] {
-  height: calc(336 * var(--u));
+  height: calc(362 * var(--u));
 }
 /* five or six species: seven rows want more room still */
 .tg-pop.is-open[data-view='pop'][data-count='5'],
 .tg-pop.is-open[data-view='pop'][data-count='6'] {
-  height: min(calc(384 * var(--u)), calc(100vh - 210 * var(--u)));
+  height: min(calc(412 * var(--u)), calc(100vh - 210 * var(--u)));
 }
 /* seven to twelve species: as tall as the screen allows */
 .tg-pop.is-open[data-view='pop'][data-count='7'],
@@ -907,14 +919,7 @@ button.tg-ent-b:hover {
 .tg-pop.is-open[data-view='pop'][data-count='10'],
 .tg-pop.is-open[data-view='pop'][data-count='11'],
 .tg-pop.is-open[data-view='pop'][data-count='12'] {
-  height: min(calc(440 * var(--u)), calc(100vh - 210 * var(--u)));
-}
-@media (max-height: 940px) {
-  /* the rail would collide with the tall chart on short screens, so the chart sits to its right */
-  .tg-pop.is-open {
-    left: calc(var(--m) + 48 * var(--u));
-    width: min(calc(640 * var(--u)), calc(100vw - 2 * var(--m) - 48 * var(--u)));
-  }
+  height: min(calc(486 * var(--u)), calc(100vh - 210 * var(--u)));
 }
 .tg-pop-head {
   display: flex;
@@ -963,12 +968,26 @@ button.tg-ent-b:hover {
   padding: 0 calc(10 * var(--u));
   font-size: calc(13 * var(--u));
 }
-.tg-pop.is-open[data-view='pop'] .tg-pop-chips:not(.tg-evo-legend),
 .tg-pop.is-open[data-view='evo'] .tg-evo-legend {
   display: flex;
   gap: calc(6 * var(--u));
   flex-wrap: nowrap;
   margin-left: calc(4 * var(--u));
+}
+/* the population legend: every species by name, in its own colour, on a strip under the tabs (each name is also a show/hide toggle) */
+.tg-pop.is-open[data-view='pop'] .tg-pop-chips:not(.tg-evo-legend) {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  gap: calc(3 * var(--u)) calc(4 * var(--u));
+  margin: 0 0 calc(5 * var(--u));
+}
+.tg-pop-chips:not(.tg-evo-legend) .tg-chip {
+  height: calc(20 * var(--u));
+  gap: calc(5 * var(--u));
+  padding: 0 calc(8 * var(--u)) 0 calc(7 * var(--u));
+  font-size: calc(11.5 * var(--u));
+  color: var(--c);
 }
 .tg-pop.is-open[data-view='evo'] .tg-pop-log {
   display: none;
@@ -1035,21 +1054,6 @@ button.tg-ent-b:hover {
 .tg-chip-btn {
   transition: opacity 0.15s, background-color 0.15s;
 }
-/* five or six species: the chips shrink to colour dots (each row is named in the chart anyway) */
-.tg-pop[data-count='5'] .tg-chip-btn,
-.tg-pop[data-count='6'] .tg-chip-btn,
-.tg-pop[data-count='7'] .tg-chip-btn,
-.tg-pop[data-count='8'] .tg-chip-btn,
-.tg-pop[data-count='9'] .tg-chip-btn,
-.tg-pop[data-count='10'] .tg-chip-btn,
-.tg-pop[data-count='11'] .tg-chip-btn,
-.tg-pop[data-count='12'] .tg-chip-btn {
-  font-size: 0;
-  gap: 0;
-  width: calc(26 * var(--u));
-  padding: 0;
-  justify-content: center;
-}
 .tg-chip-btn:hover {
   background: rgba(240, 228, 200, 0.08);
 }
@@ -1091,6 +1095,18 @@ button.tg-ent-b:hover {
 }
 .tg-cell.is-gone {
   opacity: 0.55;
+}
+/* 10x and 100x: the panel eases (see PopGraph.update). The numbers change a few times a second, so they sit a little quieter
+   than at 1x, and at 100x the whole strip reads as a time-lapse. */
+.tg-pop.is-fast .tg-cell-n {
+  opacity: 0.9;
+}
+.tg-pop.is-lapse .tg-cell-n {
+  opacity: 0.78;
+}
+.tg-pop.is-lapse .tg-pop-sub {
+  font-style: italic;
+  color: var(--gold);
 }
 .tg-cell-top {
   display: flex;

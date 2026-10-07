@@ -23,9 +23,33 @@ interface Cell {
   count: HTMLElement;
   canvas: HTMLCanvasElement;
   lastText: string;
+  /** The count as shown: eases toward the real count while the sim runs fast. */
+  shown: number;
+  /** The sparkline's vertical range, eased between redraws while the sim runs fast. */
+  yMin: number;
+  yMax: number;
+  hover: boolean;
+  tip: string;
 }
 
+/** How fast the sim runs, as far as the panel is concerned: 1x and slower are live, 10x is fast, 100x and skipping is a time-lapse. */
+type Pace = 'live' | 'fast' | 'lapse';
+const paceOf = (speed: number): Pace => (speed < 0 || speed >= 100 ? 'lapse' : speed >= 10 ? 'fast' : 'live');
+/**
+ * How often the numbers and the sparklines refresh at each pace (milliseconds), how far a number moves toward its real value on each
+ * refresh, and how many history rows one sparkline point averages. Live (1x) is the original behaviour: numbers every frame, drawing about 8 Hz.
+ */
+const PACE = {
+  live: { num: 0, draw: 125, ease: 1, bin: 1 },
+  fast: { num: 250, draw: 200, ease: 0.45, bin: 4 },
+  lapse: { num: 500, draw: 250, ease: 0.35, bin: 6 },
+} as const;
+/** A sparkline never spans less than this fraction of the window's mean (each side), so a wolf count of 18 to 17 stays a flat line. */
+const SPARK_MIN_HALF = 0.25;
+
 const SPARK_YEARS = 8;
+/** Ticks to years. */
+const toYears = (ticks: number): number => ticks / YEAR_TICKS;
 /** Species that always get a graph row (bison, wolf, raven). Every other species, current or future, only gets one once it has been alive. */
 const ALWAYS_SHOWN_KEYS = new Set(['bison', 'wolf', 'raven']);
 const alwaysShown = (sp: number): boolean => ALWAYS_SHOWN_KEYS.has(SPECIES_KEYS[sp] ?? '');
@@ -54,6 +78,8 @@ export class PopGraph {
   private unit = 0;
   private dirty = true;
   private lastDraw = 0;
+  private pace: Pace = 'live';
+  private numAt = 0;
   private hoverX = -1;
   private hoverRaf = 0;
 
@@ -74,7 +100,7 @@ export class PopGraph {
   constructor() {
     this.cellsEl = h('div', { class: 'tg-cells' });
     this.sub = h('span', { class: 'tg-pop-sub', text: 'since the start' });
-    this.chipsEl = h('div', { class: 'tg-pop-chips', role: 'group', 'aria-label': 'Species shown on the graph' });
+    this.chipsEl = h('div', { class: 'tg-pop-chips', role: 'group', 'aria-label': 'Species shown on the graph, by name and colour' });
     this.logBtn = button({
       class: 'tg-btn tg-pop-log',
       text: 'Log',
@@ -122,7 +148,6 @@ export class PopGraph {
       h('span', { class: 'tg-pop-title', text: 'Population' }),
       tabs,
       this.sub,
-      this.chipsEl,
       this.evoLegend,
       h('span', { class: 'tg-grow' }),
       this.logBtn,
@@ -135,7 +160,7 @@ export class PopGraph {
     this.chart.addEventListener('pointermove', (e) => this.onHover(e));
     this.chart.addEventListener('pointerleave', () => this.onHover(null));
 
-    this.el = h('section', { class: 'tg-pop tg-glass tg-leaf', 'aria-label': 'Population', 'data-rows': '1', 'data-view': 'pop' }, head, this.cellsEl, this.chartWrap);
+    this.el = h('section', { class: 'tg-pop tg-glass tg-leaf', 'aria-label': 'Population', 'data-rows': '1', 'data-view': 'pop' }, head, this.chipsEl, this.cellsEl, this.chartWrap);
 
     this.ro = new ResizeObserver(() => {
       this.unit = unitPx(this.el);
@@ -282,7 +307,10 @@ export class PopGraph {
         h('div', { class: 'tg-cell-top' }, h('span', { class: 'tg-cell-name' }, h('i', { class: 'tg-dot' }), SPECIES_NAMES[sp]), count),
         canvas,
       );
-      this.cells.push({ sp, el, count, canvas, lastText: '' });
+      const cell: Cell = { sp, el, count, canvas, lastText: '', shown: this.pops[sp][this.pops[sp].length - 1] ?? 0, yMin: 0, yMax: 0, hover: false, tip: '' };
+      el.addEventListener('pointerenter', () => { cell.hover = true; this.dirty = true; this.lastDraw = 0; });
+      el.addEventListener('pointerleave', () => { cell.hover = false; this.dirty = true; this.lastDraw = 0; });
+      this.cells.push(cell);
       this.cellsEl.append(el);
     }
     // 1 to 3 species sit in one row of three, 4 make a tidy 2 x 2, 5 and more fill rows of three
@@ -315,17 +343,41 @@ export class PopGraph {
     this.dirty = true;
   }
 
-  /** Called every frame. Cheap: counts are text diffs, drawing is throttled to about 8 Hz and only when data changed. */
-  update(now: number, pop: number[]): void {
-    for (const c of this.cells) {
-      const t = fmtInt(pop[c.sp] ?? 0);
-      if (t !== c.lastText) {
-        c.lastText = t;
-        c.count.textContent = t;
-        c.el.classList.toggle('is-gone', (pop[c.sp] ?? 0) === 0);
+  /**
+   * Called every frame. Cheap: counts are text diffs, drawing is throttled and only when data changed. At 1x the numbers follow the
+   * sim every frame and drawing is about 8 Hz. At 10x and 100x the numbers ease toward their value a few times a second and the
+   * sparklines redraw more slowly, so the panel reads as a calm time-lapse rather than a blur of flashing digits.
+   */
+  update(now: number, pop: number[], speed = 1): void {
+    const pace = paceOf(speed);
+    if (pace !== this.pace) {
+      this.pace = pace;
+      this.el.classList.toggle('is-fast', pace === 'fast');
+      this.el.classList.toggle('is-lapse', pace === 'lapse');
+      this.numAt = 0;
+      this.dirty = true;
+      this.lastDraw = 0;
+    }
+    const cfg = PACE[pace];
+    if (cfg.num === 0 || now - this.numAt >= cfg.num) {
+      this.numAt = now;
+      for (const c of this.cells) {
+        const target = pop[c.sp] ?? 0;
+        if (cfg.ease >= 1) c.shown = target;
+        else {
+          const d = target - c.shown;
+          c.shown = Math.abs(d) < 0.6 ? target : c.shown + d * cfg.ease;
+        }
+        const v = Math.round(c.shown);
+        const t = fmtInt(v);
+        if (t !== c.lastText) {
+          c.lastText = t;
+          c.count.textContent = t;
+          c.el.classList.toggle('is-gone', v === 0);
+        }
       }
     }
-    if (this.dirty && now - this.lastDraw >= 125) {
+    if (this.dirty && now - this.lastDraw >= cfg.draw) {
       this.lastDraw = now;
       this.dirty = false;
       this.draw();
@@ -342,7 +394,7 @@ export class PopGraph {
       const n = this.ticks.length;
       if (n >= 2) {
         const span = (this.ticks[n - 1] - this.ticks[0]) / YEAR_TICKS;
-        setText(this.sub, span >= SPARK_YEARS ? `last ${SPARK_YEARS} years` : 'since the start');
+        setText(this.sub, this.pace === 'lapse' ? 'time-lapse' : span >= SPARK_YEARS ? `last ${SPARK_YEARS} years` : 'since the start');
       }
       for (const c of this.cells) this.drawSpark(c);
     }
@@ -387,25 +439,46 @@ export class PopGraph {
     const ts = this.ticks[i0];
     if (t1 <= ts) return;
     const series = this.pops[cell.sp];
-    let lo = Infinity, hi = 1;
+    const calm = this.pace !== 'live';
+    let lo = Infinity, hi = -Infinity, sum = 0;
     for (let i = i0; i < n; i++) {
-      if (series[i] > hi) hi = series[i];
-      if (series[i] < lo) lo = series[i];
+      const v = series[i];
+      if (v > hi) hi = v;
+      if (v < lo) lo = v;
+      sum += v;
     }
-    // show the shape, not the baseline: scale from the window's low to its high, but never blow up flat noise
-    const range = Math.max(hi - lo, hi * 0.04, 3);
-    const yMin = Math.max(0, lo - (range - (hi - lo)) / 2 - range * 0.06);
-    const yMax = yMin + range * 1.12;
+    const mean = sum / (n - i0);
+    // A scale that cannot exaggerate: the range is at least +/-25% of the window's mean (and a few animals wide), centred on the
+    // data, and never reaches below zero. A wolf count of 18 to 17 is a flat line; a real crash still fills the height.
+    const half = Math.max((hi - lo) / 2, mean * SPARK_MIN_HALF, 1.5);
+    const mid = (hi + lo) / 2;
+    let tMin = mid - half, tMax = mid + half;
+    if (tMin < 0) { tMax -= tMin; tMin = 0; }
+    tMax += (tMax - tMin) * 0.08;
+    if (calm && cell.yMax > cell.yMin) {
+      // ease the range between redraws, so a new high does not rescale the whole line in one jump
+      cell.yMin += (tMin - cell.yMin) * 0.35;
+      cell.yMax += (tMax - cell.yMax) * 0.35;
+    } else {
+      cell.yMin = tMin;
+      cell.yMax = tMax;
+    }
+    const yMin = cell.yMin, yMax = cell.yMax;
     const padT = 4 * this.unit, padB = 3 * this.unit, padL = 1, padR = 4 * this.unit;
     const pw = w - padL - padR, ph = ht - padT - padB;
     const X = (t: number) => padL + ((t - ts) / (t1 - ts)) * pw;
     const Y = (v: number) => padT + ph - ((v - yMin) / (yMax - yMin)) * ph;
-    const step = Math.max(1, Math.floor((n - i0) / (pw * 1.5)));
 
-    // a faint baseline at the foot of the window's range, and a dotted line at its average
-    let sum = 0;
-    for (let i = i0; i < n; i++) sum += series[i];
-    const avgY = Y(sum / (n - i0));
+    // the visible window's low and high, for the hover tip and the tiny labels
+    const winText = toYears(t1 - this.ticks[0]) >= SPARK_YEARS ? `last ${SPARK_YEARS} years` : 'since the start';
+    const tip = `${SPECIES_NAMES[cell.sp]}, ${winText}: low ${fmtInt(lo)}, high ${fmtInt(hi)}`;
+    if (tip !== cell.tip) {
+      cell.tip = tip;
+      cell.el.title = tip;
+    }
+
+    // a faint baseline at the foot of the plot, and a dotted line at the window's average
+    const avgY = Y(mean);
     g.lineWidth = 1;
     g.strokeStyle = 'rgba(239,230,208,0.2)';
     g.beginPath();
@@ -420,17 +493,29 @@ export class PopGraph {
     g.stroke();
     g.setLineDash([]);
 
-    g.beginPath();
-    let first = true;
-    let lastX = 0, lastY = 0;
-    for (let i = i0; i < n; i += step) {
-      const x = X(this.ticks[i]), y = Y(series[i]);
-      if (first) { g.moveTo(x, y); first = false; } else g.lineTo(x, y);
-      lastX = x; lastY = y;
+    // the points: at 1x every few rows; when fast, the mean of fixed bins of rows. The bins are aligned to the row index, not to
+    // the window, so as the window slides the points stay put and the line scrolls smoothly instead of shimmering.
+    const bin = PACE[this.pace].bin;
+    const xs: number[] = [], ys: number[] = [];
+    if (bin <= 1) {
+      const step = Math.max(1, Math.floor((n - i0) / (pw * 1.5)));
+      for (let i = i0; i < n; i += step) { xs.push(X(this.ticks[i])); ys.push(Y(series[i])); }
+    } else {
+      for (let k = Math.ceil(i0 / bin) * bin; k + bin <= n; k += bin) {
+        let sv = 0, st = 0;
+        for (let i = k; i < k + bin; i++) { sv += series[i]; st += this.ticks[i]; }
+        xs.push(X(st / bin)); ys.push(Y(sv / bin));
+      }
+      if (!xs.length) { xs.push(X(ts)); ys.push(Y(series[i0])); }
     }
     const xe = X(this.ticks[n - 1]), ye = Y(series[n - 1]);
-    g.lineTo(xe, ye);
-    lastX = xe; lastY = ye;
+    xs.push(xe); ys.push(ye);
+    g.beginPath();
+    for (let i = 0; i < xs.length; i++) {
+      if (i === 0) g.moveTo(xs[i], ys[i]);
+      else g.lineTo(xs[i], ys[i]);
+    }
+    const lastX = xe, lastY = ye;
     g.lineJoin = 'round';
     g.lineCap = 'round';
     g.lineWidth = 1.6 * this.unit;
@@ -438,7 +523,7 @@ export class PopGraph {
     g.stroke();
     // soft area under the line
     g.lineTo(lastX, padT + ph);
-    g.lineTo(X(ts), padT + ph);
+    g.lineTo(xs[0], padT + ph);
     g.closePath();
     const grad = g.createLinearGradient(0, padT, 0, padT + ph);
     grad.addColorStop(0, hexA(color, 0.2));
@@ -450,6 +535,16 @@ export class PopGraph {
     g.arc(lastX, lastY, 2.4 * this.unit, 0, Math.PI * 2);
     g.fillStyle = color;
     g.fill();
+    // tiny labels for the window's high and low while the pointer is over the sparkline
+    if (cell.hover) {
+      g.font = `600 ${9 * this.unit}px ${SANS}`;
+      g.fillStyle = PAPER_DIM;
+      g.textAlign = 'left';
+      g.textBaseline = 'top';
+      g.fillText(`high ${fmtInt(hi)}`, padL + 2, 0);
+      g.textBaseline = 'alphabetic';
+      g.fillText(`low ${fmtInt(lo)}`, padL + 2, ht - 1);
+    }
   }
 
   private plotRect(w: number, ht: number) {
