@@ -1,0 +1,110 @@
+{
+ "args": {
+  "seeds": 20,
+  "seedBase": 1,
+  "ticks": 720000,
+  "generations": null,
+  "sampleEvery": 1500,
+  "threads": 10,
+  "scenarios": [
+   "cull70",
+   "drought",
+   "wolfwipe"
+  ],
+  "params": {
+   "raptors": 1,
+   "stormCells": 1,
+   "cougar.initial": 6,
+   "muledeer.initial": 60,
+   "herdSpacingGraze": 1.6,
+   "raptorDogPref": 0.1
+  },
+  "mock": false,
+  "maxMinutes": 0,
+  "progressSec": 15,
+  "out": "C:\\Users\\stewa\\Documents\\Claude\\ecosystem-sim\\scratch\\frozen\\a6b02bb\\review\\stability\\v7c-a6b02bb-shocks",
+  "argv": [
+   "--seeds",
+   "20",
+   "--ticks",
+   "720000",
+   "--sample",
+   "1500",
+   "--scenario",
+   "cull70,drought,wolfwipe",
+   "--threads",
+   "10",
+   "--params",
+   "{\"raptors\":1,\"stormCells\":1,\"cougar.initial\":6,\"muledeer.initial\":60,\"herdSpacingGraze\":1.6,\"raptorDogPref\":0.1}",
+   "--out",
+   "review/stability/v7c-a6b02bb-shocks"
+  ]
+ },
+ "commit": "a6b02bb (frozen copy)",
+ "node": "v24.19.0",
+ "platform": "win32 x64",
+ "startedAt": "2026-10-07T03:16:41.396Z",
+ "finishedAt": "2026-10-07T05:29:00.965Z",
+ "wallSeconds": 7939.56,
+ "stopReason": null,
+ "tasks": {
+  "total": 60,
+  "completed": 60,
+  "errors": 0,
+  "aborted": 0,
+  "skipped": 0
+ },
+ "msPerTick": 1.770251,
+ "ticksRun": 43200000,
+ "ticksPerSecWall": 5441,
+ "scenarios": {
+  "cull70": {
+   "seeds": 20,
+   "completed": 20,
+   "persistencePct": {
+    "bison": 100,
+    "wolf": 100,
+    "raven": 100,
+    "pronghorn": 100,
+    "rabbit": 100,
+    "cougar": 100,
+    "coyote": 100,
+    "prairiedog": 95,
+    "muledeer": 100
+   },
+   "maxGen": 404.6281081081081
+  },
+  "drought": {
+   "seeds": 20,
+   "completed": 20,
+   "persistencePct": {
+    "bison": 100,
+    "wolf": 100,
+    "raven": 100,
+    "pronghorn": 100,
+    "rabbit": 100,
+    "cougar": 95,
+    "coyote": 100,
+    "prairiedog": 100,
+    "muledeer": 100
+   },
+   "maxGen": 423.6887159533074
+  },
+  "wolfwipe": {
+   "seeds": 20,
+   "completed": 20,
+   "persistencePct": {
+    "bison": 100,
+    "wolf": 100,
+    "raven": 100,
+    "pronghorn": 100,
+    "rabbit": 100,
+    "cougar": 100,
+    "coyote": 100,
+    "prairiedog": 95,
+    "muledeer": 100
+   },
+   "maxGen": 405.3278463648834
+  }
+ }
+}
