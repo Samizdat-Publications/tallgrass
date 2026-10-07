@@ -81,6 +81,7 @@
 | 10-05 02:16 | ElevenLabs sound-generation | `hawk_scream_2` (4 s) retake -> `public/audio/hawk_scream_2.mp3` (R5, KEPT: Gemini heard a real red-tailed hawk twice; the sixth and last of the R5 budget) | 1 SFX | 22 credits |
 | 10-05 02:20 | Gemini `gemini-3.8-flash` | R5 listen-checks of the raptor clips (`scratch` script, not committed): what animal, real or imitation | 9 calls | cents |
 | 10-05 04:56 | Gemini `gemini-3.1-pro-preview` | blind video critique of reel.mp4 (75996 KB) | 1 call | ~$0.05 |
+| 10-07 15:53 | Gemini `gemini-3.1-pro-preview` | blind video critique of reel.mp4 (48781 KB) | 1 call | ~$0.05 |
 
 ## Downloaded third-party assets
 | Asset | Source | License | Used in |
