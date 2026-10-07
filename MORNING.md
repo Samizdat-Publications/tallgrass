@@ -27,7 +27,7 @@ Everything Track S built in the cloud (S0 to S18) is now merged into main and li
 ![Snow depth from the sim](journey/20261006-154700_still_v2-snowdepth-top.jpg)
 ![A flood](journey/20261006-161900_still_v2-flood.jpg)
 
-**More tools on the rail:** lightning (click a spot), blizzard, flood, distemper (wolves and coyotes) and plant grove (click a spot) join the original nine; the rail groups them into columns that fit any screen. Why v7a failed is now known: the eagles and hawks eat too many prairie dogs (without them, towns hold in 31 of 32 worlds). A new setting halves, then quarters, their taste for prairie dogs; at a quarter the towns hold as well as with no raptors and the eagles still come every winter. That candidate (v7b) is now in its full 20-world acceptance on this machine.
+**More tools on the rail:** lightning (click a spot), blizzard, flood, distemper (wolves and coyotes) and plant grove (click a spot) join the original nine; the rail groups them into columns that fit any screen. Why v7a failed is now known: the eagles and hawks eat too many prairie dogs (without them, towns hold in 31 of 32 worlds). A new setting halves, then quarters, their taste for prairie dogs; at a quarter the towns hold as well as with no raptors and the eagles still come every winter. That candidate (v7b) then missed the 20-world acceptance by a single world: prairie dogs held in 17 of 20 (the gate is 18; v7a managed 11), everything else passed. v6b stays the default. A gentler setting (v7c) is running its acceptance now for the next session.
 
 ![The tool rail with the god tools v2](journey/20261006-174800_ui_v2-tools-rail.jpg)
 
