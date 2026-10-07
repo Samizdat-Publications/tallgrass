@@ -65,6 +65,7 @@ if (q.get('grass') === '0') grass.object3D.visible = false;
 const animals = new AnimalLayer(renderWorld);
 engine.scene.add(animals.object3D);
 animals.snowField = engine.snowDepth;
+animals.swimLevelAt = (x, z) => engine.beaverWorks.surfaceAt(x, z);
 engine.cam.preset((q.get('cam') as 'wide' | 'low' | 'top' | null) ?? 'wide', true);
 // captures pin full resolution; players get an automatic render scale that holds 60 fps
 engine.autoScale = q.get('autoscale') !== '0';
@@ -205,6 +206,7 @@ worker.onmessage = (e: MessageEvent<FromWorker>) => {
   engine.setFlood(m.flood);
   engine.setDust(m.dust);
   engine.setHoppers(m.hoppers);
+  engine.setBeavers(m);
   if (m.small) {
     lastSmall = m.small;
     smallprey.setSmall(m.small);

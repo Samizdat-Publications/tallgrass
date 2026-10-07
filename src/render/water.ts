@@ -26,6 +26,8 @@ import { NIGHT } from './sky';
 const V_REF = 0.55;
 /** Average channel half-width (m) the speed is referenced to (see shapeCreek in terrain.ts: 2.4 to 6.2 m). */
 const HW_REF = 4.3;
+/** Beaver pond cells (S14, Snapshot.ponds, centimetres of extra water) at or above this depth are drawn as water (the sim's POND_WET, 0.12 m). */
+const POND_WET_CM = 12;
 
 export class Water {
   readonly mesh: THREE.Mesh;
@@ -33,6 +35,10 @@ export class Water {
   private canopyTex: THREE.DataTexture;
   private windOff = new THREE.Vector2();
   private lastT = -1;
+  /** Builds the water geometry from the creek and ponds plus an optional beaver pond field (S14). */
+  private buildMesh: (pond: Uint8Array | null) => THREE.BufferGeometry;
+  /** Pond cells (S14) in the field drawn now, for the bench and tests. */
+  pondCells = 0;
 
   constructor(world: World, shared: SharedUniforms, creekDist: Float32Array) {
     const { n, hn, cell, size } = world;
@@ -271,39 +277,104 @@ export class Water {
 
     // ---- mesh: water vertices sit on the surface; vertices on the bank are draped just above the ground so the wet band can
     // be drawn there (the fragment shader always works from the true water level, carried separately)
-    const pos: number[] = [];
-    const lvl: number[] = [];
-    const flw: number[] = [];
-    const flw2: number[] = [];
-    const remap = new Int32Array(hn * hn).fill(-1);
-    const idx: number[] = [];
-    const vert = (i: number, j: number): number => {
-      const v = j * hn + i;
-      if (remap[v] >= 0) return remap[v];
-      remap[v] = pos.length / 3;
-      pos.push(i * cell, Math.max(wy[v], rh[v] + 0.04), j * cell);
-      lvl.push(wy[v]);
-      const f = frame(i * cell, j * cell);
-      flw.push(f[0], f[1], f[2], f[3]);
-      flw2.push(f[4], f[5], f[6], f[7]);
-      return remap[v];
+    // (S14: the same builder runs again when beaver ponds change, with the pond surface merged into the levels; see setPonds)
+    const frameCache = new Map<number, number[]>();
+    const frameAt = (v: number, i: number, j: number): number[] => {
+      let f = frameCache.get(v);
+      if (!f) { f = frame(i * cell, j * cell); frameCache.set(v, f); }
+      return f;
     };
-    for (let j = 0; j < hn - 1; j++) {
-      for (let i = 0; i < hn - 1; i++) {
-        const a = j * hn + i, b = a + 1, c = a + hn, d = c + 1;
-        if (Number.isNaN(wy[a]) || Number.isNaN(wy[b]) || Number.isNaN(wy[c]) || Number.isNaN(wy[d])) continue;
-        const va = vert(i, j), vb = vert(i + 1, j), vc = vert(i, j + 1), vd = vert(i + 1, j + 1);
-        // winding with +Y normals, same diagonal as the terrain so the draped skirt follows the ground exactly
-        idx.push(va, vc, vb, vb, vc, vd);
+    const ZERO_FRAME = [0, 0, 0, 0, 0, 0, 0, 0];
+    this.buildMesh = (pond: Uint8Array | null): THREE.BufferGeometry => {
+      // beaver ponds: the surface of every cell with at least POND_WET_CM of extra water is the rendered ground at the cell centre plus
+      // the depth; a vertex takes the mean of the wet cells around it, and one ring of vertices past them is filled in the same way so the
+      // draped skirt can show the shore (the fragment shader then finds the true waterline against the ground)
+      let pw: Float32Array | null = null;
+      // vertices filled in past the wet cells (not a corner of one): their level is capped at the ground, so water never hangs in the
+      // air over ground that falls away below a dam
+      let ext: Uint8Array | null = null;
+      let wetCells = 0;
+      if (pond) {
+        const sum = new Float32Array(hn * hn), cnt = new Uint8Array(hn * hn);
+        for (let j = 0; j < n; j++) {
+          for (let i = 0; i < n; i++) {
+            const dcm = pond[j * n + i];
+            if (dcm < POND_WET_CM) continue;
+            wetCells++;
+            const s = hAt((i + 0.5) * cell, (j + 0.5) * cell) + dcm / 100;
+            for (let dj = 0; dj <= 1; dj++) for (let di = 0; di <= 1; di++) { const v = (j + dj) * hn + i + di; sum[v] += s; cnt[v]++; }
+          }
+        }
+        if (wetCells > 0) {
+          pw = new Float32Array(hn * hn).fill(NaN);
+          for (let v = 0; v < hn * hn; v++) if (cnt[v]) pw[v] = sum[v] / cnt[v];
+          const next = pw.slice();
+          ext = new Uint8Array(hn * hn);
+          for (let j = 0; j < hn; j++) {
+            for (let i = 0; i < hn; i++) {
+              const v = j * hn + i;
+              if (!Number.isNaN(pw[v])) continue;
+              let s = 0, c = 0;
+              for (let dj = -1; dj <= 1; dj++) {
+                for (let di = -1; di <= 1; di++) {
+                  const ii = i + di, jj = j + dj;
+                  if (ii < 0 || jj < 0 || ii >= hn || jj >= hn) continue;
+                  const w = pw[jj * hn + ii];
+                  if (!Number.isNaN(w)) { s += w; c++; }
+                }
+              }
+              if (c) { next[v] = s / c; ext[v] = 1; }
+            }
+          }
+          pw = next;
+        }
       }
-    }
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-    geo.setAttribute('aLevel', new THREE.Float32BufferAttribute(lvl, 1));
-    geo.setAttribute('aFlow', new THREE.Float32BufferAttribute(flw, 4));
-    geo.setAttribute('aFlow2', new THREE.Float32BufferAttribute(flw2, 4));
-    geo.setIndex(idx);
-    geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(world.size / 2, 10, world.size / 2), world.size);
+      this.pondCells = wetCells;
+      const level = new Float32Array(hn * hn);
+      const inPond = new Uint8Array(hn * hn);
+      for (let v = 0; v < hn * hn; v++) {
+        const a = wy[v];
+        let b = pw ? pw[v] : NaN;
+        if (ext && ext[v]) b = Math.min(b, rh[v]);
+        if (Number.isNaN(b)) level[v] = a;
+        else { level[v] = Number.isNaN(a) ? b : Math.max(a, b); inPond[v] = 1; }
+      }
+      const pos: number[] = [];
+      const lvl: number[] = [];
+      const flw: number[] = [];
+      const flw2: number[] = [];
+      const remap = new Int32Array(hn * hn).fill(-1);
+      const idx: number[] = [];
+      const vert = (i: number, j: number): number => {
+        const v = j * hn + i;
+        if (remap[v] >= 0) return remap[v];
+        remap[v] = pos.length / 3;
+        pos.push(i * cell, Math.max(level[v], rh[v] + 0.04), j * cell);
+        lvl.push(level[v]);
+        const f = inPond[v] ? ZERO_FRAME : frameAt(v, i, j);
+        flw.push(f[0], f[1], f[2], f[3]);
+        flw2.push(f[4], f[5], f[6], f[7]);
+        return remap[v];
+      };
+      for (let j = 0; j < hn - 1; j++) {
+        for (let i = 0; i < hn - 1; i++) {
+          const a = j * hn + i, b = a + 1, c = a + hn, d = c + 1;
+          if (Number.isNaN(level[a]) || Number.isNaN(level[b]) || Number.isNaN(level[c]) || Number.isNaN(level[d])) continue;
+          const va = vert(i, j), vb = vert(i + 1, j), vc = vert(i, j + 1), vd = vert(i + 1, j + 1);
+          // winding with +Y normals, same diagonal as the terrain so the draped skirt follows the ground exactly
+          idx.push(va, vc, vb, vb, vc, vd);
+        }
+      }
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+      g.setAttribute('aLevel', new THREE.Float32BufferAttribute(lvl, 1));
+      g.setAttribute('aFlow', new THREE.Float32BufferAttribute(flw, 4));
+      g.setAttribute('aFlow2', new THREE.Float32BufferAttribute(flw2, 4));
+      g.setIndex(idx);
+      g.boundingSphere = new THREE.Sphere(new THREE.Vector3(world.size / 2, 10, world.size / 2), world.size);
+      return g;
+    };
+    const geo = this.buildMesh(null);
 
     const windOffU = { value: this.windOff };
     this.material = new THREE.ShaderMaterial({
@@ -948,6 +1019,16 @@ export class Water {
       this.windOff.x += w.x * s * dt;
       this.windOff.y += w.y * s * dt;
     };
+  }
+
+  /**
+   * Beaver ponds (S14, Snapshot.ponds): rebuild the water mesh with the pond surface merged into the creek's. Call only when the field
+   * changed (Snapshot.pondVersion); pass undefined to go back to the creek as generated. A few thousand vertices, no per-frame cost.
+   */
+  setPonds(depth: Uint8Array | undefined): void {
+    const old = this.mesh.geometry;
+    this.mesh.geometry = this.buildMesh(depth ?? null);
+    old.dispose();
   }
 
   dispose(): void {
