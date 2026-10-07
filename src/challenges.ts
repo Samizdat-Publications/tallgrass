@@ -67,6 +67,8 @@ export const CHALLENGE_PIN: Record<string, number> = {
   smallPrey: 0, smallGameField: 0, dogClip: 0, dogGrazeBonus: 0, 'coyote.initial': 0,
   // storms (S6), fire spread and summer dry spells (S17)
   stormCells: 0, fireSpread: 1, summerDroughtP: 0.1,
+  // checkpoint v7c: raptors, cougars, mule deer, herd spacing and raptor taste for prairie dogs
+  raptors: 0, 'cougar.initial': 0, 'muledeer.initial': 0, herdSpacingGraze: 0, raptorDogPref: 1,
 };
 /** The calendar the challenges were tuned on, with every v2 mechanism pinned off. */
 const CLASSIC = { calendarScale: 1, ...CHALLENGE_PIN };
