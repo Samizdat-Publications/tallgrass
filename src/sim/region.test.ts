@@ -3,7 +3,7 @@
 import { NG } from './agents';
 import { simHash } from '../headless/hash';
 import { RegionalPool } from './region';
-import { createSim } from './sim';
+import { createSim, V7C_OFF } from './testpins';
 import { Sim } from './sim';
 import { COAT_BASE } from './species';
 import { F_MIGRANT, Sp, St } from './types';
@@ -79,8 +79,8 @@ function ok(cond: boolean, msg: string): void {
 
 // ---- off (all rates zero) reproduces a closed valley exactly
 {
-  const off = simHash(3, 6000, { openPrairie: 0, ravenVagrants: 0 });
-  const zero = simHash(3, 6000, { ravenVagrants: 0, openPrairie: 1, wolfInRate: 0, wolfOutAfter: 1e9, deerOutK: 0, deerInK: 0, deerRescue: 0, coyoteInRate: 0 });
+  const off = simHash(3, 6000, { ...V7C_OFF, openPrairie: 0, ravenVagrants: 0 });
+  const zero = simHash(3, 6000, { ...V7C_OFF, ravenVagrants: 0, openPrairie: 1, wolfInRate: 0, wolfOutAfter: 1e9, deerOutK: 0, deerInK: 0, deerRescue: 0, coyoteInRate: 0 });
   ok(off === zero, `openPrairie 1 with every rate at zero is identical to a closed valley (${off} vs ${zero})`);
 }
 

@@ -1,6 +1,6 @@
 // Unit tests for storm cells and lightning (V2-PLAN.md S6). Run: npx tsx src/sim/storms.test.ts
 import { MAX_STORM_CELLS, STORM_EXIT_M, STORM_STRIDE, STRIKE_STRIDE, StormCells } from './storms';
-import { createSim } from './sim';
+import { createSim } from './testpins';
 import { EnvState, Weather } from './types';
 
 let failures = 0;

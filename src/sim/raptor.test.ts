@@ -1,9 +1,9 @@
 // Unit tests for the raptors (V2-PLAN.md S7): golden eagles and red-tailed hawks. Run: npx tsx src/sim/raptor.test.ts
-import { createSim, Sim } from './sim';
+import { Sim } from './sim';
+import { createSim, defaultParams } from './testpins';
 import { flightStep, FLEDGE_AGE, Mode, NEST_TREE_MIN, PERCH_FRAC } from './sp/raptor';
 import { GAIN, TAKE_KINDS } from './smallprey';
 import { AGENT_STRIDE, F_JUVENILE, F_MIGRANT, SEASON_TICKS, Sp, St, YEAR_TICKS } from './types';
-import { defaultParams } from './params';
 
 let failures = 0;
 let checks = 0;

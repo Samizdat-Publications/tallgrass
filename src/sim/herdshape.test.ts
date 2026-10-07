@@ -1,11 +1,11 @@
 // Unit tests for herd shape (S10): drink spots, grazing spacing and the ring / nearest-neighbour sample columns.
 // Run: npx tsx src/sim/herdshape.test.ts
-import { applyOverrides, defaultParams } from './params';
-import { createSim } from './sim';
+import { applyOverrides } from './params';
+import { createSim, defaultParams, V7C_OFF } from './testpins';
 import { simHash } from '../headless/hash';
 
 // pin the v6 base so the checks do not depend on later default changes (v6b turns small prey and coyotes on)
-const V6 = { smallPrey: 0, smallGameField: 0, 'coyote.initial': 0 };
+const V6 = { ...V7C_OFF, smallPrey: 0, smallGameField: 0, 'coyote.initial': 0 };
 
 let failures = 0;
 let checks = 0;

@@ -2,7 +2,15 @@
 
 **Updated:** 2026-10-04 afternoon, at the end of the v2 planning session. v1 is finished and live; v2 starts now. The plan is `V2-PLAN.md`.
 
-## State now (2026-10-06 17:48, single-mode lead session, weekly 86%)
+## State now (2026-10-07 13:20, after the v7c adoption)
+- Default world is checkpoint v7c (v6b + raptors, storm cells, 6 cougars, 60 mule deer, herd spacing 1.6, raptorDogPref 0.1). Golden 2cabdb62, 5ad21d26, 904ebf61. Live at https://tallgrass.stewartgregerson.workers.dev.
+- Every Track S WP (S0 to S18) is merged, and every new frame field draws (snow depth, dynamic trees, dust, grasshoppers, floods, groves, beaver ponds). Off by default and each needing its own 32-seed screen plus acceptance: snowDepth, dynamicTrees (with treeCwRecruit about 0.003), dustStorms, grasshoppers, springFloods, beavers, evolution2, greenUpShift.
+- Next phase: to be planned by a fresh Opus session. Inputs: this file, MORNING.md 'Next 5', TRACK-S.md Handoff items 4 and 5, MAYBE-WANTS.md (owner's later ideas).
+- Known follow-ups: real beaver model with swim pose (rabbit stand-in; swimming beavers not visible); marsh tint for shallow ponds; wolves recover in only 75% of worlds after a wipeout; coyote-hare correlation 0.38 (gate 0.4); making-of artifact republish (blocked by permission, steps in MORNING.md); cougar cover and director still read static trees when dynamicTrees is on.
+- Session hygiene: wait loops must match a line the tool really prints (batch.ts ends with 'done in', not 'N/N seeds done'), and never wait on a clock hour.
+
+## Earlier state (2026-10-06 session, kept for history)
+### 2026-10-06 17:48
 - Main is merged with v2-sim (S0 to S18), live and checked (last deploy 16:12). Added: Add prairie dogs tool, wrapping tool rail, snow depth render (S11), planted groves and floodwater render (S17). Default world is still v6b.
 - v7a acceptance finished (20 seeds): FAILED the presence gate on prairie dogs (11/20 worlds at >= 90% vs 20/20 for v6b; seed 15 lost its bison in year 948). Not adopted, shocks not run. review/stability/v7a-c9c3f5a/RESULT.md.
   If the owner overrules: shock suite from scratch/frozen/c9c3f5a: npx tsx src/headless/batch.ts --seeds 20 --ticks 720000 --sample 1500 --scenario cull70,drought,wolfwipe --threads 10 --params "{\"raptors\":1,\"stormCells\":1,\"cougar.initial\":6,\"muledeer.initial\":60,\"herdSpacingGraze\":1.6}" --out review/stability/v7a-c9c3f5a-shocks

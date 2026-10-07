@@ -1,8 +1,8 @@
 // Unit tests for beavers and moving water (V2-PLAN.md S14): the registry entry and params, off by default, the pond field, dams and their growth, the
 // effects (water mask, waterDist and the drink gradients, moisture ribbon, drought shield, drowned trees, meadow), breaches, abandonment, wolves taking
 // beavers on land only, the frame fields and determinism. Run: npx tsx src/sim/beaver.test.ts
-import { createSim, Sim } from './sim';
-import { defaultParams } from './params';
+import { Sim } from './sim';
+import { createSim, defaultParams } from './testpins';
 import { DamState, DAM_STRIDE, POND_WET, Ponds } from './ponds';
 import { generateWorld } from './world';
 import { SEASON_TICKS, SPECIES_KEYS, Sp, YEAR_TICKS } from './types';

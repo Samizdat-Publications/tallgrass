@@ -2,6 +2,11 @@
 
 *(Updated 22:10 Tuesday 2026-10-06. This file is refreshed at every milestone.)*
 
+## v7c is the default world (adopted 2026-10-07 13:20, live)
+Golden eagles (winter visitors), red-tailed hawks, six cougars, sixty mule deer, storm cells with lightning fires and herd spacing are now part of every new valley. It passed the full 20-world acceptance (every species held; prairie dogs in 18 of 20 worlds, at the gate) and all three shock tests (bison recovered in every world after a 70% cull, a drought and a wolf wipeout). The challenges still play as they were designed (those six settings are pinned off for them).
+
+Your idle-events idea is saved in `MAYBE-WANTS.md` for the next planning session.
+
 ## v2 integration (session 2026-10-06 afternoon; live redeployed 14:57, live check clean)
 Everything Track S built in the cloud (S0 to S18) is now merged into main and live at https://tallgrass.stewartgregerson.workers.dev.
 

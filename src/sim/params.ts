@@ -497,7 +497,7 @@ export function defaultParams(): Params {
   species[Sp.Cougar] = base({
     maxAge: 8400, matureAge: 1300, gestation: 300, birthCooldown: 2600, litter: 2.2,
     walkSpeed: 1.6, runSpeed: 18, stamina: 45, sight: 45, metabolism: 1 / 1430, thirst: 1 / 1700,
-    meat: 2.5, toughness: 1.6, initial: 0, herdRadius: 0, camo: 0.8,
+    meat: 2.5, toughness: 1.6, initial: 6, herdRadius: 0, camo: 0.8, // v7c: initial 6 (was 0)
   });
   // coyote (S5; the plan's table): wolf-like yearly breeding at the spring tick (gestation and cooldown unused), smaller body, no founders by default.
   // The den, territory, wolf-avoidance and wolf-kill numbers are top-level params (coyoteTerritory...), like the wolf's.
@@ -529,7 +529,7 @@ export function defaultParams(): Params {
   species[Sp.MuleDeer] = base({
     maxAge: 4800, matureAge: 450, gestation: 150, birthCooldown: 1000, litter: 1.5,
     walkSpeed: 1.6, runSpeed: 12.5, stamina: 75, sight: 50, metabolism: 1 / 1300, thirst: 1 / 2000,
-    bite: 0.009, foodValue: 0.55, meat: 3, toughness: 0.9, initial: 0, herdRadius: 20,
+    bite: 0.009, foodValue: 0.55, meat: 3, toughness: 0.9, initial: 60, herdRadius: 20, // v7c: initial 60 (was 0)
     wariness: 0.75, defense: 0.1, camo: 0.55, diet: 1, hideAge: 160, maxLitter: 2,
   });
   // beaver (S14): the founders and all the colony rules are the beaver* params. A kit is weaned and working at 1,200 ticks (a year); one litter a year, divided by
@@ -570,7 +570,7 @@ export function defaultParams(): Params {
     matingWindow: 0,
     herdNearest: 0,
     drinkSpots: 0,
-    herdSpacingGraze: 0,
+    herdSpacingGraze: 1.6, // v7c (was 0)
     climateAmp: 0,
     calendarScale: 2,
     droughtRefuge: 0,
@@ -594,7 +594,7 @@ export function defaultParams(): Params {
     dogR: 1.0,
     plagueRate: 0.08,
     smallGameField: 1, // v6b (was 0)
-    raptorDogPref: 1,
+    raptorDogPref: 0.1, // v7c (was 1)
     dogClip: 0,
     dogGrazeBonus: 0,
     wolfInRate: 0.2,
@@ -651,7 +651,7 @@ export function defaultParams(): Params {
     beaverSwim: 3,
     beaverRange: 40,
     cougarInRate: 1,
-    raptors: 0,
+    raptors: 1, // v7c (was 0)
     eagleMin: 2,
     eagleMax: 6,
     hawkPairsMin: 2,
@@ -661,7 +661,7 @@ export function defaultParams(): Params {
     raptorEatRate: 0.004,
     raptorMeatEnergy: 3.5,
     hawkNestSpacing: 140,
-    stormCells: 0,
+    stormCells: 1, // v7c (was 0)
     lightningRate: 0.05,
     lightningIgnite: 0.5,
     fireSpread: 1,

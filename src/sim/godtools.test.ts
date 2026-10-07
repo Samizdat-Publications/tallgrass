@@ -1,6 +1,7 @@
 // Unit tests for the god tools v2 (S17): lightning, blizzard, flood, targeted disease, grove, and introduce / cull / remove for every species.
 // Run: npx tsx src/sim/godtools.test.ts
-import { createSim, type Sim } from './sim';
+import { type Sim } from './sim';
+import { createSim } from './testpins';
 import { SPECIES } from './species';
 import { decodeShare, encodeShare, type LoggedIntervention } from './sharecode';
 import { Sp, Weather, type Intervention } from './types';

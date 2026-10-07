@@ -1,7 +1,8 @@
 // Unit tests for the small-prey web (V2-PLAN.md S4): the catch rule, diffusion, prairie dog towns, sylvatic plague, hare booms and
 // crashes, rescues, god tools, founders, the snapshot texture. Run: npx tsx src/sim/smallprey.test.ts
 import { Rng } from './rng';
-import { createSim, Sim, SimEvent } from './sim';
+import { Sim, SimEvent } from './sim';
+import { createSim } from './testpins';
 import { A, CELLS, GAIN, HANDLE, PREF, SMALL_SCALE, STEP_TICKS, SmallPrey, TAKE_KINDS } from './smallprey';
 import { BASE_YEAR_TICKS, SPECIES_COUNT, Sp, St, YEAR_TICKS } from './types';
 import { COARSE_N, generateWorld } from './world';

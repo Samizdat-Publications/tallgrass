@@ -2,8 +2,7 @@
 import { AGENT_STRIDE, F_MANGE, F_MIGRANT, F_STOT, SPECIES_COUNT, SPECIES_KEYS, SPECIES_NAMES, STATE_NAMES, Sp, St } from './types';
 import { COAT_BASE, COAT_RANGE, DIET, PARAM_PREFIX, SPECIES, SPECIES_BY_KEY, canHunt, isGrazer, isPredator, isPrey, isThreat } from './species';
 import { Agents } from './agents';
-import { createSim } from './sim';
-import { defaultParams } from './params';
+import { createSim, defaultParams } from './testpins';
 
 let failures = 0;
 let checks = 0;

@@ -1,7 +1,7 @@
 // Unit tests for the mule deer (V2-PLAN.md S8): habitat, founder groups, browsing, hidden fawns, the stotting flag, the open-prairie rescue,
 // and the cougar's preference. Run: npx tsx src/sim/muledeer.test.ts
-import { createSim, Sim } from './sim';
-import { defaultParams } from './params';
+import { Sim } from './sim';
+import { createSim, defaultParams } from './testpins';
 import { DIET } from './species';
 import { F_STOT, SEASON_TICKS, SPECIES_KEYS, Sp, St, YEAR_TICKS, AGENT_STRIDE } from './types';
 
