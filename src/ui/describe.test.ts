@@ -1,6 +1,6 @@
 // Event text checks: every event kind, including the v2 kinds, gives a clean sentence. Run: npx tsx src/ui/describe.test.ts
 import type { SimEvent, SimEventKind } from '../sim/sim';
-import { describeEvent, eventWeight } from './describe';
+import { ChronicleVoice, describeEvent, describeFolded, eventWeight, foldKey } from './describe';
 
 let failures = 0;
 let checks = 0;
@@ -58,6 +58,43 @@ ok(/dies|dead/.test(describeEvent({ tick: 10, kind: 'elder', sp: 0, x: 0, y: 0, 
 
 // an unknown kind does not crash
 ok(describeEvent({ tick: 10, kind: 'nope' as SimEventKind, sp: 0, x: 0, y: 0, a: 0, b: 0 }).sentence.length > 0, 'unknown kind');
+
+// variety: the same kind of event, twice running, never reads word for word the same through the chronicle voice
+{
+  const voice = new ChronicleVoice();
+  for (const [kind, sp, a] of [['immigrated', 6, 2], ['immigrated', 1, 2], ['immigrated', 3, 5], ['outbreak', 0, 40], ['emigrated', 3, 4], ['droughtEnd', -1, 0], ['rain', -1, 0], ['stampede', 0, 80], ['elder', 0, 9000]] as [SimEventKind, number, number][]) {
+    voice.reset();
+    let prev = '';
+    for (let i = 0; i < 40; i++) {
+      // identical data each time (as in "Two coyotes arrive" twice, "40 fall ill" twice): only the tick differs
+      const e: SimEvent = { tick: 3000 + i * 2400, kind, sp, x: 100, y: 400, a, b: 0 };
+      const s = voice.describe(e).sentence;
+      ok(s !== prev, `${kind} sp=${sp}: line ${i} repeats the one before it: "${s}"`);
+      prev = s;
+    }
+  }
+  voice.reset();
+  const first = voice.describe({ tick: 3000, kind: 'immigrated', sp: 6, x: 0, y: 0, a: 2, b: 0 }).sentence;
+  const second = voice.describe({ tick: 12000, kind: 'immigrated', sp: 6, x: 0, y: 0, a: 2, b: 0 }).sentence;
+  ok(first !== second, `two consecutive coyote arrivals differ: "${first}" vs "${second}"`);
+  const o1 = voice.describe({ tick: 3000, kind: 'outbreak', sp: 0, x: 400, y: 256, a: 40, b: 0 }).sentence;
+  const o2 = voice.describe({ tick: 9000, kind: 'outbreak', sp: 0, x: 400, y: 256, a: 40, b: 0 }).sentence;
+  ok(o1 !== o2 && o1.includes('40') && o2.includes('40'), `two outbreaks with the same count differ: "${o1}" vs "${o2}"`);
+  // describeEvent itself stays pure: the same event always reads the same way
+  const ev: SimEvent = { tick: 777, kind: 'immigrated', sp: 6, x: 0, y: 0, a: 2, b: 0 };
+  ok(describeEvent(ev).sentence === describeEvent(ev).sentence, 'describeEvent is pure');
+}
+
+// runs of arrivals fold into one line with a running total
+{
+  const e: SimEvent = { tick: 5000, kind: 'immigrated', sp: 6, x: 0, y: 0, a: 3, b: 0 };
+  ok(foldKey(e) === 'immigrated:6', 'arrivals fold by species');
+  ok(foldKey({ ...e, kind: 'outbreak' }) === null, 'an outbreak does not fold');
+  const line = describeFolded(e, 6, 2);
+  ok(/6/.test(line) && /coyotes/.test(line) && !line.includes(EM_DASH), `folded line carries the total: "${line}"`);
+  const out = describeFolded({ ...e, kind: 'emigrated', sp: 3 }, 9, 3);
+  ok(/9/.test(out) && /pronghorn/i.test(out), `folded departure line: "${out}"`);
+}
 
 console.log(`${checks - failures}/${checks} checks passed`);
 if (failures) process.exit(1);

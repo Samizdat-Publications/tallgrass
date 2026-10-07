@@ -16,6 +16,8 @@ const calendarOffset = () => Math.round(START_SEASON * SEASON_TICKS);
 export interface DescribeContext {
   /** For a pack that broke up: true when the wolf count fell around then, false when it did not, undefined when unknown. */
   wolvesFell?: boolean;
+  /** Shifts which phrasing is chosen (0 by default). The chronicle voice raises it to avoid saying the same thing twice in a row. */
+  salt?: number;
 }
 
 export interface EventText {
@@ -261,9 +263,11 @@ export function cardRank(kind: string): number {
 
 /** Deterministic pick from a few phrasings, keyed on the event, so the same event always reads the same way. */
 function pick<T>(e: SimEvent, variants: T[], salt = 0): T {
-  const h = (Math.imul(Math.round(e.tick), 2654435761) ^ Math.imul(Math.round(e.a) + 7, 40503) ^ Math.imul(salt + 1, 977)) >>> 0;
-  return variants[h % variants.length];
+  const h = (Math.imul(Math.round(e.tick), 2654435761) ^ Math.imul(Math.round(e.a) + 7, 40503) ^ Math.imul(salt + 1 + voiceSalt * 7919, 977)) >>> 0;
+  return variants[(h >>> 3) % variants.length];
 }
+/** The salt of the describeEvent call in progress (see DescribeContext.salt). */
+let voiceSalt = 0;
 
 /**
  * How big the news is, 1 (small) to 5 (big). A busy year in the chronicle keeps its biggest events and folds the
@@ -333,6 +337,15 @@ export function eventWeight(e: SimEvent): number {
  * Pure: depends only on the event.
  */
 export function describeEvent(e: SimEvent, ctx?: DescribeContext): EventText {
+  voiceSalt = ctx?.salt ?? 0;
+  try {
+    return describeCore(e, ctx);
+  } finally {
+    voiceSalt = 0;
+  }
+}
+
+function describeCore(e: SimEvent, ctx?: DescribeContext): EventText {
   const when = whenPhrase(e.tick);
   const year = yearOfTick(e.tick);
   const known = e.sp >= 0 && e.sp < SINGULAR.length;
@@ -373,13 +386,24 @@ export function describeEvent(e: SimEvent, ctx?: DescribeContext): EventText {
       };
     }
     case 'droughtEnd':
-      return { sentence: 'The drought breaks.' };
+      return { sentence: pick(e, ['The drought breaks.', 'The dry spell ends at last.', 'The drought lets go of the valley.', 'The rains come back, and the drought is over.']) };
     case 'outbreak': {
       const noun = groupNoun(e.sp);
       const where = `the ${region && region !== 'central' ? `${region} ` : ''}${noun}`;
-      const sick = e.a > 0 ? `, and ${countWord(e.a)} fall ill` : '';
+      // e.a is the size of the crowd the first case stood in (the sim's neighbour count), not a count of the sick: the line says so
+      const n = Math.round(e.a);
+      const crowd = n >= 3 ? countWord(n) : '';
       return {
-        sentence: pick(e, [`Disease spreads through ${where}${sick}.`, `Sickness takes hold in ${where}${sick}.`, `A fever runs through ${where}${sick}.`]),
+        sentence: crowd
+          ? pick(e, [
+            `Disease spreads through ${where}, a crowd of ${crowd} packed close.`,
+            `Sickness takes hold in ${where}, where ${crowd} animals stand shoulder to shoulder.`,
+            `A fever runs through ${where}, and ${crowd} crowded animals are the first to feel it.`,
+            `Sickness finds ${where}: ${crowd} animals in one tight crowd, and it spreads.`,
+            `Illness breaks out in ${where}, among ${crowd} animals packed close.`,
+            `The first cases appear in ${where}, in a crowd of ${crowd}.`,
+          ])
+          : pick(e, [`Disease spreads through ${where}.`, `Sickness takes hold in ${where}.`, `A fever runs through ${where}.`, `Illness breaks out in ${where}.`]),
         card: { title: `Sickness in the ${noun}`, subtitle: when },
       };
     }
@@ -413,7 +437,7 @@ export function describeEvent(e: SimEvent, ctx?: DescribeContext): EventText {
       return { sentence, card: { title, subtitle: when } };
     }
     case 'removed':
-      return { sentence: `The ${pl} are removed from the valley.` };
+      return { sentence: pick(e, [`The ${pl} are removed from the valley.`, `The ${pl} are taken out of the valley.`, `Every ${sg} is lifted out of the valley.`]) };
     case 'culled': {
       const n = Math.max(0, Math.round(e.a));
       return { sentence: `A cull takes ${countWord(n)} ${n === 1 ? sg : pl} from the ${groupNoun(e.sp)}.` };
@@ -431,7 +455,7 @@ export function describeEvent(e: SimEvent, ctx?: DescribeContext): EventText {
       return { sentence: `A plague is loosed among the ${pl}${n > 0 ? `, and ${countWord(n)} fall ill` : ''}.` };
     }
     case 'rain':
-      return { sentence: 'Rain falls across the valley.' };
+      return { sentence: pick(e, ['Rain falls across the valley.', 'A soaking rain moves over the prairie.', 'Rain sweeps in, and the grass drinks.', 'Clouds gather, and the rain comes down on the valley.']) };
     case 'elder': {
       {
         const age = ageText(e.a, e.sp);
@@ -451,39 +475,66 @@ export function describeEvent(e: SimEvent, ctx?: DescribeContext): EventText {
       return { sentence: `The valley sees its first kill: a ${hunter} takes down a ${prey}.` };
     }
     case 'record':
-      return { sentence: 'A new record is set in the valley.' };
+      return { sentence: pick(e, ['A new record is set in the valley.', 'The valley breaks one of its own records.', 'A mark is passed that the valley has not seen before.']) };
     // ---- v2 kinds: open prairie (S1), canid disease (S2), small prey (S4), coyotes (S5), storms (S6) ----
     case 'immigrated': {
       const n = Math.max(1, Math.round(e.a));
+      const N = cap(countWord(n));
       if (e.sp === 1) {
         return {
           sentence: n === 2
-            ? pick(e, ['A pair of wolves comes in over the rim and claims an empty den.', 'Two wolves from the wider prairie settle in the valley.', 'A wandering pair of wolves finds a free range and stays.'])
-            : `${cap(countWord(n))} ${n === 1 ? 'wolf arrives' : 'wolves arrive'} from the wider prairie.`,
+            ? pick(e, ['A pair of wolves comes in over the rim and claims an empty den.', 'Two wolves from the wider prairie settle in the valley.', 'A wandering pair of wolves finds a free range and stays.', 'Two strange wolves cross the rim and do not turn back.'])
+            : n === 1
+              ? pick(e, ['A lone wolf arrives from the wider prairie.', 'One wolf comes down off the rim, looking for a pack.', 'A single wolf wanders in from the open country.'])
+              : pick(e, [`${N} wolves arrive from the wider prairie.`, `${N} wolves come in over the rim and spread out along the creek.`, `A small band of ${countWord(n)} wolves wanders in from the open country.`, `${N} strange wolves cross into the valley and look for a free range.`]),
           card: e.tick > 100 && e.a % 2 === 0 && Math.round(e.tick / 97) % 3 === 0 ? { title: 'Wolves from outside', subtitle: when } : undefined,
         };
       }
       if (e.sp === 3) {
-        return { sentence: pick(e, [`${cap(countWord(n))} pronghorn come back over the rim for spring.`, `The pronghorn return: ${countWord(n)} file in from the open prairie.`]) };
+        return { sentence: pick(e, [`${N} pronghorn come back over the rim for spring.`, `The pronghorn return: ${countWord(n)} file in from the open prairie.`, `${N} pronghorn drift in from the plains, fast and wary.`, `A band of ${countWord(n)} pronghorn crosses the rim and spreads over the grass.`]) };
       }
       if (e.sp === 10) {
-        return { sentence: pick(e, [`${cap(countWord(n))} mule deer slip down into the creek draws from the wider prairie.`, `A group of ${countWord(n)} mule deer finds the groves along the creek and stays.`]) };
+        return { sentence: pick(e, [`${N} mule deer slip down into the creek draws from the wider prairie.`, `A group of ${countWord(n)} mule deer finds the groves along the creek and stays.`, `${N} mule deer pick their way in from the breaks and take to the cottonwoods.`, `Mule deer arrive from the hills: ${countWord(n)} of them, ears turning at every sound.`]) };
       }
       if (e.sp === 11) {
-        return { sentence: pick(e, ['A pair of beavers swims in along the creek, looking for a place to dam it.', 'Beavers come up the creek from the wider country and go looking for a stand of willows.', 'A pair of beavers arrives on the creek and starts looking over the banks.']) };
+        return { sentence: pick(e, ['A pair of beavers swims in along the creek, looking for a place to dam it.', 'Beavers come up the creek from the wider country and go looking for a stand of willows.', 'A pair of beavers arrives on the creek and starts looking over the banks.', 'Beavers work their way up the creek, testing the banks for a good dam site.']) };
       }
       if (e.sp === 5) {
-        return { sentence: n === 2 ? 'A pair of cougars drifts in from the hills and takes up a range along the creek.' : `${cap(countWord(n))} ${n === 1 ? 'cougar arrives' : 'cougars arrive'} from the wider country.` };
+        return { sentence: n === 2
+          ? pick(e, ['A pair of cougars drifts in from the hills and takes up a range along the creek.', 'Two cougars come down out of the hills and settle along the creek.', 'A pair of cougars slips into the valley by night and claims the broken ground.'])
+          : pick(e, [`${N} ${n === 1 ? 'cougar arrives' : 'cougars arrive'} from the wider country.`, `${n === 1 ? 'A cougar' : `${N} cougars`} ${n === 1 ? 'comes' : 'come'} down from the hills and ${n === 1 ? 'tests' : 'test'} the valley.`, `${n === 1 ? 'A lone cougar' : `${N} cougars`} ${n === 1 ? 'slips' : 'slip'} in over the rim.`]) };
       }
-      return { sentence: `${cap(countWord(n))} ${n === 1 ? sg : pl} ${n === 1 ? 'arrives' : 'arrive'} from the wider prairie.` };
+      if (e.sp === 6) {
+        return { sentence: pick(e, [
+          `${N} ${n === 1 ? 'coyote arrives' : 'coyotes arrive'} from the wider prairie.`,
+          `${N} ${n === 1 ? 'coyote slips' : 'coyotes slip'} in from the open country and ${n === 1 ? 'starts' : 'start'} looking for a den.`,
+          `${n === 1 ? 'A coyote trots' : `${N} coyotes trot`} in from the rim, noses down.`,
+          `${n === 1 ? 'A stray coyote turns' : `${N} stray coyotes turn`} up in the valley.`,
+          `${N} ${n === 1 ? 'coyote drifts' : 'coyotes drift'} in across the grass and ${n === 1 ? 'stays' : 'stay'}.`,
+        ]) };
+      }
+      return { sentence: pick(e, [
+        `${N} ${n === 1 ? sg : pl} ${n === 1 ? 'arrives' : 'arrive'} from the wider prairie.`,
+        `${N} ${n === 1 ? sg : pl} ${n === 1 ? 'wanders' : 'wander'} in from the open country.`,
+        `${n === 1 ? `A ${sg}` : `${N} ${pl}`} ${n === 1 ? 'turns' : 'turn'} up in the valley from beyond the rim.`,
+      ]) };
     }
     case 'emigrated': {
       const n = Math.max(1, Math.round(e.a));
+      const N = cap(countWord(n));
       if (e.sp === 3) {
-        return { sentence: pick(e, [`${cap(countWord(n))} pronghorn drift out of the valley ahead of winter.`, `The browse runs short, and ${countWord(n)} pronghorn leave for the open prairie.`]) };
+        return { sentence: pick(e, [`${N} pronghorn drift out of the valley ahead of winter.`, `The browse runs short, and ${countWord(n)} pronghorn leave for the open prairie.`, `${N} pronghorn turn their backs on the valley and head for the plains.`, `A band of ${countWord(n)} pronghorn leaves for kinder country.`]) };
       }
-      if (e.sp === 1) return { sentence: n === 1 ? 'A lone wolf with no pack leaves the valley.' : `${cap(countWord(n))} wolves leave the valley.` };
-      return { sentence: `${cap(countWord(n))} ${n === 1 ? sg : pl} ${n === 1 ? 'leaves' : 'leave'} the valley.` };
+      if (e.sp === 1) {
+        return { sentence: n === 1
+          ? pick(e, ['A lone wolf with no pack leaves the valley.', 'A wolf without a pack slips out over the rim.', 'One packless wolf goes off into the open country.'])
+          : pick(e, [`${N} wolves leave the valley.`, `${N} wolves with no range to call their own head out over the rim.`, `${N} wolves quit the valley for the open country.`]) };
+      }
+      return { sentence: pick(e, [
+        `${N} ${n === 1 ? sg : pl} ${n === 1 ? 'leaves' : 'leave'} the valley.`,
+        `${N} ${n === 1 ? sg : pl} ${n === 1 ? 'drifts' : 'drift'} off toward the open prairie.`,
+        `${n === 1 ? `A ${sg}` : `${N} ${pl}`} ${n === 1 ? 'goes' : 'go'} out over the rim and ${n === 1 ? 'does' : 'do'} not come back.`,
+      ]) };
     }
     case 'recolonized':
       return {
@@ -504,12 +555,12 @@ export function describeEvent(e: SimEvent, ctx?: DescribeContext): EventText {
     }
     case 'mange': {
       const name = e.sp === 1 && e.a > 0 ? `the ${packName(e.a)} pack` : `the ${pl}`;
-      return { sentence: pick(e, [`Mange shows up in ${name}: thinning coats, hard winters ahead.`, `A wolf of ${name} is losing its coat to mange.`]) };
+      return { sentence: pick(e, [`Mange shows up in ${name}: thinning coats, hard winters ahead.`, `${e.sp === 1 ? 'A wolf' : `One of ${name}`} is losing its coat to mange.`, `Mange creeps into ${name}, and the coats go ragged.`]) };
     }
     case 'townFounded':
-      return { sentence: region && region !== 'central' ? `Prairie dogs dig a new town on the ${region} flats.` : 'Prairie dogs dig a new town on the flats.' };
+      return { sentence: region && region !== 'central' ? pick(e, [`Prairie dogs dig a new town on the ${region} flats.`, `A new prairie dog town appears on the ${region} flats, mound by mound.`, `Burrows open across the ${region} flats: a new dog town.`]) : pick(e, ['Prairie dogs dig a new town on the flats.', 'A new prairie dog town appears on the flats, mound by mound.', 'Burrows open across the flats: a new dog town.']) };
     case 'townLost':
-      return { sentence: region && region !== 'central' ? `The ${region} prairie dog town falls empty; only the mounds remain.` : 'A prairie dog town falls empty; only the mounds remain.' };
+      return { sentence: region && region !== 'central' ? pick(e, [`The ${region} prairie dog town falls empty; only the mounds remain.`, `Nothing barks on the ${region} flats any more: the dog town is empty.`, `The ${region} dog town goes quiet, and the burrows stand open.`]) : pick(e, ['A prairie dog town falls empty; only the mounds remain.', 'Nothing barks on the flats any more: a dog town is empty.', 'A dog town goes quiet, and the burrows stand open.']) };
     case 'sylvaticPlague': {
       const n = Math.max(0, Math.round(e.a));
       return {
@@ -523,22 +574,25 @@ export function describeEvent(e: SimEvent, ctx?: DescribeContext): EventText {
       return { sentence: pick(e, ['The jackrabbits crash, and the prairie goes quiet.', 'Jackrabbits grow scarce after the boom.']) };
     case 'coyotePups': {
       const n = Math.max(0, Math.round(e.a));
-      return { sentence: n > 0 ? `Coyote pups tumble out of a den: ${countWord(n)} of them.` : 'The coyotes have pups.' };
+      return { sentence: n > 0 ? pick(e, [`Coyote pups tumble out of a den: ${countWord(n)} of them.`, `A coyote den fills with ${countWord(n)} yipping pups.`, `${cap(countWord(n))} coyote pups see daylight for the first time.`]) : pick(e, ['The coyotes have pups.', 'A coyote den stirs with new pups.']) };
     }
     case 'mesoRelease':
       return {
-        sentence: 'With the wolves few, coyotes take over the valley.',
+        sentence: pick(e, ['With the wolves few, coyotes take over the valley.', 'The wolves are scarce, and the coyotes move into the space they leave.', 'Coyotes spread across the valley now that the wolves are few.']),
         card: { title: 'The coyotes take over', subtitle: when },
       };
     case 'eaglesArrive': {
       const n = Math.max(1, Math.round(e.a));
       return {
         sentence: n === 1
-          ? pick(e, ['A golden eagle drifts in over the open prairie to spend the winter.', 'One golden eagle arrives from the north for the cold months.'])
+          ? pick(e, ['A golden eagle drifts in over the open prairie to spend the winter.', 'One golden eagle arrives from the north for the cold months.', 'A lone golden eagle takes a ridge perch for the winter.'])
           : pick(e, [
             `${cap(countWord(n))} golden eagles arrive over the open prairie to winter in the valley.`,
             `Golden eagles are back for the winter: ${countWord(n)} of them, riding the cold air in from the north.`,
             `${cap(countWord(n))} golden eagles settle in for the cold months.`,
+            `The first snow brings ${countWord(n)} golden eagles down from the north.`,
+            `${cap(countWord(n))} golden eagles take up their winter perches along the ridges.`,
+            `Winter sends the valley ${countWord(n)} golden eagles, wide-winged and patient.`,
           ]),
         card: n >= 3 ? { title: 'Eagles for the winter', subtitle: when } : undefined,
       };
@@ -547,11 +601,14 @@ export function describeEvent(e: SimEvent, ctx?: DescribeContext): EventText {
       const n = Math.max(1, Math.round(e.a));
       return {
         sentence: n === 1
-          ? pick(e, ['A pair of red-tailed hawks returns to the cottonwoods to nest.', 'Red-tailed hawks come back: one pair, and a nest in the cottonwoods.'])
+          ? pick(e, ['A pair of red-tailed hawks returns to the cottonwoods to nest.', 'Red-tailed hawks come back: one pair, and a nest in the cottonwoods.', 'One pair of red-tails circles the creek and starts a nest.'])
           : pick(e, [
             `${cap(countWord(n))} pairs of red-tailed hawks return to nest in the cottonwoods.`,
             `Red-tailed hawks are back for the summer: ${countWord(n)} pairs, each to a cottonwood.`,
             `The hawks return, ${countWord(n)} pairs of them, and the cottonwood nests fill again.`,
+            `${cap(countWord(n))} pairs of red-tails wheel over the creek, and the old nests are mended.`,
+            `Spring brings the red-tails back to the cottonwoods: ${countWord(n)} pairs.`,
+            `A high thin cry over the creek: ${countWord(n)} pairs of red-tailed hawks are home.`,
           ]),
         card: n >= 3 ? { title: 'The hawks return', subtitle: when } : undefined,
       };
@@ -656,4 +713,90 @@ export function describeEvent(e: SimEvent, ctx?: DescribeContext): EventText {
 /** Format a count for display: 1,234. */
 export function fmtInt(n: number): string {
   return Math.round(n).toLocaleString('en-US');
+}
+
+// ---------------------------------------------------------------------------------------------------------
+// repeats: one line for a run of the same news, and a voice that does not say the same thing twice
+// ---------------------------------------------------------------------------------------------------------
+
+/**
+ * Events that come in runs ("Two coyotes arrive", then "Three coyotes arrive") and read better as one growing line.
+ * Returns the key that decides which events fold together (kind and species), or null for an event that stands alone.
+ */
+export function foldKey(e: SimEvent): string | null {
+  if (e.kind === 'immigrated' || e.kind === 'emigrated') return `${e.kind}:${e.sp}`;
+  return null;
+}
+
+/**
+ * The line for a run of `runs` events of one kind adding up to `total` animals within one valley year:
+ * "More coyotes drift in from the prairie: 6 this year." Phrasing is chosen from the latest event's data.
+ */
+export function describeFolded(e: SimEvent, total: number, runs: number): string {
+  const known = e.sp >= 0 && e.sp < PLURAL.length;
+  const pl = known ? PLURAL[e.sp] : 'animals';
+  const t = fmtInt(total);
+  if (e.kind === 'emigrated') {
+    return pick(e, [
+      `More ${pl} leave the valley: ${t} this year.`,
+      `${cap(pl)} keep slipping away: ${t} gone this year.`,
+      `Still more ${pl} head out over the rim, ${t} in all this year.`,
+      `${t} ${pl} have left the valley this year.`,
+    ], runs);
+  }
+  return pick(e, [
+    `More ${pl} drift in from the prairie: ${t} this year.`,
+    `${cap(pl)} keep arriving from the wider country: ${t} this year.`,
+    `Still more ${pl} come in over the rim, ${t} in all this year.`,
+    `${t} ${pl} have found their way into the valley this year.`,
+  ], runs);
+}
+
+/** Window inside which a run of the same event folds into one line: the rest of the player-facing year it started in. */
+export function foldWindow(): number {
+  return YEAR_TICKS;
+}
+
+/**
+ * Wraps describeEvent for the chronicle: it remembers the last few lines it wrote for each kind of event and, when the
+ * phrasing the event's data picks was just used, reaches for another (a second "Two coyotes arrive" never reads like the first).
+ * Deterministic for the same sequence of events. describeEvent itself stays pure.
+ */
+export class ChronicleVoice {
+  private recent = new Map<string, string[]>();
+  private static readonly MEMORY = 12;
+  private static readonly TRIES = 12;
+
+  reset(): void {
+    this.recent.clear();
+  }
+
+  describe(e: SimEvent, ctx?: DescribeContext): EventText {
+    const key = `${e.kind}:${e.sp}`;
+    const seen = this.recent.get(key) ?? [];
+    let best = describeEvent(e, { ...ctx, salt: 0 });
+    if (seen.includes(best.sentence)) {
+      // prefer a phrasing not used in the last few lines; settle for one that is not the very last
+      let fallback: EventText | null = null;
+      for (let salt = 1; salt <= ChronicleVoice.TRIES; salt++) {
+        const t = describeEvent(e, { ...ctx, salt });
+        if (!seen.includes(t.sentence)) { best = t; fallback = null; break; }
+        if (!fallback && t.sentence !== seen[seen.length - 1]) fallback = t;
+      }
+      if (fallback) best = fallback;
+    }
+    seen.push(best.sentence);
+    if (seen.length > ChronicleVoice.MEMORY) seen.shift();
+    this.recent.set(key, seen);
+    return best;
+  }
+
+  /** Note a line written some other way (a folded run), so the next one does not repeat it. */
+  note(e: SimEvent, sentence: string): void {
+    const key = `${e.kind}:${e.sp}`;
+    const seen = this.recent.get(key) ?? [];
+    seen.push(sentence);
+    if (seen.length > ChronicleVoice.MEMORY) seen.shift();
+    this.recent.set(key, seen);
+  }
 }
