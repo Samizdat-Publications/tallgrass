@@ -1,6 +1,6 @@
 # Good morning: Tallgrass overnight report
 
-*(Updated 16:20 Tuesday 2026-10-06. This file is refreshed at every milestone.)*
+*(Updated 22:10 Tuesday 2026-10-06. This file is refreshed at every milestone.)*
 
 ## v2 integration (session 2026-10-06 afternoon; live redeployed 14:57, live check clean)
 Everything Track S built in the cloud (S0 to S18) is now merged into main and live at https://tallgrass.stewartgregerson.workers.dev.
@@ -17,12 +17,11 @@ Everything Track S built in the cloud (S0 to S18) is now merged into main and li
 
 **Still off by default, and why**
 - Raptors, storm cells, cougars, mule deer and herd spacing (the v7a candidate): its acceptance failed on prairie dogs (see below).
-- Snow depth, dust storms, grasshoppers, spring floods, dynamic trees, beavers, evolution v2: the renderer does not draw their fields yet (snow cover, groves, floods, ponds), or they have not had their own 32-world screen. Each stays off until it both draws and passes.
-- Lightning, blizzard, flood, disease and grove god tools work in the sim but have no toolbar buttons yet (R13).
+- Snow depth, dust storms, grasshoppers, spring floods, dynamic trees, beavers, evolution v2: all of them now draw (see below), but none has had its own 32-world screen and acceptance yet. Each stays off until it passes. You can try any of them with a URL like `?p=snowDepth:1` or `?p=beavers:1,beaver.initial:6`.
 
 **v7a (raptors, storms, cougars, mule deer, herd spacing) was not adopted.** The full 20-world acceptance passed bison (19 of 20), the other core species, wolf cycles (CV 0.26) and ravens (CV 0.18), but prairie dogs were present at least 90% of the time in only 11 of 20 worlds (v6b: 20 of 20), and one world lost its bison. v6b stays the default; details in `review/stability/v7a-c9c3f5a/RESULT.md`. You can overrule this in DECISIONS.md.
 
-**Rendered since the merge (still off by default in the sim):** per-cell snow depth (drifts in hollows, bare windswept ground) when snowDepth is on; living trees that seed, grow, burn to snags and fall when dynamicTrees is on; dust storms and grasshopper swarms; beaver ponds, dams and lodges (the beavers themselves are a stand-in for now); planted groves and floodwater for the grove and flood god tools and spring floods. Redeployed 16:12, live check clean.
+**Rendered since the merge (still off by default in the sim):** per-cell snow depth (drifts in hollows, bare windswept ground) when snowDepth is on; living trees that seed, grow, burn to snags and fall when dynamicTrees is on; dust storms and grasshopper swarms; beaver ponds, dams and lodges (the beavers themselves are a stand-in for now); planted groves and floodwater for the grove and flood god tools and spring floods. Last redeploy about 22:00, playtest and live check clean.
 
 ![Snow depth from the sim](journey/20261006-154700_still_v2-snowdepth-top.jpg)
 ![A flood](journey/20261006-161900_still_v2-flood.jpg)
@@ -35,6 +34,13 @@ Everything Track S built in the cloud (S0 to S18) is now merged into main and li
 
 ![The merged build, live](journey/20261006-145900_ui_v2-live-merged.jpg)
 ![The town challenge and the new tool](journey/20261006-145600_ui_v2-town-rail.jpg)
+
+**Next 5:**
+1. Read the v7c acceptance (running, ends about 23:45); if it passes every gate, run its shock suite and adopt it (NEXT-SESSION.md has the commands).
+2. If prairie dogs still miss, screen cougars, mule deer and herd spacing one at a time over long runs.
+3. A real beaver model with a swim pose (the render uses a rabbit stand-in), and a marsh tint for shallow flooded ground.
+4. 32-world screens for snowDepth 1 and dynamicTrees 1 (now that both draw), toward the next checkpoint.
+5. Republish the making-of page (blocked by a permission check this session; steps under Blocked).
 
 ## v2 beta progress (session wrap-up 2026-10-05 ~10:20; live redeployed 10:15, live check clean)
 Since the alpha (below), all merged, live and verified (npm test, build, foot-slip rig, review stills with no errors):
