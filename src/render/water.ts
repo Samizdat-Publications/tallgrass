@@ -642,7 +642,8 @@ export class Water {
           float dry = max(uSnow * 0.85, cold * 0.7);
 
           float edgeW = min(min(p.x, uWorld - p.x), min(p.y, uWorld - p.y));
-          float worldFade = smoothstep(0.0, 20.0, edgeW);
+          // (a long dissolve: the creek ends at the world edge, and a short one left a blunt end that the map view shows)
+          float worldFade = smoothstep(0.0, 48.0, edgeW);
 
           // ---- above the waterline: the draped skirt darkens the wet bank, with a thin glossy line right at the edge
           if (depth < 0.0) {
@@ -819,6 +820,13 @@ export class Water {
           refl = mix(refl, refl * (0.55 + 0.9 * fStreak) * mix(vec3(0.84, 0.91, 1.06), vec3(1.1, 0.95, 0.82), smoothstep(0.42, 0.74, fStreak)), dimK * isCreek * clamp(midK * 1.6 + mirK, 0.0, 1.0) * (1.0 - ice));
           // the deep middle mirrors darker than the shoals beside it (steeper facets, more of the dark bed and bank in what it reflects)
           refl *= 1.0 - 0.34 * smoothstep(0.16, 0.46, depth) * midK * isCreek * (1.0 - ice);
+          // from afar a lilac or violet sky (dusk, dawn, a stormy west) is not mirrored as a purple ribbon: the magenta in the
+          // reflection is pulled toward a cool slate-green, so a stream keeps a water colour under any sky (the sky itself is untouched)
+          {
+            float rl = dot(refl, vec3(0.2126, 0.7152, 0.0722));
+            float purp = clamp(((refl.r + refl.b) * 0.5 - refl.g) / (rl + 0.02) * 3.5, 0.0, 1.0);
+            refl = mix(refl, vec3(rl) * vec3(0.82, 1.0, 1.0), 0.85 * purp * max(farK, midK * isCreek) * (1.0 - uNight) * (1.0 - ice));
+          }
           // From afar a stream is never one tone: calm reaches mirror the dark banks, and where the current or a gust roughens
           // the surface it scatters the bright low sky and goes silvery. The pattern drifts slowly downstream.
           float roughD = 0.0;
