@@ -236,3 +236,28 @@ Hunt-heavy v2 timeline (`node tools/video.mjs --set v2`), main at 6c94a83, gemin
 | 5 | Hard shadows strobe at 100x | Fix (M1) | Soften sun shadows with time speed |
 | 6 | Chronicle text small | Defer to R12 settings (UI scale exists) | |
 | 7 | Rain looks like a flat overlay | Fix if cheap (M1) | Depth layers for the rain streaks |
+
+## Round 15 (blind critic, stills of the live v7c build and v7c acceptance charts, 2026-10-07 15:50) -> `review/round-15/critique.md`
+Scores: visual 6, readability 4, life and motion 5, ecosystem believability 5, UI clarity 6, keep watching 5.
+
+| # | Issue | Triage | Reason / outcome |
+|---|---|---|---|
+| 1 | Bison carpet (about 1,000 bison smother the wide views) | defer to the next-phase planner | Core design call (bison carrying capacity sets the whole web); the Gemini video round praised the herd scale. Needs a planned change plus re-acceptance. |
+| 2 | Long-run dynamics read as jitter, phase plots without loops | defer to planner | Ecology redesign question (cycle period, smoothing); evidence in review/stability/v7c-a6b02bb charts. |
+| 3 | Mule deer settle near 10, prairie dog towns small, raven ceiling | defer to planner | Balance work on S8/S4/S1; all pass the persistence gates today. |
+| 4 | Field notes point at nothing; small species invisible | fix | Builder r-fieldnote-camera: director frames the subject of each field note and headline event. |
+| 5 | First decades are a warm-up | defer to planner | Option: start worlds from a spun-up state. |
+| 6 | Blotchy snow in wide views, flat river, haze, square map edge | defer | Partly addressed by the snow depth render (off by default); revisit after v8. |
+| 7 | Territory overlay shows no tinted ranges | fix | Builder r-overlay-chronicle (video round saw them as flat debug blobs, so also restyle). |
+| 8 | Chronicle repeats lines word for word | fix | Builder r-overlay-chronicle. |
+| 9 | UI footprint, rail reflow, sparkline scales | defer | Planner (tool drawer idea). |
+| 10 | Same dead snag in winter, floating grey creature, bison clipping | defer | Polish backlog. |
+
+## Round 16 (Gemini video, v7c live build, 2026-10-07 15:53) -> `review/round-16-video/reel.gemini.md`
+| # | Issue | Triage | Reason / outcome |
+|---|---|---|---|
+| 1 | Camera pushes through tree canopy | fix | Builder r-camera-night. |
+| 2 | Animals glide, lack weight on slopes | defer | Gait and foot-plant work; planner. |
+| 3 | Night herd scenes are muddy | fix | Builder r-camera-night. |
+| 4 | UI flashing during time-lapse | defer | Planner (calmer UI at speed). |
+| 5 | Territory overlay looks like flat debug blobs | fix | Builder r-overlay-chronicle. |
