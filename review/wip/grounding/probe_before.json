@@ -1,0 +1,42 @@
+{
+ "root": "C:\\Users\\stewa\\Documents\\Claude\\ecosystem-sim",
+ "hasSlope": false,
+ "out": [
+  {
+   "camD": "0-45 m",
+   "wolfFrames": 849,
+   "slipPct": 47.7,
+   "groundMeanCm": 1.4,
+   "groundP95Cm": 2.7,
+   "headingOffMeanDeg": 29.9,
+   "headingOffP95Deg": 152.1
+  },
+  {
+   "camD": "45-90 m",
+   "wolfFrames": 2919,
+   "slipPct": 35,
+   "groundMeanCm": null,
+   "groundP95Cm": null,
+   "headingOffMeanDeg": 15.8,
+   "headingOffP95Deg": 76.6
+  },
+  {
+   "camD": "90-150 m",
+   "wolfFrames": 5143,
+   "slipPct": 31.5,
+   "groundMeanCm": null,
+   "groundP95Cm": null,
+   "headingOffMeanDeg": 6.9,
+   "headingOffP95Deg": 34.6
+  },
+  {
+   "camD": "150-260 m",
+   "wolfFrames": 5305,
+   "slipPct": 41.3,
+   "groundMeanCm": null,
+   "groundP95Cm": null,
+   "headingOffMeanDeg": 12.8,
+   "headingOffP95Deg": 59.5
+  }
+ ]
+}

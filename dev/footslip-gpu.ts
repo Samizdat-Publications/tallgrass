@@ -6,7 +6,7 @@
 import { getModel } from '../src/render/models';
 import { animationShaderParts } from '../src/render/models/shader';
 import {
-  aimLeg, bodyMotion, footModel, footPath, gaitMix, groundUnderFoot, IK_FAR, IK_NEAR, instanceRotation, legRigOf, sstep, stanceBodyDy,
+  aimLeg, bodyMotion, footModel, footPath, gaitMix, groundUnderFoot, IK_FAR, IK_NEAR, instanceRotation, legRigOf, slopeResponse, sstep, stanceBodyDy,
 } from '../src/render/models/legmath';
 import { makeTerrain, placeInstance, SPECIES_SCALE, LEGGED, paceFor, stotOf } from './footslip-core';
 import type { GaitName } from './footslip-core';
@@ -149,17 +149,18 @@ export function runGpuCheck(): { lines: string[]; maxErr: number; pass: boolean 
       for (const gait of ['stand', 'walk', 'trot', 'gallop', ...(p.stot ? ['stot'] : [])] as Array<GaitName | 'stand'>) {
         const spd = gait === 'stand' ? 0 : paceFor(p, gait);
         const stotW = gait === 'stand' ? 0 : stotOf(gait);
-        for (const camD of [20, 30, 43, 60]) {
+        for (const camD of [20, 30, 43, 60, 100]) { // (beyond 100 m the shader's min-size boost scales a small animal, which the mirror does not model)
           for (let k = 0; k < 24; k++) {
             const ph = k / 24 + 0.013;
             const x = 40 + k * 0.7, z = 100;
             const inst = placeInstance(p, { h: (gx, gz) => ground(gx, gz) }, x, z, vs, camD);
             const R = instanceRotation(inst);
-            const gm = gaitMix(p, spd, stotW);
+            const sr = slopeResponse(inst.pitch, inst.roll, camD);
+            const gm = gaitMix(p, spd, stotW, sr.strideK);
             const farK = sstep(20, 110, camD);
             const ikK = 1 - sstep(IK_NEAR, IK_FAR, camD);
             const bdy = ikK > 0.001 ? stanceBodyDy(p, rig, gm, ph, inst, ground) * ikK : 0;
-            const bm = bodyMotion(p, gm, ph, farK, bdy, stotW);
+            const bm = bodyMotion(p, gm, ph, farK, bdy, stotW, sr.dp, sr.dr);
             // the instance matrix exactly as AnimalLayer.writeInstance builds it (column major, scale in the columns)
             const mat = new Float32Array(16);
             mat[0] = R[0] * vs; mat[1] = R[3] * vs; mat[2] = R[6] * vs;

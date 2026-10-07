@@ -1,5 +1,5 @@
 // Headless foot-slip gate: `npx tsx dev/footslip.ts [--bumps] [--cam 20,44] [--rest]`
-// Prints the before (pre-R1 leg math) and after table for every legged species, gait, time scale and slope, and exits 1 if a gate
+// Prints the before (the build before the grounding work; with --legacy the pre-R1 leg math) and after table for every legged species, gait, time scale and slope, and exits 1 if a gate
 // fails (stance slip <= 5% at walk and trot, <= 8% at gallop; foot to ground <= 5 cm on a 20 degree slope; all at 1x).
 // The browser version with image strips is dev/footslip.html.
 import { allPass, formatTable, paceFor, restPose, runTable, speciesRig, LEGGED, SPECIES_SCALE } from './footslip-core';
@@ -37,7 +37,7 @@ for (const { sp, name } of LEGGED) {
     }
   }
 }
-const rows = runTable(cams, bumps ? 'bumps' : 'plane');
+const rows = runTable(cams, bumps ? 'bumps' : 'plane', argv.includes('--legacy') ? 'legacy' : 'main');
 console.log(`terrain: ${bumps ? 'slope plus bumps (14 cm swells, 9 cm ripples)' : 'flat and a plane slope'}`);
 console.log(formatTable(rows));
 const ok = allPass(rows);

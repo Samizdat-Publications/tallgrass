@@ -1,0 +1,426 @@
+time-lapse gait (apparent speed = pace x factor, pose at 0.9 x apparent capped at fast1):
+  bison      walk     10x body   17 m/s | before  9.1 Hz | after 2.2 Hz, stride 3.8 m, feet 8 m/s
+  bison      walk    100x body  170 m/s | before 12.0 Hz | after 2.2 Hz, stride 4.1 m, feet 9 m/s
+  bison      trot     10x body   56 m/s | before 12.0 Hz | after 2.2 Hz, stride 4.1 m, feet 9 m/s
+  bison      trot    100x body  560 m/s | before 12.0 Hz | after 2.2 Hz, stride 4.1 m, feet 9 m/s
+  bison      gallop   10x body  109 m/s | before 12.0 Hz | after 2.2 Hz, stride 4.1 m, feet 9 m/s
+  bison      gallop  100x body 1093 m/s | before 12.0 Hz | after 2.2 Hz, stride 4.1 m, feet 9 m/s
+  wolf       walk     10x body   14 m/s | before  9.2 Hz | after 3.7 Hz, stride 3.0 m, feet 11 m/s
+  wolf       walk    100x body  140 m/s | before 12.0 Hz | after 3.7 Hz, stride 4.3 m, feet 16 m/s
+  wolf       trot     10x body   57 m/s | before 12.0 Hz | after 3.7 Hz, stride 4.3 m, feet 16 m/s
+  wolf       trot    100x body  570 m/s | before 12.0 Hz | after 3.7 Hz, stride 4.3 m, feet 16 m/s
+  wolf       gallop   10x body  126 m/s | before 12.0 Hz | after 3.7 Hz, stride 4.3 m, feet 16 m/s
+  wolf       gallop  100x body 1265 m/s | before 12.0 Hz | after 3.7 Hz, stride 4.3 m, feet 16 m/s
+  pronghorn  walk     10x body   17 m/s | before 11.9 Hz | after 3.3 Hz, stride 2.7 m, feet 9 m/s
+  pronghorn  walk    100x body  170 m/s | before 12.0 Hz | after 3.3 Hz, stride 3.6 m, feet 12 m/s
+  pronghorn  trot     10x body   60 m/s | before 12.0 Hz | after 3.3 Hz, stride 3.6 m, feet 12 m/s
+  pronghorn  trot    100x body  600 m/s | before 12.0 Hz | after 3.3 Hz, stride 3.6 m, feet 12 m/s
+  pronghorn  gallop   10x body  126 m/s | before 12.0 Hz | after 3.3 Hz, stride 3.6 m, feet 12 m/s
+  pronghorn  gallop  100x body 1265 m/s | before 12.0 Hz | after 3.3 Hz, stride 3.6 m, feet 12 m/s
+  cougar     walk     10x body   15 m/s | before 12.0 Hz | after 4.1 Hz, stride 2.2 m, feet 9 m/s
+  cougar     walk    100x body  150 m/s | before 12.0 Hz | after 4.1 Hz, stride 3.2 m, feet 13 m/s
+  cougar     trot     10x body   61 m/s | before 12.0 Hz | after 4.1 Hz, stride 3.2 m, feet 13 m/s
+  cougar     trot    100x body  605 m/s | before 12.0 Hz | after 4.1 Hz, stride 3.2 m, feet 13 m/s
+  cougar     gallop   10x body  132 m/s | before 12.0 Hz | after 4.1 Hz, stride 3.2 m, feet 13 m/s
+  cougar     gallop  100x body 1323 m/s | before 12.0 Hz | after 4.1 Hz, stride 3.2 m, feet 13 m/s
+  coyote     walk     10x body   13 m/s | before 11.5 Hz | after 4.5 Hz, stride 2.2 m, feet 10 m/s
+  coyote     walk    100x body  125 m/s | before 12.0 Hz | after 4.5 Hz, stride 3.1 m, feet 14 m/s
+  coyote     trot     10x body   50 m/s | before 12.0 Hz | after 4.5 Hz, stride 3.1 m, feet 14 m/s
+  coyote     trot    100x body  500 m/s | before 12.0 Hz | after 4.5 Hz, stride 3.1 m, feet 14 m/s
+  coyote     gallop   10x body  115 m/s | before 12.0 Hz | after 4.5 Hz, stride 3.1 m, feet 14 m/s
+  coyote     gallop  100x body 1150 m/s | before 12.0 Hz | after 4.5 Hz, stride 3.1 m, feet 14 m/s
+  mule deer  walk     10x body   17 m/s | before 12.0 Hz | after 3.2 Hz, stride 2.9 m, feet 9 m/s
+  mule deer  walk    100x body  170 m/s | before 12.0 Hz | after 3.2 Hz, stride 3.8 m, feet 12 m/s
+  mule deer  trot     10x body   61 m/s | before 12.0 Hz | after 3.2 Hz, stride 3.8 m, feet 12 m/s
+  mule deer  trot    100x body  610 m/s | before 12.0 Hz | after 3.2 Hz, stride 3.8 m, feet 12 m/s
+  mule deer  gallop   10x body  126 m/s | before 12.0 Hz | after 3.2 Hz, stride 3.8 m, feet 12 m/s
+  mule deer  gallop  100x body 1265 m/s | before 12.0 Hz | after 3.2 Hz, stride 3.8 m, feet 12 m/s
+terrain: flat and a plane slope
+species    gait    speed slope cam |   BEFORE: slip  gnd max |   AFTER: slip  gnd mean  gnd max  Hz  capped unreach | gate
+-- camera 20 m (IK on) --
+bison      walk     1x    0d  20 |   0.2%   0.0 |   0.2%   0.0   0.0  0.9   0.0%   0.0% | ok
+bison      walk     1x   20d  20 |   0.2%   0.0 |   0.1%   0.0   0.0  1.3   0.0%   0.0% | ok
+bison      walk    10x    0d  20 |   0.2%   0.0 |   0.2%   0.0   0.0  9.1   0.0%   0.0% | (time-lapse, not gated)
+bison      walk    10x   20d  20 |   0.1%   0.0 |   9.5%   0.0   0.0 12.0 100.0%   0.0% | (time-lapse, not gated)
+bison      trot     1x    0d  20 |   0.5%   0.0 |   0.2%   0.0   0.0  2.0   0.0%   0.0% | ok
+bison      trot     1x   20d  20 |   0.5%   0.0 |   0.1%   0.0   0.0  3.0   0.0%   0.0% | ok
+bison      trot    10x    0d  20 |  40.8%   0.0 |  40.9%   0.0   0.0 12.0 100.0%   0.0% | (time-lapse, not gated)
+bison      trot    10x   20d  20 |  44.4%   0.0 |  59.7%   0.0   0.0 12.0 100.0%   0.0% | (time-lapse, not gated)
+bison      gallop   1x    0d  20 |   1.5%   0.7 |   0.1%   0.0   0.0  3.3   0.0%   0.0% | ok
+bison      gallop   1x   20d  20 |   1.5%   0.7 |   0.0%   0.0   0.0  4.8   0.0%   0.0% | ok
+bison      gallop  10x    0d  20 |  63.3%   0.6 |  63.4%   0.0   0.0 12.0 100.0%   0.0% | (time-lapse, not gated)
+bison      gallop  10x   20d  20 |  65.5%   0.6 |  75.0%   0.0   0.0 12.0 100.0%   0.0% | (time-lapse, not gated)
+wolf       walk     1x    0d  20 |   0.6%   0.0 |   0.6%   0.0   0.0  0.9   0.0%   0.0% | ok
+wolf       walk     1x   20d  20 |   0.6%   0.0 |   0.2%   0.0   0.0  1.4   0.0%   0.0% | ok
+wolf       walk    10x    0d  20 |   0.4%   0.0 |   0.4%   0.0   0.0  9.2   0.0%   0.0% | (time-lapse, not gated)
+wolf       walk    10x   20d  20 |   0.4%   0.0 |  11.4%   0.0   0.0 12.0 100.0%   0.0% | (time-lapse, not gated)
+wolf       trot     1x    0d  20 |   0.8%   0.1 |   0.3%   0.0   0.0  2.6   0.0%   0.0% | ok
+wolf       trot     1x   20d  20 |   0.8%   0.1 |   0.1%   0.0   0.0  3.9   0.0%   0.0% | ok
+wolf       trot    10x    0d  20 |  54.5%   0.1 |  54.6%   0.0   0.0 12.0 100.0%   0.0% | (time-lapse, not gated)
+wolf       trot    10x   20d  20 |  57.2%   0.1 |  69.0%   0.0   0.0 12.0 100.0%   0.0% | (time-lapse, not gated)
+wolf       gallop   1x    0d  20 |   3.2%   1.8 |   0.2%   0.0   0.0  4.2   0.0%   0.0% | ok
+wolf       gallop   1x   20d  20 |   3.1%   1.8 |   0.1%   0.0   0.1  6.1   0.0%   0.0% | ok
+wolf       gallop  10x    0d  20 |  70.9%   1.3 |  71.2%   0.0   0.0 12.0 100.0%   0.0% | (time-lapse, not gated)
+wolf       gallop  10x   20d  20 |  72.6%   1.3 |  80.4%   0.0   0.1 12.0 100.0%   0.0% | (time-lapse, not gated)
+pronghorn  walk     1x    0d  20 |   0.7%   0.0 |   0.7%   0.0   0.0  1.2   0.0%   0.0% | ok
+pronghorn  walk     1x   20d  20 |   0.8%   0.0 |   0.4%   0.0   0.0  1.7   0.0%   0.0% | ok
+pronghorn  walk    10x    0d  20 |   0.5%   0.0 |   0.5%   0.0   0.0 11.9   0.0%   0.0% | (time-lapse, not gated)
+pronghorn  walk    10x   20d  20 |   5.6%   0.0 |  31.4%   0.0   0.0 12.0 100.0%   0.0% | (time-lapse, not gated)
+pronghorn  trot     1x    0d  20 |   0.7%   0.0 |   0.3%   0.0   0.0  3.3   0.0%   0.0% | ok
+pronghorn  trot     1x   20d  20 |   0.7%   0.0 |   0.1%   0.0   0.0  4.9   0.0%   0.0% | ok
+pronghorn  trot    10x    0d  20 |  63.8%   0.0 |  63.9%   0.0   0.0 12.0 100.0%   0.0% | (time-lapse, not gated)
+pronghorn  trot    10x   20d  20 |  66.0%   0.0 |  75.4%   0.0   0.0 12.0 100.0%   0.0% | (time-lapse, not gated)
+pronghorn  gallop   1x    0d  20 |   1.9%   0.8 |   0.1%   0.0   0.0  5.0   0.0%   0.0% | ok
+pronghorn  gallop   1x   20d  20 |   2.0%   0.8 |   0.1%   0.0   0.0  7.3   0.0%   0.0% | ok
+pronghorn  gallop  10x    0d  20 |  75.8%   0.6 |  76.0%   0.0   0.0 12.0 100.0%   0.0% | (time-lapse, not gated)
+pronghorn  gallop  10x   20d  20 |  77.2%   0.6 |  83.6%   0.0   0.0 12.0 100.0%   0.0% | (time-lapse, not gated)
+cougar     walk     1x    0d  20 |   0.5%   0.0 |   0.5%   0.0   0.0  1.4   0.0%   0.0% | ok
+cougar     walk     1x   20d  20 |   0.5%   0.0 |   0.2%   0.0   0.0  2.0   0.0%   0.0% | ok
+cougar     walk    10x    0d  20 |  11.2%   0.0 |  11.2%   0.0   0.0 12.0 100.0%   0.0% | (time-lapse, not gated)
+cougar     walk    10x   20d  20 |  16.5%   0.0 |  39.4%   0.0   0.0 12.0 100.0%   0.0% | (time-lapse, not gated)
+cougar     trot     1x    0d  20 |   0.8%   0.1 |   0.2%   0.0   0.0  3.8   0.0%   0.0% | ok
+cougar     trot     1x   20d  20 |   0.8%   0.1 |   0.1%   0.0   0.0  5.6   0.0%   0.0% | ok
+cougar     trot    10x    0d  20 |  68.6%   0.1 |  68.7%   0.0   0.0 12.0 100.0%   0.0% | (time-lapse, not gated)
+cougar     trot    10x   20d  20 |  70.5%   0.1 |  78.6%   0.0   0.0 12.0 100.0%   0.0% | (time-lapse, not gated)
+cougar     gallop   1x    0d  20 |   4.6%   2.1 |   0.2%   0.0   0.1  5.9   0.0%   0.0% | ok
+cougar     gallop   1x   20d  20 |   4.5%   2.1 |   0.2%   0.0   0.1  8.7   0.0%   0.0% | ok
+cougar     gallop  10x    0d  20 |  79.4%   1.6 |  79.8%   0.0   0.0 12.0 100.0%   0.0% | (time-lapse, not gated)
+cougar     gallop  10x   20d  20 |  80.6%   1.6 |  86.2%   0.0   0.1 12.0 100.0%   0.0% | (time-lapse, not gated)
+coyote     walk     1x    0d  20 |   0.6%   0.0 |   0.6%   0.0   0.0  1.1   0.0%   0.0% | ok
+coyote     walk     1x   20d  20 |   0.6%   0.0 |   0.2%   0.0   0.0  1.7   0.0%   0.0% | ok
+coyote     walk    10x    0d  20 |   0.3%   0.0 |   0.3%   0.0   0.0 11.5   0.0%   0.0% | (time-lapse, not gated)
+coyote     walk    10x   20d  20 |   1.6%   0.0 |  28.5%   0.0   0.0 12.0 100.0%   0.0% | (time-lapse, not gated)
+coyote     trot     1x    0d  20 |   0.8%   0.0 |   0.3%   0.0   0.0  3.2   0.0%   0.0% | ok
+coyote     trot     1x   20d  20 |   0.7%   0.0 |   0.1%   0.0   0.0  4.7   0.0%   0.0% | ok
+coyote     trot    10x    0d  20 |  62.7%   0.0 |  62.8%   0.0   0.0 12.0 100.0%   0.0% | (time-lapse, not gated)
+coyote     trot    10x   20d  20 |  64.9%   0.0 |  74.6%   0.0   0.0 12.0 100.0%   0.0% | (time-lapse, not gated)
+coyote     gallop   1x    0d  20 |   3.1%   1.3 |   0.2%   0.0   0.0  5.3   0.0%   0.0% | ok
+coyote     gallop   1x   20d  20 |   3.1%   1.3 |   0.1%   0.0   0.1  7.7   0.0%   0.0% | ok
+coyote     gallop  10x    0d  20 |  76.9%   1.0 |  77.2%   0.0   0.0 12.0 100.0%   0.0% | (time-lapse, not gated)
+coyote     gallop  10x   20d  20 |  78.3%   1.0 |  84.5%   0.0   0.1 12.0 100.0%   0.0% | (time-lapse, not gated)
+mule deer  walk     1x    0d  20 |   0.7%   0.0 |   0.7%   0.0   0.0  1.2   0.0%   0.0% | ok
+mule deer  walk     1x   20d  20 |   0.7%   0.0 |   0.4%   0.0   0.0  1.8   0.0%   0.0% | ok
+mule deer  walk    10x    0d  20 |   0.5%   0.0 |   0.5%   0.0   0.0 12.0 100.0%   0.0% | (time-lapse, not gated)
+mule deer  walk    10x   20d  20 |   6.1%   0.0 |  31.8%   0.0   0.0 12.0 100.0%   0.0% | (time-lapse, not gated)
+mule deer  trot     1x    0d  20 |   0.7%   0.0 |   0.4%   0.0   0.0  3.2   0.0%   0.0% | ok
+mule deer  trot     1x   20d  20 |   0.7%   0.0 |   0.1%   0.0   0.0  4.7   0.0%   0.0% | ok
+mule deer  trot    10x    0d  20 |  62.1%   0.0 |  62.2%   0.0   0.0 12.0 100.0%   0.0% | (time-lapse, not gated)
+mule deer  trot    10x   20d  20 |  64.4%   0.0 |  74.2%   0.0   0.0 12.0 100.0%   0.0% | (time-lapse, not gated)
+mule deer  gallop   1x    0d  20 |   2.0%   0.9 |   0.2%   0.0   0.0  4.7   0.0%   0.0% | ok
+mule deer  gallop   1x   20d  20 |   2.0%   0.9 |   0.1%   0.0   0.0  6.9   0.0%   0.0% | ok
+mule deer  gallop  10x    0d  20 |  74.1%   0.7 |  74.4%   0.0   0.0 12.0 100.0%   0.0% | (time-lapse, not gated)
+mule deer  gallop  10x   20d  20 |  75.7%   0.7 |  82.5%   0.0   0.0 12.0 100.0%   0.0% | (time-lapse, not gated)
+mule deer  stot     1x    0d  20 |   3.0%   1.0 |   0.2%   0.0   0.0  2.6   0.0%   0.0% | ok
+mule deer  stot     1x   20d  20 |   3.0%   1.0 |   0.1%   0.0   0.1  3.9   0.0%   0.0% | ok
+mule deer  stot    10x    0d  20 |   0.0%   0.0 |   0.0%   0.0   0.0 12.0 100.0%   0.0% | (time-lapse, not gated)
+mule deer  stot    10x   20d  20 |   0.0%   0.0 |   0.0%   0.0   0.0 12.0 100.0%   0.0% | (time-lapse, not gated)
+-- camera 44 m (IK fading) --
+bison      walk     1x    0d  44 |   1.5%   0.0 |   1.5%   0.0   0.0  0.9   0.0%   0.0% | ok
+bison      walk     1x   20d  44 |   2.2%   2.1 |   1.9%   0.0   0.0  1.3   0.0%   0.0% | ok
+bison      walk    10x    0d  44 |   1.4%   0.0 |   1.4%   0.0   0.0  9.1   0.0%   0.0% | (time-lapse, not gated)
+bison      walk    10x   20d  44 |   2.2%   2.1 |   9.8%   0.0   0.0 12.0 100.0%   0.0% | (time-lapse, not gated)
+bison      trot     1x    0d  44 |   2.3%   0.2 |   1.6%   0.0   0.0  2.0   0.0%   0.0% | ok
+bison      trot     1x   20d  44 |   2.7%   2.3 |   2.2%   0.0   0.0  3.0   0.0%   0.0% | ok
+bison      trot    10x    0d  44 |  40.7%   0.2 |  41.0%   0.0   0.0 12.0 100.0%   0.0% | (time-lapse, not gated)
+bison      trot    10x   20d  44 |  44.3%   2.1 |  59.7%   0.0   0.0 12.0 100.0%   0.0% | (time-lapse, not gated)
+bison      gallop   1x    0d  44 |   3.6%   1.7 |   1.2%   0.0   0.0  3.3   0.0%   0.0% | ok
+bison      gallop   1x   20d  44 |   3.6%   2.7 |   1.7%   0.0   0.1  4.8   0.0%   0.0% | ok
+bison      gallop  10x    0d  44 |  62.9%   1.5 |  63.4%   0.0   0.0 12.0 100.0%   0.0% | (time-lapse, not gated)
+bison      gallop  10x   20d  44 |  65.1%   2.5 |  75.1%   0.0   0.1 12.0 100.0%   0.0% | (time-lapse, not gated)
+wolf       walk     1x    0d  44 |   1.7%   0.0 |   1.7%   0.0   0.0  0.9   0.0%   0.0% | ok
+wolf       walk     1x   20d  44 |   2.4%   1.5 |   1.8%   0.0   0.0  1.4   0.0%   0.0% | ok
+wolf       walk    10x    0d  44 |   1.6%   0.0 |   1.5%   0.0   0.0  9.2   0.0%   0.0% | (time-lapse, not gated)
+wolf       walk    10x   20d  44 |   2.2%   1.5 |  11.6%   0.0   0.0 12.0 100.0%   0.0% | (time-lapse, not gated)
+wolf       trot     1x    0d  44 |   2.4%   0.3 |   1.6%   0.0   0.0  2.6   0.0%   0.0% | ok
+wolf       trot     1x   20d  44 |   2.7%   1.7 |   2.1%   0.0   0.0  3.9   0.0%   0.0% | ok
+wolf       trot    10x    0d  44 |  54.4%   0.3 |  54.6%   0.0   0.0 12.0 100.0%   0.0% | (time-lapse, not gated)
+wolf       trot    10x   20d  44 |  57.2%   1.5 |  69.1%   0.0   0.0 12.0 100.0%   0.0% | (time-lapse, not gated)
+wolf       gallop   1x    0d  44 |   5.4%   3.1 |   1.0%   0.0   0.1  4.2   0.0%   0.0% | ok
+wolf       gallop   1x   20d  44 |   5.2%   3.1 |   1.2%   0.1   0.3  6.1   0.0%   0.0% | ok
+wolf       gallop  10x    0d  44 |  70.5%   2.8 |  71.2%   0.0   0.1 12.0 100.0%   0.0% | (time-lapse, not gated)
+wolf       gallop  10x   20d  44 |  72.3%   3.0 |  80.4%   0.1   0.3 12.0 100.0%   0.0% | (time-lapse, not gated)
+pronghorn  walk     1x    0d  44 |   1.7%   0.0 |   1.6%   0.0   0.0  1.2   0.0%   0.0% | ok
+pronghorn  walk     1x   20d  44 |   2.3%   1.3 |   1.7%   0.0   0.0  1.7   0.0%   0.0% | ok
+pronghorn  walk    10x    0d  44 |   1.4%   0.0 |   1.3%   0.0   0.0 11.9   0.0%   0.0% | (time-lapse, not gated)
+pronghorn  walk    10x   20d  44 |   6.0%   1.2 |  31.5%   0.0   0.0 12.0 100.0%   0.0% | (time-lapse, not gated)
+pronghorn  trot     1x    0d  44 |   2.1%   0.2 |   1.5%   0.0   0.0  3.3   0.0%   0.0% | ok
+pronghorn  trot     1x   20d  44 |   2.5%   1.3 |   2.1%   0.0   0.0  4.9   0.0%   0.0% | ok
+pronghorn  trot    10x    0d  44 |  63.8%   0.2 |  63.9%   0.0   0.0 12.0 100.0%   0.0% | (time-lapse, not gated)
+pronghorn  trot    10x   20d  44 |  65.9%   1.2 |  75.4%   0.0   0.0 12.0 100.0%   0.0% | (time-lapse, not gated)
+pronghorn  gallop   1x    0d  44 |   3.8%   1.7 |   1.0%   0.0   0.1  5.0   0.0%   0.0% | ok
+pronghorn  gallop   1x   20d  44 |   3.8%   2.0 |   1.0%   0.0   0.1  7.3   0.0%   0.0% | ok
+pronghorn  gallop  10x    0d  44 |  75.5%   1.6 |  76.0%   0.0   0.1 12.0 100.0%   0.0% | (time-lapse, not gated)
+pronghorn  gallop  10x   20d  44 |  77.0%   1.9 |  83.6%   0.0   0.1 12.0 100.0%   0.0% | (time-lapse, not gated)
+cougar     walk     1x    0d  44 |   1.8%   0.0 |   1.8%   0.0   0.0  1.4   0.0%   0.0% | ok
+cougar     walk     1x   20d  44 |   2.4%   1.1 |   1.9%   0.0   0.0  2.0   0.0%   0.0% | ok
+cougar     walk    10x    0d  44 |  11.4%   0.0 |  11.4%   0.0   0.0 12.0 100.0%   0.0% | (time-lapse, not gated)
+cougar     walk    10x   20d  44 |  16.7%   1.1 |  39.4%   0.0   0.0 12.0 100.0%   0.0% | (time-lapse, not gated)
+cougar     trot     1x    0d  44 |   2.5%   0.2 |   1.5%   0.0   0.0  3.8   0.0%   0.0% | ok
+cougar     trot     1x   20d  44 |   2.8%   1.2 |   2.2%   0.0   0.0  5.6   0.0%   0.0% | ok
+cougar     trot    10x    0d  44 |  68.5%   0.2 |  68.7%   0.0   0.0 12.0 100.0%   0.0% | (time-lapse, not gated)
+cougar     trot    10x   20d  44 |  70.4%   1.1 |  78.6%   0.0   0.0 12.0 100.0%   0.0% | (time-lapse, not gated)
+cougar     gallop   1x    0d  44 |   7.4%   3.4 |   1.1%   0.1   0.2  5.9   0.0%   0.0% | ok
+cougar     gallop   1x   20d  44 |   7.0%   2.9 |   1.2%   0.1   0.3  8.7   0.0%   0.0% | ok
+cougar     gallop  10x    0d  44 |  79.0%   2.9 |  79.8%   0.1   0.1 12.0 100.0%   0.0% | (time-lapse, not gated)
+cougar     gallop  10x   20d  44 |  80.3%   2.9 |  86.2%   0.1   0.3 12.0 100.0%   0.0% | (time-lapse, not gated)
+coyote     walk     1x    0d  44 |   1.7%   0.0 |   1.7%   0.0   0.0  1.1   0.0%   0.0% | ok
+coyote     walk     1x   20d  44 |   2.4%   1.1 |   1.8%   0.0   0.0  1.7   0.0%   0.0% | ok
+coyote     walk    10x    0d  44 |   1.5%   0.0 |   1.5%   0.0   0.0 11.5   0.0%   0.0% | (time-lapse, not gated)
+coyote     walk    10x   20d  44 |   2.8%   1.1 |  28.6%   0.0   0.0 12.0 100.0%   0.0% | (time-lapse, not gated)
+coyote     trot     1x    0d  44 |   2.3%   0.2 |   1.6%   0.0   0.0  3.2   0.0%   0.0% | ok
+coyote     trot     1x   20d  44 |   2.7%   1.2 |   2.1%   0.0   0.0  4.7   0.0%   0.0% | ok
+coyote     trot    10x    0d  44 |  62.6%   0.2 |  62.8%   0.0   0.0 12.0 100.0%   0.0% | (time-lapse, not gated)
+coyote     trot    10x   20d  44 |  64.8%   1.1 |  74.6%   0.0   0.0 12.0 100.0%   0.0% | (time-lapse, not gated)
+coyote     gallop   1x    0d  44 |   5.4%   2.3 |   1.0%   0.0   0.1  5.3   0.0%   0.0% | ok
+coyote     gallop   1x   20d  44 |   5.2%   2.2 |   1.1%   0.1   0.2  7.7   0.0%   0.0% | ok
+coyote     gallop  10x    0d  44 |  76.6%   2.0 |  77.2%   0.0   0.1 12.0 100.0%   0.0% | (time-lapse, not gated)
+coyote     gallop  10x   20d  44 |  78.0%   2.2 |  84.5%   0.1   0.2 12.0 100.0%   0.0% | (time-lapse, not gated)
+mule deer  walk     1x    0d  44 |   1.7%   0.0 |   1.6%   0.0   0.0  1.2   0.0%   0.0% | ok
+mule deer  walk     1x   20d  44 |   2.3%   1.3 |   1.7%   0.0   0.0  1.8   0.0%   0.0% | ok
+mule deer  walk    10x    0d  44 |   1.5%   0.0 |   1.5%   0.0   0.0 12.0 100.0%   0.0% | (time-lapse, not gated)
+mule deer  walk    10x   20d  44 |   6.5%   1.3 |  31.9%   0.0   0.0 12.0 100.0%   0.0% | (time-lapse, not gated)
+mule deer  trot     1x    0d  44 |   2.1%   0.2 |   1.5%   0.0   0.0  3.2   0.0%   0.0% | ok
+mule deer  trot     1x   20d  44 |   2.5%   1.4 |   2.1%   0.0   0.0  4.7   0.0%   0.0% | ok
+mule deer  trot    10x    0d  44 |  62.0%   0.2 |  62.2%   0.0   0.0 12.0 100.0%   0.0% | (time-lapse, not gated)
+mule deer  trot    10x   20d  44 |  64.3%   1.3 |  74.2%   0.0   0.0 12.0 100.0%   0.0% | (time-lapse, not gated)
+mule deer  gallop   1x    0d  44 |   3.9%   1.8 |   1.0%   0.0   0.1  4.7   0.0%   0.0% | ok
+mule deer  gallop   1x   20d  44 |   3.8%   2.1 |   1.0%   0.0   0.1  6.9   0.0%   0.0% | ok
+mule deer  gallop  10x    0d  44 |  73.9%   1.7 |  74.4%   0.0   0.1 12.0 100.0%   0.0% | (time-lapse, not gated)
+mule deer  gallop  10x   20d  44 |  75.4%   2.0 |  82.5%   0.0   0.1 12.0 100.0%   0.0% | (time-lapse, not gated)
+mule deer  stot     1x    0d  44 |   3.0%   1.0 |   0.2%   0.0   0.0  2.6   0.0%   0.0% | ok
+mule deer  stot     1x   20d  44 |   3.2%   2.3 |   0.1%   0.0   0.1  3.9   0.0%   0.0% | ok
+mule deer  stot    10x    0d  44 |   0.0%   0.0 |   0.0%   0.0   0.0 12.0 100.0%   0.0% | (time-lapse, not gated)
+mule deer  stot    10x   20d  44 |   0.0%   0.8 |   0.0%   0.0   0.0 12.0 100.0%   0.0% | (time-lapse, not gated)
+-- camera 70 m (IK fading) --
+bison      walk     1x    0d  70 |   4.9%   0.0 |   4.7%   0.0   0.0  0.9   0.0%   0.0% | (far, not gated)
+bison      walk     1x   20d  70 |   9.4%  10.8 |   6.7%   0.0   0.1  1.3   0.0%   0.0% | (far, not gated)
+bison      walk    10x    0d  70 |   4.6%   0.0 |   4.5%   0.0   0.0  9.1   0.0%   0.0% | (time-lapse, not gated)
+bison      walk    10x   20d  70 |   9.2%  10.8 |  12.1%   0.0   0.1 12.0 100.0%   0.0% | (time-lapse, not gated)
+bison      trot     1x    0d  70 |   8.1%   1.2 |   5.3%   0.0   0.1  2.0   0.0%   0.0% | (far, not gated)
+bison      trot     1x   20d  70 |  10.8%  11.6 |   7.5%   0.0   0.2  3.0   0.0%   0.0% | (far, not gated)
+bison      trot    10x    0d  70 |  40.6%   1.2 |  41.2%   0.0   0.1 12.0 100.0%   0.0% | (time-lapse, not gated)
+bison      trot    10x   20d  70 |  44.4%  10.7 |  59.9%   0.1   0.1 12.0 100.0%   0.0% | (time-lapse, not gated)
+bison      gallop   1x    0d  70 |  12.4%   7.0 |   4.5%   0.1   0.4  3.3   0.0%   0.0% | (far, not gated)
+bison      gallop   1x   20d  70 |  13.0%  11.9 |   6.0%   0.2   0.7  4.8   0.0%   0.0% | (far, not gated)
+bison      gallop  10x    0d  70 |  61.2%   6.6 |  63.5%   0.1   0.4 12.0 100.0%   0.0% | (time-lapse, not gated)
+bison      gallop  10x   20d  70 |  63.5%  11.7 |  75.2%   0.2   0.7 12.0 100.0%   0.0% | (time-lapse, not gated)
+wolf       walk     1x    0d  70 |   4.8%   0.1 |   4.7%   0.0   0.1  0.9   0.0%   0.0% | (far, not gated)
+wolf       walk     1x   20d  70 |   9.2%   7.6 |   6.0%   0.0   0.1  1.4   0.0%   0.0% | (far, not gated)
+wolf       walk    10x    0d  70 |   4.5%   0.1 |   4.5%   0.0   0.1  9.2   0.0%   0.0% | (time-lapse, not gated)
+wolf       walk    10x   20d  70 |   9.0%   7.6 |  13.3%   0.0   0.1 12.0 100.0%   0.0% | (time-lapse, not gated)
+wolf       trot     1x    0d  70 |   7.6%   1.3 |   4.9%   0.1   0.1  2.6   0.0%   0.0% | (far, not gated)
+wolf       trot     1x   20d  70 |  10.3%   8.5 |   6.9%   0.1   0.2  3.9   0.0%   0.0% | (far, not gated)
+wolf       trot    10x    0d  70 |  54.2%   1.2 |  54.7%   0.1   0.1 12.0 100.0%   0.0% | (time-lapse, not gated)
+wolf       trot    10x   20d  70 |  57.1%   7.6 |  69.1%   0.1   0.2 12.0 100.0%   0.0% | (time-lapse, not gated)
+wolf       gallop   1x    0d  70 |  13.7%   9.1 |   3.6%   0.2   0.8  4.2   0.0%   0.0% | (far, not gated)
+wolf       gallop   1x   20d  70 |  13.7%  11.0 |   4.5%   0.4   1.2  6.1   0.0%   0.0% | (far, not gated)
+wolf       gallop  10x    0d  70 |  69.2%   8.8 |  71.4%   0.3   0.8 12.0 100.0%   0.0% | (time-lapse, not gated)
+wolf       gallop  10x   20d  70 |  71.0%   8.8 |  80.5%   0.3   1.0 12.0 100.0%   0.0% | (time-lapse, not gated)
+pronghorn  walk     1x    0d  70 |   4.1%   0.1 |   4.0%   0.0   0.1  1.2   0.0%   0.0% | (far, not gated)
+pronghorn  walk     1x   20d  70 |   8.8%   6.4 |   5.2%   0.0   0.1  1.7   0.0%   0.0% | (far, not gated)
+pronghorn  walk    10x    0d  70 |   3.7%   0.1 |   3.7%   0.0   0.1 11.9   0.0%   0.0% | (time-lapse, not gated)
+pronghorn  walk    10x   20d  70 |  10.2%   6.3 |  31.8%   0.0   0.1 12.0 100.0%   0.0% | (time-lapse, not gated)
+pronghorn  trot     1x    0d  70 |   7.0%   1.0 |   4.8%   0.1   0.1  3.3   0.0%   0.0% | (far, not gated)
+pronghorn  trot     1x   20d  70 |   9.8%   6.8 |   7.0%   0.1   0.2  4.9   0.0%   0.0% | (far, not gated)
+pronghorn  trot    10x    0d  70 |  63.6%   1.0 |  64.0%   0.1   0.1 12.0 100.0%   0.0% | (time-lapse, not gated)
+pronghorn  trot    10x   20d  70 |  65.9%   6.1 |  75.4%   0.1   0.2 12.0 100.0%   0.0% | (time-lapse, not gated)
+pronghorn  gallop   1x    0d  70 |  11.0%   6.0 |   3.3%   0.1   0.5  5.0   0.0%   0.0% | (far, not gated)
+pronghorn  gallop   1x   20d  70 |  11.3%   8.6 |   3.9%   0.3   0.8  7.3   0.0%   0.0% | (far, not gated)
+pronghorn  gallop  10x    0d  70 |  74.7%   5.9 |  76.1%   0.2   0.5 12.0 100.0%   0.0% | (time-lapse, not gated)
+pronghorn  gallop  10x   20d  70 |  76.1%   6.5 |  83.7%   0.2   0.7 12.0 100.0%   0.0% | (time-lapse, not gated)
+cougar     walk     1x    0d  70 |   5.0%   0.1 |   4.9%   0.0   0.0  1.4   0.0%   0.0% | (far, not gated)
+cougar     walk     1x   20d  70 |   9.3%   5.6 |   6.2%   0.0   0.1  2.0   0.0%   0.0% | (far, not gated)
+cougar     walk    10x    0d  70 |  12.5%   0.1 |  12.5%   0.0   0.0 12.0 100.0%   0.0% | (time-lapse, not gated)
+cougar     walk    10x   20d  70 |  18.5%   5.5 |  39.7%   0.0   0.1 12.0 100.0%   0.0% | (time-lapse, not gated)
+cougar     trot     1x    0d  70 |   8.3%   1.0 |   5.0%   0.0   0.1  3.8   0.0%   0.0% | (far, not gated)
+cougar     trot     1x   20d  70 |  10.7%   6.3 |   7.2%   0.0   0.1  5.6   0.0%   0.0% | (far, not gated)
+cougar     trot    10x    0d  70 |  68.3%   0.9 |  68.7%   0.0   0.1 12.0 100.0%   0.0% | (time-lapse, not gated)
+cougar     trot    10x   20d  70 |  70.3%   5.6 |  78.7%   0.0   0.1 12.0 100.0%   0.0% | (time-lapse, not gated)
+cougar     gallop   1x    0d  70 |  17.3%   8.7 |   3.9%   0.3   0.9  5.9   0.0%   0.0% | (far, not gated)
+cougar     gallop   1x   20d  70 |  16.9%   8.3 |   4.5%   0.3   1.0  8.7   0.0%   0.0% | (far, not gated)
+cougar     gallop  10x    0d  70 |  77.9%   8.0 |  79.9%   0.3   0.8 12.0 100.0%   0.0% | (time-lapse, not gated)
+cougar     gallop  10x   20d  70 |  79.2%   7.0 |  86.4%   0.3   0.9 12.0 100.0%   0.0% | (time-lapse, not gated)
+coyote     walk     1x    0d  70 |   4.8%   0.1 |   4.7%   0.0   0.0  1.1   0.0%   0.0% | (far, not gated)
+coyote     walk     1x   20d  70 |   9.2%   5.4 |   6.0%   0.0   0.1  1.7   0.0%   0.0% | (far, not gated)
+coyote     walk    10x    0d  70 |   4.3%   0.1 |   4.3%   0.0   0.0 11.5   0.0%   0.0% | (time-lapse, not gated)
+coyote     walk    10x   20d  70 |   9.2%   5.4 |  29.1%   0.0   0.1 12.0 100.0%   0.0% | (time-lapse, not gated)
+coyote     trot     1x    0d  70 |   7.5%   0.9 |   4.8%   0.0   0.1  3.2   0.0%   0.0% | (far, not gated)
+coyote     trot     1x   20d  70 |  10.3%   6.1 |   6.9%   0.0   0.1  4.7   0.0%   0.0% | (far, not gated)
+coyote     trot    10x    0d  70 |  62.4%   0.9 |  62.8%   0.0   0.1 12.0 100.0%   0.0% | (time-lapse, not gated)
+coyote     trot    10x   20d  70 |  64.8%   5.4 |  74.6%   0.0   0.1 12.0 100.0%   0.0% | (time-lapse, not gated)
+coyote     gallop   1x    0d  70 |  13.7%   6.6 |   3.5%   0.2   0.6  5.3   0.0%   0.0% | (far, not gated)
+coyote     gallop   1x   20d  70 |  13.6%   7.8 |   4.2%   0.2   0.8  7.7   0.0%   0.0% | (far, not gated)
+coyote     gallop  10x    0d  70 |  75.6%   6.4 |  77.3%   0.2   0.6 12.0 100.0%   0.0% | (time-lapse, not gated)
+coyote     gallop  10x   20d  70 |  77.0%   6.2 |  84.6%   0.2   0.7 12.0 100.0%   0.0% | (time-lapse, not gated)
+mule deer  walk     1x    0d  70 |   4.3%   0.1 |   4.2%   0.0   0.1  1.2   0.0%   0.0% | (far, not gated)
+mule deer  walk     1x   20d  70 |   9.0%   6.5 |   5.7%   0.0   0.1  1.8   0.0%   0.0% | (far, not gated)
+mule deer  walk    10x    0d  70 |   4.3%   0.1 |   4.3%   0.0   0.1 12.0 100.0%   0.0% | (time-lapse, not gated)
+mule deer  walk    10x   20d  70 |  10.6%   6.5 |  32.2%   0.0   0.1 12.0 100.0%   0.0% | (time-lapse, not gated)
+mule deer  trot     1x    0d  70 |   7.0%   1.1 |   4.8%   0.1   0.1  3.2   0.0%   0.0% | (far, not gated)
+mule deer  trot     1x   20d  70 |   9.9%   7.2 |   7.1%   0.1   0.2  4.7   0.0%   0.0% | (far, not gated)
+mule deer  trot    10x    0d  70 |  61.9%   1.1 |  62.3%   0.1   0.1 12.0 100.0%   0.0% | (time-lapse, not gated)
+mule deer  trot    10x   20d  70 |  64.3%   6.4 |  74.3%   0.1   0.2 12.0 100.0%   0.0% | (time-lapse, not gated)
+mule deer  gallop   1x    0d  70 |  11.1%   6.3 |   3.3%   0.1   0.5  4.7   0.0%   0.0% | (far, not gated)
+mule deer  gallop   1x   20d  70 |  11.5%   9.0 |   3.8%   0.3   0.8  6.9   0.0%   0.0% | (far, not gated)
+mule deer  gallop  10x    0d  70 |  72.9%   6.2 |  74.4%   0.2   0.5 12.0 100.0%   0.0% | (time-lapse, not gated)
+mule deer  gallop  10x   20d  70 |  74.5%   6.8 |  82.6%   0.2   0.7 12.0 100.0%   0.0% | (time-lapse, not gated)
+mule deer  stot     1x    0d  70 |   3.0%   1.0 |   0.2%   0.0   0.0  2.6   0.0%   0.0% | (far, not gated)
+mule deer  stot     1x   20d  70 |   7.6%   7.8 |   0.3%   0.0   0.2  3.9   0.0%   0.0% | (far, not gated)
+mule deer  stot    10x    0d  70 |   0.0%   0.0 |   0.0%   0.0   0.0 12.0 100.0%   0.0% | (time-lapse, not gated)
+mule deer  stot    10x   20d  70 |   0.0%   3.9 |   0.0%   0.0   0.0 12.0 100.0%   0.0% | (time-lapse, not gated)
+-- camera 100 m (IK fading) --
+bison      walk     1x    0d 100 |   8.4%   0.1 |   7.9%   0.0   0.1  0.9   0.0%   0.0% | (far, not gated)
+bison      walk     1x   20d 100 |  18.4%  22.1 |  11.2%   0.1   0.2  1.3   0.0%   0.0% | (far, not gated)
+bison      walk    10x    0d 100 |   7.8%   0.1 |   7.5%   0.0   0.1  9.1   0.0%   0.0% | (time-lapse, not gated)
+bison      walk    10x   20d 100 |  18.1%  22.1 |  15.2%   0.1   0.2 12.0 100.0%   0.0% | (time-lapse, not gated)
+bison      trot     1x    0d 100 |  15.5%   3.0 |   9.0%   0.1   0.1  2.0   0.0%   0.0% | (far, not gated)
+bison      trot     1x   20d 100 |  21.4%  23.7 |  17.0%   0.4   6.6  3.0   0.0%   8.6% | (far, not gated)
+bison      trot    10x    0d 100 |  40.6%   3.0 |  41.7%   0.1   0.1 12.0 100.0%   0.0% | (time-lapse, not gated)
+bison      trot    10x   20d 100 |  45.4%  21.8 |  60.3%   0.8   6.5 12.0 100.0%  10.0% | (time-lapse, not gated)
+bison      gallop   1x    0d 100 |  26.9%  16.8 |   9.2%   0.8   7.1  3.3   0.0%   7.7% | (far, not gated)
+bison      gallop   1x   20d 100 |  28.5%  24.3 |  11.2%   0.7   4.5  4.8   0.0%   0.5% | (far, not gated)
+bison      gallop  10x    0d 100 |  59.5%  16.0 |  64.1%   1.0   3.9 12.0 100.0%  22.2% | (time-lapse, not gated)
+bison      gallop  10x   20d 100 |  62.0%  24.1 |  75.8%   1.0   3.8 12.0 100.0%  11.1% | (time-lapse, not gated)
+wolf       walk     1x    0d 100 |   7.9%   0.2 |   7.6%   0.1   0.1  0.9   0.0%   0.0% | (far, not gated)
+wolf       walk     1x   20d 100 |  18.0%  15.5 |  10.1%   0.1   0.2  1.4   0.0%   0.0% | (far, not gated)
+wolf       walk    10x    0d 100 |   7.4%   0.2 |   7.2%   0.1   0.1  9.2   0.0%   0.0% | (time-lapse, not gated)
+wolf       walk    10x   20d 100 |  17.7%  15.5 |  15.8%   0.1   0.2 12.0 100.0%   0.0% | (time-lapse, not gated)
+wolf       trot     1x    0d 100 |  14.3%   3.1 |   8.2%   0.1   0.2  2.6   0.0%   0.0% | (far, not gated)
+wolf       trot     1x   20d 100 |  20.3%  17.3 |  12.3%   0.2   1.6  3.9   0.0%   3.2% | (far, not gated)
+wolf       trot    10x    0d 100 |  54.1%   3.0 |  54.9%   0.1   0.2 12.0 100.0%   0.0% | (time-lapse, not gated)
+wolf       trot    10x   20d 100 |  57.6%  15.4 |  69.2%   0.3   1.6 12.0 100.0%  10.0% | (time-lapse, not gated)
+wolf       gallop   1x    0d 100 |  26.4%  19.1 |   7.3%   0.7   3.1  4.2   0.0%   0.4% | (far, not gated)
+wolf       gallop   1x   20d 100 |  27.3%  21.7 |   9.3%   0.9   3.3  6.1   0.0%   0.0% | (far, not gated)
+wolf       gallop  10x    0d 100 |  67.9%  18.8 |  71.7%   0.9   3.0 12.0 100.0%   0.0% | (time-lapse, not gated)
+wolf       gallop  10x   20d 100 |  69.5%  16.5 |  81.0%   0.7   2.3 12.0 100.0%   0.0% | (time-lapse, not gated)
+pronghorn  walk     1x    0d 100 |   6.8%   0.1 |   6.5%   0.1   0.1  1.2   0.0%   0.0% | (far, not gated)
+pronghorn  walk     1x   20d 100 |  17.4%  13.1 |   8.8%   0.1   0.2  1.7   0.0%   0.0% | (far, not gated)
+pronghorn  walk    10x    0d 100 |   6.0%   0.1 |   6.0%   0.1   0.1 11.9   0.0%   0.0% | (time-lapse, not gated)
+pronghorn  walk    10x   20d 100 |  17.6%  12.9 |  32.5%   0.1   0.2 12.0 100.0%   0.0% | (time-lapse, not gated)
+pronghorn  trot     1x    0d 100 |  13.0%   2.6 |   8.1%   0.1   0.2  3.3   0.0%   0.0% | (far, not gated)
+pronghorn  trot     1x   20d 100 |  19.3%  14.0 |  12.0%   0.1   0.4  4.9   0.0%   0.0% | (far, not gated)
+pronghorn  trot    10x    0d 100 |  63.4%   2.5 |  64.1%   0.1   0.2 12.0 100.0%   0.0% | (time-lapse, not gated)
+pronghorn  trot    10x   20d 100 |  66.1%  12.4 |  75.5%   0.1   0.4 12.0 100.0%   0.0% | (time-lapse, not gated)
+pronghorn  gallop   1x    0d 100 |  21.4%  13.1 |   6.5%   0.5   1.9  5.0   0.0%   0.0% | (far, not gated)
+pronghorn  gallop   1x   20d 100 |  22.4%  17.6 |   7.9%   0.7   2.6  7.3   0.0%   0.0% | (far, not gated)
+pronghorn  gallop  10x    0d 100 |  73.6%  12.4 |  76.2%   0.5   1.7 12.0 100.0%   0.0% | (time-lapse, not gated)
+pronghorn  gallop  10x   20d 100 |  75.0%  13.4 |  84.0%   0.6   1.8 12.0 100.0%   0.0% | (time-lapse, not gated)
+cougar     walk     1x    0d 100 |   8.4%   0.1 |   7.9%   0.0   0.1  1.4   0.0%   0.0% | (far, not gated)
+cougar     walk     1x   20d 100 |  18.2%  11.3 |  10.3%   0.0   0.1  2.0   0.0%   0.0% | (far, not gated)
+cougar     walk    10x    0d 100 |  14.2%   0.1 |  14.2%   0.0   0.1 12.0 100.0%   0.0% | (time-lapse, not gated)
+cougar     walk    10x   20d 100 |  23.1%  11.2 |  40.3%   0.0   0.1 12.0 100.0%   0.0% | (time-lapse, not gated)
+cougar     trot     1x    0d 100 |  15.9%   2.2 |   8.8%   0.1   1.2  3.8   0.0%   2.8% | (far, not gated)
+cougar     trot     1x   20d 100 |  21.2%  12.7 |  22.1%   0.6   7.0  5.6   0.0%  13.1% | (far, not gated)
+cougar     trot    10x    0d 100 |  68.2%   2.2 |  68.8%   0.2   1.2 12.0 100.0%  10.0% | (time-lapse, not gated)
+cougar     trot    10x   20d 100 |  70.5%  11.3 |  78.8%   0.8   7.0 12.0 100.0%  10.0% | (time-lapse, not gated)
+cougar     gallop   1x    0d 100 |  32.6%  17.1 |   9.4%   1.0   3.5  5.9   0.0%   8.9% | (far, not gated)
+cougar     gallop   1x   20d 100 |  33.6%  15.6 |   9.7%   0.6   2.2  8.7   0.0%   0.0% | (far, not gated)
+cougar     gallop  10x    0d 100 |  77.0%  16.3 |  80.3%   1.1   2.8 12.0 100.0%  14.3% | (time-lapse, not gated)
+cougar     gallop  10x   20d 100 |  78.3%  12.0 |  86.9%   0.4   1.5 12.0 100.0%   0.0% | (time-lapse, not gated)
+coyote     walk     1x    0d 100 |   7.9%   0.1 |   7.6%   0.0   0.1  1.1   0.0%   0.0% | (far, not gated)
+coyote     walk     1x   20d 100 |  17.9%  11.1 |  10.0%   0.0   0.1  1.7   0.0%   0.0% | (far, not gated)
+coyote     walk    10x    0d 100 |   7.1%   0.1 |   7.0%   0.0   0.1 11.5   0.0%   0.0% | (time-lapse, not gated)
+coyote     walk    10x   20d 100 |  17.7%  11.0 |  30.1%   0.0   0.1 12.0 100.0%   0.0% | (time-lapse, not gated)
+coyote     trot     1x    0d 100 |  14.1%   2.2 |   8.1%   0.1   0.1  3.2   0.0%   0.0% | (far, not gated)
+coyote     trot     1x   20d 100 |  20.2%  12.4 |  12.5%   0.1   1.5  4.7   0.0%   5.3% | (far, not gated)
+coyote     trot    10x    0d 100 |  62.2%   2.1 |  62.9%   0.1   0.1 12.0 100.0%   0.0% | (time-lapse, not gated)
+coyote     trot    10x   20d 100 |  65.0%  11.1 |  74.7%   0.2   1.5 12.0 100.0%  10.0% | (time-lapse, not gated)
+coyote     gallop   1x    0d 100 |  26.5%  13.8 |   7.1%   0.5   2.2  5.3   0.0%   2.3% | (far, not gated)
+coyote     gallop   1x   20d 100 |  27.4%  15.5 |   8.7%   0.6   2.3  7.7   0.0%   0.0% | (far, not gated)
+coyote     gallop  10x    0d 100 |  74.6%  13.6 |  77.6%   0.7   2.2 12.0 100.0%   0.0% | (time-lapse, not gated)
+coyote     gallop  10x   20d 100 |  75.8%  11.9 |  85.0%   0.5   1.6 12.0 100.0%   0.0% | (time-lapse, not gated)
+mule deer  walk     1x    0d 100 |   7.2%   0.1 |   6.9%   0.1   0.1  1.2   0.0%   0.0% | (far, not gated)
+mule deer  walk     1x   20d 100 |  17.6%  13.4 |   9.6%   0.1   0.2  1.8   0.0%   0.0% | (far, not gated)
+mule deer  walk    10x    0d 100 |   7.0%   0.1 |   6.9%   0.1   0.1 12.0 100.0%   0.0% | (time-lapse, not gated)
+mule deer  walk    10x   20d 100 |  17.9%  13.2 |  33.0%   0.1   0.2 12.0 100.0%   0.0% | (time-lapse, not gated)
+mule deer  trot     1x    0d 100 |  13.2%   2.7 |   8.2%   0.1   0.2  3.2   0.0%   0.0% | (far, not gated)
+mule deer  trot     1x   20d 100 |  19.5%  14.7 |  12.1%   0.1   0.4  4.7   0.0%   0.0% | (far, not gated)
+mule deer  trot    10x    0d 100 |  61.7%   2.6 |  62.4%   0.1   0.2 12.0 100.0%   0.0% | (time-lapse, not gated)
+mule deer  trot    10x   20d 100 |  64.6%  13.1 |  74.3%   0.2   0.4 12.0 100.0%   0.0% | (time-lapse, not gated)
+mule deer  gallop   1x    0d 100 |  21.7%  14.3 |   6.4%   0.5   2.0  4.7   0.0%   0.0% | (far, not gated)
+mule deer  gallop   1x   20d 100 |  23.0%  18.4 |   7.8%   0.7   2.6  6.9   0.0%   0.0% | (far, not gated)
+mule deer  gallop  10x    0d 100 |  71.8%  14.1 |  74.6%   0.6   2.0 12.0 100.0%   0.0% | (time-lapse, not gated)
+mule deer  gallop  10x   20d 100 |  73.3%  14.1 |  82.9%   0.6   1.8 12.0 100.0%   0.0% | (time-lapse, not gated)
+mule deer  stot     1x    0d 100 |   3.0%   1.0 |   0.2%   0.0   0.0  2.6   0.0%   0.0% | (far, not gated)
+mule deer  stot     1x   20d 100 |  15.5%  15.0 |   0.6%   0.1   0.5  3.9   0.0%   0.0% | (far, not gated)
+mule deer  stot    10x    0d 100 |   0.0%   0.0 |   0.0%   0.0   0.0 12.0 100.0%   0.0% | (time-lapse, not gated)
+mule deer  stot    10x   20d 100 |   0.0%   8.0 |   0.0%   0.1   0.1 12.0 100.0%   0.0% | (time-lapse, not gated)
+-- camera 180 m (IK fading) --
+bison      walk     1x    0d 180 |   8.8%   0.1 |   8.2%   0.0   0.1  0.9   0.0%   0.0% | (far, not gated)
+bison      walk     1x   20d 180 |  23.7%  29.5 |  11.6%   0.1   0.3  1.3   0.0%   0.0% | (far, not gated)
+bison      walk    10x    0d 180 |   8.0%   0.1 |   7.8%   0.0   0.1  9.1   0.0%   0.0% | (time-lapse, not gated)
+bison      walk    10x   20d 180 |  23.5%  29.6 |  15.5%   0.2   0.3 12.0 100.0%   0.0% | (time-lapse, not gated)
+bison      trot     1x    0d 180 |  16.3%   3.2 |   9.4%   0.1   0.1  2.0   0.0%   0.0% | (far, not gated)
+bison      trot     1x   20d 180 |  26.2%  31.4 |  20.5%   0.8   9.3  3.0   0.0%  11.0% | (far, not gated)
+bison      trot    10x    0d 180 |  40.6%   3.2 |  41.7%   0.1   0.1 12.0 100.0%   0.0% | (time-lapse, not gated)
+bison      trot    10x   20d 180 |  46.6%  29.1 |  60.4%   1.2   9.3 12.0 100.0%  10.0% | (time-lapse, not gated)
+bison      gallop   1x    0d 180 |  28.5%  18.0 |   9.8%   0.9   7.9  3.3   0.0%   8.2% | (far, not gated)
+bison      gallop   1x   20d 180 |  32.5%  31.6 |  12.4%   1.0   6.8  4.8   0.0%   1.0% | (far, not gated)
+bison      gallop  10x    0d 180 |  59.4%  17.1 |  64.2%   1.2   4.4 12.0 100.0%  22.2% | (time-lapse, not gated)
+bison      gallop  10x   20d 180 |  62.3%  31.6 |  76.1%   1.5   6.1 12.0 100.0%  11.1% | (time-lapse, not gated)
+wolf       walk     1x    0d 180 |   8.2%   0.2 |   7.9%   0.1   0.1  0.9   0.0%   0.0% | (far, not gated)
+wolf       walk     1x   20d 180 |  23.3%  20.7 |  10.5%   0.1   0.3  1.4   0.0%   0.0% | (far, not gated)
+wolf       walk    10x    0d 180 |   7.6%   0.2 |   7.5%   0.1   0.1  9.2   0.0%   0.0% | (time-lapse, not gated)
+wolf       walk    10x   20d 180 |  23.0%  20.7 |  16.1%   0.1   0.3 12.0 100.0%   0.0% | (time-lapse, not gated)
+wolf       trot     1x    0d 180 |  15.0%   3.3 |   8.5%   0.1   0.2  2.6   0.0%   0.0% | (far, not gated)
+wolf       trot     1x   20d 180 |  25.2%  22.8 |  15.4%   0.4   3.8  3.9   0.0%   8.1% | (far, not gated)
+wolf       trot    10x    0d 180 |  54.0%   3.2 |  54.9%   0.1   0.2 12.0 100.0%   0.0% | (time-lapse, not gated)
+wolf       trot    10x   20d 180 |  58.3%  20.5 |  69.2%   0.6   3.8 12.0 100.0%  10.0% | (time-lapse, not gated)
+wolf       gallop   1x    0d 180 |  27.8%  20.3 |   7.7%   0.8   3.4  4.2   0.0%   1.4% | (far, not gated)
+wolf       gallop   1x   20d 180 |  30.9%  27.2 |  10.6%   1.2   4.5  6.1   0.0%   0.0% | (far, not gated)
+wolf       gallop  10x    0d 180 |  67.9%  20.0 |  71.7%   1.0   3.3 12.0 100.0%   0.0% | (time-lapse, not gated)
+wolf       gallop  10x   20d 180 |  69.5%  21.5 |  81.2%   1.0   3.0 12.0 100.0%   0.0% | (time-lapse, not gated)
+pronghorn  walk     1x    0d 180 |   9.8%   0.1 |   9.8%   0.1   0.1  1.1   0.0%   0.0% | (far, not gated)
+pronghorn  walk     1x   20d 180 |  22.8%  17.6 |  11.5%   0.1   0.3  1.6   0.0%   0.0% | (far, not gated)
+pronghorn  walk    10x    0d 180 |   9.4%   0.1 |   9.4%   0.1   0.1 11.2   0.0%   0.0% | (time-lapse, not gated)
+pronghorn  walk    10x   20d 180 |  22.6%  17.5 |  32.6%   0.1   0.3 12.0 100.0%   0.0% | (time-lapse, not gated)
+pronghorn  trot     1x    0d 180 |  13.4%   2.7 |  10.9%   0.1   0.2  3.1   0.0%   0.0% | (far, not gated)
+pronghorn  trot     1x   20d 180 |  23.7%  18.5 |  14.2%   0.2   0.6  4.6   0.0%   1.3% | (far, not gated)
+pronghorn  trot    10x    0d 180 |  63.4%   2.7 |  64.1%   0.1   0.2 12.0 100.0%   0.0% | (time-lapse, not gated)
+pronghorn  trot    10x   20d 180 |  66.6%  16.5 |  75.5%   0.2   0.6 12.0 100.0%  10.0% | (time-lapse, not gated)
+pronghorn  gallop   1x    0d 180 |  19.6%  13.8 |   9.7%   0.5   2.1  4.7   0.0%   0.0% | (far, not gated)
+pronghorn  gallop   1x   20d 180 |  23.9%  22.1 |  12.1%   1.0   3.7  6.9   0.0%   0.0% | (far, not gated)
+pronghorn  gallop  10x    0d 180 |  73.5%  13.0 |  76.2%   0.6   1.9 12.0 100.0%   0.0% | (time-lapse, not gated)
+pronghorn  gallop  10x   20d 180 |  75.0%  17.4 |  84.2%   0.8   2.3 12.0 100.0%   0.0% | (time-lapse, not gated)
+cougar     walk     1x    0d 180 |   8.7%   0.1 |   8.2%   0.0   0.1  1.4   0.0%   0.0% | (far, not gated)
+cougar     walk     1x   20d 180 |  23.5%  15.2 |  10.7%   0.1   0.2  2.0   0.0%   0.0% | (far, not gated)
+cougar     walk    10x    0d 180 |  14.3%   0.1 |  14.4%   0.0   0.1 12.0 100.0%   0.0% | (time-lapse, not gated)
+cougar     walk    10x   20d 180 |  26.7%  15.0 |  40.4%   0.1   0.2 12.0 100.0%   0.0% | (time-lapse, not gated)
+cougar     trot     1x    0d 180 |  17.0%   2.4 |   9.5%   0.1   1.8  3.8   0.0%   4.2% | (far, not gated)
+cougar     trot     1x   20d 180 |  26.0%  16.7 |  26.6%   0.9   8.9  5.6   0.0%  14.6% | (far, not gated)
+cougar     trot    10x    0d 180 |  68.1%   2.3 |  68.8%   0.2   1.8 12.0 100.0%  10.0% | (time-lapse, not gated)
+cougar     trot    10x   20d 180 |  70.9%  15.1 |  78.8%   1.0   8.9 12.0 100.0%  10.0% | (time-lapse, not gated)
+cougar     gallop   1x    0d 180 |  34.3%  18.0 |  10.5%   1.1   4.2  5.9   0.0%   9.6% | (far, not gated)
+cougar     gallop   1x   20d 180 |  37.4%  19.6 |  11.3%   0.7   3.0  8.7   0.0%   0.0% | (far, not gated)
+cougar     gallop  10x    0d 180 |  76.9%  17.2 |  80.3%   1.3   3.1 12.0 100.0%  14.3% | (time-lapse, not gated)
+cougar     gallop  10x   20d 180 |  78.3%  15.7 |  87.0%   0.5   1.8 12.0 100.0%   0.0% | (time-lapse, not gated)
+coyote     walk     1x    0d 180 |  18.2%   0.1 |  18.3%   0.0   0.1  1.0   0.0%   0.0% | (far, not gated)
+coyote     walk     1x   20d 180 |  26.5%  14.9 |  19.6%   0.1   0.2  1.4   0.0%   0.0% | (far, not gated)
+coyote     walk    10x    0d 180 |  18.2%   0.1 |  18.2%   0.0   0.1  9.6   0.0%   0.0% | (time-lapse, not gated)
+coyote     walk    10x   20d 180 |  26.3%  14.9 |  30.2%   0.1   0.2 12.0 100.0%   0.0% | (time-lapse, not gated)
+coyote     trot     1x    0d 180 |  18.7%   2.3 |  18.6%   0.1   0.1  2.7   0.0%   0.0% | (far, not gated)
+coyote     trot     1x   20d 180 |  26.4%  16.4 |  22.4%   0.3   3.1  4.0   0.0%   9.2% | (far, not gated)
+coyote     trot    10x    0d 180 |  62.2%   2.3 |  62.9%   0.1   0.1 12.0 100.0%   0.0% | (time-lapse, not gated)
+coyote     trot    10x   20d 180 |  65.6%  14.8 |  74.7%   0.5   3.1 12.0 100.0%  10.0% | (time-lapse, not gated)
+coyote     gallop   1x    0d 180 |  22.5%  14.6 |  18.5%   0.6   2.5  4.4   0.0%   3.1% | (far, not gated)
+coyote     gallop   1x   20d 180 |  24.7%  19.5 |  20.5%   0.8   3.2  6.5   0.0%   0.0% | (far, not gated)
+coyote     gallop  10x    0d 180 |  74.5%  14.4 |  77.6%   0.7   2.4 12.0 100.0%   0.0% | (time-lapse, not gated)
+coyote     gallop  10x   20d 180 |  75.9%  15.5 |  85.1%   0.7   2.1 12.0 100.0%   0.0% | (time-lapse, not gated)
+mule deer  walk     1x    0d 180 |   7.5%   0.1 |   7.1%   0.1   0.1  1.2   0.0%   0.0% | (far, not gated)
+mule deer  walk     1x   20d 180 |  23.0%  17.9 |  10.0%   0.1   0.3  1.8   0.0%   0.0% | (far, not gated)
+mule deer  walk    10x    0d 180 |   7.3%   0.1 |   7.2%   0.1   0.1 12.0 100.0%   0.0% | (time-lapse, not gated)
+mule deer  walk    10x   20d 180 |  22.9%  17.7 |  33.1%   0.1   0.3 12.0 100.0%   0.0% | (time-lapse, not gated)
+mule deer  trot     1x    0d 180 |  13.8%   2.8 |   8.5%   0.1   0.2  3.2   0.0%   0.0% | (far, not gated)
+mule deer  trot     1x   20d 180 |  24.5%  19.4 |  13.1%   0.2   1.2  4.7   0.0%   2.5% | (far, not gated)
+mule deer  trot    10x    0d 180 |  61.7%   2.8 |  62.4%   0.1   0.2 12.0 100.0%   0.0% | (time-lapse, not gated)
+mule deer  trot    10x   20d 180 |  65.1%  17.4 |  74.3%   0.3   1.2 12.0 100.0%  10.0% | (time-lapse, not gated)
+mule deer  gallop   1x    0d 180 |  22.9%  15.2 |   6.7%   0.5   2.3  4.7   0.0%   0.0% | (far, not gated)
+mule deer  gallop   1x   20d 180 |  26.8%  23.2 |   8.8%   1.0   3.7  6.9   0.0%   0.0% | (far, not gated)
+mule deer  gallop  10x    0d 180 |  71.7%  14.8 |  74.7%   0.6   2.2 12.0 100.0%   0.0% | (time-lapse, not gated)
+mule deer  gallop  10x   20d 180 |  73.3%  18.3 |  83.1%   0.8   2.4 12.0 100.0%   0.0% | (time-lapse, not gated)
+mule deer  stot     1x    0d 180 |   3.0%   1.0 |   0.2%   0.0   0.0  2.6   0.0%   0.0% | (far, not gated)
+mule deer  stot     1x   20d 180 |  21.3%  19.7 |   1.0%   0.2   0.8  3.9   0.0%   0.0% | (far, not gated)
+mule deer  stot    10x    0d 180 |   0.0%   0.0 |   0.0%   0.0   0.0 12.0 100.0%   0.0% | (time-lapse, not gated)
+mule deer  stot    10x   20d 180 |   0.0%  10.7 |   0.0%   0.1   0.2 12.0 100.0%   0.0% | (time-lapse, not gated)
+
+GATES PASS (1x rows)
