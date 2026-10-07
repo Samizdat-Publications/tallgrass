@@ -1609,7 +1609,7 @@ export function makeAnimalMaterials(sp: number, def: ModelDef, shared: AnimalSha
         // far-view dimming above takes the coat down at night, this gives part of it back)
         // (pale coats, a pronghorn's white, get little of it: they already stand out against the dark ground)
         float tgNL = 1.0 - 0.7 * smoothstep(0.18, 0.5, dot(diffuseColor.rgb, vec3(0.2126, 0.7152, 0.0722)));
-        diffuseColor.rgb *= 1.0 + 0.35 * uLow * uNightK * tgNL;${mangeFrag}`)
+        diffuseColor.rgb *= 1.0 + 0.55 * uLow * uNightK * tgNL;${mangeFrag}`)
       // sky fill: pull toward a warm neutral (so brown coats stay brown in blue shade), then boost it so the shaded side keeps form
       .replace(
         '#include <lights_fragment_end>',
@@ -1630,8 +1630,8 @@ export function makeAnimalMaterials(sp: number, def: ModelDef, shared: AnimalSha
         // by its outline and by value, without the night looking like day.
         float tgNR = pow(1.0 - clamp(dot(normalize(vViewPosition), normal), 0.0, 1.0), 2.8);
         float tgNK = smoothstep(0.25, 0.85, uLow) * uNightK;
-        totalEmissiveRadiance += vec3(0.5, 0.64, 0.95) * 0.4 * tgNR * (0.3 + 0.7 * vTgUp) * tgNK * (0.6 + 0.4 * vTgFar) * tgNL;
-        totalEmissiveRadiance += diffuseColor.rgb * vec3(0.045, 0.06, 0.11) * tgNK * (0.5 + 0.5 * vTgUp) * tgNL;`,
+        totalEmissiveRadiance += vec3(0.5, 0.64, 0.95) * 0.75 * tgNR * (0.3 + 0.7 * vTgUp) * tgNK * (0.6 + 0.4 * vTgFar) * tgNL;
+        totalEmissiveRadiance += diffuseColor.rgb * vec3(0.08, 0.105, 0.19) * tgNK * (0.5 + 0.5 * vTgUp) * tgNL;`,
       );
   };
   material.customProgramCacheKey = () => `tg-animal-${sp}-${variant}-${R8_SHADER.on ? 1 : 0}${R8_SHADER.bison ? 1 : 0}${R8_SHADER.flare ? 1 : 0}`;

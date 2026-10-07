@@ -438,7 +438,7 @@ export function computeAtmosphere(env: EnvLike, sm: Smoothed, u: SharedUniforms,
     L.hemiSky.lerp(_b.setRGB(l, l, l * 1.05), over * 0.5);
     L.hemiGround.lerp(_b.setRGB(l * 0.7, l * 0.68, l * 0.62), over * 0.4);
   }
-  L.exposure = lerp(k0.expo, k1.expo, t) * (1 + over * 0.2) * (1 + 0.22 * dark);
+  L.exposure = lerp(k0.expo, k1.expo, t) * (1 + over * 0.2) * (1 + 0.22 * dark) * (1 + 0.08 * u.night.value);
 
   // distance haze: a light near-field term (scaled down with camera altitude in the post pass) plus a fixed far term;
   // slightly heavier at dawn/dusk, in drought dust and in overcast
@@ -464,11 +464,12 @@ export function computeAtmosphere(env: EnvLike, sm: Smoothed, u: SharedUniforms,
   L.gradeHighlight.setRGB(1.0 + 0.08 * golden - 0.1 * nightG, 1.0 + 0.0 * golden + 0.02 * nightG, 1.0 - 0.1 * golden + 0.14 * nightG);
   L.gradeShadow.setRGB(1.0 - 0.14 * golden - 0.2 * nightG, 1.0 + 0.0 * golden + 0.0 * nightG, 1.0 + 0.24 * golden + 0.26 * nightG);
   L.gradeSat = 1.1 - 0.1 * golden + 0.06 * twilight - 0.1 * nightG - 0.12 * over - 0.04 * winter;
-  L.gradeContrast = 1.1 - 0.06 * over + 0.2 * nightG + 0.08 * twilight;
+  // (the night's contrast gain is kept modest: the power curve crushes everything under 0.18, which is the whole night scene)
+  L.gradeContrast = 1.1 - 0.06 * over + 0.12 * nightG + 0.08 * twilight;
   L.vignette = 0.26 + 0.06 * nightG;
   L.bloom = 0.17 + 0.13 * golden + 0.06 * nightG;
   // shadow floor: a faint cool lift, plus more at night so nothing is ever pure black
-  L.gradeLift.setRGB(0.0016 + 0.003 * nightG, 0.0021 + 0.0048 * nightG, 0.0034 + 0.0085 * nightG);
+  L.gradeLift.setRGB(0.0016 + 0.0048 * nightG, 0.0021 + 0.0078 * nightG, 0.0034 + 0.0135 * nightG);
   L.gradeLift.multiplyScalar(1 - 0.3 * dark);
 
   // russet ground under red dusk light compounds into wine: in autumn the low sun gives up some of its red

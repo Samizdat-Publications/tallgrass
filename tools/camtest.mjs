@@ -5,7 +5,7 @@
 //   follow  : a runner crosses the valley through the groves at 9 m/s, followed the way the director follows an animal, cinematic drift on
 //   pan     : cinematic glides from grove to grove (a new shot starts, no cut), then holds, as the director does for a far-off shot
 //   cuts    : snaps into grove interiors (a cut must also land clear)
-// node tools/camtest.mjs [--json out.json] [--logs] [--noobs]   (--noobs: tree avoidance off, to judge the smoothing on its own)
+// node tools/camtest.mjs [--json out.json] [--logs] [--noobs] [--only follow,cuts]   (--noobs: tree avoidance off, to judge the smoothing on its own)
 import { chromium } from 'playwright';
 import { createServer } from 'vite';
 import { resolve } from 'node:path';
@@ -28,7 +28,8 @@ try {
   await page.waitForFunction(() => window.__ready === true, null, { timeout: 180000 });
   const results = {};
   if (argv.includes('--noobs')) await page.evaluate(() => window.__engine.cam.setObstacles(null)); // the smoothing alone, without the tree avoidance
-  for (const scenario of ['orbit', 'follow', 'pan', 'cuts']) {
+  const only = argv.indexOf('--only') >= 0 ? argv[argv.indexOf('--only') + 1].split(',') : null;
+  for (const scenario of ['orbit', 'follow', 'pan', 'cuts'].filter((x) => !only || only.includes(x))) {
     const log = await page.evaluate((scenario) => {
       const e = window.__engine, cam = e.cam, DT = 1 / 60;
       // groves: the densest spots among the valley's trees (cottonwoods within 28 m), at least 70 m apart

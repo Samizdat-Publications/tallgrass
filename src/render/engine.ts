@@ -759,7 +759,8 @@ export class Engine {
       const focus = this.cam.getFocus(this._focus);
       u.occCam.value.copy(this.camera.position);
       u.occFocus.value.set(focus.x, focus.y + 0.5, focus.z);
-      const r = clamp(dist * 0.04, 1.4, 5);
+      // (the porthole through the canopy to the watched point was a pinhole at the usual 20 to 40 m shots; a wider one reads as a clearing)
+      const r = clamp(dist * 0.06, 2.2, 7);
       u.occParams.value.set(r * 0.5, r * 1.35, this.occlusionFade ? 1 - smoothstep(110, 175, dist) : 0);
     }
 
