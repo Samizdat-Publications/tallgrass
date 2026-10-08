@@ -22,6 +22,19 @@ interface ToolDef {
 /** How long the rail shows its labels when a session opens: two minutes, long enough to learn what each icon does. */
 const INTRO_MS = 120000;
 
+const RAIL_SEEN_KEY = 'tallgrass.rail.seen.v1';
+
+/** Has this browser already had its first session with the labelled rail? Marks it seen as a side effect (the first call returns false). */
+function railSeen(): boolean {
+  try {
+    if (window.localStorage.getItem(RAIL_SEEN_KEY) === '1') return true;
+    window.localStorage.setItem(RAIL_SEEN_KEY, '1');
+  } catch {
+    /* storage unavailable: treat every visit as the first */
+  }
+  return false;
+}
+
 export const TOOL_DEFS: ToolDef[] = [
   { id: 'rain', short: 'Rain', label: 'Call rain', hint: 'Rain falls across the valley', armedHint: '', group: 0 },
   { id: 'drought', short: 'Drought', label: 'Bring drought', hint: 'The rains fail for a time', armedHint: '', group: 0 },
@@ -55,9 +68,12 @@ export class ToolRail {
     this.el = h('nav', { class: 'tg-rail', 'aria-label': 'God tools', role: 'toolbar' });
     this.note = h('p', { class: 'tg-rail-note', role: 'status', hidden: true });
     this.el.append(h('p', { class: 'tg-rail-title tg-leaf', text: 'Tools' }), this.note);
-    // open for a few seconds at the start so the labels are seen once, then settle to icons
-    this.el.classList.add('is-intro');
-    window.setTimeout(() => this.el.classList.remove('is-intro'), INTRO_MS);
+    // open with labels for the first session only, so the labels are seen once; every later visit starts as plain icons
+    // (a calmer frame, more landscape). Storage may be blocked: then the intro just shows each time, as before.
+    if (!railSeen()) {
+      this.el.classList.add('is-intro');
+      window.setTimeout(() => this.el.classList.remove('is-intro'), INTRO_MS);
+    }
     // each visual group sits in its own box: when the rail wraps into more columns the groups stay whole
     let lastGroup = -1;
     let groupEl: HTMLElement | null = null;

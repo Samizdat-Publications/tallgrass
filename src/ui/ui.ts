@@ -115,6 +115,8 @@ export class GameUI {
   private onAnyDown: (e: PointerEvent) => void;
   private camOn = false;
   private hintDone = false;
+  /** Sim tick a running blizzard ends (from its event), for the status line while its snow has not yet built up on screen. */
+  private blizzardUntil = -1;
   private lastInput = performance.now();
   private dimmed = false;
   private dimAfter = DIM_IDLE_MS;
@@ -360,7 +362,11 @@ export class GameUI {
     this.followingId = f.following;
 
     this.ui.classList.toggle('has-pane', this.paneOpen);
-    this.slate.update(f.env);
+    for (const e of f.events) if (e.kind === 'blizzard') this.blizzardUntil = e.tick + e.a;
+    if (f.sky) f.sky.blizzardPending = f.tick < this.blizzardUntil;
+    this.slate.update(f.env, f.sky);
+    // a hint pill never shares the screen with a title card (the card owns the lower third)
+    this.ui.classList.toggle('has-chapter', this.chapterCard.isOn);
     this.time.update(f.speed, f.ticksPerSec, now);
     if (f.history.length) {
       this.pop.addHistory(f.history);
@@ -388,7 +394,7 @@ export class GameUI {
     this.firstFrame = false;
     this.flushToast(now);
     this.updateDim(now);
-    if (!this.hintDone && now - this.lastInput > HINT_IDLE_MS && !this.hidden && !this.cinematic && !this.result.isOpen && !this.titleOpen) this.showHint();
+    if (!this.hintDone && now - this.lastInput > HINT_IDLE_MS && !this.hidden && !this.cinematic && !this.result.isOpen && !this.titleOpen && !this.chapterCard.isOn) this.showHint();
   }
 
   /** The quiet hint about H and C. Shown once ever (per browser) after a minute of no input; also callable directly. */
@@ -822,6 +828,7 @@ export class GameUI {
   private resetWorld(f: UIFrame): void {
     this.seed = f.seed;
     this.scenario = f.scenario;
+    this.blizzardUntil = -1;
     this.pop.reset();
     this.tracker.reset();
     this.seasons.reset();

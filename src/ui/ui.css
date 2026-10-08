@@ -121,6 +121,15 @@
   pointer-events: auto;
 }
 
+/* The two panels that carry reading (population, chronicle) sit on a denser glass: over busy grass or snow the plain glass let the
+   texture behind the small numbers and sentences show through. Same smoke tint and blur, just more of it. */
+.tg-pop.tg-glass,
+.tg-chron.tg-glass {
+  background: rgba(26, 23, 17, 0.8);
+  -webkit-backdrop-filter: blur(calc(20 * var(--u))) saturate(1.15) brightness(var(--glass-dim));
+  backdrop-filter: blur(calc(20 * var(--u))) saturate(1.15) brightness(var(--glass-dim));
+}
+
 /* Everything that fades away in cinematic mode and under H. Each leaf fades itself (an ancestor with opacity would
    cut the glass off from the scene behind it). */
 .tg-leaf {
@@ -1758,10 +1767,14 @@ button.tg-ent-b:hover {
 
 /* ---- idle: the side panels settle to three quarters (enough backing to stay readable over trees) after a while with no input, and come back on any move or key ----- */
 .tg-ui.is-idle:not(.is-cinematic):not(.is-hidden) .tg-tool,
-.tg-ui.is-idle:not(.is-cinematic):not(.is-hidden) .tg-rail-title,
+.tg-ui.is-idle:not(.is-cinematic):not(.is-hidden) .tg-rail-title {
+  opacity: 0.75;
+  transition: opacity 1.2s var(--ease);
+}
+/* the reading panels dim less when idle, so their text stays legible */
 .tg-ui.is-idle:not(.is-cinematic):not(.is-hidden) .tg-chron,
 .tg-ui.is-idle:not(.is-cinematic):not(.is-hidden) .tg-pop {
-  opacity: 0.75;
+  opacity: 0.9;
   transition: opacity 1.2s var(--ease);
 }
 
@@ -2368,8 +2381,28 @@ button.tg-ent-b:hover {
   visibility: hidden;
   isolation: isolate;
 }
-.tg-chapter.is-on {
-  visibility: visible;
+.tg-chapter.is-on {
+  visibility: visible;
+}
+/* The card keeps clear of the population panel (bottom left): symmetric side room equal to the panel's width plus its margin, so the
+   words stay centred and never run under it. */
+@media (min-width: 900px) {
+  .tg-chapter {
+    padding-left: max(calc(24 * var(--u)), calc(var(--m) + 440 * var(--u) + 18 * var(--u)));
+    padding-right: max(calc(24 * var(--u)), calc(var(--m) + 440 * var(--u) + 18 * var(--u)));
+  }
+  /* with the graph open it fills the lower middle, so the card moves to the clear strip at the top centre (between the tools and the chronicle) */
+  .tg-ui:has(.tg-pop.is-open) .tg-chapter,
+  .tg-ui:has(.tg-pop.is-open) .tg-chapter.is-compact {
+    bottom: auto;
+    top: calc(var(--m) + 8 * var(--u));
+  }
+  .tg-ui:has(.tg-pop.is-open) .tg-chapter .tg-chapter-title {
+    font-size: calc(30 * var(--u));
+  }
+  .tg-ui:has(.tg-pop.is-open) .tg-chapter .tg-chapter-rule {
+    margin: calc(9 * var(--u)) auto calc(7 * var(--u));
+  }
 }
 .tg-chapter::before {
   /* soft feathered pool of shade behind the type, so it holds over bright sky and pale grass alike */
@@ -3144,6 +3177,7 @@ button.tg-ent-b:hover {
   display: none;
 }
 /* while the title is up the rest of the interface waits */
+.tg-ui.has-chapter .tg-hint,
 .tg-ui.has-title .tg-chrome,
 .tg-ui.has-title .tg-hint,
 .tg-ui.has-title .tg-chapter,

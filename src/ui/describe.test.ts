@@ -1,6 +1,6 @@
 // Event text checks: every event kind, including the v2 kinds, gives a clean sentence. Run: npx tsx src/ui/describe.test.ts
 import type { SimEvent, SimEventKind } from '../sim/sim';
-import { ChronicleVoice, describeEvent, describeFolded, eventWeight, foldKey } from './describe';
+import { ChronicleVoice, describeEvent, describeFolded, eventWeight, foldKey, skyWord, type SkyView } from './describe';
 
 let failures = 0;
 let checks = 0;
@@ -94,6 +94,22 @@ ok(describeEvent({ tick: 10, kind: 'nope' as SimEventKind, sp: 0, x: 0, y: 0, a:
   ok(/6/.test(line) && /coyotes/.test(line) && !line.includes(EM_DASH), `folded line carries the total: "${line}"`);
   const out = describeFolded({ ...e, kind: 'emigrated', sp: 3 }, 9, 3);
   ok(/9/.test(out) && /pronghorn/i.test(out), `folded departure line: "${out}"`);
+}
+
+// the status line says what is on screen: snow only while snow falls, blizzard only in a blizzard
+{
+  const clear: SkyView = { snow: 0, blizzard: 0, rain: 0, drought: 0, dustStorm: 0, flood: 0, overcast: 0 };
+  ok(skyWord({ weather: 0 }, clear) === 'clear', 'clear sky reads clear');
+  ok(skyWord({ weather: 4 }, clear) === 'clear', 'sim snow that is not on screen yet reads clear, not snow');
+  ok(skyWord({ weather: 4 }, { ...clear, overcast: 0.5 }) === 'overcast', 'clouds gathering before the snow reads overcast');
+  ok(skyWord({ weather: 4 }, { ...clear, snow: 0.6, overcast: 0.4 }) === 'snow', 'falling snow reads snow');
+  ok(skyWord({ weather: 4 }, { ...clear, snow: 1, blizzard: 0.9 }) === 'blizzard', 'a blizzard reads blizzard');
+  ok(skyWord({ weather: 0 }, { ...clear, blizzardPending: true }) === 'blizzard building', 'a blizzard event with no snow yet reads building');
+  ok(skyWord({ weather: 3 }, { ...clear, rain: 1 }) === 'storm', 'a storm reads storm');
+  ok(skyWord({ weather: 1 }, { ...clear, rain: 0.7 }) === 'rain', 'rain reads rain');
+  ok(skyWord({ weather: 0 }, { ...clear, dustStorm: 0.6 }) === 'dust storm', 'a dust storm reads dust storm');
+  ok(skyWord({ weather: 0 }, { ...clear, flood: 0.8 }) === 'clear, flood', 'a flood adds flood');
+  ok(skyWord({ weather: 4 }, undefined) === 'snow', 'without sky data the sim weather is used');
 }
 
 console.log(`${checks - failures}/${checks} checks passed`);
