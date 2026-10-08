@@ -45,7 +45,9 @@ const PROBE = `(async () => {
   const calm = b.def.far?.calm ?? 0;
   const hasSlope = typeof L.slopeResponse === 'function';
   const BUCKETS = [[0, 45], [45, 90], [90, 150], [150, 260]];
-  const acc = BUCKETS.map(() => ({ foot: 0, body: 0, n: 0, g: [], ang: [], frames: 0, ds: 0 }));
+  const acc = BUCKETS.map(() => ({ foot: 0, body: 0, n: 0, g: [], ang: [], angS: [], frames: 0, ds: 0 }));
+  const hist = new Map();
+  let clock = 0;
   const prev = new Map();
   const world = A.world;
   const ground = (x, z) => W.sampleHeight(world.height, world.hn, world.cell, x, z);
@@ -53,6 +55,7 @@ const PROBE = `(async () => {
   window.__probe = { hasSlope, acc, BUCKETS, get frames() { return frames; }, get used() { return used; }, prev };
   E.onFrame((dt) => {
     frames++;
+    clock += dt;
     const te = b.mesh.instanceMatrix.array, ga = b.gait.array, fx = b.fx.array;
     const cp = A.shared.uCamPos.value;
     const seen = new Set();
@@ -60,7 +63,7 @@ const PROBE = `(async () => {
       const id = b.ids[k];
       const o = k * 16, g = k * 4;
       const spd = ga[g + 1];
-      if (!(spd > 2.0)) { prev.delete(id); continue; }
+      if (!(spd > 2.0)) { prev.delete(id); hist.delete(id); continue; }
       const s = Math.hypot(te[o], te[o + 1], te[o + 2]);
       const R = [te[o] / s, te[o + 4] / s, te[o + 8] / s, te[o + 1] / s, te[o + 5] / s, te[o + 9] / s, te[o + 2] / s, te[o + 6] / s, te[o + 10] / s];
       const inst = { x: te[o + 12], y: te[o + 13], z: te[o + 14], s, pitch: Math.asin(Math.max(-1, Math.min(1, R[3]))), roll: Math.atan2(-R[5], R[4]), ch: 1, sh: 0 };
@@ -108,6 +111,19 @@ const PROBE = `(async () => {
         const w = feet[leg].w;
         a.g.push(Math.abs(w[1] - ground(w[0], w[2])) * 100 - 0);
       }
+      // centred heading error: the heading 0.1 s ago against the drawn travel over the 0.2 s window around it (no filter lag in either)
+      {
+        let hs = hist.get(id);
+        if (!hs) { hs = []; hist.set(id, hs); }
+        hs.push({ t: clock, x: inst.x, z: inst.z, hx: R[0], hz: R[6] });
+        while (hs.length > 2 && clock - hs[0].t > 0.5) hs.shift();
+        let m = null, o0 = null;
+        for (const e of hs) { if (!m || Math.abs(e.t - (clock - 0.1)) < Math.abs(m.t - (clock - 0.1))) m = e; if (!o0 || Math.abs(e.t - (clock - 0.2)) < Math.abs(o0.t - (clock - 0.2))) o0 = e; }
+        if (m && o0 && Math.abs(m.t - (clock - 0.1)) < 0.04 && Math.abs(o0.t - (clock - 0.2)) < 0.04) {
+          const tx = inst.x - o0.x, tz = inst.z - o0.z, th = Math.hypot(tx, tz);
+          if (th > 0.6) acc[bi].angS.push(Math.acos(Math.max(-1, Math.min(1, (m.hx * tx + m.hz * tz) / (Math.hypot(m.hx, m.hz) * th)))) * 180 / Math.PI);
+        }
+      }
       prev.set(id, { x: inst.x, y: inst.y, z: inst.z, bi, feet });
       used++;
     }
@@ -137,22 +153,23 @@ try {
     let step = 0;
     while ((Date.now() - t0) / 1000 < secs) {
       const ph = step++ % 6;
-      await page.evaluate((ph) => {
+      await page.evaluate(([ph, step]) => {
         const e = window.__engine;
         const ids = window.__find(1);
-        if (ids.length) window.__followId(ids[(Math.random() * ids.length) | 0]);
+        if (ids.length) window.__followId(ids[(step * 7 + ph) % ids.length]);
         e.cam.setView({ distance: [26, 60, 110, 190, 40, 130][ph], pitchDeg: [14, 20, 24, 28, 16, 22][ph] }, true);
-      }, ph);
+      }, [ph, step]);
       await page.waitForTimeout(6000);
     }
     const res = await page.evaluate(() => {
       const P = window.__probe;
-      return { hasSlope: P.hasSlope, frames: P.frames, used: P.used, buckets: P.BUCKETS.map((bk, i) => { const a = P.acc[i]; return { bk, foot: a.foot, body: a.body, n: a.n, g: a.g.length, gMean: a.g.length ? a.g.reduce((s, v) => s + v, 0) / a.g.length : NaN, gArr: a.g.slice(0, 20000), ang: a.ang.slice(0, 20000), frames: a.frames }; }) };
+      return { hasSlope: P.hasSlope, frames: P.frames, used: P.used, buckets: P.BUCKETS.map((bk, i) => { const a = P.acc[i]; return { bk, foot: a.foot, body: a.body, n: a.n, g: a.g.length, gMean: a.g.length ? a.g.reduce((s, v) => s + v, 0) / a.g.length : NaN, gArr: a.g.slice(0, 20000), ang: a.ang.slice(0, 20000), angS: a.angS.slice(0, 20000), frames: a.frames }; }) };
     });
     const out = res.buckets.map((r) => ({
       camD: `${r.bk[0]}-${r.bk[1]} m`, wolfFrames: r.frames, slipPct: r.body > 0 ? +(100 * r.foot / r.body).toFixed(1) : null,
       groundMeanCm: r.g ? +r.gMean.toFixed(1) : null, groundP95Cm: +pct(r.gArr, 0.95).toFixed(1),
       headingOffMeanDeg: r.ang.length ? +(r.ang.reduce((s, v) => s + v, 0) / r.ang.length).toFixed(1) : null, headingOffP95Deg: +pct(r.ang, 0.95).toFixed(1),
+      centredMeanDeg: r.angS.length ? +(r.angS.reduce((s, v) => s + v, 0) / r.angS.length).toFixed(1) : null, centredMedianDeg: +pct(r.angS, 0.5).toFixed(1), centredP95Deg: +pct(r.angS, 0.95).toFixed(1), over30Pct: r.angS.length ? +(100 * r.angS.filter((v) => v > 30).length / r.angS.length).toFixed(1) : null,
     }));
     console.log(`slopeResponse present: ${res.hasSlope}; frames ${res.frames}; wolf samples ${res.used}`);
     console.table(out);

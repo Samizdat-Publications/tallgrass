@@ -216,6 +216,15 @@ const TURN: Array<[number, number]> = byId<[number, number]>(
   },
   (s) => (s.flies ? [3.5, 2.6] : [7, 6]),
 );
+/**
+ * Running heading (R-heading): above a walk the drawn heading is handed over to the direction the animal is actually drawn
+ * travelling (the velocity of its interpolated render position, smoothed over HEAD_PATH_TAU), so the body points where the feet
+ * are going. The hand-over is full above HEAD_PATH_FULL m/s drawn speed and zero below HEAD_PATH_FROM, easing at HEAD_PATH_RATE.
+ */
+const HEAD_PATH_TAU = 0.1;
+const HEAD_PATH_FROM = 1.6;
+const HEAD_PATH_FULL = 3.2;
+const HEAD_PATH_RATE = 6;
 /** Largest lean (rad) into a turn at speed. */
 const BANK_MAX: number[] = byId({ bison: 0.2, wolf: 0.42, raven: 0.75, pronghorn: 0.42, rabbit: 0.3, cougar: 0.42, eagle: 0.62, hawk: 0.7 }, (s) => (s.flies ? 0.75 : 0.42));
 
@@ -556,6 +565,10 @@ class Slots {
   /** Drawn heading (rad) and its angular velocity: a critically damped follower of the sim heading. */
   hs = new Float32Array(this.cap);
   hw = new Float32Array(this.cap);
+  /** Velocity of the drawn path (m/s, world xz, smoothed over HEAD_PATH_TAU) and how far the drawn heading has been handed over to it (0 sim heading .. 1 travel direction). */
+  dvx = new Float32Array(this.cap);
+  dvz = new Float32Array(this.cap);
+  dvw = new Float32Array(this.cap);
   /** Seconds since a pounce began (negative = not pouncing), and what it is aimed at: a live animal id, or a fixed point. */
   pounce = new Float32Array(this.cap).fill(-1);
   ptid = new Uint32Array(this.cap);
@@ -641,6 +654,9 @@ class Slots {
     this.hunt = g(this.hunt, Float32Array);
     this.hs = g(this.hs, Float32Array);
     this.hw = g(this.hw, Float32Array);
+    this.dvx = g(this.dvx, Float32Array);
+    this.dvz = g(this.dvz, Float32Array);
+    this.dvw = g(this.dvw, Float32Array);
     { const b = new Float32Array(n).fill(-1); b.set(this.pounce); this.pounce = b; }
     this.ptid = g(this.ptid, Uint32Array);
     this.ptx = g(this.ptx, Float32Array);
@@ -1956,6 +1972,9 @@ export class AnimalLayer {
         S.bdy[slot] = 0;
         S.hs[slot] = h;
         S.hw[slot] = 0;
+        S.dvx[slot] = 0;
+        S.dvz[slot] = 0;
+        S.dvw[slot] = 0;
         S.spd[slot] = spdT;
         S.vis[slot] = 0;
         S.hdn[slot] = hdT;
@@ -1968,8 +1987,16 @@ export class AnimalLayer {
       }
       // The distance actually drawn since the last frame. The legs are locked to it (cadence = distance / stride), so a
       // planted foot stands still on the ground whatever the sim rate, time scale or snapshot jitter.
-      let ds = Math.hypot(x - S.px[slot], z - S.pz[slot]);
+      const stepX = x - S.px[slot], stepZ = z - S.pz[slot];
+      let ds = Math.hypot(stepX, stepZ);
       if (ds > 30) ds = 0; // a teleport (respawn, new world), not a step
+      // the velocity of the drawn path, smoothed over about 0.15 s: the heading follows it while the animal is running (below)
+      if (dt > 1e-4) {
+        const kv = 1 - Math.exp(-dt / HEAD_PATH_TAU);
+        const rvx = ds > 0 ? stepX / dt : 0, rvz = ds > 0 ? stepZ / dt : 0;
+        S.dvx[slot] += (rvx - S.dvx[slot]) * kv;
+        S.dvz[slot] += (rvz - S.dvz[slot]) * kv;
+      }
       // on a slope the body travels further along the ground than its shadow does (1 / cos(20 deg) = +6%): the feet move by that
       const dsGround = pr.kind === 0 && ds > 0 ? Math.hypot(ds, g0 - S.pgy[slot]) : ds;
       S.px[slot] = x;
@@ -2172,7 +2199,17 @@ export class AnimalLayer {
         S.hs[slot] = wrapPi(hs);
         S.hw[slot] = hw;
       }
-      const hd = S.hs[slot];
+      // Running: hand the drawn heading over to the direction of the drawn path. The follower above lags the path by tens of degrees
+      // in a turn (the feet then slide sideways); the path itself is already smooth. Fliers bank on the spring, a predator on its
+      // prey keeps the heading the pounce set up.
+      let hd = S.hs[slot];
+      if (!FLIES[sp]) {
+        const wT = pounceE > 0.3 ? 0 : smoothstep(HEAD_PATH_FROM, HEAD_PATH_FULL, S.vis[slot]);
+        S.dvw[slot] += (wT - S.dvw[slot]) * (1 - Math.exp(-dt * HEAD_PATH_RATE));
+        if (S.dvw[slot] > 0.002 && Math.hypot(S.dvx[slot], S.dvz[slot]) > 0.5) {
+          hd = wrapPi(hd + wrapPi(Math.atan2(S.dvz[slot], S.dvx[slot]) - hd) * S.dvw[slot]);
+        }
+      }
       const turnRate = S.hw[slot];
 
       // pose on the terrain
