@@ -504,7 +504,7 @@ export class Director {
       case 'townPlague': this.queueMoment('town', W('sylvaticPlague'), true); break;
       case 'pronghornMigration': this.queueMoment('migration', W('immigrated:3') ?? W('emigrated:3'), true, Sp.Deer); break;
       case 'mangeSeen': this.queueMoment('mange', W('mange'), true); break;
-      case 'hareBoom': this.queueMoment('hares', W('hareBoom'), true); break;
+      // (no hareBoom moment: jackrabbits are a density field and rarely show as bodies, so the shot framed empty grass; the field note itself stays)
       default: break;
     }
   }
