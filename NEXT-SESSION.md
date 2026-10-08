@@ -2,7 +2,14 @@
 
 **Updated:** 2026-10-04 afternoon, at the end of the v2 planning session. v1 is finished and live; v2 starts now. The plan is `V2-PLAN.md`.
 
-## State now (2026-10-07 evening, owner allowed work up to 97% weekly; start nothing new at 95%)
+## State now (2026-10-08 ~06:30, end of the extended session; weekly about 92%)
+- Default world is checkpoint v8b (v7c + snowDepth 1, dynamicTrees 1, treeCwRecruit 0.003, dogRescueYears 8). Golden 2b8abd08, 810eb241, b162b93a. Live and checked.
+- Everything is merged, pushed and deployed; nothing is running. No builder worktrees left (frozen worktrees under scratch/frozen are kept for reruns).
+- Latest reviews: review/round-17 (blind stills, scores 6/4/5/5/6/5) and review/round-18-video (Gemini). Their top items are planner calls: bison density and herd shape (spacing alone does not help, see DECISIONS), small animals and the followed animal not readable at default/follow cameras, mule deer near 10 and ravens at a flat ceiling in long runs, dynamics that read as jitter, water that reads as asphalt, UI footprint. Quick fixes still open: follow camera framing, title card overlapping the hint pill, weather status line during a blizzard, Cottonwood pack tint.
+- Branches on origin, not merged: r-winter-trees and r-winter-trees2 (living winter trees; one over budget, one looks ghostly).
+- Planner inputs: this file, MORNING.md, DECISIONS.md (2026-10-07 and 2026-10-08 entries), REVIEWS.md rounds 15 to 18, MAYBE-WANTS.md.
+
+### 2026-10-07 evening, owner allowed work up to 97% weekly; start nothing new at 95%)
 - Live = main with today's review fixes (overlay, chronicle, field-note camera, canopy clearance, night, beaver model and marsh, grounding, calm UI, wide-view terrain). Default world still v7c (golden 2cabdb62, 5ad21d26, 904ebf61).
 - v8 acceptance done: NOT adopted (prairie dogs 17/20 at >= 90% presence, gate 18). review/stability/v8-a009c8e/RESULT.md. Snow depth and dynamic trees both draw and pass short screens; the blocker is long-run prairie dog town fragility (planner item).
 - RUNNING: v8b acceptance (v8 + dogRescueYears 8), 20 x 1,000 generations, started about 23:15 from scratch/frozen/d8b8624, 14 threads, log scratch/accept_v8b.log, out scratch/frozen/d8b8624/review/stability/v8b-d8b8624/baseline (ETA about 03:00). If it passes all gates: shocks from the same worktree (--seeds 20 --ticks 720000 --sample 1500 --scenario cull70,drought,wolfwipe --threads 14, params {"snowDepth":1,"dynamicTrees":1,"treeCwRecruit":0.003,"dogRescueYears":8}); then adopt (flip four defaults, re-record golden, extend testpins with a V8_OFF, pin snowDepth 0, dynamicTrees 0, dogRescueYears 20 in CHALLENGE_PIN, challenge_suite, playtest, deploy).

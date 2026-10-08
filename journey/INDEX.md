@@ -112,3 +112,4 @@ Chronological. Use this to cut a progression video or landing page.
 | 2026-10-07 17:40 | still | [20261007-174000_still_v2-night-herd.jpg](20261007-174000_still_v2-night-herd.jpg) | A bison herd at night, now readable under the moon | review/wip/camera-night |
 | 2026-10-07 17:40 | still | [20261007-174000_still_v2-beaver-marsh.jpg](20261007-174000_still_v2-beaver-marsh.jpg) | A beaver pond from above, with a lodge, a dam and marshy shallows | review/wip/beaver-marsh |
 | 2026-10-07 18:50 | ui | [20261007-185000_ui_v2-graph-legend.jpg](20261007-185000_ui_v2-graph-legend.jpg) | The population graph at 100x: labelled legend, calm lines, honest scales | review/wip/ui-calm |
+| 2026-10-08 04:45 | ui | [20261008-044500_still_v2-v8b-blizzard.jpg](20261008-044500_still_v2-v8b-blizzard.jpg) | The live v8b world in a blizzard: deep drifts, bare windswept ground, bison and wolves in the snow | scratch/live.jpg |

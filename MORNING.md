@@ -2,6 +2,13 @@
 
 *(Updated 22:10 Tuesday 2026-10-06. This file is refreshed at every milestone.)*
 
+## 2026-10-08 overnight: v8b is the default world (live)
+Snow depth (drifts, bare windswept ground) and living trees (they seed, grow, burn to snags and fall) are now part of every valley, together with a fix for the one weakness every long run showed this week: prairie dog towns that died out stayed empty for decades. New colonies now arrive from the open prairie every 8 years instead of 20. The 20-world acceptance passed with every species present in all 20 worlds, and bison recovered from every shock test.
+
+Also overnight: a fresh review round (stills and video). It caught a real bug (a black disc in tree canopies from yesterday's camera change), now fixed and live. The rest of its list is for your planner: too many bison crowding the wide views (wider spacing alone barely changes it), small animals hard to see, mule deer and raven long-run dynamics, and water that looks like a road.
+
+![Blizzard over v8b snow drifts](journey/20261008-044500_still_v2-v8b-blizzard.jpg)
+
 ## 2026-10-07 afternoon and evening: review round and fixes (all live)
 A fresh blind critic (stills) and a Gemini video review looked at the v7c world (`review/round-15`, `review/round-16-video`). Fixed and deployed:
 - Territory overlay: every pack's range now shows as a lit, softly bordered colour patch with its name and den (it was nearly invisible by day and a flat blob at night).
