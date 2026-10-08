@@ -597,7 +597,7 @@ export function defaultParams(): Params {
     plagueRate: 0.08,
     smallGameField: 1, // v6b (was 0)
     raptorDogPref: 0.1, // v7c (was 1)
-    dogRescueYears: 20,
+    dogRescueYears: 8, // v8b (was 20)
     dogClip: 0,
     dogGrazeBonus: 0,
     wolfInRate: 0.2,
@@ -668,7 +668,7 @@ export function defaultParams(): Params {
     lightningRate: 0.05,
     lightningIgnite: 0.5,
     fireSpread: 1,
-    snowDepth: 0,
+    snowDepth: 1, // v8b (was 0)
     snowStorms: 4,
     snowFall: 0.2,
     snowDrift: 10,
@@ -712,9 +712,9 @@ export function defaultParams(): Params {
     floodGrass: 0.5,
     floodYoung: 0.3,
     floodAdult: 0.02,
-    dynamicTrees: 0,
+    dynamicTrees: 1, // v8b (was 0)
     treeGrowth: 1,
-    treeCwRecruit: 0.0015,
+    treeCwRecruit: 0.003, // v8b (was 0.0015)
     treeFloodBoost: 40,
     treeCwCap: 400,
     treeGroveMin: 12,

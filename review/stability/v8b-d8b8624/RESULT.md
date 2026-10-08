@@ -10,4 +10,4 @@ Params on top of v7c: snowDepth 1, dynamicTrees 1, treeCwRecruit 0.003, dogRescu
 | Raven CV >= 0.1 | 0.20 (min 0.17) | 0.19 | 0.18 | pass |
 | Every species present >= 90% in >= 18 of 20 worlds | all 20/20; prairie dogs worst 98% | prairie dogs 17/20 | prairie dogs 18/20 | pass |
 
-Verdict: acceptance PASSES with margin. Shock suite running (cull70, drought, wolfwipe; log scratch/shocks_v8b.log).
+Verdict: acceptance PASSES with margin. Shocks PASS: bison recovered in 100% (cull70), 100% (drought) and 95% (wolfwipe) of worlds; prairie dogs 100%, 100%, 90%. ADOPTED 2026-10-08.

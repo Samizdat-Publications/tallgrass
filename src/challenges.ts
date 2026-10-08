@@ -69,6 +69,8 @@ export const CHALLENGE_PIN: Record<string, number> = {
   stormCells: 0, fireSpread: 1, summerDroughtP: 0.1,
   // checkpoint v7c: raptors, cougars, mule deer, herd spacing and raptor taste for prairie dogs
   raptors: 0, 'cougar.initial': 0, 'muledeer.initial': 0, herdSpacingGraze: 0, raptorDogPref: 1,
+  // checkpoint v8b: snow depth, dynamic trees, prairie dog rescue interval
+  snowDepth: 0, dynamicTrees: 0, treeCwRecruit: 0.0015, dogRescueYears: 20,
 };
 /** The calendar the challenges were tuned on, with every v2 mechanism pinned off. */
 const CLASSIC = { calendarScale: 1, ...CHALLENGE_PIN };

@@ -1,8 +1,11 @@
 // Unit tests for S13 (dynamic trees). Run: npx tsx src/sim/trees.test.ts
-import { simHash } from '../headless/hash';
-import { applyOverrides, defaultParams } from './params';
+import { simHash as rawSimHash } from '../headless/hash';
+import { applyOverrides } from './params';
 import { Rng } from './rng';
-import { Sim, createSim } from './sim';
+import { Sim } from './sim';
+import { V7C_OFF, createSim, defaultParams } from './testpins';
+// tests written against the pre-v8b default world: hash with the v7c and v8b additions pinned off
+const simHash = (seed: number, ticks: number, p: Record<string, number> = {}): string => rawSimHash(seed, ticks, { ...V7C_OFF, ...p });
 import { Kind, Stage, TREE_STEP, TREE_STRIDE, Trees } from './trees';
 import { Sp } from './types';
 import { generateWorld } from './world';

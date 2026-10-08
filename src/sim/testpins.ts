@@ -5,6 +5,8 @@ import { createSim as rawCreateSim, type Sim } from './sim';
 
 export const V7C_OFF: Record<string, number> = {
   raptors: 0, stormCells: 0, 'cougar.initial': 0, 'muledeer.initial': 0, herdSpacingGraze: 0, raptorDogPref: 1,
+  // checkpoint v8b additions, also pinned off for v6b-era tests
+  snowDepth: 0, dynamicTrees: 0, treeCwRecruit: 0.0015, dogRescueYears: 20,
 };
 
 export function createSim(opts: { seed: number; params?: Record<string, number> }): Sim {
