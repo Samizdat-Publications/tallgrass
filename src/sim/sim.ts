@@ -189,6 +189,8 @@ export class Sim implements SimLike {
   private cVagOut = 0;
   /** Vagrant ravens alive (counted at the top of each tick). */
   private vagrants = 0;
+  /** Year-smoothed carrion for food-linked raven nesting (ravenNestFood); -1 until the first sample. */
+  private carrionEma = -1;
   private everPresent = new Uint8Array(SPECIES_COUNT);
   /** Mule deer and cougars have lived in this valley (and have not been removed by a god tool): the open-prairie rescues only ever refill, never found, a species (S8). */
   private muleSeen = false;
@@ -740,6 +742,10 @@ export class Sim implements SimLike {
     if (this.beavers !== null) this.beavers.step(t);
     if (this.p.raptors > 0 || this.pop[Sp.Eagle] + this.pop[Sp.Hawk] > 0) this.raptors.step(t);
     if (this.region !== null) this.openPrairieStep(t);
+    if (this.p.ravenNestFood > 0 && t % 50 === 0) {
+      const c = this.sumRemainingMeat();
+      this.carrionEma = this.carrionEma < 0 ? c : this.carrionEma + (c - this.carrionEma) * (50 / YEAR_TICKS);
+    }
     if (this.dis.on) this.dis.step(this.pop[Sp.Wolf]);
 
     // agents
@@ -2258,7 +2264,7 @@ export class Sim implements SimLike {
     }
     // reproduce in pairs
     if (a.energy[i] > 0.8 && a.age[i] > P.matureAge && a.cooldown[i] === 0 && !a.male[i] && this.env.state.season < 1.2
-      && a.origin[i] !== 2 && rng.next() < 1 - (this.pop[Sp.Raven] - this.vagrants) / this.p.ravenNestSites) {
+      && a.origin[i] !== 2 && rng.next() < 1 - (this.pop[Sp.Raven] - this.vagrants) / this.ravenSites()) {
       a.cooldown[i] = P.birthCooldown;
       a.energy[i] -= 0.3;
       const n = Math.max(1, Math.round(P.litter * a.genes[i * NG + G_LITTER] + (rng.next() - 0.5)));
@@ -2990,6 +2996,14 @@ export class Sim implements SimLike {
    * border nearest the richest carcass and fly to it. Once the carrion cannot support a fifth of those present, a twentieth
    * of them head for the nearest edge. Vagrants (origin 2) never breed.
    */
+  /** Raven nest sites: fixed, or scaled by year-smoothed carrion when ravenNestFood is on. */
+  private ravenSites(): number {
+    const p = this.p;
+    if (p.ravenNestFood <= 0 || this.carrionEma < 0) return p.ravenNestSites;
+    const k = Math.pow(Math.max(1, this.carrionEma) / p.ravenNestCarrionRef, p.ravenNestFood);
+    return p.ravenNestSites * Math.min(2, Math.max(0.4, k));
+  }
+
   private vagrantRavens(): void {
     const a = this.a, p = this.p, r = this.region!.rng;
     const carrion = this.sumRemainingMeat();

@@ -427,6 +427,11 @@ export interface Params {
   wolfScentPow: number;
   wolfSmallGame: number;
   ravenNestSites: number;
+  /** Food-linked raven nesting (0 = off: a fixed ravenNestSites). Above 0 the nest sites scale with the year-smoothed carrion in the valley,
+   *  sites = ravenNestSites x clamp((carrion / ravenNestCarrionRef) ^ ravenNestFood, 0.4, 2): hard winters and big kills raise the next
+   *  spring's breeding, lean years lower it, so resident ravens track food instead of sitting at a fixed ceiling. */
+  ravenNestFood: number;
+  ravenNestCarrionRef: number;
   // carcasses
   carcassRot: number;
   carcassSoil: number;
@@ -759,6 +764,8 @@ export function defaultParams(): Params {
     wolfScentPow: 1,
     wolfSmallGame: 0.5,
     ravenNestSites: 320,
+    ravenNestFood: 0,
+    ravenNestCarrionRef: 900,
     carcassRot: 0.0009,
     carcassSoil: 0.05,
     diseaseBeta: 0.03,
