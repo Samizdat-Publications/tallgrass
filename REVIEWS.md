@@ -261,3 +261,11 @@ Scores: visual 6, readability 4, life and motion 5, ecosystem believability 5, U
 | 3 | Night herd scenes are muddy | fix | Builder r-camera-night. |
 | 4 | UI flashing during time-lapse | defer | Planner (calmer UI at speed). |
 | 5 | Territory overlay looks like flat debug blobs | fix | Builder r-overlay-chronicle. |
+
+## Round 17 (blind critic, v8b live build, 2026-10-08 ~05:00) -> `review/round-17/critique.md`
+Scores unchanged from round 15 (6/4/5/5/6/5). Repeated themes: bison density and herd shape, invisible small animals, mule deer and raven dynamics, phase plots without loops, water. New: follow camera does not frame the followed animal; title card overlaps the hint pill and the status line contradicts the blizzard.
+Triage: planner items (density, dynamics, mule deer, ravens, water look, UI footprint). Fix candidates for the next session: follow camera framing, title-card versus hint-pill overlap and weather line consistency, Cottonwood pack tint against summer grass.
+
+## Round 18 (Gemini video, v8b live build, 2026-10-08 ~05:00) -> `review/round-18-video/reel.gemini.md`
+Scores: visual 6, readability 8, life and motion 2, believability 5, UI clarity 9, keep watching 4 (round 16: 7/6/5/8/6/7).
+Reported: animals do not animate (slide like chess pieces), stay level on slopes, a giant black sphere in a cottonwood grove, bison clipping, jerky follow pan. A black disc is visible in the reel at 00:08. Triage: possible regression from 2026-10-07 merges or the v8b defaults; builder r-regress bisecting.

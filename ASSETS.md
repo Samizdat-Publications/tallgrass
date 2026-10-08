@@ -82,6 +82,7 @@
 | 10-05 02:20 | Gemini `gemini-3.8-flash` | R5 listen-checks of the raptor clips (`scratch` script, not committed): what animal, real or imitation | 9 calls | cents |
 | 10-05 04:56 | Gemini `gemini-3.1-pro-preview` | blind video critique of reel.mp4 (75996 KB) | 1 call | ~$0.05 |
 | 10-07 15:53 | Gemini `gemini-3.1-pro-preview` | blind video critique of reel.mp4 (48781 KB) | 1 call | ~$0.05 |
+| 10-08 04:54 | Gemini `gemini-3.1-pro-preview` | blind video critique of reel.mp4 (60291 KB) | 1 call | ~$0.05 |
 
 ## Downloaded third-party assets
 | Asset | Source | License | Used in |
