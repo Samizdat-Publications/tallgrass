@@ -107,3 +107,8 @@ Chronological. Use this to cut a progression video or landing page.
 | 2026-10-06 19:20 | still | [20261006-192000_still_v2-dynamic-trees.jpg](20261006-192000_still_v2-dynamic-trees.jpg) | Dynamic trees after 30 valley years: young cottonwoods filling in along the creek | review/wip/dyntrees |
 | 2026-10-06 20:30 | still | [20261006-203000_still_v2-dust-storm.jpg](20261006-203000_still_v2-dust-storm.jpg) | A dust storm closing in over the valley (dustStorms on) | review/wip/dust-hoppers |
 | 2026-10-06 21:54 | still | [20261006-215400_still_v2-beaver-pond.jpg](20261006-215400_still_v2-beaver-pond.jpg) | A beaver pond backed up behind a dam, a lodge in the middle (beavers on) | review/wip/beavers |
+| 2026-10-07 17:05 | ui | [20261007-170500_ui_v2-territories.jpg](20261007-170500_ui_v2-territories.jpg) | Wolf territories, every pack a lit, bordered colour patch with its name | review/wip/overlay-chronicle |
+| 2026-10-07 17:05 | still | [20261007-170500_still_v2-fieldnote-pronghorn.jpg](20261007-170500_still_v2-fieldnote-pronghorn.jpg) | The documentary camera cuts to the field note's subject: pronghorn on the move | review/wip/fieldnote-camera |
+| 2026-10-07 17:40 | still | [20261007-174000_still_v2-night-herd.jpg](20261007-174000_still_v2-night-herd.jpg) | A bison herd at night, now readable under the moon | review/wip/camera-night |
+| 2026-10-07 17:40 | still | [20261007-174000_still_v2-beaver-marsh.jpg](20261007-174000_still_v2-beaver-marsh.jpg) | A beaver pond from above, with a lodge, a dam and marshy shallows | review/wip/beaver-marsh |
+| 2026-10-07 18:50 | ui | [20261007-185000_ui_v2-graph-legend.jpg](20261007-185000_ui_v2-graph-legend.jpg) | The population graph at 100x: labelled legend, calm lines, honest scales | review/wip/ui-calm |
