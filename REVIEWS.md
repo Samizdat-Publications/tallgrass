@@ -281,3 +281,6 @@ Scores: visual 5, readability 7, life and motion 2, believability 5, UI clarity 
 | 5 | Snow pops on in one frame at 10x | fix: r-anim-polish (ease by real time) |
 | 6 | No splashes when animals cross water | fix: r-anim-polish |
 | 7 | Title cards over scenes that do not show the event | defer: director already frames field-note subjects; headline cards may need the same |
+
+## Round 20 (blind critic, after the design-call fixes, 2026-10-08 evening) -> `review/round-20/critique.md`
+Scores 7/4/6/5/6/6 (round 17: 6/4/5/5/6/5). Triage in the critique file: builders r-far-read and r-ui-calm2; ecology items in the v9 acceptance; early drift and wolf to bison ratio to the planner.
