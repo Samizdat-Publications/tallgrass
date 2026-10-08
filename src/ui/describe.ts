@@ -65,6 +65,45 @@ export function weatherWord(w: number): string {
   return WEATHER_WORDS[w] ?? WEATHER_NAMES[w] ?? 'clear';
 }
 
+/**
+ * What the renderer is actually showing in the sky and on the ground, all eased 0..1 (the engine's own state, so the status
+ * line can never say snow over a clear sky). `blizzardPending` is true while a blizzard event is running but its snow has not
+ * yet built up on screen (or the sim is paused right after the tool was used).
+ */
+export interface SkyView {
+  snow: number;
+  blizzard: number;
+  rain: number;
+  drought: number;
+  dustStorm: number;
+  flood: number;
+  overcast: number;
+  blizzardPending?: boolean;
+}
+
+/** An eased amount must pass this before the word is used: below it nothing readable is on screen yet. */
+const SKY_SEEN = 0.15;
+
+/**
+ * The weather phrase for the status line, from what is on screen. The sim's weather only decides it while the renderer has not
+ * caught up (then the sky is called overcast rather than rain or snow that nobody can see).
+ */
+export function skyWord(env: { weather: number }, sky: SkyView | undefined): string {
+  if (!sky) return weatherWord(env.weather);
+  let word: string;
+  if (sky.dustStorm > SKY_SEEN) word = 'dust storm';
+  else if (sky.blizzard > 0.3 && sky.snow > SKY_SEEN) word = 'blizzard';
+  else if (sky.blizzardPending && sky.snow <= SKY_SEEN) word = 'blizzard building';
+  else if (env.weather === 3 && sky.rain > SKY_SEEN) word = 'storm';
+  else if (sky.snow > SKY_SEEN) word = 'snow';
+  else if (sky.rain > SKY_SEEN) word = 'rain';
+  else if (sky.drought > SKY_SEEN) word = 'drought';
+  else if (sky.overcast > 0.3) word = 'overcast';
+  else word = 'clear';
+  if (sky.flood > SKY_SEEN) word += ', flood';
+  return word;
+}
+
 /** Calendar year shown to the player. The sim's env.year is zero-based, the player's first year is year 1. */
 export function yearOfTick(tick: number): number {
   return Math.floor((tick + calendarOffset()) / YEAR_TICKS) + 1;

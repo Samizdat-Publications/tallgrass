@@ -4,6 +4,7 @@ import { SCENARIOS as GAME_SCENARIOS } from '../scenarios';
 import type { HistoryRow, AnimalDetail } from '../sim/worker';
 import type { SimEvent, StoryEntry } from '../sim/sim';
 import type { Settings } from './settings';
+import type { SkyView } from './describe';
 
 export type ToolId =
   | 'rain' | 'drought' | 'fire' | 'plague' | 'cull' | 'addWolves' | 'addBison' | 'addPrairieDogs' | 'removeWolves'
@@ -71,6 +72,8 @@ export interface UIFrame {
   narrator?: boolean;
   /** The line the narrator is speaking right now (null when silent); shown as a caption in cinematic mode. */
   caption?: string | null;
+  /** What the renderer is showing right now (eased precipitation, dust, flood), for the status line. */
+  sky?: SkyView;
 }
 
 /**

@@ -375,6 +375,17 @@ export class Engine {
     Object.assign(this.env, env);
   }
 
+  /** What is on screen right now (the same eased values that drive the precipitation, dust and flood passes), for the status line. */
+  skyNow(out: { snow: number; blizzard: number; rain: number; drought: number; dustStorm: number; flood: number; overcast: number }): void {
+    out.snow = this.snowfallSm;
+    out.blizzard = this.post.blizzard;
+    out.rain = this.rainSm;
+    out.drought = this.dustSm;
+    out.dustStorm = this.dustStorm.amount;
+    out.flood = this.flood.level;
+    out.overcast = this.sm.overcast;
+  }
+
   /** A new snow depth frame from the sim (Snapshot.snow: 32 x 32 bytes, depth x 255, row-major by y then x). Eased toward over about a second. */
   setSnowDepth(bytes: Uint8Array): void {
     this.snowDepth.setTarget(bytes);

@@ -11,7 +11,7 @@ import { GameUI, type OverlayId, type ToolId } from './ui/ui';
 import { loadSettings, type QualityPreset, type Settings } from './ui/settings';
 import { titleWanted } from './ui/title';
 import { decodeShare, shareUrl, type DecodedShare, type LoggedIntervention } from './sim/sharecode';
-import { packName } from './ui/describe';
+import { packName, type SkyView } from './ui/describe';
 import { generateWorld } from './sim/world';
 import { hashSeed } from './sim/rng';
 import { scenarioById } from './scenarios';
@@ -158,6 +158,7 @@ window.addEventListener('keydown', (e) => {
 const worker = new Worker(new URL('./sim/worker.ts', import.meta.url), { type: 'module' });
 const send = (m: ToWorker) => worker.postMessage(m);
 
+const skyView: SkyView = { snow: 0, blizzard: 0, rain: 0, drought: 0, dustStorm: 0, flood: 0, overcast: 0 };
 let speed = Number(q.get('speed') ?? 1);
 let following: number | null = null;
 let armed: ToolId | null = null;
@@ -651,7 +652,7 @@ engine.onFrame((dt, t) => {
       tick: pending.tick, env: pending.env, pop: pending.pop, history: pendingHistory, events: pendingEvents,
       selected: pending.selected, speed: pending.speed, ticksPerSec: pending.ticksPerSec, seed: seedStr,
       scenario: scenario.id, following, story: pending.story, storyId: pending.storyId,
-      packs: pending.packs.length / 4, autoCamera: autoCam, narrator: narrator.enabled, caption: narrator.caption,
+      packs: pending.packs.length / 4, autoCamera: autoCam, narrator: narrator.enabled, caption: narrator.caption, sky: (engine.skyNow(skyView), skyView),
     });
     if (pending.selectedGone && following !== null) { following = null; engine.cam.follow(null); }
     const cp = engine.camera.position; // three x = sim x, three z = sim y

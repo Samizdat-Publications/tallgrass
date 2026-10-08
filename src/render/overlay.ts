@@ -10,8 +10,14 @@ const SEG = 192;
 const LIFT = 1.1;
 const MAX_PACKS = 16;
 const FADE_S = 0.35;
-/** Pack colors: eight clearly different hues, saturated enough to read on green turf, tan grass, snow and moonlit ground. The tint is lit like the land (see the shader), so it sits in the scene. */
-const PACK_HEX = ['#f0a030', '#3d8fe0', '#d9453b', '#8e63d6', '#1fb5ad', '#e060a8', '#c2cc3a', '#8a4f2c'];
+/**
+ * Pack colors: eight hues that all sit in the cool-to-pink half of the wheel (teal through blue and violet to rose), because the grass
+ * runs from green through straw gold to autumn copper (hues about 20 to 100 degrees) and a pack tinted in any of those vanished on it
+ * (round 17: the gold pack on summer grass). Saturated enough to read on turf, snow and moonlit ground. The tint is lit like the land
+ * (see the shader), so it sits in the scene. PACK_HUE is each colour's hue in degrees, for picking the most different free colour.
+ */
+const PACK_HEX = ['#2f7fe8', '#e0488c', '#14b8a6', '#9b5ae0', '#46d0f0', '#d946e0', '#3b3fc4', '#f0506e'];
+const PACK_HUE = [215, 335, 173, 272, 192, 295, 238, 350];
 const MODE_ID: Record<OverlayMode, number> = { none: 0, vegetation: 1, fear: 2, territory: 3, traits: 4 };
 
 const LEGENDS: Record<OverlayMode, { title: string; lo: string; hi: string; ramp: string } | null> = {
@@ -107,12 +113,14 @@ void main() {
       float den = (1.0 - smoothstep(0.7, 0.7 + aa, d)) * 0.85 + exp(-de * de) * 0.35;
       // the pack's own colour, lit like the ground under it; the border and the den are a brighter tone of it
       vec3 base = uPackCol[i] * lit;
-      vec3 bright = mix(uPackCol[i], vec3(1.0), 0.45);
+      vec3 bright = mix(uPackCol[i], vec3(1.0), 0.3);
       col = over(col, base, clamp(wash, 0.0, 0.7));
       // a thin border that follows the range's own outline, a little broken along its length, never a drawn circle
-      float soft = max(1.1, aa * 1.2);
+      // it tapers: a slow swell along the outline thins it to a hair in places and fattens it a little in others, and it is fine overall
+      float swell = smoothstep(0.15, 0.85, vnoise(dir * 2.6 + fi * 4.7));
+      float soft = max(0.7, aa * 0.9) * (0.55 + 0.75 * swell);
       float le = (d - R * 0.985) / soft;
-      float line = exp(-le * le) * (0.62 + 0.3 * vnoise(dir * 6.0 + fi * 2.3));
+      float line = exp(-le * le) * (0.22 + 0.5 * swell) * (0.75 + 0.25 * vnoise(dir * 6.0 + fi * 2.3));
       col = over(col, bright, clamp(line, 0.0, 0.85));
       col = over(col, bright, clamp(den, 0.0, 0.9));
     }
@@ -242,8 +250,22 @@ export class OverlayLayer {
     for (let i = 0; i < n; i++) {
       const name = names[i] ?? '';
       if (this.slotOf.has(name)) continue;
+      // the first pack starts from its name's hash; every later one takes the free colour furthest in hue from the colours in use
       let s = this.colorIndex(name) % PACK_HEX.length;
-      for (let tries = 0; tries < PACK_HEX.length && used.has(s); tries++) s = (s + 1) % PACK_HEX.length;
+      if (used.size > 0 && used.size < PACK_HEX.length) {
+        let best = -1;
+        for (let c = 0; c < PACK_HEX.length; c++) {
+          if (used.has(c)) continue;
+          let gap = 360;
+          for (const u of used) {
+            const dh = Math.abs(PACK_HUE[c] - PACK_HUE[u]);
+            gap = Math.min(gap, Math.min(dh, 360 - dh));
+          }
+          if (gap > best) { best = gap; s = c; }
+        }
+      } else {
+        for (let tries = 0; tries < PACK_HEX.length && used.has(s); tries++) s = (s + 1) % PACK_HEX.length;
+      }
       used.add(s);
       this.slotOf.set(name, s);
     }

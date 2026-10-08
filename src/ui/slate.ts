@@ -1,7 +1,7 @@
 // Top-left location slate: place and year, then season, time of day and weather. Text only, like a documentary slate.
 import type { EnvState } from '../sim/types';
 import { h, setText } from './dom';
-import { seasonPhrase, timeOfDay, weatherWord } from './describe';
+import { seasonPhrase, skyWord, timeOfDay, type SkyView } from './describe';
 
 export class Slate {
   readonly el: HTMLElement;
@@ -19,8 +19,8 @@ export class Slate {
     );
   }
 
-  update(env: EnvState): void {
+  update(env: EnvState, sky?: SkyView): void {
     setText(this.year, `year ${env.year + 1}`);
-    setText(this.line, `${seasonPhrase(env.season)}, ${timeOfDay(env.dayFrac)}, ${weatherWord(env.weather)}`);
+    setText(this.line, `${seasonPhrase(env.season)}, ${timeOfDay(env.dayFrac)}, ${skyWord(env, sky)}`);
   }
 }
