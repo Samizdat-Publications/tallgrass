@@ -7,8 +7,11 @@ import * as THREE from 'three';
 
 export const SNOW_N = 32;
 
-/** Seconds of render time for the displayed field to cover about 95% of the way to a new frame. */
-const EASE_SECONDS = 1.0;
+/**
+ * Seconds of render time for the displayed field to cover about 95% of the way to a new frame. A few seconds, so that at 10x and 100x, where the
+ * sim's snow grows or melts in a handful of frames, the cover still arrives as a visible fade and never pops.
+ */
+const EASE_SECONDS = 2.4;
 
 export class SnowDepth {
   /** True once a frame has arrived (the field exists only when the sim runs with snowDepth on). */
