@@ -17,6 +17,7 @@ const slowSec = Number(arg('slow', '120'));
 const fastSec = Number(arg('fast', '300'));
 const challenges = arg('challenges', 'meso,town,storm,cats').split(',').filter(Boolean);
 const out = resolve(arg('out', 'scratch/playtest'));
+const loadTimeout = Number(arg('timeout', '120000'));
 const NAMES = ['bison', 'wolf', 'raven', 'pronghorn', 'rabbit', 'cougar', 'coyote', 'prairiedog', 'eagle', 'hawk', 'muledeer', 'beaver'];
 
 type W = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -64,8 +65,8 @@ async function main(): Promise<number> {
     page.on('console', (m) => { if (m.type() === 'error') errors.push(`[${page.url().split('?')[1] ?? ''}] ${m.text()}`); });
     page.on('pageerror', (e) => errors.push(`[pageerror ${page.url().split('?')[1] ?? ''}] ${String(e)}`));
     const load = async (query: string): Promise<void> => {
-      await page.goto(`http://127.0.0.1:${port}/index.html?${query}`, { timeout: 120000 });
-      await page.waitForFunction(() => (window as unknown as W).__ready === true, null, { timeout: 120000 });
+      await page.goto(`http://127.0.0.1:${port}/index.html?${query}`, { timeout: loadTimeout });
+      await page.waitForFunction(() => (window as unknown as W).__ready === true, null, { timeout: loadTimeout });
     };
     const shot = (name: string): Promise<Buffer> => page.screenshot({ path: `${out}/${name}.jpg`, type: 'jpeg', quality: 85 });
 
