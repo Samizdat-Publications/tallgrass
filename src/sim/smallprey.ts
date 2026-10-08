@@ -101,10 +101,9 @@ const BOOM_WINDOW_YEARS = 10;
 const BOOM_RATIO = 1.5; // the 96th percentile of total/mean in the v6b screen (2x never happened)
 const CRASH_RATIO = 0.6; // the 5th percentile (0.4x never happened)
 const BOOM_SPACING_YEARS = 5;
-/** Rescue: hares arrive when the valley holds fewer than RESCUE_HARE_BELOW; a dog colony once per RESCUE_DOG_YEARS base years with no town. */
+/** Rescue: hares arrive when the valley holds fewer than RESCUE_HARE_BELOW; a dog colony once per dogRescueYears (param) base years with no town. */
 const RESCUE_HARE_BELOW = 20;
 const RESCUE_HARE_COUNT = 10;
-const RESCUE_DOG_YEARS = 20;
 /** Grass height prairie dogs keep their towns clipped to. */
 const CLIP_HEIGHT = 0.12;
 /** Number of starting colonies when prairiedog.initial is 0, and the minimum spacing between them (coarse cells). */
@@ -693,7 +692,7 @@ export class SmallPrey {
       this.drain.hareArrivals += RESCUE_HARE_COUNT;
       this.host.event('immigrated', Sp.Rabbit, x, y, RESCUE_HARE_COUNT, 0);
     }
-    if (this.townCount === 0 && tick - this.lastDogArrival >= RESCUE_DOG_YEARS * BASE_YEAR_TICKS) {
+    if (this.townCount === 0 && tick - this.lastDogArrival >= this.p.dogRescueYears * BASE_YEAR_TICKS) {
       const edge: number[] = [], any: number[] = [];
       for (let c = 0; c < CELLS; c++) {
         if (this.world.dogCap[c] < 0.5) continue;

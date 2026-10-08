@@ -185,6 +185,8 @@ export interface Params {
   smallGameField: number;
   /** Multiplier on the eagles' and hawks' preference for prairie dogs, in where they hunt and what they catch (v7b). 1 = the S7 tables. */
   raptorDogPref: number;
+  /** Open prairie (S1): base years between prairie dog colonies arriving from outside while the valley has no town (was the constant RESCUE_DOG_YEARS 20). */
+  dogRescueYears: number;
   /** Grass in prairie dog towns is clipped short: the share of grass above the clip height removed per 50 ticks in a full town (0 = off). */
   dogClip: number;
   /** Bison migration and grazing prefer the edges of towns by this much grass-equivalent (0 = off). */
@@ -595,6 +597,7 @@ export function defaultParams(): Params {
     plagueRate: 0.08,
     smallGameField: 1, // v6b (was 0)
     raptorDogPref: 0.1, // v7c (was 1)
+    dogRescueYears: 20,
     dogClip: 0,
     dogGrazeBonus: 0,
     wolfInRate: 0.2,
