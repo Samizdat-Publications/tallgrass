@@ -196,6 +196,8 @@ export function buildCoyote(): ModelDef {
     warm: [1.0, 0.98, 0.93],
     neutral: 0.75,
     // from range a coyote is a tan-grey slim form: warmer than the wolf's slate, so the two canids read apart
+    // R-readable: guild value separation and edge lift at the default distances (see ModelDef.read)
+    read: { dark: [0.8, 0.78, 0.8], rim: [0.78, 0.86, 1.0, 0.6] },
     far: { gain: 0.85, rim: 0.045, hunt: 0.22, rimCol: [0.95, 0.92, 0.86], d0: 70, d1: 280, tint: [0.27, 0.205, 0.125], mix: 0.65, floor: 0.12, lowFill: 0.5,
       top: [0.46, 0.38, 0.27], topMix: 0.5, side: 0.2, legs: 0.9, calm: 0.6, widen: 0.1 },
     params: {

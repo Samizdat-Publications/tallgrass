@@ -17,6 +17,7 @@ import { hashSeed } from './sim/rng';
 import { scenarioById } from './scenarios';
 import { challengeById } from './challenges';
 import { Director } from './director';
+import { followFrameFor, isAirborneSpecies } from './render/followframes';
 import { JPEG_QUALITY, LensController, type PhotoFormat } from './ui/photomode';
 import { AudioDirector } from './audio/audio';
 import { Narrator } from './audio/narrator';
@@ -310,15 +311,7 @@ const ui = new GameUI(document.getElementById('ui')!, {
   skipToEvent: () => send({ type: 'skip' }),
   armTool: (t) => { armed = t; ui.setArmedTool(t); host.style.cursor = t ? 'crosshair' : ''; },
   applyTool: (t) => { const iv = toolIntervention(t); if (iv && ui.tryUseTool()) send({ type: 'apply', iv }); },
-  follow: (id) => {
-    takeCamera();
-    following = id;
-    if (id === null) engine.cam.follow(null);
-    else {
-      const v = new THREE.Vector3();
-      engine.cam.follow(() => (animals.getPosition(id, v) ? { x: v.x, y: v.z } : null));
-    }
-  },
+  follow: (id) => { takeCamera(); startFollow(id); },
   select: (id) => select(id),
   requestLineage: (id) => send({ type: 'lineage', id }),
   requestDynasty: (pack) => send({ type: 'dynasty', pack }),
@@ -539,6 +532,23 @@ engine.cam.onUserInput = takeCamera;
   }
 }
 
+/**
+ * Follow an animal with the framed follow camera (render/followframes.ts: a distance by species, a raised three-quarter view, the animal in
+ * the lower middle third, a look-ahead along its travel), and mark it (the ring that fades in for a few seconds). null stops following.
+ */
+function startFollow(id: number | null): void {
+  following = id;
+  animals.setFollowed(id);
+  if (id === null) { engine.cam.follow(null); return; }
+  const v = new THREE.Vector3();
+  const sp = animals.getSpecies(id);
+  const air = isAirborneSpecies(sp);
+  engine.cam.follow(() => {
+    if (!animals.getPosition(id, v)) return null;
+    return { x: v.x, y: v.z, h: air && v.y - engine.groundHeight(v.x, v.z) > 2 ? v.y : undefined };
+  }, followFrameFor(sp));
+}
+
 function select(id: number | null): void {
   if (id !== null) takeCamera();
   selectedAnimal = id;
@@ -630,6 +640,8 @@ engine.onFrame((dt, t) => {
   animals.timeScale = speed > 0 ? Math.min(speed, 12) : 0;
   // years flying by: let the camera drift slowly instead of sitting like a security camera
   engine.cam.idleDrift = speed >= 10 ? 0.025 : 0;
+  // the follow ring goes when the camera lets go of the animal (a pan, a fly-to, the director)
+  if (animals.followedId !== null && !engine.cam.isFollowing()) animals.setFollowed(null);
   animals.update(dt, alpha, t);
   smallprey.timeScale = speed > 0 ? 1 : 0;
   engine.cam.getFocus(focusV);
@@ -764,12 +776,7 @@ w.__narrator = narrator;
 w.__fieldnotes = ui.fieldNotes;
 // dev hook: speak one line by id, bypassing the narrator's rules (the audio must be unlocked by a click)
 w.__narrate = (id: string) => narrator.speakNow(id);
-w.__followId = (id: number | null) => {
-  following = id;
-  if (id === null) { engine.cam.follow(null); return; }
-  const v = new THREE.Vector3();
-  engine.cam.follow(() => (animals.getPosition(id, v) ? { x: v.x, y: v.z } : null));
-};
+w.__followId = (id: number | null) => startFollow(id);
 /** Advance the sim (synchronously in the worker) to the next time the day reaches `frac`. */
 w.__timeOfDay = (frac: number) => {
   if (!pending) return;

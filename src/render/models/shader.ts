@@ -1295,6 +1295,7 @@ uniform vec3 uVelvet;
 varying vec3 vTgColor;
 varying float vTgSel;
 varying float vTgFar;
+varying float vTgMid;
 varying float vTgHunt;
 varying float vTgUp;
 varying float vTgFade;
@@ -1395,6 +1396,7 @@ void tgShade(vec3 on) {
   vTgFade = dead ? 1.0 : tgFadeOf() * tgSwimFade;
   // distance readability: 0 close up, 1 from the wide view (see ModelDef.far)
   vTgFar = smoothstep(FAR_NEAR, FAR_FAR, distance(uCamPos, vec3(instanceMatrix[3])));
+  vTgMid = smoothstep(6.0, 40.0, distance(uCamPos, vec3(instanceMatrix[3])));
 #if BEHAV
   vTgHunt = 0.0; // (R8: a bison's aFx.z is its bellow weight)
 #else
@@ -1594,6 +1596,8 @@ export interface AnimalShared {
   uTL?: { value: number };
   /** Strength of the night lift (moon rim, albedo and fill) 0..1, 1 = on; a tuning and A/B hook. Optional: defaults to 1. */
   uNightK?: { value: number };
+  /** How bright the season's grass is, 0.6 (spring green, winter) .. 1 (summer gold): scales the predators' darkening (R-readable). Optional: defaults to 0.8. */
+  uGrassB?: { value: number };
   /** Ambient light of the scene as an rgb (0 night .. about 0.7 day), set by `probe`. */
   uAmb: { value: THREE.Vector3 };
   /** Reads the lights of the scene being rendered into `uLow` (called once per draw of the main view). */
@@ -1608,6 +1612,7 @@ export interface AnimalShared {
 export function makeAnimalMaterials(sp: number, def: ModelDef, shared: AnimalShared, variant: Variant = 'single'): AnimalMaterials {
   shared.uTL ??= { value: 0 };
   shared.uNightK ??= { value: 1 };
+  shared.uGrassB ??= { value: 0.8 };
   // (worked out when the program is compiled, so the R8 switch below can take effect on a recompile)
   const defsOf = (): string => defines(def.params, def.far, def.geometry, def, variant) + '\n' + seasonDefines(def);
   const defsDepthOf = (): string => defines(def.params, def.far, def.geometry) + '\n' + seasonDefines(def);
@@ -1646,6 +1651,10 @@ export function makeAnimalMaterials(sp: number, def: ModelDef, shared: AnimalSha
     shader.uniforms.uLow = shared.uLow;
     shader.uniforms.uTL = shared.uTL!;
     shader.uniforms.uNightK = shared.uNightK!;
+    shader.uniforms.uGrassB = shared.uGrassB!;
+    shader.uniforms.uReadDark = { value: new THREE.Vector3(...(def.read?.dark ?? [1, 1, 1])) };
+    shader.uniforms.uReadPale = { value: def.read?.pale ?? 0 };
+    shader.uniforms.uReadRim = { value: new THREE.Vector4(...(def.read?.rim ?? [1, 1, 1, 0])) };
     shader.uniforms.uAmb = shared.uAmb;
     shader.uniforms.uFarTint = { value: new THREE.Vector3(...(far.tint ?? [1, 1, 1])) };
     shader.uniforms.uFarMix = { value: far.tint ? far.mix ?? 0.5 : 0 };
@@ -1668,7 +1677,7 @@ export function makeAnimalMaterials(sp: number, def: ModelDef, shared: AnimalSha
       .replace('#include <begin_vertex>', 'vec3 transformed = tgP;');
     shader.fragmentShader = shader.fragmentShader
       .replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>\n if (tgFadeDiscard(vTgFade)) discard;${lodOn ? '\n if (tgLodDiscard()) discard;' : ''}${hasShell ? '\n if (tgShellDiscard()) discard;' : ''}`)
-      .replace('#include <common>', `#include <common>\n${lodDefs}\n${FADE_FRAG_DECL}\nvarying vec3 vTgColor;\nvarying float vTgSel;\nvarying float vTgFar;\nvarying float vTgHunt;\nuniform float uFill;\nuniform vec3 uWarm;\nuniform float uNeutral;\nuniform float uFarGain;\nuniform vec3 uRimCol;\nuniform float uRimK;\nuniform float uHuntK;\nuniform float uLow;\nuniform vec3 uAmb;\nuniform vec3 uFarTint;\nuniform float uFarMix;\nuniform float uFloor;\nuniform float uLowFill;\nvarying float vTgUp;\nuniform vec3 uTopCol;\nuniform float uTopMix;\nuniform float uSideDark;\nuniform float uNightK;${mangeDecl}`)
+      .replace('#include <common>', `#include <common>\n${lodDefs}\n${FADE_FRAG_DECL}\nvarying vec3 vTgColor;\nvarying float vTgSel;\nvarying float vTgFar;\nvarying float vTgMid;\nuniform vec3 uReadDark;\nuniform float uReadPale;\nuniform vec4 uReadRim;\nuniform float uGrassB;\nvarying float vTgHunt;\nuniform float uFill;\nuniform vec3 uWarm;\nuniform float uNeutral;\nuniform float uFarGain;\nuniform vec3 uRimCol;\nuniform float uRimK;\nuniform float uHuntK;\nuniform float uLow;\nuniform vec3 uAmb;\nuniform vec3 uFarTint;\nuniform float uFarMix;\nuniform float uFloor;\nuniform float uLowFill;\nvarying float vTgUp;\nuniform vec3 uTopCol;\nuniform float uTopMix;\nuniform float uSideDark;\nuniform float uNightK;${mangeDecl}`)
       // Bright parts of the coat (the white bands and rump) are pulled toward a mid value as the light drops, so they
       // darken with the scene instead of glowing against the dark herds at dusk and night.
       .replace('#include <color_fragment>', `vec3 tgC = vTgColor * mix(1.0, uFarGain, vTgFar);
@@ -1686,6 +1695,11 @@ export function makeAnimalMaterials(sp: number, def: ModelDef, shared: AnimalSha
         tgC = mix(tgC, vec3(tgL), 0.3 * uLow * vTgFar);
         tgC *= 1.0 - 0.8 * uLow * max(tgL - 0.16, 0.0) / max(tgL, 1e-3);
         diffuseColor.rgb *= tgC;
+        // R-readable: value separation by guild at the default distances. A predator is darker and cooler (most against bright grass), a
+        // grazer's pale markings (rump, belly) are lifted; both fade in from about 6 m, give way to the far-view tint, and fade with the dark.
+        float tgMidK = vTgMid * (1.0 - 0.5 * vTgFar);
+        diffuseColor.rgb *= mix(vec3(1.0), uReadDark, uGrassB * tgMidK);
+        diffuseColor.rgb *= 1.0 + uReadPale * smoothstep(0.16, 0.42, dot(diffuseColor.rgb, vec3(0.2126, 0.7152, 0.0722))) * tgMidK * (1.0 - uLow);
         // night lift: the coat reflects more of the little light there is, so the animals do not sink into the blue ground (the
         // far-view dimming above takes the coat down at night, this gives part of it back)
         // (pale coats, a pronghorn's white, get little of it: they already stand out against the dark ground)
@@ -1702,6 +1716,9 @@ export function makeAnimalMaterials(sp: number, def: ModelDef, shared: AnimalSha
         float tgRim = pow(1.0 - clamp(dot(normalize(vViewPosition), normal), 0.0, 1.0), 3.0);
         totalEmissiveRadiance += vec3(1.0, 0.8, 0.35) * vTgSel * (0.015 + 0.45 * tgRim);
         float tgEdge = pow(1.0 - clamp(dot(normalize(vViewPosition), normal), 0.0, 1.0), 1.6);
+        // R-readable edge lift: a faint sky-coloured light along the silhouette (scales with the scene's ambient, so it never glows)
+        float tgRd = pow(1.0 - clamp(dot(normalize(vViewPosition), normal), 0.0, 1.0), 2.4);
+        totalEmissiveRadiance += uReadRim.rgb * uReadRim.a * uAmb * tgRd * (0.55 + 0.45 * vTgUp) * vTgMid * (1.0 - 0.7 * uLow);
         totalEmissiveRadiance += uRimCol * vTgFar * (uRimK + vTgHunt * uHuntK) * tgEdge * (1.0 - 0.9 * uLow);
         // ambient floor: a share of the scene's own ambient light reaches the coat unshadowed, so a herd in shade or at dusk
         // keeps its value above the shadows; it scales with the light, so it dims with the scene and never glows

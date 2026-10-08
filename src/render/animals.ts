@@ -753,12 +753,13 @@ export class AnimalLayer {
   /** The non-null batches, for loops over every drawn species. */
   private live: Batch[] = [];
   private uTime = { value: 0 };
-  private shared: AnimalShared & { uTL: { value: number }; uNightK: { value: number } } = {
+  private shared: AnimalShared & { uTL: { value: number }; uNightK: { value: number }; uGrassB: { value: number } } = {
     uTime: this.uTime, uCamPos: { value: new THREE.Vector3(256, 400, 256) }, uPxK: { value: 900 / (2 * Math.tan((45 * Math.PI) / 360)) },
     tHeight: { value: null }, uCell: { value: 1 }, uHN: { value: 2 },
     uLow: { value: 0 },
     uTL: { value: 0 },
     uNightK: { value: 1 },
+    uGrassB: { value: 0.8 },
     uAmb: { value: new THREE.Vector3(0.6, 0.55, 0.45) },
     probe: (scene, exposure) => {
       this.lit.probe(scene);
@@ -843,6 +844,11 @@ export class AnimalLayer {
   private lastAlpha = 1;
 
   private selectedId: number | null = null;
+  /** The animal the camera is following (R-readable): marked by a ground ring that blooms for a few seconds when the follow starts. */
+  private _followedId: number | null = null;
+  private followT0 = -100;
+  private halo: THREE.Mesh;
+  private haloMat: THREE.ShaderMaterial;
   private ring: THREE.Mesh;
   private ringGeo: THREE.PlaneGeometry;
   private ringBase: Float32Array;
@@ -945,6 +951,37 @@ export class AnimalLayer {
     this.ring.onBeforeRender = (_r, scene) => { if (scene.overrideMaterial) this.ringGeo.setDrawRange(0, 0); };
     this.ring.onAfterRender = () => this.ringGeo.setDrawRange(0, Infinity);
     this.object3D.add(this.ring);
+    // Follow halo: a soft warm band on the ground round the followed animal, depth tested (so it lies under the belly and legs, never over
+    // the body), fading in for the first seconds of a follow and gone after. It shares the ring's geometry (one more small draw).
+    this.haloMat = new THREE.ShaderMaterial({
+      transparent: true, depthWrite: false, depthTest: true, fog: false,
+      uniforms: { uHalo: { value: 0 } },
+      vertexShader: /* glsl */ `
+        varying vec2 vUv;
+        void main() {
+          vUv = uv * 2.0 - 1.0;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }`,
+      fragmentShader: /* glsl */ `
+        precision highp float;
+        uniform float uHalo;
+        varying vec2 vUv;
+        void main() {
+          float r = length(vUv);
+          float band = smoothstep(0.3, 0.78, r) * (1.0 - smoothstep(0.86, 1.0, r));
+          float a = band * uHalo * 0.42;
+          if (a < 0.004) discard;
+          gl_FragColor = vec4(1.35, 1.12, 0.72, a);
+        }`,
+    });
+    this.halo = new THREE.Mesh(this.ringGeo, this.haloMat);
+    this.halo.frustumCulled = false;
+    this.halo.renderOrder = 49;
+    this.halo.visible = false;
+    this.halo.name = 'follow-halo';
+    this.halo.onBeforeRender = (_r, scene) => { if (scene.overrideMaterial) this.ringGeo.setDrawRange(0, 0); };
+    this.halo.onAfterRender = () => this.ringGeo.setDrawRange(0, Infinity);
+    this.object3D.add(this.halo);
   }
 
   // ---------------------------------------------------------------------------------------------------------
@@ -1647,9 +1684,11 @@ export class AnimalLayer {
     const kFrzIn = 1 - Math.exp(-dt / 0.5), kFrzOut = 1 - Math.exp(-dt / 0.1);
     const deerS = this.deerNow(snap);
     const season = this.seasonNow(snap);
+    // how bright the season's grass is (spring green and winter lower, summer gold highest): the predators' darkening follows it (ModelDef.read)
+    this.shared.uGrassB.value = 0.62 + 0.38 * smoothstep(0.3, 1.3, season) - 0.4 * smoothstep(2.6, 3.4, season);
     const kBank = 1 - Math.exp(-dt * 3);
     const snapDt = this.snapDt;
-    const sel = this.selectedId;
+    const sel = this.selectedId, fol = this._followedId;
     this.selInfo.found = false;
     const kSick = 1 - Math.exp(-dt / 2.5);
     const kBdy = 1 - Math.exp(-dt / 0.12);
@@ -2488,7 +2527,7 @@ export class AnimalLayer {
       b.centers[c + 2] = z;
       b.centers[c + 3] = Math.max(0.3, pr.length * 0.42 * vs);
       b.alive = b.count;
-      if (id === sel) {
+      if (id === sel || id === fol) {
         this.selInfo.found = true;
         this.selInfo.x = x;
         this.selInfo.y = y;
@@ -2676,15 +2715,22 @@ export class AnimalLayer {
 
   private updateRing(): void {
     const si = this.selInfo;
-    if (this.selectedId === null || !si.found) {
+    if ((this.selectedId === null && this._followedId === null) || !si.found) {
       this.ring.visible = false;
+      this.halo.visible = false;
       return;
     }
     const w = this.world;
     // wide enough that the ring is never smaller than about 10 px across on screen
     const cp = this.shared.uCamPos.value;
     const cd = Math.hypot(si.x - cp.x, si.y - cp.y, si.z - cp.z);
-    const R = Math.max(si.r, cd * 0.0085) * (1 + 0.03 * Math.sin(this.timeSec * 3));
+    // follow marker: for the first 3 s of a follow the ring blooms (it contracts onto the animal from about 2.5 times its size and a soft
+    // warm band lies round the feet), then the band is gone and the ring is a little fainter than a plain selection's
+    const fAge = this._followedId !== null ? this.timeSec - this.followT0 : 1e9;
+    const bloom = fAge < 3.6 ? (1 - smoothstep(0, 1.4, fAge)) : 0;
+    const haloK = fAge < 3.6 ? smoothstep(0, 0.35, fAge) * (1 - smoothstep(2.4, 3.6, fAge)) : 0;
+    const quiet = this._followedId !== null && fAge >= 3.6 ? 0.62 : 1;
+    const R = Math.max(si.r, cd * 0.0085) * (1 + 0.03 * Math.sin(this.timeSec * 3)) * (1 + 1.5 * bloom * bloom);
     const pos = this.ringGeo.getAttribute('position') as THREE.BufferAttribute;
     const arr = pos.array as Float32Array;
     for (let i = 0; i < arr.length; i += 3) {
@@ -2695,8 +2741,10 @@ export class AnimalLayer {
     }
     pos.needsUpdate = true;
     this.ringGeo.computeBoundingSphere();
-    this.ringMat.uniforms.uOpacity.value = 0.88 + 0.12 * Math.sin(this.timeSec * 4);
+    this.ringMat.uniforms.uOpacity.value = (0.88 + 0.12 * Math.sin(this.timeSec * 4)) * quiet;
     this.ring.visible = true;
+    this.haloMat.uniforms.uHalo.value = haloK;
+    this.halo.visible = haloK > 0.004;
   }
 
   // ---------------------------------------------------------------------------------------------------------
@@ -2730,8 +2778,16 @@ export class AnimalLayer {
 
   setSelected(id: number | null): void {
     this.selectedId = id;
-    if (id === null) this.ring.visible = false;
+    if (id === null && this._followedId === null) this.ring.visible = false;
   }
+
+  /** The animal the camera follows (null: none). A new follow restarts the bloom of the marker. */
+  setFollowed(id: number | null): void {
+    if (id !== this._followedId) this.followT0 = this.timeSec;
+    this._followedId = id;
+    if (id === null) this.halo.visible = false;
+  }
+  get followedId(): number | null { return this._followedId; }
 
   /** Interpolated world position of an animal (three.js coordinates, on the terrain or at its flight altitude). */
   getPosition(id: number, out: THREE.Vector3): boolean {
@@ -2790,5 +2846,6 @@ export class AnimalLayer {
     this.kills.dispose();
     this.ringGeo.dispose();
     this.ringMat.dispose();
+    this.haloMat.dispose();
   }
 }

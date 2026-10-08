@@ -191,6 +191,8 @@ export function buildWolf(): ModelDef {
     // from the wide view a wolf is a little darker (value contrast with gold grass) and one that stalks, chases or feeds
     // gets a cool rim of light
     // from 70 m out a wolf deepens to a cool slate (a hue the gold grass and brown herds do not have) and gets a cool rim
+    // R-readable: guild value separation and edge lift at the default distances (see ModelDef.read)
+    read: { dark: [0.74, 0.78, 0.88], rim: [0.72, 0.84, 1.0, 0.7] },
     far: { gain: 0.8, rim: 0.05, hunt: 0.25, rimCol: [0.92, 0.93, 0.95], d0: 70, d1: 280, tint: [0.105, 0.1, 0.092], mix: 0.7, floor: 0.12,
       // a slim cool-grey form with a paler back; the legs swing less so the outline is not a crumpled scrap
       top: [0.29, 0.275, 0.255], topMix: 0.55, side: 0.22, legs: 0.85, calm: 0.6, widen: 0.1 },

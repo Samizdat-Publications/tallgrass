@@ -73,6 +73,34 @@ function softExcess(d: number, dz: number): number {
   return ((x + w) * (x + w)) / (4 * w);
 }
 
+/**
+ * The framing of a followed animal (R-readable): the shot the camera settles into so the subject fills a readable share of the frame.
+ * Distance, pitch, yaw and the focus offset all move on their own critically damped springs, so a turn, a sprint or a new subject never
+ * jerks the picture. The framing yields to the operator: a wheel zoom, an orbit drag or a setView() on a value switches its auto mode off.
+ */
+export interface FollowFrame {
+  /** Orbit distance (m) of the shot at rest. A sprint pulls out by up to `pull` (fraction) so the animal has room to run into. */
+  dist: number;
+  pull?: number;
+  /** Camera elevation above the horizon (degrees): a slightly raised three-quarter view, so the animal is seen against the ground, not the sky. */
+  pitchDeg: number;
+  /** Height (m) of the look-at point above the ground: the middle of the body. */
+  lift: number;
+}
+
+/** The camera sits this far (rad) round from straight behind the subject's heading: a three-quarter rear view. */
+const FRAME_SIDE = 0.6;
+/** The camera only swings to a new heading once the wanted yaw is this far (rad) from the one it holds, so a wander never turns the shot. */
+const FRAME_YAW_BAND = 0.9;
+/** Follow smoothing time (s) of the focus point in a framed follow. Short: the feed-forward below removes the steady lag at speed. */
+const FRAME_SMOOTH = 0.3;
+/** Where the subject sits on screen in a framed follow (normalised device y, negative = below the middle): the lower middle third. */
+const FRAME_NDC_Y = -0.26;
+/** Terrain clearance (m) a sight line from the camera to the subject must keep, and the pitch steps (rad) tried to find a clear one. */
+const OCC_CLEAR = 0.45;
+const OCC_STEPS = [0, 7, 14, 22, 31, 41].map((d) => d * DEG);
+const OCC_MAX_PITCH = 64 * DEG;
+
 export interface DroneCameraOptions {
   /** Terrain height at a world position (works outside the playable square). */
   ground: (x: number, z: number) => number;
@@ -113,6 +141,26 @@ export class DroneCamera {
   private vgy: Vel = { v: 0 };
   /** A follower was just set: its first position is checked against the focus (a far subject is cut to, not whipped to). */
   private followFresh = false;
+  // framed follow (see FollowFrame): null = the plain follow the director uses
+  private frame: FollowFrame | null = null;
+  private frameAuto = { dist: true, yaw: true, pitch: true };
+  private frameInit = false;
+  private fPrev = { x: 0, z: 0, ok: false };
+  /** The subject's velocity (m/s, world xz), smoothed over ~0.45 s (look-ahead and lag feed-forward) and over ~1 s (the heading the shot is built on). */
+  private fv = { x: 0, z: 0 };
+  private fh = { x: 0, z: 0 };
+  private fSide = 1;
+  private fYawT = 0;
+  private fYaw = 0; private vfYaw: Vel = { v: 0 };
+  private fDist = 0; private vfDist: Vel = { v: 0 };
+  private fPitch = 0; private vfPitch: Vel = { v: 0 };
+  /** Rise (rad) added to the pitch so the subject is not hidden behind a rise in the ground, its target and the spring that follows it. */
+  private occT = 0; private occ = 0; private vocc: Vel = { v: 0 };
+  private occTimer = 0; private occLowFor = 0;
+  private fSideSet = false;
+  /** How far (in orbit distances) the focus is from where the framed shot wants it: a subject that bursts away tightens the chase. */
+  private fErr = 0;
+  private fLostT = 0;
   // tree and terrain avoidance (the boom is shortened, or swung round the tree, when a crown or the ground is in the way)
   private obstacles: CameraObstacles | null = null;
   private av = { off: 0, offT: 0, up: 0, upT: 0, boom: 1, boomT: 1, timer: 0 };
@@ -168,13 +216,22 @@ export class DroneCamera {
   }
 
   /** Keep a moving subject framed. Pass null to stop following. */
-  follow(getPos: (() => { x: number; y: number; h?: number } | null) | null): void {
+  follow(getPos: (() => { x: number; y: number; h?: number } | null) | null, frame?: FollowFrame): void {
     this.follower = getPos;
+    this.frame = getPos && frame ? frame : null;
+    this.frameAuto.dist = this.frameAuto.yaw = this.frameAuto.pitch = true;
+    this.frameInit = false;
+    this.fPrev.ok = false;
+    this.fv.x = this.fv.z = this.fh.x = this.fh.z = 0;
+    this.occT = this.occ = this.vocc.v = 0;
     if (getPos) {
       this.rate = 3.5;
       this.followFresh = true;
     } else this.releaseLift();
   }
+
+  /** The framing of the current follow, or null (plain follow, or not following). */
+  get followFrame(): FollowFrame | null { return this.follower ? this.frame : null; }
 
   /** Terrain height at a world position (the camera's own ground function). */
   groundAt(x: number, z: number): number { return this.opt.ground(x, z); }
@@ -225,6 +282,7 @@ export class DroneCamera {
     const c = this.opt.worldSize / 2;
     const sunAz = this.opt.sunAzimuth ? this.opt.sunAzimuth() : 1.6;
     this.follower = null;
+    this.frame = null;
     if (name === 'wide') {
       // high oblique valley overview: camera over the rim, sun about 38 degrees to the left of the view direction
       const fwd = sunAz - 38 * DEG;
@@ -251,6 +309,8 @@ export class DroneCamera {
     this.sm = { ...this.goal };
     this.gy = this.opt.ground(this.cur.tx, this.cur.tz);
     this.vgy.v = 0;
+    this.occ = this.occT = this.vocc.v = 0;
+    this.frameInit = false;
     for (const k of Object.values(this.smV)) k.v = 0;
     this.avoid(0, true);
     this.apply();
@@ -271,9 +331,10 @@ export class DroneCamera {
     if (opts.y !== undefined) this.goal.tz = opts.y;
     // h: world height of the subject (a bird in the air), so a cut to it starts framed on the bird, not on the ground under it
     if (opts.h !== undefined) { this.liftFollow = true; this.goal.lift = Math.max(0, opts.h - this.opt.ground(this.goal.tx, this.goal.tz)); }
-    if (opts.yawDeg !== undefined) this.goal.yaw = opts.yawDeg * DEG;
-    if (opts.pitchDeg !== undefined) this.goal.pitch = clamp(opts.pitchDeg * DEG, MIN_PITCH, MAX_PITCH);
-    if (opts.distance !== undefined) this.goal.dist = clamp(opts.distance, MIN_DIST, MAX_DIST);
+    // (a framed follow hands each value it was steering to whoever sets it)
+    if (opts.yawDeg !== undefined) { this.goal.yaw = opts.yawDeg * DEG; this.frameAuto.yaw = false; }
+    if (opts.pitchDeg !== undefined) { this.goal.pitch = clamp(opts.pitchDeg * DEG, MIN_PITCH, MAX_PITCH); this.frameAuto.pitch = false; }
+    if (opts.distance !== undefined) { this.goal.dist = clamp(opts.distance, MIN_DIST, MAX_DIST); this.frameAuto.dist = false; }
     if (snap) this.snap();
   }
 
@@ -301,21 +362,31 @@ export class DroneCamera {
       if (yaw || tilt) {
         g.yaw += yaw * 0.9 * dt;
         g.pitch = clamp(g.pitch + tilt * 0.6 * dt, MIN_PITCH, MAX_PITCH);
+        if (yaw) this.frameAuto.yaw = false;
+        if (tilt) this.frameAuto.pitch = false;
         this.userInput(false);
       }
     }
 
     if (this.follower) {
       const p = this.follower();
+      const F = this.frame;
       if (p && p.h !== undefined) {
         this.liftFollow = true;
         g.lift = Math.max(0, p.h - this.opt.ground(p.x, p.y));
-      } else this.releaseLift();
+      } else {
+        this.releaseLift();
+        if (F) g.lift = F.lift;
+      }
       if (p) {
         if (this.followFresh) {
           this.followFresh = false;
           // a subject far from the frame is cut to (an editor's cut), not whipped to across the valley
-          if (Math.hypot(p.x - c.tx, p.y - c.tz) > Math.max(c.dist, g.dist) + 80) {
+          if (F && (Math.hypot(p.x - c.tx, p.y - c.tz) > 120 || c.dist > 90)) {
+            // a framed follow from the wide view: cut straight to the framed shot (a glide from 400 m down to 15 m is a flight over the terrain)
+            this.frameCut(p, F);
+            return; // (snap replaced cur and sm: this frame ends here)
+          } else if (Math.hypot(p.x - c.tx, p.y - c.tz) > Math.max(c.dist, g.dist) + 80) {
             this.cutCount++;
             g.tx = c.tx = this.sm.tx = clamp(p.x, 0, this.opt.worldSize); g.tz = c.tz = this.sm.tz = clamp(p.y, 0, this.opt.worldSize);
             this.vx.v = this.vz.v = this.smV.tx.v = this.smV.tz.v = 0;
@@ -323,12 +394,30 @@ export class DroneCamera {
         }
         // dead zone with a soft edge: the goal moves only by the part of the subject's offset beyond a small circle (blended in, not
         // switched on), so small wanders do not jiggle the frame and the pan never starts or stops with a kink
-        const dx = p.x - g.tx, dz = p.y - g.tz;
+        let sx = p.x, sz = p.y, dzr = clamp(c.dist * this.followDeadzone, 0.8, 9);
+        if (F) {
+          const t = this.frameTarget(p, F, dt);
+          sx = t.x; sz = t.z;
+          dzr = clamp(c.dist * 0.03, 0.4, 3);
+        }
+        if (F) {
+          this.fErr = Math.hypot(sx - c.tx, sz - c.tz) / Math.max(c.dist, 1);
+          // a subject that has got far out of the frame and stays there (a takedown carries a wolf, a respawn) is cut to, not chased
+          this.fLostT = this.fErr > 1.6 ? this.fLostT + dt : 0;
+          if (this.fLostT > 0.6) { this.fLostT = 0; this.frameCut(p, F); return; }
+        }
+        const dx = sx - g.tx, dz = sz - g.tz;
         const d = Math.hypot(dx, dz);
-        const dzr = clamp(c.dist * this.followDeadzone, 0.8, 9);
         if (d > 1e-6) { const e = softExcess(d, dzr) / d; g.tx += dx * e; g.tz += dz * e; }
+        if (F) {
+          // the sight line to the subject must clear the ground: a rise between the camera and the animal lifts the camera over it
+          this.occTimer -= dt;
+          if (this.occTimer <= 0) { this.occTimer = 0.12; this.occlusion(p, F); }
+        }
       }
     }
+    if (!this.follower || !this.frame) this.occT = 0;
+    this.occ = spring(this.occ, this.occT, this.vocc, this.occT > this.occ ? 3 : 1.2, dt);
 
     this.clockT += dt;
     if (this.idleDrift > 0 && !this.cinematic && !this.follower && this.clockT - this.lastInputT > 6) {
@@ -354,7 +443,9 @@ export class DroneCamera {
     const om = Math.max(0.05, this.rate * ramp * 1.7);
     // the focus point: a follower is chased lazily (and the chase starts slower and tightens over the first few seconds of a shot)
     const stretch = this.follower ? 1 + 1.6 * (1 - smoothstep(0, 3.5, this.moveT)) : 1;
-    const omF = this.follower ? 2 / (Math.max(0.05, this.followSmoothTime) * stretch) : om;
+    let omF = this.follower ? 2 / (Math.max(0.05, this.frame ? FRAME_SMOOTH : this.followSmoothTime) * stretch) : om;
+    // (a framed subject that bursts away from the shot tightens the chase, up to about 4 times)
+    if (this.follower && this.frame) omF *= 1 + 3 * smoothstep(0.25, 0.75, this.fErr);
     // the focus speed is capped, smoothly (see maxD below)
     const vmax = Math.max(28, 1.2 * c.dist);
     // first stage: the goal through a quick spring (3x the camera's own), so the camera's chase starts with zero acceleration
@@ -389,6 +480,113 @@ export class DroneCamera {
     }
   }
 
+  /** An editor's cut to the framed shot of the subject (standing where it belongs in the frame at once), keeping the heading the shot has. */
+  private frameCut(p: { x: number; y: number }, F: FollowFrame): void {
+    const g = this.goal, D = F.dist, pch = F.pitchDeg * DEG;
+    const phi = Math.atan(-FRAME_NDC_Y * Math.tan((this.camera.fov * DEG) / 2));
+    const a = clamp(D * Math.cos(pch) - (D * Math.sin(pch)) / Math.tan(pch + phi), 0, 0.5 * D);
+    g.tx = clamp(p.x - Math.sin(g.yaw) * a, 0, this.opt.worldSize);
+    g.tz = clamp(p.y - Math.cos(g.yaw) * a, 0, this.opt.worldSize);
+    g.dist = D; g.pitch = pch; g.lift = F.lift;
+    this.fLostT = 0;
+    this.snap();
+  }
+
+  /**
+   * The focus point of a framed follow, and (as a side effect) the springs that steer the shot: distance (a sprint pulls out), pitch,
+   * and yaw (a three-quarter rear view of the heading, retargeted only when the heading has turned well away). The point is the subject
+   * pushed ahead along the camera's view (so the animal stands in the lower middle third of the frame, not dead centre), plus a look-ahead
+   * along its travel, plus a feed-forward of its velocity over the chase's lag so a galloping animal is not left behind.
+   */
+  private frameTarget(p: { x: number; y: number }, F: FollowFrame, dt: number): { x: number; z: number } {
+    const g = this.goal, c = this.cur, fv = this.fv, fh = this.fh;
+    if (this.fPrev.ok && dt > 1e-4) {
+      let vx = (p.x - this.fPrev.x) / dt, vz = (p.y - this.fPrev.z) / dt;
+      if (Math.hypot(vx, vz) > 80) vx = vz = 0; // a jump (a respawn, a cut), not a speed
+      const k1 = 1 - Math.exp(-dt / 0.4), k2 = 1 - Math.exp(-dt / 1.0);
+      fv.x += (vx - fv.x) * k1; fv.z += (vz - fv.z) * k1;
+      fh.x += (vx - fh.x) * k2; fh.z += (vz - fh.z) * k2;
+    }
+    this.fPrev.x = p.x; this.fPrev.z = p.y; this.fPrev.ok = true;
+    const speed = Math.hypot(fv.x, fv.z), hs = Math.hypot(fh.x, fh.z);
+    if (!this.frameInit) {
+      this.frameInit = true;
+      this.fDist = g.dist; this.vfDist.v = 0;
+      this.fPitch = g.pitch; this.vfPitch.v = 0;
+      this.fYaw = this.fYawT = g.yaw; this.vfYaw.v = 0;
+      this.fSideSet = false;
+    }
+    // distance: the shot's own, pulled out a little in a sprint
+    const spK = smoothstep(3, 14, Math.min(speed, 30));
+    if (this.frameAuto.dist) {
+      this.fDist = spring(this.fDist, F.dist * (1 + (F.pull ?? 0.25) * spK), this.vfDist, 1.3, dt);
+      g.dist = clamp(this.fDist, MIN_DIST, MAX_DIST);
+    } else { this.fDist = g.dist; this.vfDist.v = 0; }
+    if (this.frameAuto.pitch) {
+      this.fPitch = spring(this.fPitch, F.pitchDeg * DEG, this.vfPitch, 1.4, dt);
+      g.pitch = clamp(this.fPitch, MIN_PITCH, MAX_PITCH);
+    } else { this.fPitch = g.pitch; this.vfPitch.v = 0; }
+    // yaw: behind and to one side of where the subject is heading (the side nearest to where the camera already is, kept for the whole follow)
+    if (hs > 2.2) { // (a grazer's wander has a smoothed velocity well under this: the shot only turns for a subject that is going somewhere)
+      const base = Math.atan2(-fh.x, -fh.z);
+      if (!this.fSideSet) {
+        this.fSideSet = true;
+        this.fSide = Math.abs(wrapAngle(base + FRAME_SIDE - g.yaw)) <= Math.abs(wrapAngle(base - FRAME_SIDE - g.yaw)) ? 1 : -1;
+        this.fYawT = base + this.fSide * FRAME_SIDE;
+      } else {
+        const want = base + this.fSide * FRAME_SIDE;
+        if (Math.abs(wrapAngle(want - this.fYawT)) > FRAME_YAW_BAND) this.fYawT = want;
+      }
+    }
+    if (this.frameAuto.yaw) {
+      this.fYaw = spring(this.fYaw, this.fYaw + wrapAngle(this.fYawT - this.fYaw), this.vfYaw, 0.55, dt);
+      g.yaw = this.fYaw;
+    } else { this.fYaw = this.fYawT = g.yaw; this.vfYaw.v = 0; }
+    // where the focus goes
+    const D = c.dist, pch = this.pitchNow();
+    const phi = Math.atan(-FRAME_NDC_Y * Math.tan((this.camera.fov * DEG) / 2));
+    const a = clamp(D * Math.cos(pch) - (D * Math.sin(pch)) / Math.tan(pch + phi), 0, 0.5 * D);
+    const yaw = c.yaw + this.av.off;
+    let ox = -Math.sin(yaw) * a, oz = -Math.cos(yaw) * a;
+    if (speed > 0.6) {
+      const lead = Math.min(speed * 0.3, 0.14 * D);
+      ox += (fv.x / speed) * lead; oz += (fv.z / speed) * lead;
+      // the chase lags a steady-speed subject by (smoothing time x its stretch) x 4/3 (both springs); feed that distance forward
+      const stretch = 1 + 1.6 * (1 - smoothstep(0, 3.5, this.moveT));
+      const ff = FRAME_SMOOTH * stretch * (4 / 3);
+      ox += fv.x * ff; oz += fv.z * ff;
+    }
+    const ol = Math.hypot(ox, oz), cap = 0.8 * D;
+    if (ol > cap) { ox *= cap / ol; oz *= cap / ol; }
+    return { x: p.x + ox, z: p.y + oz };
+  }
+
+  /**
+   * Terrain between the camera and a framed subject (a hillside in the way): find the smallest rise of the pitch (rad) whose sight line
+   * clears the ground, and make it the target of the rise. It rises at once and comes down only after the way has been clear for a second.
+   */
+  private occlusion(p: { x: number; y: number }, F: FollowFrame): void {
+    const c = this.cur, ground = this.opt.ground;
+    const sy = ground(p.x, p.y) + Math.max(0.5, F.lift * 1.1);
+    const yaw = c.yaw + this.av.off, fy = this.gy + c.lift, boom = c.dist;
+    let rise = OCC_STEPS[OCC_STEPS.length - 1];
+    for (const step of OCC_STEPS) {
+      const pitch = Math.min(OCC_MAX_PITCH, c.pitch + this.av.up + step);
+      const cp = Math.cos(pitch);
+      const cx = c.tx + boom * cp * Math.sin(yaw), cz = c.tz + boom * cp * Math.cos(yaw), cy = Math.max(fy + boom * Math.sin(pitch), ground(cx, cz) + 1.6);
+      let clear = true;
+      for (let i = 1; i <= 14; i++) {
+        const t = (i / 14) * 0.92;
+        const px = cx + (p.x - cx) * t, pz = cz + (p.y - cz) * t, py = cy + (sy - cy) * t;
+        if (py - ground(px, pz) < OCC_CLEAR * (0.35 + 0.65 * (1 - t))) { clear = false; break; }
+      }
+      if (clear) { rise = step; break; }
+      if (c.pitch + this.av.up + step >= OCC_MAX_PITCH) { rise = step; break; }
+    }
+    if (rise >= this.occT) { this.occT = rise; this.occLowFor = 0; }
+    else { this.occLowFor += 0.12; if (this.occLowFor > 1.0) { this.occT = rise; this.occLowFor = 0; } }
+  }
+
   /** Debug: set to an array and every update() appends [clock, dt, px, py, pz, fx, fy, fz, cuts, boom, swingDeg] (stride 11). See tools/camlog.mjs. */
   debugLog: number[] | null = null;
   private logFocus = new THREE.Vector3();
@@ -403,7 +601,7 @@ export class DroneCamera {
 
   /** The camera's pitch with the avoidance's rise added (radians). */
   private pitchNow(): number {
-    return clamp(this.cur.pitch + this.av.up, MIN_PITCH, Math.max(this.cur.pitch, MAX_AVOID_PITCH));
+    return clamp(this.cur.pitch + this.av.up + this.occ, MIN_PITCH, Math.max(this.cur.pitch + this.occ, MAX_AVOID_PITCH));
   }
 
   /**
@@ -629,6 +827,7 @@ export class DroneCamera {
       } else if ((e.buttons & 1) !== 0 || e.pointerType === 'touch') {
         g.yaw -= dx * 0.0052;
         g.pitch = clamp(g.pitch + dy * 0.0042, MIN_PITCH, MAX_PITCH);
+        this.frameAuto.yaw = this.frameAuto.pitch = false;
         this.userInput(false);
       }
     });
@@ -637,6 +836,7 @@ export class DroneCamera {
       e.preventDefault();
       const g = this.goal;
       g.dist = clamp(g.dist * Math.exp(e.deltaY * 0.0011), MIN_DIST, MAX_DIST);
+      this.frameAuto.dist = false;
       this.userInput(false);
     }, { passive: false });
 
