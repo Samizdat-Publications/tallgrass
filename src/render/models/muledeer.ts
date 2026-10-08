@@ -255,6 +255,8 @@ export function buildMuleDeer(): ModelDef {
     warm: [1.1, 1.0, 0.86],
     neutral: 0.7,
     // from the drone view a herd reads as a dull tan and white, not a bright smear
+    // R-readable: guild value separation and edge lift at the default distances (see ModelDef.read)
+    read: { pale: 0.3, rim: [1.0, 0.92, 0.78, 0.45] },
     far: { gain: 0.9, rim: 0, hunt: 0, rimCol: [1, 1, 1], d0: 100, d1: 340, tint: [0.3, 0.215, 0.14], mix: 0.28, lowFill: 0.3,
       top: [0.34, 0.25, 0.17], topMix: 0.7, side: 0.12, legs: 0.55, calm: 0.8, widen: 0.4 },
     params: {

@@ -347,6 +347,13 @@ export interface ModelDef {
     /** Extra body width at range (fraction, full by about 380 m): a slender body is a stick from above, an oval reads as an animal. */
     widen?: number;
   };
+  /**
+   * R-readable: value separation at the default distances (about 6 m and out, full by 40 m), by guild, against the season's grass. A
+   * predator reads cooler and darker (`dark`, a multiplier on the albedo, strongest against bright grass), a grazer keeps its pale
+   * markings brighter (`pale`, the rump and belly), and every coat gets a faint edge lift from the sky light (`rim`: colour and strength).
+   * None of it lights the animal by itself: it scales with the scene's ambient light and fades with the dark.
+   */
+  read?: { dark?: [number, number, number]; pale?: number; rim?: [number, number, number, number] };
   triangles: number;
 }
 

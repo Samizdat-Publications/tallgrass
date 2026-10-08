@@ -162,6 +162,8 @@ export function buildCougar(): ModelDef {
     fill: 1.5,
     warm: [1.15, 1.0, 0.8],
     neutral: 0.7,
+    // R-readable: guild value separation and edge lift at the default distances (see ModelDef.read)
+    read: { dark: [0.8, 0.77, 0.78], rim: [0.78, 0.86, 1.0, 0.55] },
     far: { gain: 0.85, rim: 0.06, hunt: 0.4, rimCol: [1.0, 0.86, 0.62], d0: 80, d1: 300, tint: [0.2, 0.12, 0.06], mix: 0.4, floor: 0.1,
       top: [0.3, 0.2, 0.11], topMix: 0.35, side: 0.15, legs: 0.85, calm: 0.5, widen: 0.1 },
     params: {
