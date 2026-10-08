@@ -58,6 +58,43 @@ const SETS = {
     { name: 'wv_09_winter_night_wide', eval: "window.__env({ season: 3.4, dayFrac: 0.95 })", wait: 3000 },
     { name: 'wv_10_winter_night_top', eval: "window.__cam('top')", wait: 3000 },
   ],
+  // R-water2: the far-field look of the creek and ponds (wide, mid, top, graze) in each season and light, UI hidden ('h'). Same views before and after.
+  water2: [
+    { name: 'w2_00_setup', eval: `(() => {
+      const e = window.__engine, w = e.world;
+      window.__wv = (t, dist, pitch, rel) => {
+        let x, y;
+        if (typeof t === 'string') { const q = Number(t.slice(1)) * 4; x = w.ponds[q]; y = w.ponds[q + 1]; }
+        else { const n = w.creek.length / 2, k = Math.min(n - 2, Math.max(0, Math.floor(n * t))); x = w.creek[2 * k]; y = w.creek[2 * k + 1]; }
+        const L = e.uniforms.lightDir.value;
+        const az = Math.atan2(L.x, L.z) * 180 / Math.PI;
+        e.cam.setView({ x, y, distance: dist, pitchDeg: pitch, yawDeg: az + 180 + rel }, true);
+      };
+      window.__env = (o) => {
+        window.__envO = Object.assign({ season: 1.3, weather: 0, warmth: 0.7, rain: 0, dayFrac: 0.45 }, o);
+        if (!window.__envHook) window.__envHook = e.onFrame(() => e.setEnv(window.__envO));
+        e.setEnv(window.__envO); e.applyEnvNow();
+      };
+      window.__speed(1); window.__followId(null); window.__env({ season: 1.3, dayFrac: 0.45 }); window.__cam('wide');
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'h', bubbles: true }));
+    })()`, wait: 3500 },
+    { name: 'w2_01_summer_wide', eval: '', wait: 2500 },
+    { name: 'w2_02_summer_mid', eval: "window.__wv(0.45, 190, 30, 60)", wait: 3000 },
+    { name: 'w2_03_summer_top', eval: "window.__cam('top')", wait: 3000 },
+    { name: 'w2_04_golden_wide', eval: "window.__env({ dayFrac: 0.68 }); window.__cam('wide')", wait: 3000 },
+    { name: 'w2_05_dusk_wide', eval: "window.__env({ dayFrac: 0.765 })", wait: 3000 },
+    { name: 'w2_06_dusk_mid', eval: "window.__wv(0.45, 190, 24, 40)", wait: 3000 },
+    { name: 'w2_07_dawn_wide', eval: "window.__env({ dayFrac: 0.27 }); window.__cam('wide')", wait: 3000 },
+    { name: 'w2_08_dawn_top', eval: "window.__cam('top')", wait: 3000 },
+    { name: 'w2_09_winter_dusk_wide', eval: "window.__env({ season: 3.3, dayFrac: 0.7, warmth: 0.1 }); window.__cam('wide')", wait: 3000 },
+    { name: 'w2_10_winter_mid', eval: "window.__env({ season: 3.3, dayFrac: 0.42, warmth: 0.1 }); window.__wv(0.45, 190, 30, 60)", wait: 3000 },
+    { name: 'w2_11_winter_top', eval: "window.__cam('top')", wait: 3000 },
+    { name: 'w2_12_pond_wide', eval: "window.__env({ season: 1.3, dayFrac: 0.45 }); window.__wv('p0', 170, 32, 60)", wait: 3000 },
+    { name: 'w2_13_pond_dusk', eval: "window.__env({ dayFrac: 0.765 }); window.__wv('p0', 170, 28, 30)", wait: 3000 },
+    { name: 'w2_14_pond_top', eval: "window.__env({ dayFrac: 0.45 }); window.__wv('p1', 150, 80, 0)", wait: 3000 },
+    { name: 'w2_15_creek_graze', eval: "window.__wv(0.3, 110, 14, 20)", wait: 3000 },
+    { name: 'w2_16_night_wide', eval: "window.__env({ dayFrac: 0.95 }); window.__cam('wide')", wait: 3000 },
+  ],
   // snow vs calendar: fast-forward through a winter, then drop to 1x and check the ground matches the header's season
   // herd shape: run a few valley-years, then look at the herds from the drone, mid range and above (compare ?p=herdNearest:6)
   herds: [

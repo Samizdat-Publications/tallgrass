@@ -1474,9 +1474,12 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
     float bn = tgNoise2(xz * 0.06 + vec2(5.0, 9.0)) * 0.6 + tgNoise2(xz * 0.21 + vec2(1.0, 4.0)) * 0.4;
     float wetW = 5.5 + 9.0 * smoothstep(120.0, 800.0, dist);
     float wetB = 1.0 - smoothstep(0.3 * wetW, wetW, wd + (bn - 0.5) * 0.9 * wetW);
-    col = mix(col, col * vec3(0.5, 0.43, 0.35), wetB * 0.72 * bankK * (1.0 - 0.2 * snowCover));
+    // R-water2: the dark bank comes in runs along the creek (wet soil, overhanging grass) with open, paler stretches between, so the water is
+    // not outlined in one even dark line; the runs match the ones in the water's own margin (same noise, same scale)
+    float runsB = smoothstep(0.38, 0.72, tgNoise2(xz * 0.06 + vec2(3.0, 8.0)) * 0.6 + tgNoise2(xz * 0.19 + 1.0) * 0.4);
+    col = mix(col, col * vec3(0.5, 0.43, 0.35), wetB * 0.72 * bankK * (0.3 + 0.7 * runsB) * (1.0 - 0.2 * snowCover));
     float cutB = 1.0 - smoothstep(0.0, mix(1.4, 3.6, smoothstep(120.0, 700.0, dist)), wd);
-    col *= 1.0 - 0.38 * cutB * bankK;
+    col *= 1.0 - 0.38 * cutB * bankK * (0.35 + 0.65 * runsB);
     float gravN = smoothstep(0.52, 0.76, tgNoise2(xz * 0.045 + vec2(21.0, 7.0)) * 0.6 + tgNoise2(xz * 0.16 + vec2(3.0, 13.0)) * 0.4);
     float gravB = gravN * smoothstep(0.1, 0.6, wd) * (1.0 - smoothstep(0.3 * wetW, 0.8 * wetW, wd));
     col = mix(col, vec3(0.43, 0.37, 0.27) * (0.85 + 0.3 * nA), gravB * 0.55 * bankK * (1.0 - 0.5 * snowCover));
