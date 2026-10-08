@@ -660,6 +660,8 @@ function foliageMaterial(shared: SharedUniforms, kind: FoliageKind): THREE.MeshS
           // vOcc is interpolated per MSAA pixel center and can overshoot at silhouette pixels: clamp before any pow
           float occ = clamp( vOcc, 0.0, 1.0 );
           float shade = 0.2 + 0.9 * pow( occ, 1.15 );
+          // the porthole to the watched point: the interior seen through it is lit like the crown's shell, not black
+          shade = mix( shade, max( shade, 0.74 ), tgOcclusionLift( wpw ) * ( 1.0 - lod ) );
           shade *= mix( ${shrub ? '0.8 + 0.34 * puff' : '0.88 + 0.2 * puff'}, 1.0, lod );
           // leaf-scale tonal speckle and a slightly lighter, yellower tip on the sunlit shell
           leaf *= shade * ( 0.76 + 0.2 * ${shrub ? 'tgNoise3( wpw * 2.6 )' : 'tone'} +${shrub ? '0.85' : '0.6'} * ( fine - 0.5 ) + ${shrub ? '0.45' : '0.32'} * ( ${shrub ? 'tgNoise3( wpw * 26.0 )' : 'fineB'} - 0.5 ) + 0.14 * ${shrub ? 'tgNoise3( wpw * 9.0 )' : 'fineA'} ) * inst.r;

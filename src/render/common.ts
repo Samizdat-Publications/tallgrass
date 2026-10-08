@@ -221,9 +221,24 @@ float tgOcclusionFade(vec3 wp){
   float t = dot(wp - uOccCam, ab) / l2;
   float between = smoothstep(-0.02, 0.0, t) * (1.0 - smoothstep(0.93, 0.995, t));
   vec3 q = uOccCam + ab * clamp(t, 0.0, 1.0);
-  float d = length(wp - q);
+  // the rim is ragged, not a round cut: each leaf-scale bit of crown (about 0.2 m cells in world space) sees the hole a little wider or
+  // narrower than its neighbour, so the edge reads as foliage thinning out and not as a circular window
+  vec3 cell = floor(wp * 5.0);
+  float rag = fract(sin(dot(cell, vec3(12.9898, 78.233, 37.719))) * 43758.5453) - 0.5;
+  float d = length(wp - q) + rag * uOccParams.y * 0.7;
   float hole = 1.0 - smoothstep(uOccParams.x, uOccParams.y, d);
   return (1.0 - hole * between * uOccParams.z) * nearK;
+}
+// How much of the porthole a fragment lies in, counting the line of sight beyond the focus too (a short way). The crown shader lifts the
+// leaves seen through the hole and along its rim out of the crown's interior darkness: left alone they read as a black disc in the canopy.
+float tgOcclusionLift(vec3 wp){
+  if (uOccParams.z <= 0.001) return 0.0;
+  vec3 ab = uOccFocus - uOccCam;
+  float l2 = max(dot(ab, ab), 1e-3);
+  float t = dot(wp - uOccCam, ab) / l2;
+  float ahead = smoothstep(-0.02, 0.0, t) * (1.0 - smoothstep(0.0, 30.0, (t - 1.0) * sqrt(l2)));
+  float d = length(wp - (uOccCam + ab * max(t, 0.0)));
+  return (1.0 - smoothstep(uOccParams.x, uOccParams.y * 1.7, d)) * ahead * uOccParams.z;
 }
 `;
 

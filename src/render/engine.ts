@@ -761,8 +761,11 @@ export class Engine {
       u.occCam.value.copy(this.camera.position);
       u.occFocus.value.set(focus.x, focus.y + 0.5, focus.z);
       // (the porthole through the canopy to the watched point was a pinhole at the usual 20 to 40 m shots; a wider one reads as a clearing)
-      const r = clamp(dist * 0.06, 2.2, 7);
-      u.occParams.value.set(r * 0.5, r * 1.35, this.occlusionFade ? 1 - smoothstep(110, 175, dist) : 0);
+      // (r-regress: the 0.06 / 2.2 to 7 version with a tight 0.5 to 1.35 falloff read as a round black window in the canopy from 40 to 60 m,
+      // a "giant black sphere" in the round-18 video review. Back near the old size with a small clear core and a long soft falloff: the
+      // leaves thin out toward the watched line instead of ending at a hard ring.)
+      const r = clamp(dist * 0.048, 1.8, 5.5);
+      u.occParams.value.set(r * 0.35, r * 2.0, this.occlusionFade ? 1 - smoothstep(110, 175, dist) : 0);
     }
 
     this.terrain.updateShadow(this.renderer, u.lightDir.value);
