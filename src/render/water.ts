@@ -599,8 +599,12 @@ export class Water {
           }
           float depth = vLevel - terr;
           // the waterline wanders a little (undercut banks, trampled mud, grass leaning in), so the edge is not a drawn contour
-          float wig = tgNoise2(p * 0.31 + 2.0) * 0.6 + tgNoise2(p * 1.1 + 8.0) * 0.4 - 0.5;
-          depth += wig * mix(0.1, 0.2, mA) * (1.0 - smoothstep(0.08, 0.4, abs(depth)));
+          float wig = tgNoise2(p * 0.31 + 2.0) * 0.6 + mix(tgNoise2(p * 1.1 + 8.0), 0.5, smoothstep(40.0, 150.0, length(cameraPosition - vWorld))) * 0.4 - 0.5;
+          // (R-water2: from afar the waterline wanders more, by metres along a reach, so the edge is a coast and not a drawn contour;
+          // a long slow term pinches and swells the channel, a shorter one scallops it)
+          float wanderK = smoothstep(40.0, 150.0, length(cameraPosition - vWorld));
+          float wan = tgNoise2(p * 0.07 + 31.0) * 0.6 + tgNoise2(p * 0.22 + 4.0) * 0.4 - 0.5;
+          depth += wig * mix(0.1, 0.2, mA) * (1.0 - smoothstep(0.08, 0.4, abs(depth))) + wan * 0.34 * wanderK * (1.0 - smoothstep(0.1, 0.55, abs(depth)));
           if (depth < -0.55) discard;
 
           vec3 toCam = cameraPosition - vWorld;
@@ -648,7 +652,7 @@ export class Water {
           // ---- above the waterline: the draped skirt darkens the wet bank, with a thin glossy line right at the edge
           if (depth < 0.0) {
             float hA = -depth;
-            float rag = tgNoise2(p * 0.6) * 0.6 + tgNoise2(p * 2.1 + 3.0) * 0.4;
+            float rag = tgNoise2(p * 0.6) * 0.6 + mix(tgNoise2(p * 2.1 + 3.0), 0.5, smoothstep(40.0, 160.0, dist)) * 0.4;
             // the band never reaches the floodplain beside the creek (about 0.3 m up), so it cannot end at the mesh edge
             // in height above the water: the pond banks are gentle, so their band stays low or it smears across the grass
             float reach = mix(0.06 + 0.08 * rag, min(0.26, (0.12 + 0.1 * rag) * (1.0 + 0.3 * riffle)), isCreek);
@@ -658,6 +662,11 @@ export class Water {
             reach *= 1.0 + 1.5 * midC;
             float band = 1.0 - smoothstep(0.0, reach, hA);
             float a = pow(band, mix(mix(2.0, 1.0, farK), 1.6, midC)) * mix(mix(0.42, mix(0.4, 0.6, isCreek), max(farK, rain)), 0.5, midC) * (1.0 - dry);
+            // R-water2: from afar the dark margin comes in runs (wet soil and overhanging grass) with open stretches between, not as
+            // one even outline along the whole creek
+            float runsS = smoothstep(0.38, 0.72, tgNoise2(p * 0.06 + vec2(3.0, 8.0)) * 0.6 + tgNoise2(p * 0.19 + 1.0) * 0.4);
+            float runK = smoothstep(35.0, 100.0, dist) * isCreek;
+            a *= mix(1.0, 0.3 + 0.7 * runsS, runK);
             float film = 1.0 - smoothstep(0.0, 0.012, hA);
             float Fw = 0.03 + 0.97 * pow(1.0 - clamp(V.y, 0.0, 1.0), 5.0);
             vec3 src = tgSkyBase(normalize(vec3(-V.x, max(abs(V.y), 0.05), -V.z))) * Fw * film * 0.2 * (1.0 - dry);
@@ -667,14 +676,16 @@ export class Water {
             // is framed by a dark line and the terrain's pale bank mud never shows as a kerb. Drawn as pure darkening, so the bank
             // keeps the terrain's own colour and lighting.
             {
-              float clump = tgNoise2(p * 0.8 + 3.0) * 0.6 + tgNoise2(p * 2.6 + 1.0) * 0.4;
+              float clump = tgNoise2(p * 0.8 + 3.0) * 0.6 + mix(tgNoise2(p * 2.6 + 1.0), 0.5, smoothstep(40.0, 160.0, dist)) * 0.4;
               float frH = mix(0.36, 0.5, farK) * (0.75 + 0.5 * clump);
               float fr = (1.0 - smoothstep(frH * 0.4, frH, hA)) * (0.5 + 0.5 * smoothstep(0.3, 0.7, clump)) * mix(0.5, 0.34, farK) * mix(0.35, 1.0, isCreek);
               fr *= 1.0 - 0.85 * uSnow;
+              fr *= mix(1.0, 0.15 + 0.85 * runsS, runK);
               src *= 1.0 - fr;
               a = a + fr * (1.0 - a);
             }
             float lip = (1.0 - smoothstep(0.0, mix(0.035, 0.07, farK) * (0.7 + 0.6 * rag), hA)) * mix(0.5, 0.8, isCreek) * (1.0 - dry);
+            lip *= mix(1.0, 0.25 + 0.75 * runsS, runK);
             src *= 1.0 - lip;
             a = max(a, lip);
             if (isCreek > 0.5) {
@@ -927,7 +938,7 @@ export class Water {
           bodyC *= 1.0 - 0.25 * rain;
 
           // the water hides the terrain except in the last few centimetres, where it thins to a wet film over the mud
-          float edgeA = smoothstep(0.0, mix(0.06, 0.2, midK * isCreek), depth);
+          float edgeA = smoothstep(0.0, mix(0.06, 0.2, max(midK * isCreek, 0.6 * wanderK)), depth);
           vec3 src = refl * F + bodyC * (1.0 - F) * edgeA;
           float a = F + (1.0 - F) * edgeA;
           // mid range: the shelving margins of the creek are lighter than its deep middle, an olive-tan band where the bed shows through
@@ -940,6 +951,88 @@ export class Water {
           float lipW = (1.0 - edgeA) * mix(0.5, 0.8, isCreek) * (1.0 - dry);
           src = src * (1.0 - lipW) + refl * F * lipW;
           a = mix(a, 1.0, lipW);
+          // ---- R-water2, far field (beyond about 35 m): the water as a medium, seen from the drone. The old far look was a mirror held
+          // below the land's brightness, which read as grey asphalt. Here depth sets the colour (tan-olive shallows at the margins where
+          // the bed shows, olive-green midway, dark teal-brown in the middle), the sky and the banks are mirrored with a Fresnel that
+          // follows the view angle (strong at a graze, weak from above, so a top view sees the bed and the depth colour), lanes of
+          // calmer and rougher water ride the current, the margin is broken into stretches of wet dark soil, overhanging grass and
+          // open shoals, and a dusk sky is mirrored as slate and a little warmth, never as a lilac or milky sheet.
+          float gK = smoothstep(32.0, 100.0, dist) * (1.0 - uNight) * (1.0 - ice);
+          if (gK > 0.003) {
+            const vec3 LUMW = vec3(0.2126, 0.7152, 0.0722);
+            float vY = clamp(V.y, 0.0, 1.0);
+            float vEff = mix(vY, cosV, 0.5);
+            // lanes along the current: broad calm and rough reaches (always legible from afar) plus finer streaks nearer in
+            float lane = 0.5;
+            float laneFine = 0.5;
+            if (isCreek > 0.5) {
+              lane = wNoise(vec2(q.x * 0.03, q.y * 0.22) + vec2(31.0, 5.0)).x * 0.6 + wNoise(vec2(q.x * 0.011, q.y * 0.1) + vec2(2.0, 47.0)).x * 0.4;
+            lane = clamp((lane - 0.5) * 2.2 + 0.5, 0.0, 1.0);
+              laneFine = wNoise(vec2(q.x * 0.1, q.y * 0.9) + vec2(7.0, 61.0)).x;
+              laneFine = mix(0.5, laneFine, 1.0 - smoothstep(90.0, 230.0, dist));
+            } else {
+              // a pond: cat's paws and the gusts' patches vary the sheen across the surface
+              lane = mix(0.5, gust, 0.8);
+              laneFine = wNoise((p - uWindOff) * 0.25 + 12.0).x;
+              laneFine = mix(0.5, laneFine, 1.0 - smoothstep(90.0, 230.0, dist));
+            }
+            float rough = clamp(lane * 0.8 + (laneFine - 0.5) * 0.5 + 0.1, 0.0, 1.0);
+            // depth: the dN measure undoes the mid-range clearing of optK so the colours hold from 35 m out to the map
+            // (the creek's section is a parabola only half a metre deep, so its real shallows are under a metre wide: from afar the
+            // gradient is spread across the whole channel by the offset from the centreline instead, shoals toward both banks, with the
+            // bends' pools and bars from optK; a pond shelves more gently, so its own depth, taken as a root, does the same)
+            float dN;
+            if (isCreek > 0.5) {
+              float sAcross = clamp(abs(vFlow.y) / max(vFlow2.w, 1.5), 0.0, 1.2);
+              dN = clamp((1.0 - smoothstep(0.2, 1.0, sAcross)) * clamp(optK / mix(1.0, 0.42, midK), 0.6, 1.35), 0.0, 1.0);
+              dN = min(dN, smoothstep(0.0, 0.12, depth) * 0.5 + 0.5 * dN);
+            } else {
+              dN = smoothstep(0.0, 1.0, sqrt(max(depth, 0.0) / 0.95));
+            }
+            vec3 shAlb = isCreek > 0.5 ? vec3(0.52, 0.41, 0.19) : vec3(0.33, 0.37, 0.23);
+            vec3 mdAlb = isCreek > 0.5 ? vec3(0.2, 0.27, 0.095) : vec3(0.14, 0.23, 0.17);
+            vec3 dpAlb = isCreek > 0.5 ? vec3(0.05, 0.125, 0.095) : vec3(0.045, 0.13, 0.14);
+            // (a beaver pond is stained brown and olive by leaf litter)
+            shAlb = mix(shAlb, vec3(0.11, 0.09, 0.05), 0.75 * mA);
+            mdAlb = mix(mdAlb, vec3(0.065, 0.08, 0.042), 0.7 * mA);
+            dpAlb = mix(dpAlb, vec3(0.032, 0.05, 0.038), 0.7 * mA);
+            vec3 alb = mix(mix(shAlb, mdAlb, smoothstep(0.0, 0.5, dN)), dpAlb, smoothstep(0.4, 1.0, dN));
+            // the current carries silt: paler streaks along it, and the riffles run pale over the gravel
+            alb *= mix(1.0, 0.8 + 0.42 * mix(lane, laneFine, 0.4), isCreek);
+            alb = mix(alb, shAlb * 1.12, riffle * 0.55);
+            // the margin is not one even line: stretches of wet dark soil and overhanging grass (dark, a little green) alternate with
+            // open tan shoals, in runs of a few tens of metres along the bank
+            float edgeBelt = 1.0 - smoothstep(0.0, 0.34, depth);
+            float runs = smoothstep(0.38, 0.72, tgNoise2(p * 0.06 + vec2(3.0, 8.0)) * 0.6 + tgNoise2(p * 0.19 + 1.0) * 0.4);
+            float overhang = smoothstep(0.5, 0.8, tgNoise2(p * 0.11 + vec2(17.0, 2.0)));
+            alb *= 1.0 - 0.55 * edgeBelt * runs * mix(0.6, 1.0, farK) * (1.0 - 0.7 * uSnow);
+            alb = mix(alb, mix(uGrassGreen, uGrassDry, uCure) * 0.3, 0.4 * edgeBelt * runs * overhang * (1.0 - uSnow) * (1.0 - mA));
+            // (the ambient term is the dome's blue, which on a body of olive and tan paints it slate: the water's own light is taken toward a warm neutral)
+            vec3 irrF = mix(irrBody, vec3(dot(irrBody, LUMW)) * vec3(1.0, 0.97, 0.88), 0.85);
+            vec3 bodyF = alb * INV_PI * irrF * (1.0 - 0.25 * rain);
+            // Fresnel by view angle: weak from above (the bed and the depth colour show), strong at a graze; calm lanes mirror more
+            // (the sky is far brighter than the water's own light, so a flat reflectance would paint the whole stream sky-grey: the mirror
+            // comes in sheets, bright where a lane is calm and nearly absent where it is rough, over a body that keeps its depth colour)
+            float Fv = 0.025 + 0.8 * pow(1.0 - vEff, 4.5);
+            Fv = max(Fv, 0.1 * smoothstep(0.85, 0.3, vY));
+            float sheen = smoothstep(0.35, 0.65, 1.0 - rough);
+            Fv *= mix(0.3, 2.3, sheen);
+            Fv *= mix(0.45, 1.0, smoothstep(0.05, 0.45, dN));
+            Fv *= 1.0 - 0.35 * rain - 0.25 * gust * uWind.z * (1.0 - isCreek);
+            Fv = clamp(Fv, 0.0, 0.8);
+            // what it mirrors: the dome's radiance in the reflected direction (compressed so a low sun never whitens it), taken toward
+            // slate at dusk, dawn and under cloud, with the banks and crowns blurred into it where they hide the sky
+            vec3 skyF = tgSkyBase(normalize(vec3(R.x, max(R.y * 0.8, 0.03), R.z)));
+            float skyFL = dot(skyF, LUMW);
+            skyF *= skyFL > 1.1 ? (1.1 + (skyFL - 1.1) / (1.0 + 1.6 * (skyFL - 1.1))) / skyFL : 1.0;
+            skyF = mix(skyF, vec3(skyFL) * vec3(0.84, 1.0, 1.05), clamp(0.2 + 0.55 * dimK + 0.3 * uOvercast, 0.0, 0.85));
+            skyF *= 1.0 - 0.3 * uOvercast;
+            vec3 reflF = mix(skyF, hit.rgb, hit.a * 0.7);
+            vec3 srcF = reflF * Fv + bodyF * (1.0 - Fv) * edgeA;
+            float aF = Fv + (1.0 - Fv) * edgeA;
+            src = mix(src, srcF, gK);
+            a = mix(a, aF, gK);
+          }
           if (mA > 0.01 && depth < 0.45) {
             // sedge and floating litter in the shallows of a beaver pond, in soft clumps that thin out with depth
             float reed = smoothstep(0.52, 0.78, tgNoise2(p * 1.35 + 21.0) * 0.65 + tgNoise2(p * 4.2 + 5.0) * 0.35) * (1.0 - smoothstep(0.08, 0.42, depth)) * mA * (1.0 - dry);
