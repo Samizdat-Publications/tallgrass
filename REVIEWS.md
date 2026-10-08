@@ -269,3 +269,15 @@ Triage: planner items (density, dynamics, mule deer, ravens, water look, UI foot
 ## Round 18 (Gemini video, v8b live build, 2026-10-08 ~05:00) -> `review/round-18-video/reel.gemini.md`
 Scores: visual 6, readability 8, life and motion 2, believability 5, UI clarity 9, keep watching 4 (round 16: 7/6/5/8/6/7).
 Reported: animals do not animate (slide like chess pieces), stay level on slopes, a giant black sphere in a cottonwood grove, bison clipping, jerky follow pan. A black disc is visible in the reel at 00:08. Triage: possible regression from 2026-10-07 merges or the v8b defaults; builder r-regress bisecting.
+
+## Round 19 (Gemini video, after the design-call fixes, 2026-10-08 afternoon) -> `review/round-19-video/reel.gemini.md`
+Scores: visual 5, readability 7, life and motion 2, believability 5, UI clarity 8, keep watching 3. Video critics keep scoring motion low.
+| # | Issue | Triage |
+|---|---|---|
+| 1 | Wolves gallop like rigid toys (no spine flex) | fix: builder r-anim-polish |
+| 2 | A bird frozen mid-flap during time-lapse | fix: r-anim-polish |
+| 3 | Herds slide at mid distance | partly the reel's 1 fps sampling (see r-regress); gallop work may help |
+| 4 | Pile of animals on a pond at night with ravens (01:37: pronghorn bedded on the water) | fix: r-anim-polish |
+| 5 | Snow pops on in one frame at 10x | fix: r-anim-polish (ease by real time) |
+| 6 | No splashes when animals cross water | fix: r-anim-polish |
+| 7 | Title cards over scenes that do not show the event | defer: director already frames field-note subjects; headline cards may need the same |
