@@ -209,6 +209,15 @@ function herdCenterAt(t: number): { x: number; y: number } {
 }
 
 function buildScene(): void {
+  // ?solo=wolf|cougar|coyote: one runner and a pack mate on the stampede circle, nothing else (clean strips of a gait)
+  const soloSp = ({ wolf: Sp.Wolf, cougar: Sp.Cougar, coyote: Sp.Coyote } as Record<string, number>)[q.get('solo') ?? ''];
+  if (soloSp !== undefined) {
+    add(soloSp, 'chase', 0, 0, 0, { ox: 0, oy: 0, coat: 0.3, st: St.Chase });
+    add(soloSp, 'chase', 0, 0, 0, { ox: -7, oy: 4, coat: 0.4, st: St.Chase });
+    carcs.length = 0;
+    roles.wolf = agents[0].id;
+    return;
+  }
   const lineup = CAM0 === 'lineup';
   if (lineup) {
     const sps = [Sp.Bison, Sp.Wolf, Sp.Deer, Sp.Cougar, Sp.Rabbit, Sp.Raven];
@@ -599,8 +608,11 @@ const showHud = q.get('hud') === '1';
 let frames = 0, last = performance.now(), fpsAcc = 0, fpsN = 0;
 let prevT = performance.now() / 1000;
 
+// Manual mode (?manual=1): the page does not run on its own; tools call window.__advance(dt) to step the fake sim and the layer by dt seconds
+// of a virtual clock and render one frame, so a strip of poses can be taken at exact phases.
+let manualNow = 0;
 function frame(): void {
-  const nowMs = performance.now();
+  const nowMs = q.get('manual') === '1' ? manualNow * 1000 : performance.now();
   const now = nowMs / 1000;
   const dt = Math.min(0.1, now - prevT);
   prevT = now;
@@ -632,7 +644,7 @@ function frame(): void {
     }
   }
   if (!window.__ready && ++readyFrames > 8) window.__ready = true;
-  requestAnimationFrame(frame);
+  if (q.get('manual') !== '1') requestAnimationFrame(frame);
 }
 let readyFrames = 0;
 
@@ -650,7 +662,12 @@ window.__bench = (frames = 60): number => {
   return (performance.now() - t0) / frames;
 };
 
-requestAnimationFrame(frame);
+if (q.get('manual') === '1') {
+  manualNow = performance.now() / 1000;
+  prevT = manualNow;
+  (window as unknown as Record<string, unknown>).__advance = (dt: number): void => { manualNow += dt; frame(); };
+  window.__ready = true;
+} else requestAnimationFrame(frame);
 if (q.get('picktest') === '1') setTimeout(() => window.__pickTest!(), 2500);
 if (q.get('bench') === '1') {
   setTimeout(() => {

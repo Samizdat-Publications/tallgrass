@@ -208,6 +208,7 @@ export function buildWolf(): ModelDef {
       bobW: 0.012, bobT: 0.025, bobG: 0.07,
       pitchT: 0.025, pitchG: 0.12,
       nodW: 0.05, nodG: 0.09,
+      spine: { flex: 1.5, twist: 0.2, head: 0.8 },
       headDown: 1.05, lookYaw: 0.5,
       tailRest: 0, tailRun: -0.3, tailSway: 0.22,
       lieDrop: 0.4, lieHipF: 1.25, lieKneeF: -2.3, lieHipH: -0.8, lieKneeH: 1.6,

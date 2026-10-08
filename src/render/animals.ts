@@ -25,6 +25,7 @@ import { ContactShadows } from './models/contact';
 import { R8_SHADER, makeAnimalMaterials } from './models/shader';
 import type { AnimalShared } from './models/shader';
 import { Dust, KillSites, Markers, SceneLit } from './models/fx';
+import { Splash } from './models/splash';
 import { CanidState, newIn, newOut } from './canids';
 import { BEH, BEH_RANGE, BisonBehaviour, newBisonIn, newBisonOut, packBisonA, packBisonB, rutK, sessionAt } from './behaviours';
 import { sunHeight } from '../audio/mix';
@@ -197,6 +198,11 @@ const TL_PUFFS_PER_FRAME = 40;
 const TL_TRAIL_M = 4.5;
 const TL_DUST_RANGE = 170;
 const TL_MIN_VIS = 5;
+/** Water contact (models/splash.ts): splashes and wake rings only this close to the camera (m), at most SPLASH_BUDGET emissions a frame, and not in a time-lapse. */
+const SPLASH_RANGE = 60;
+const SPLASH_BUDGET = 10;
+/** Furthest a bedded animal or a carcass in a pond is moved to reach the shore (m); further than that it stays where the sim put it. */
+const SHORE_MAX = 36;
 
 /**
  * Render-side heading dynamics per species: natural frequency (rad/s) of the critically damped spring that chases the sim
@@ -610,6 +616,13 @@ class Slots {
   dust = new Float32Array(this.cap);
   /** Distance travelled (in trail spacings) since the last time-lapse dust puff. */
   tdust = new Float32Array(this.cap);
+  /** Shore nudge of a bedded animal standing in water (m, drawn offset) and its eased weight 0..1: it lies on the bank, not on the pond. */
+  snx = new Float32Array(this.cap);
+  snz = new Float32Array(this.cap);
+  snw = new Float32Array(this.cap);
+  /** Water contact: 1 while the feet were in water last frame, and the distance (m) drawn since the last wake step. */
+  wetP = new Float32Array(this.cap);
+  spl = new Float32Array(this.cap);
   fresh = new Uint8Array(this.cap);
   stamp = new Uint32Array(this.cap);
   map = new Map<number, number>();
@@ -690,6 +703,11 @@ class Slots {
     this.sick = g(this.sick, Float32Array);
     this.dust = g(this.dust, Float32Array);
     this.tdust = g(this.tdust, Float32Array);
+    this.snx = g(this.snx, Float32Array);
+    this.snz = g(this.snz, Float32Array);
+    this.snw = g(this.snw, Float32Array);
+    this.wetP = g(this.wetP, Float32Array);
+    this.spl = g(this.spl, Float32Array);
     this.fresh = g(this.fresh, Uint8Array);
     this.stamp = g(this.stamp, Uint32Array);
     this.cap = n;
@@ -783,6 +801,11 @@ export class AnimalLayer {
   /** Leg cycles per second of the time-lapse bound by species id (see timelapseHz). */
   private tlHz: number[] = [];
   private dust: Dust;
+  private splash: Splash;
+  /** Nearest dry ground to a water cell (offset in m from the cell centre to the bank plus a margin), cleared now and then (ponds change). */
+  private shoreCache = new Map<number, number>();
+  private shoreAge = 0;
+  private splashBudget = 0;
   /** Soft contact shadow under every ground animal (see models/contact.ts). */
   readonly contact: ContactShadows;
   private kills: KillSites;
@@ -905,9 +928,10 @@ export class AnimalLayer {
     this.kills = new KillSites(world, this.lit);
     this.beh.setTrees(world.trees);
     this.dust = new Dust(this.lit);
+    this.splash = new Splash(this.lit);
     this.markers = new Markers(world.size);
     this.contact = new ContactShadows(this.shared);
-    this.object3D.add(this.kills.mesh, this.contact.mesh, this.dust.mesh, this.markers.mesh, this.markers.pingMesh);
+    this.object3D.add(this.kills.mesh, this.contact.mesh, this.dust.mesh, this.splash.drops, this.splash.rings, this.markers.mesh, this.markers.pingMesh);
 
     // Selection ring: a crisp thin cream ring with a dark edge on both sides (so it reads on gold grass, snow and dusk alike),
     // hugging the terrain under the selected animal. Its line stays about 2.5 px wide at any camera distance.
@@ -1021,6 +1045,7 @@ export class AnimalLayer {
         S.phase[slot] = hash01(id * 7 + 3);
         S.sick[slot] = 0;
         S.dust[slot] = 0;
+        S.snx[slot] = 0; S.snz[slot] = 0; S.snw[slot] = 0; S.wetP[slot] = 0; S.spl[slot] = 0;
         S.pounce[slot] = -1;
         S.pkey[slot] = -1;
         S.pstop[slot] = STRUGGLE_END;
@@ -1660,6 +1685,52 @@ export class AnimalLayer {
   private rvA = [0, 0];
   private rvB = [0, 0];
 
+  private shoreV = { dx: 0, dz: 0 };
+  /**
+   * Where a body that lies in water is moved to: the offset (m) from (x, z) to dry ground on the nearest bank, a metre or two inland and spread along
+   * the bank by the body's own seed so a pile of them does not stack on one point. False when (x, z) is not in water or no bank is within SHORE_MAX.
+   * The bank search is cached per water cell (the cache is cleared every ten seconds or so, ponds come and go).
+   */
+  private shoreOffset(x: number, z: number, id: number, out: { dx: number; dz: number }): boolean {
+    const w = this.world, n = w.n, cs = w.cell;
+    const ci = Math.min(n - 1, Math.max(0, Math.floor(x / cs))), cj = Math.min(n - 1, Math.max(0, Math.floor(z / cs)));
+    if (!w.water[cj * n + ci]) return false;
+    const key = cj * n + ci;
+    let packed = this.shoreCache.get(key);
+    if (packed === undefined) {
+      // nearest dry cell by growing square rings; the packed value is the cell offset (i, j) in two 16-bit halves, or -1 for none
+      const R = Math.ceil(SHORE_MAX / cs);
+      let bi = 0, bj = 0, bd = 1e9;
+      for (let r = 1; r <= R && bd === 1e9; r++) {
+        for (let j = -r; j <= r; j++) {
+          const jj = cj + j;
+          if (jj < 0 || jj >= n) continue;
+          const edge = j === -r || j === r;
+          for (let i = -r; i <= r; i += edge ? 1 : 2 * r) {
+            const ii = ci + i;
+            if (ii < 0 || ii >= n || w.water[jj * n + ii]) continue;
+            const d = i * i + j * j;
+            if (d < bd) { bd = d; bi = i; bj = j; }
+          }
+        }
+      }
+      packed = bd === 1e9 ? -1 : (bi + 512) * 1024 + (bj + 512);
+      this.shoreCache.set(key, packed);
+    }
+    if (packed < 0) return false;
+    const bi = Math.floor(packed / 1024) - 512, bj = (packed % 1024) - 512;
+    const L = Math.hypot(bi, bj) || 1;
+    const ux = bi / L, uz = bj / L;
+    // the bank point is the dry cell's centre; go a little past it, and spread sideways by the seed
+    const hs = hash01(id * 11 + 3), hs2 = hash01(id * 5 + 9);
+    const inland = 0.8 + 2.4 * hs;
+    const side = (hs2 - 0.5) * 4.5;
+    const cx = (ci + 0.5) * cs, cz = (cj + 0.5) * cs;
+    out.dx = cx + bi * cs + ux * inland - uz * side - x;
+    out.dz = cz + bj * cs + uz * inland + ux * side - z;
+    return true;
+  }
+
   // ---------------------------------------------------------------------------------------------------------
   update(dt: number, alpha: number, timeSec: number): void {
     this.timeSec = timeSec;
@@ -1695,6 +1766,9 @@ export class AnimalLayer {
     const groundAt = (gx: number, gz: number): number => sampleHeight(H, hn, cell, gx, gz);
     const running = this.timeScale > 0 ? dt : 0;
     this.dust.update(running);
+    this.splash.update(running);
+    this.splashBudget = SPLASH_BUDGET;
+    if (++this.shoreAge > 600) { this.shoreAge = 0; this.shoreCache.clear(); }
     this.markers.begin();
     const dustRate = Math.min(this.timeScale, 3);
     // time-lapse (see timelapseK in models/legmath.ts): 0 up to 3x, 1 from 8x. Drives the bound pose, the cadence and the landing dust.
@@ -1767,7 +1841,7 @@ export class AnimalLayer {
         const om = 22 * Math.min(12, Math.max(1, this.timeScale));
         // (an animal on the weight follower below springs from where this smoothing left it last frame, not from where the follower drew it)
         const own = ACCEL[sp] > 0 && S.wset[slot] === 1;
-        const ax = (own ? S.wtx[slot] : S.px[slot] - S.fox[slot] - this.cn.appliedX(slot)) - x, az = (own ? S.wtz[slot] : S.pz[slot] - S.foz[slot] - this.cn.appliedZ(slot)) - z;
+        const ax = (own ? S.wtx[slot] : S.px[slot] - S.fox[slot] - this.cn.appliedX(slot) - S.snx[slot]) - x, az = (own ? S.wtz[slot] : S.pz[slot] - S.foz[slot] - this.cn.appliedZ(slot) - S.snz[slot]) - z;
         if (ax * ax + az * az < 900) {
           const bx = S.svx[slot] + om * ax, bz = S.svz[slot] + om * az;
           const e = Math.exp(-om * dt);
@@ -1957,6 +2031,19 @@ export class AnimalLayer {
       else if (boOn && bo.faceOn) h = bo.face; // (bison: the opponent, the tree it rubs against, the way round its ring)
       else if (cnOn && cnO.moving) h = cnO.face; // (a pup romping on its ring)
 
+      // A bedded animal never lies on a pond: the sim lets a grazer settle for the night wherever it stands, water included, so the drawn body is
+      // moved to the bank (a display offset, eased in with the lie weight; S.snx and S.snz are taken out of the follower above like the other offsets)
+      if (!flier && !SWIMS[sp]) {
+        let nw = 0;
+        if (S.lie[slot] > 0.02 && this.shoreOffset(x, z, id, this.shoreV)) {
+          nw = smoothstep(0.1, 0.9, S.lie[slot]);
+          S.snx[slot] = this.shoreV.dx * nw;
+          S.snz[slot] = this.shoreV.dz * nw;
+        } else if (S.snw[slot] > 0) { S.snx[slot] = 0; S.snz[slot] = 0; }
+        S.snw[slot] = nw;
+        x += S.snx[slot];
+        z += S.snz[slot];
+      }
       // the terrain under the drawn position: the leg cycle runs on the distance along the ground, and the pose below uses it
       const g0 = sampleHeight(H, hn, cell, x, z);
 
@@ -2206,6 +2293,28 @@ export class AnimalLayer {
       const camP = this.shared.uCamPos.value;
       const camD = Math.hypot(x - camP.x, g0 - camP.y, z - camP.z);
       const sizeBoost = pr.kind === 0 ? legBoost(pr, vs, camD, this.shared.uPxK.value) : 1;
+      // water contact (models/splash.ts): a splash where a running animal's feet go into water, a wake ring for a wading one, near the camera only
+      if (pr.kind <= 1 && !SWIMS[sp] && camD < SPLASH_RANGE && running > 0 && this.timeScale <= 6 && S.lie[slot] < 0.3 && this.splashBudget > 0) {
+        const wcs = Math.min(world.n - 1, Math.max(0, Math.floor(z / cell))) * world.n + Math.min(world.n - 1, Math.max(0, Math.floor(x / cell)));
+        const inW = world.water[wcs] !== 0 && world.waterHeight[wcs] - g0 > 0.04;
+        const mvs = S.vis[slot];
+        if (inW && mvs > 0.5) {
+          const sy = world.waterHeight[wcs], hx = Math.cos(h), hz = Math.sin(h), sd = hash01(id * 3 + 5);
+          if (S.wetP[slot] < 0.5 && mvs > 2.2) {
+            this.splash.splash(x, sy, z, clamp(mvs / 11, 0.3, 1.2), vs, hx, hz, sd, 7);
+            this.splashBudget--;
+          }
+          S.spl[slot] += ds;
+          const stepLen = (mvs > 4.5 ? 1.1 : 0.65) * vs;
+          if (S.spl[slot] >= stepLen) {
+            S.spl[slot] = 0;
+            this.splashBudget--;
+            if (mvs > 4.5) this.splash.splash(x - hx * 0.2 * vs, sy, z - hz * 0.2 * vs, clamp(mvs / 11, 0.3, 1.1), vs, hx, hz, sd + S.phase[slot], 3);
+            else this.splash.ring(x - hx * 0.25 * vs, sy, z - hz * 0.25 * vs, 0.1 * vs, 0.55 * vs, 1.3, 0.28);
+          }
+        }
+        S.wetP[slot] = inW ? 1 : 0;
+      } else S.wetP[slot] = 0;
       // R6 stotting: a mule deer bounds on all four feet at once while the sim flags it (F_STOT, set for St.Flee); an unflagged deer
       // running normally keeps its ordinary gallop. The stride (and so the foot lock) follows the weight
       let stotW = 0;
@@ -2587,7 +2696,13 @@ export class AnimalLayer {
       const slide = fi && fi.t < 1e2 ? Math.min(fi.v * 0.1, 1.4) * (1 - Math.exp(-fi.t * 3.2)) : 0;
       // it falls where it was drawn, and settles onto the sim's position as it goes down
       const off = fi && fi.t < 1e2 ? Math.exp(-fi.t * 4) : 0;
-      const cx = x + (fi ? Math.cos(fi.h0) : ch) * slide + (fi ? fi.ox * off + fi.dgx : 0), cz = z + (fi ? Math.sin(fi.h0) : sh) * slide + (fi ? fi.oz * off + fi.dgz : 0);
+      let cx = x + (fi ? Math.cos(fi.h0) : ch) * slide + (fi ? fi.ox * off + fi.dgx : 0), cz = z + (fi ? Math.sin(fi.h0) : sh) * slide + (fi ? fi.oz * off + fi.dgz : 0);
+      // a carcass the sim left in a pond lies on the bank instead (drawn position only: the feeders read fi.cx and fi.cz, which follow it)
+      if (this.shoreOffset(cx, cz, Math.floor(seed * 4096) + 77, this.shoreV)) {
+        const sw = smoothstep(0.5, 1, fall);
+        cx += this.shoreV.dx * sw;
+        cz += this.shoreV.dz * sw;
+      }
       if (fi) {
         // where the body is drawn, for takedown contacts and feeding slots; a takedown in its struggle is open to pack mates arriving
         fi.cx = cx; fi.cz = cz; fi.rem = rem; fi.age += running;
@@ -2842,6 +2957,7 @@ export class AnimalLayer {
     this.heightTex.dispose();
     this.markers.dispose();
     this.dust.dispose();
+    this.splash.dispose();
     this.contact.dispose();
     this.kills.dispose();
     this.ringGeo.dispose();

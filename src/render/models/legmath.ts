@@ -287,6 +287,26 @@ export interface BodyMotion {
   bl: number;
   w: [number, number, number];
   cyc: number;
+  /** Rotary-gallop spine (AnimParams.spine): the signed back curvature (positive = arched) and the shoulder/hip twist now, 0 for a species without it. */
+  spA: number;
+  spR: number;
+}
+
+/** Spine motion: share of the gallop's flex at a trot, and the cycle phase (rad) at which the back is most arched (GLSL: SPINE_TROT, SPINE_PHASE). */
+export const SPINE_TROT = 0.25;
+export const SPINE_PHASE = 0.94;
+/**
+ * The curve of the back: the height offset at body x (as a share of the half length hl = boostLen * 0.55) is
+ * 0.1 * hl * spA * (1 - lncosh(2 xc) / LNCOSH1), xc = clamp(x / hl, -0.8, 0.8): zero at x = +-0.5 hl (the shoulders and the hips stay
+ * level, so the legs do not have to stretch), the middle of the back rises when arched and the head and tail ends dip. Its slope is
+ * -SPINE_K * spA * tanh(2 xc) (the tilt of the normals, and what the head cancels).
+ */
+export const LNCOSH1 = Math.log(Math.cosh(1));
+export const SPINE_K = 0.2 / LNCOSH1;
+/** Height offset (m) of the spine curve at body x for a curvature spA. */
+export function spineOffset(spA: number, hl: number, x: number): number {
+  const xc = clamp(x / hl, -0.8, 0.8);
+  return 0.1 * hl * spA * (1 - Math.log(Math.cosh(2 * xc)) / LNCOSH1);
 }
 
 /**
@@ -316,11 +336,17 @@ export function bodyMotion(p: AnimParams, gm: GaitMix, ph: number, farK: number,
     bob = mix(bob, sb, stot);
     pitch = mix(pitch, sp, stot);
   }
-  return { yoff: bob - gm.flex + dy, pitch: pitch + dp, roll: dr, stot, farK, bl: p.boostLen, w, cyc };
+  // rotary gallop spine: gathered phase (all four feet under the body, hind feet reaching forward and fore feet back) at phase 0.85 of the offG order,
+  // so the back arches there and hollows half a cycle later, when the fore feet reach and the hind feet trail
+  const sp = p.spine;
+  const wSp = sp ? (w[1] * SPINE_TROT + w[2]) * (1 - stot) : 0;
+  const spA = sp ? sp.flex * wSp * Math.cos(cyc + SPINE_PHASE) : 0;
+  const spR = sp ? sp.twist * wSp * Math.sin(cyc + SPINE_PHASE - 0.04) : 0;
+  return { yoff: bob - gm.flex + dy, pitch: pitch + dp, roll: dr, stot, farK, bl: p.boostLen, w, cyc, spA, spR };
 }
 
 /** Forward body transform of a model-space point (x, y, z). */
-export function bodyFwd(p: AnimParams, m: BodyMotion, pt: [number, number, number]): [number, number, number] {
+export function bodyFwd(p: AnimParams, m: BodyMotion, pt: [number, number, number], spineX?: number): [number, number, number] {
   let [x, y, z] = pt;
   y += m.yoff;
   [x, y] = rotZ(x, y, 0, p.comY, m.pitch);
@@ -330,13 +356,26 @@ export function bodyFwd(p: AnimParams, m: BodyMotion, pt: [number, number, numbe
     const dy = y - p.comY;
     [y, z] = [p.comY + cs * dy - sn * z, sn * dy + cs * z];
   }
+  if (m.spA !== 0 || m.spR !== 0) {
+    // the spine (GLSL: the SPINE block of tgBodyFwd): a hinge smoothed over the middle of the back (tanh tilt), nose-down shoulders and nose-up hips when arched, and the shoulders
+    // and hips rolling against each other
+    // (a leg is a rigid part that hangs from its hip: it is moved by the curve at its hip's x, `spineX`, and does not roll)
+    const half = m.bl * 0.55;
+    y += spineOffset(m.spA, half, spineX ?? x);
+    if (m.spR !== 0 && spineX === undefined) {
+      const rho = m.spR * clamp(x / half, -1.3, 1.3);
+      const cs = Math.cos(rho), sn = Math.sin(rho);
+      const dy = y - p.comY;
+      [y, z] = [p.comY + cs * dy - sn * z, sn * dy + cs * z];
+    }
+  }
   if (m.farK > 0.001) {
     const k1 = 1 - m.stot; // (the bounds of a stot have their own rise and fall)
     const wW = m.w[0] * k1, wT = m.w[1] * k1, wG = m.w[2] * k1;
     const c = m.cyc, bl = m.bl;
     const hop = wW * 0.03 * Math.cos(2 * c) + wT * 0.08 * Math.cos(2 * c) + wG * 0.16 * Math.cos(c - 0.5);
     const xn = clamp(x / (bl * 0.55), -1.3, 1.3);
-    const arch = (wT * 0.04 + wG * 0.08) * Math.cos(c + 1.0) * (xn * xn - 0.35);
+    const arch = (wT * 0.04 + wG * 0.08) * Math.cos(c + 1.0) * (0.35 - xn * xn);
     const snake = (wW * 0.02 + wT * 0.036 + wG * 0.04) * Math.sin(c + 0.3) * xn;
     y += bl * m.farK * (hop + arch);
     z += bl * m.farK * snake;
@@ -372,11 +411,11 @@ export function aimLeg(
   const path = footPath(gm, ph, leg, calmK);
   const tx = b.foot[0] + path.footX;
   const target: [number, number, number] = [tx, b.foot[1] + groundY + path.lift, z];
-  const f = bodyFwd(p, bm, target);
+  const f = bodyFwd(p, bm, target, b.hip[0]);
   let sx = target[0] - (f[0] - target[0]), sy = target[1] - (f[1] - target[1]);
   for (let it = 1; it < passes; it++) {
     // further fixed-point passes (GLSL: the extra tgBodyFwd calls in the leg branch): s <- s - (bodyFwd(s) - target)
-    const g = bodyFwd(p, bm, [sx, sy, z]);
+    const g = bodyFwd(p, bm, [sx, sy, z], b.hip[0]);
     sx -= g[0] - target[0];
     sy -= g[1] - target[1];
   }
@@ -393,7 +432,7 @@ export function footModel(p: AnimParams, rig: LegRig, leg: number, z: number, ai
   const [x, y] = poseLegPoint(b, aim.sol, b.foot, 1);
   // the stretch scales the leg about the hip pivot in z too (the paw sits a little off the pivot's z)
   const sg = Math.sign(z), zp = sg * b.z;
-  return bodyFwd(p, bm, [x, y, zp + (sg * b.footZ - zp) * aim.sol.stretch]);
+  return bodyFwd(p, bm, [x, y, zp + (sg * b.footZ - zp) * aim.sol.stretch], b.hip[0]);
 }
 
 // ---------------------------------------------------------------------------------------------------------------------

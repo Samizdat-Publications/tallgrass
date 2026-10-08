@@ -164,6 +164,8 @@ export class Engine {
   private dustSm = 0;
   /** Falling-snow intensity 0..1: eased faster than the snowpack (flakes start and stop within seconds of the weather). */
   private snowfallSm = 0;
+  /** The seasonal snowpack (PACK_KEYS) as drawn: eased in real seconds, so a time-lapse through early winter fades the snow in instead of popping it. */
+  private packSm = 0;
   /** S11 per-cell snow depth (fed by setSnowDepth, only when the sim runs with snowDepth on). */
   readonly snowDepth: SnowDepth;
   /** Floodwater over the band along the creek (S17 flood tool, S12 spring floods); hidden while no flood runs. */
@@ -694,7 +696,12 @@ export class Engine {
     u.frost.value = this.frostSm;
     // effective snow: the weather's own snowfall, or the seasonal pack that lies on a deep-winter valley even when it is not snowing
     // (the pack follows the calendar directly; it is a slow curve, so it needs no easing of its own)
-    u.snow.value = Math.max(sm.snow, keyCurve(PACK_KEYS, u.season.value));
+    // (the calendar's pack curve is slow at 1x but at 10x and 100x it crosses 0 to 0.3 in a second or less: it is eased with a real-time floor of
+    // about 0.9 s per e-fold, so the cover arrives over two to three seconds whatever the speed; it follows the calendar's own pace when that is slower)
+    const packTarget = keyCurve(PACK_KEYS, u.season.value);
+    this.packSm = ease(this.packSm, packTarget, 1, 0.9);
+    if (packTarget === 0 && this.packSm < 0.004) this.packSm = 0;
+    u.snow.value = Math.max(sm.snow, this.packSm);
     // S11: with the sim's per-cell depth field the shaders read the local depth instead (the seasonal pack is the sim's own now);
     // a falling snowfall still contributes a floor so a blizzard shows before the depth has built
     this.snowDepth.update(dt);

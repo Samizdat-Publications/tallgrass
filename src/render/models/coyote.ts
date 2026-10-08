@@ -212,6 +212,7 @@ export function buildCoyote(): ModelDef {
       bobW: 0.01, bobT: 0.02, bobG: 0.055,
       pitchT: 0.025, pitchG: 0.12,
       nodW: 0.05, nodG: 0.09,
+      spine: { flex: 1.5, twist: 0.2, head: 0.8 },
       headDown: 1.05, lookYaw: 0.8,
       // the tail hangs low at rest and stays low in a run (a wolf lifts it)
       tailRest: 0.22, tailRun: 0.02, tailSway: 0.14,

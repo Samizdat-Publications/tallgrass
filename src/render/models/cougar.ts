@@ -178,6 +178,7 @@ export function buildCougar(): ModelDef {
       bobW: 0.015, bobT: 0.03, bobG: 0.08,
       pitchT: 0.03, pitchG: 0.15,
       nodW: 0.04, nodG: 0.07,
+      spine: { flex: 1.6, twist: 0.22, head: 0.8 },
       headDown: 1.0, lookYaw: 0.4,
       tailRest: 0.0, tailRun: -0.3, tailSway: 0.35,
       lieDrop: 0.4, lieHipF: 1.25, lieKneeF: -2.3, lieHipH: -0.8, lieKneeH: 1.6,

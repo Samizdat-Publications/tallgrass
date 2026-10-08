@@ -62,6 +62,14 @@ export interface AnimParams {
   /** R6 stotting gait (mule deer only): see StotParams. Unset: the species never stots and its shader has no stotting code. */
   stot?: StotParams;
   /**
+   * Rotary-gallop spine (wolf, coyote, cougar): while galloping (a quarter as much at a trot) the back flexes and extends once per stride, the
+   * shoulders and hips roll against each other and the head counters the neck's tilt. `flex` is the tilt of the back (rad, each end of the rib cage
+   * relative to the middle: the back arches in the gathered phase, with all four feet under the body, and hollows in the extended phase),
+   * `twist` the opposed roll of shoulders and hips (rad at the ends), `head` the share of the neck's tilt the head cancels. Unset: no spine motion.
+   * It is part of the body motion (legmath.ts bodyFwd), so the leg IK takes it out of the foot targets and planted feet stay planted.
+   */
+  spine?: { flex: number; twist: number; head: number };
+  /**
    * R6 cat stalk (cougar): while crouched the shoulder blades rise above the dropped back line, the tail hangs low with a twitching tip, and in
    * the freeze before the rush (aFx2.y, 0..1) the haunches gather and wiggle. 0 or unset: no.
    */

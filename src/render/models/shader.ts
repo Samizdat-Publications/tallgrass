@@ -28,7 +28,7 @@ import * as THREE from 'three';
 import { IK_CAP, footReach, plantedStride, stotStride } from './types';
 import type { AnimParams, ModelDef } from './types';
 import { HEIGHT_GLSL } from '../common';
-import { IK_FAR, IK_NEAR, LEG_FLEX, LIFT_K, legLength, legRigOf } from './legmath';
+import { IK_FAR, IK_NEAR, LEG_FLEX, LIFT_K, LNCOSH1, SPINE_K, SPINE_PHASE, SPINE_TROT, legLength, legRigOf } from './legmath';
 
 const f = (x: number): string => (Number.isInteger(x) ? x.toFixed(1) : String(+x.toFixed(6)));
 const v4 = (a: number[]): string => `vec4(${a.map(f).join(',')})`;
@@ -131,6 +131,8 @@ function defines(p: AnimParams, far: ModelDef['far'] | undefined, geometry: Mode
     `#define IK_CAP ${f(IK_CAP)}`, `#define IK_NEAR ${f(IK_NEAR)}`, `#define IK_FAR ${f(IK_FAR)}`,
     `#define FRONT_HIP ${v2(rig.front.hip)}`, `#define FRONT_KNEE ${v2(rig.front.knee)}`, `#define FRONT_FOOT ${v2(rig.front.foot)}`,
     `#define HIND_HIP ${v2(rig.hind.hip)}`, `#define HIND_KNEE ${v2(rig.hind.knee)}`, `#define HIND_FOOT ${v2(rig.hind.foot)}`,
+    `#define SPINE ${p.kind === 0 && p.spine ? 1 : 0}`, `#define SPINE_A ${f(p.spine?.flex ?? 0)}`, `#define SPINE_R ${f(p.spine?.twist ?? 0)}`, `#define SPINE_HEAD ${f(p.spine?.head ?? 0)}`,
+    `#define SPINE_TROT ${f(SPINE_TROT)}`, `#define SPINE_PHASE ${f(SPINE_PHASE)}`, `#define SPINE_K ${f(SPINE_K)}`, `#define LNCOSH1 ${f(LNCOSH1)}`,
     `#define CURL ${f(p.curl ?? 0)}`, `#define CURL_ANG ${f(p.curlAng ?? 1.3)}`, `#define CURL_X0 ${f(p.curlX ?? 0.1)}`, `#define CURL_LEN ${f(p.curlLen ?? 1.1)}`,
     `#define LEG_CALM ${f(far?.calm ?? 0)}`, `#define WIDEN ${f(far?.widen ?? 0)}`,
     `#define FLAP_HZ ${f(p.flapHz)}`,
@@ -295,6 +297,11 @@ float tgFeedB;  // 0..1: the haul of the feeding cycle, the forequarters pulled 
 float tgHowl;   // 0..1: sitting up to howl (R3): the body pitches up about the shoulders, the haunches drop
 float tgRollB;  // the slope's extra roll (rad), body frame (legmath.ts slopeResponse)
 float tgStrideK; // stride multiplier of the slope (shorter steps uphill)
+#if SPINE
+float tgSpA;    // rotary-gallop spine (legmath.ts bodyMotion spA, spR): the signed curvature of the back (+ arched) and the shoulder/hip twist
+float tgSpR;
+float tgSpHip;  // x of the hip a leg vertex hangs from (the curve is read there, so the leg moves as a rigid part); 1e9 for every other vertex
+#endif
 float tgHeadK;  // head pitch correction of the slope (rad)
 // legmath.ts slopeResponse: the slope response is derived from the instance's own terrain pitch and roll (they are in the instance
 // matrix), so it needs no instance attribute. The extra pitch and roll are body-frame motion (the legs' IK takes them back out of
@@ -325,6 +332,24 @@ void tgBodyFwd(inout vec3 p, inout vec3 n) {
   p.y += tgYoff;
   tgRotZ(p, n, vec3(0.0, COM_Y, 0.0), tgPitchB);
   if (tgRollB != 0.0) tgRotX(p, n, vec3(0.0, COM_Y, 0.0), tgRollB);
+#if SPINE
+  if (tgSpA != 0.0 || tgSpR != 0.0) {
+    // legmath.ts bodyFwd, the spine: the back rises in the middle when arched (and drops when hollowed) and the head and tail ends dip the
+    // other way, level at the shoulders and hips (so the leg IK has nothing to stretch for); the normals follow the tangent and the shoulders
+    // and hips roll against each other. A leg is a rigid part: it is moved by the curve at its hip's x, with no tilt and no roll.
+    bool leg = tgSpHip < 1e8;
+    float hl = BODY_LEN * 0.55;
+    float xr = leg ? tgSpHip : p.x;
+    float xc = clamp(xr / hl, -0.8, 0.8);
+    p.y += 0.1 * hl * tgSpA * (1.0 - log(cosh(2.0 * xc)) / LNCOSH1);
+    if (!leg) {
+      float th = -SPINE_K * tgSpA * tanh(2.0 * xc);
+      float tc = cos(th), ts = sin(th);
+      n = vec3(tc * n.x - ts * n.y, ts * n.x + tc * n.y, n.z);
+      if (tgSpR != 0.0) tgRotX(p, n, vec3(p.x, COM_Y, 0.0), tgSpR * clamp(p.x / hl, -1.3, 1.3));
+    }
+  }
+#endif
   if (tgFarK > 0.001) {
     // Whole-body gait cues sized as a fraction of the body length, so they stay readable at 15 to 40 px: a bound (the body
     // rises and falls once per stride in a gallop), the spine arching and stretching, a lateral snake, and the body pitching.
@@ -333,7 +358,7 @@ void tgBodyFwd(inout vec3 p, inout vec3 n) {
     // (sized so that a wolf only 20 px long still visibly bounds: the gallop lifts the whole body about 16% of its length)
     float hop = tgGW.x * 0.03 * cos(2.0 * c) + tgGW.y * 0.08 * cos(2.0 * c) + tgGW.z * 0.16 * cos(c - 0.5);
     float xn = clamp(p.x / (bl * 0.55), -1.3, 1.3);
-    float arch = (tgGW.y * 0.04 + tgGW.z * 0.08) * cos(c + 1.0) * (xn * xn - 0.35);
+    float arch = (tgGW.y * 0.04 + tgGW.z * 0.08) * cos(c + 1.0) * (0.35 - xn * xn);
     float snake = (tgGW.x * 0.02 + tgGW.y * 0.036 + tgGW.z * 0.04) * sin(c + 0.3) * xn;
     p.y += bl * tgFarK * (hop + arch);
     p.z += bl * tgFarK * snake;
@@ -401,12 +426,22 @@ float tgBirdBeat(float t, float seed, float low, float effort, out float fph) {
   float burstW = smoothstep(0.0, 0.04, cph) * (1.0 - smoothstep(blen - 0.07, blen, cph));
   float hz = FLAP_HZ * (0.75 + 0.55 * fract(seed * 3.7) + 0.35 * effort);
   fph = TG_TAU * (t * hz + seed * 10.0);
-  return clamp(max(low, max(burstW * 0.95, effort)), 0.0, 1.0);
+  // Time-lapse (uTL, 3x to 8x and up): the bird crosses the sky ten times faster than it can glide, so its beat never lets go. A bird that held its wings
+  // still for the 60 to 80% of the cycle it normally glides would hang in the picture like a kite while the land streams by below.
+#if RAPTOR
+  float tlBeat = 0.5 * uTL;
+#else
+  float tlBeat = 0.9 * uTL;
+#endif
+  return clamp(max(max(low, tlBeat), max(burstW * 0.95, effort)), 0.0, 1.0);
 }
 #endif
 
 void tgAnimate(inout vec3 p, inout vec3 n) {
   int part = int(aPart.x + 0.5);
+#if SPINE
+  tgSpHip = (part >= 1 && part <= 4) ? aPivot.x : 1e9;
+#endif
   float spd = aGait.y;
   bool dead = spd < -0.5;
 #if SWIM
@@ -651,6 +686,14 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
   tgBSeed = seed;
 #endif
   tgGW = vec3(wWalk, wTrot, wGal) * (1.0 - stotK);
+#if SPINE
+  {
+    // (legmath.ts bodyMotion) flexion at the gathered phase, the hips and shoulders twisting half a beat later
+    float wSp = tgGW.y * SPINE_TROT + tgGW.z;
+    tgSpA = SPINE_A * wSp * cos(cyc + SPINE_PHASE);
+    tgSpR = SPINE_R * wSp * sin(cyc + SPINE_PHASE - 0.04);
+  }
+#endif
 #endif
 #if FLARE
   if (flareW > 0.001 && (part == 0 || part == 6)) {
@@ -909,6 +952,10 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
     // after lifting the head it turns to look, then back
     yaw += idleK * raise * (fract(seed * 6.1) - 0.5) * 1.0 * sin(t * 0.9 + seed * 7.0);
     // from the drone view the head pumps harder so a trot or a gallop reads as a body moving, not sliding
+#if SPINE
+    // the neck takes the tilt of the spine at its root: the head cancels most of it, so it stays near level while the body flexes under it
+    ang += SPINE_HEAD * SPINE_K * tgSpA * tanh(2.0 * clamp(aPivot.x / (BODY_LEN * 0.55), -0.8, 0.8)) * (1.0 - lie);
+#endif
     float pump = farK * (wWalk * 0.1 * sin(2.0 * cyc + 1.0) + wTrot * 0.16 * sin(2.0 * cyc + 1.0) + wGal * 0.32 * sin(cyc + 2.0));
     ang += pump;
 #if KIND == 0

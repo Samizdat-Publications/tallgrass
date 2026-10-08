@@ -204,13 +204,13 @@ export function runCase(o: CaseOpts, frame?: (s: FrameSample) => void): CaseResu
         model = footModel(p, rig, i, z, aim, bm);
         stance = aim.path.stance;
         short = aim.sol.short;
-        hipM = bodyFwd(p, bm, [b.hip[0], b.hip[1], z]);
+        hipM = bodyFwd(p, bm, [b.hip[0], b.hip[1], z], b.hip[0]);
         // knee point after the leg pose and the body motion
         const kx = b.knee[0], ky = b.knee[1];
         const cs = Math.cos(aim.sol.hip), sn = Math.sin(aim.sol.hip);
         const dx = kx - b.hip[0], dy = ky - b.hip[1];
         const kp: [number, number] = [b.hip[0] + (cs * dx - sn * dy) * aim.sol.stretch, b.hip[1] + (sn * dx + cs * dy) * aim.sol.stretch];
-        kneeM = bodyFwd(p, bm, [kp[0], kp[1], z]);
+        kneeM = bodyFwd(p, bm, [kp[0], kp[1], z], b.hip[0]);
       }
       const w = instanceToWorld(inst, R, model[0], model[1], model[2]);
       const gnd = worldToModelY(inst, R, w[0], T.h(w[0], w[2]), w[2]);
