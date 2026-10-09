@@ -510,6 +510,28 @@ function takeCamera(): void {
   if (autoCam) { autoCam = false; if (!cinematicOn) director.setEnabled(false); }
 }
 engine.cam.onUserInput = takeCamera;
+// A chapter card tied to a place waits until the documentary camera is on that place (and goes if it never gets there); a player who has
+// the camera sees the cards as plain news. The narrator's lines (and so the captions) follow the same rule, below.
+const filmingNow = (): boolean => autoCam || cinematicOn;
+ui.cardGate = (x, y) => !filmingNow() || director.eventInView(x, y);
+type SimEv = typeof pendingEvents[number];
+const heldNarration: Array<{ ev: SimEv; at: number }> = [];
+/** Events for the narrator: a located event is held while the director films something else, and said once the camera is on it (12 s at most). */
+function narrationEvents(evs: SimEv[]): SimEv[] {
+  const out: SimEv[] = [];
+  const now = performance.now();
+  const filming = filmingNow();
+  for (const ev of evs) {
+    if (filming && (ev.x !== 0 || ev.y !== 0) && !director.eventInView(ev.x, ev.y)) heldNarration.push({ ev, at: now });
+    else out.push(ev);
+  }
+  for (let i = heldNarration.length - 1; i >= 0; i--) {
+    const h = heldNarration[i];
+    if (!filming || director.eventInView(h.ev.x, h.ev.y)) { out.push(h.ev); heldNarration.splice(i, 1); }
+    else if (now - h.at > 12000) heldNarration.splice(i, 1);
+  }
+  return out;
+}
 
 // the saved settings take effect (the picture quality already did, at the engine); then the title card, on a plain visit only
 {
@@ -653,7 +675,7 @@ engine.onFrame((dt, t) => {
     director.setEnabled(true);
   }
   // (photo mode holds the camera where the photographer put it, so the director stands down while the panel is open)
-  if (!ui.photo.isOpen) director.update(dt, pending ? { count: pending.count, ids: pending.ids, agents: pending.agents, carcassCount: pending.carcassCount, carcasses: pending.carcasses, dayFrac: pending.env.dayFrac, small: lastSmall, events: pendingEvents } : null);
+  if (!ui.photo.isOpen) director.update(dt, pending ? { count: pending.count, ids: pending.ids, agents: pending.agents, carcassCount: pending.carcassCount, carcasses: pending.carcasses, dayFrac: pending.env.dayFrac, small: lastSmall, events: pendingEvents, speed: pending.speed, weather: pending.env.weather } : null);
   grass.viewportHeight = engine.renderer.domElement.height;
   overlay.update(dt, engine.camera, engine.renderer.domElement);
   grass.update(engine.camera, t, engine.env, sun);
@@ -684,7 +706,7 @@ engine.onFrame((dt, t) => {
     engine.camera.getWorldDirection(camFwdV);
     audio.update(dt, { env: pending.env, camX: cp.x, camY: cp.z, camHeight, speed: pending.speed, nearby: nearbyCache, nearWater: nearWater01(world, cp.x, cp.z), tension: tensionCache, camFwd: [camFwdV.x, camFwdV.y, camFwdV.z], coyotes: nearbyCache.coyote ?? 0 });
     if (!skipping) for (const ev of pendingEvents) if (ev.x !== 0 || ev.y !== 0) audio.onEvent(ev, Math.hypot(ev.x - cp.x, ev.y - cp.z, camHeight));
-    if (!skipping) narrator.onEvents(pendingEvents, pending.tick);
+    if (!skipping) narrator.onEvents(narrationEvents(pendingEvents), pending.tick);
     narrator.update({ filming: autoCam || cinematicOn, speed: pending.speed });
     // a fresh carcass near the camera: someone just died here
     if (!skipping && pending.speed > 0 && pending.speed <= 10) {

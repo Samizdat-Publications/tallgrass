@@ -86,6 +86,17 @@ export interface FollowFrame {
   pitchDeg: number;
   /** Height (m) of the look-at point above the ground: the middle of the body. */
   lift: number;
+  /** Radians round from straight behind the subject's heading that the camera sits (default 0.6, a three-quarter rear view; about 1.75 is alongside, a little ahead: a tracking shot). */
+  side?: number;
+  /** Where the subject stands in the frame (normalised device y, default -0.26, the lower middle third): a tracking shot at a rider's eye height wants it nearer the middle. */
+  ndcY?: number;
+  /** How far (rad) the wanted heading may drift from the held one before the camera swings to a new one (default 0.9), and how fast it swings (rad/s of the spring, default 0.55): a tracking shot keeps a tighter, quicker hold. */
+  yawBand?: number;
+  yawRate?: number;
+  /** Rate (rad/s) at which the orbit distance follows a changed `dist` (default 1.3); the director raises it to widen a shot quickly. */
+  distRate?: number;
+  /** How many times faster than real time the subject is moving (the sim speed): scales the speed limits so a tracking shot can keep up at 10x. Default 1. */
+  timeScale?: number;
 }
 
 /** The camera sits this far (rad) round from straight behind the subject's heading: a three-quarter rear view. */
@@ -141,6 +152,8 @@ export class DroneCamera {
   private vgy: Vel = { v: 0 };
   /** A follower was just set: its first position is checked against the focus (a far subject is cut to, not whipped to). */
   private followFresh = false;
+  /** The follow was asked to start with a cut (see follow()). */
+  private forceCut = false;
   // framed follow (see FollowFrame): null = the plain follow the director uses
   private frame: FollowFrame | null = null;
   private frameAuto = { dist: true, yaw: true, pitch: true };
@@ -215,10 +228,14 @@ export class DroneCamera {
     this.rate = 2.4;
   }
 
-  /** Keep a moving subject framed. Pass null to stop following. */
-  follow(getPos: (() => { x: number; y: number; h?: number } | null) | null, frame?: FollowFrame): void {
+  /**
+   * Keep a moving subject framed. Pass null to stop following. `cut` (a framed follow only) goes straight to the framed shot of the
+   * subject on the next update, wherever the camera was (an editor's cut), instead of gliding there.
+   */
+  follow(getPos: (() => { x: number; y: number; h?: number } | null) | null, frame?: FollowFrame, cut = false): void {
     this.follower = getPos;
     this.frame = getPos && frame ? frame : null;
+    this.forceCut = cut && !!getPos && !!frame;
     this.frameAuto.dist = this.frameAuto.yaw = this.frameAuto.pitch = true;
     this.frameInit = false;
     this.fPrev.ok = false;
@@ -268,6 +285,12 @@ export class DroneCamera {
   }
 
   isCinematic(): boolean { return this.cinematic; }
+
+  /**
+   * Cinematic mode's own slow orbit, pitch sway and valley drift (true, the default). The director turns it off for a shot it steers
+   * itself: a tracking shot (the framed follow sets the heading and pitch) and a drone move (the director flies the path each frame).
+   */
+  cinematicAuto = true;
 
   /** Start the next smooth move slowly and let it build (an operator's ease-in), instead of leaving at full speed. */
   easeIn(): void { this.moveT = 0; this.rate = Math.min(this.rate, 2); }
@@ -382,7 +405,8 @@ export class DroneCamera {
         if (this.followFresh) {
           this.followFresh = false;
           // a subject far from the frame is cut to (an editor's cut), not whipped to across the valley
-          if (F && (Math.hypot(p.x - c.tx, p.y - c.tz) > 120 || c.dist > 90)) {
+          if (F && (this.forceCut || Math.hypot(p.x - c.tx, p.y - c.tz) > 120 || c.dist > 90)) {
+            this.forceCut = false;
             // a framed follow from the wide view: cut straight to the framed shot (a glide from 400 m down to 15 m is a flight over the terrain)
             this.frameCut(p, F);
             return; // (snap replaced cur and sm: this frame ends here)
@@ -426,9 +450,11 @@ export class DroneCamera {
     }
     if (this.cinematic) {
       this.cinT += dt;
-      g.yaw += dt * 0.035;
-      g.pitch = clamp(this.cinPitch + Math.sin(this.cinT * 0.11) * 0.06, MIN_PITCH, MAX_PITCH);
-      if (!this.follower) {
+      if (this.cinematicAuto) {
+        g.yaw += dt * 0.035;
+        g.pitch = clamp(this.cinPitch + Math.sin(this.cinT * 0.11) * 0.06, MIN_PITCH, MAX_PITCH);
+      }
+      if (!this.follower && this.cinematicAuto) {
         // a lazy drift across the valley
         g.tx += Math.cos(this.cinT * 0.037 + 1.0) * dt * g.dist * 0.012;
         g.tz += Math.sin(this.cinT * 0.029) * dt * g.dist * 0.012;
@@ -447,14 +473,18 @@ export class DroneCamera {
     // (a framed subject that bursts away from the shot tightens the chase, up to about 4 times)
     if (this.follower && this.frame) omF *= 1 + 3 * smoothstep(0.25, 0.75, this.fErr);
     // the focus speed is capped, smoothly (see maxD below)
-    const vmax = Math.max(28, 1.2 * c.dist);
+    // (a framed follow of a subject moving faster than real time may chase that much faster)
+    const tracking = !!(this.follower && this.frame && this.frame.side !== undefined);
+    const vmax = Math.max(tracking ? 48 : 28, (tracking ? 2.2 : 1.2) * c.dist) * (this.follower && this.frame ? Math.max(1, this.frame.timeScale ?? 1) : 1);
     // first stage: the goal through a quick spring (3x the camera's own), so the camera's chase starts with zero acceleration
     const sm = this.sm, sv = this.smV, o1 = Math.min(40, 3 * om), o1F = Math.min(40, 3 * omF);
     sm.tx = spring(sm.tx, g.tx, sv.tx, o1F, dt);
     sm.tz = spring(sm.tz, g.tz, sv.tz, o1F, dt);
     sm.yaw = spring(sm.yaw, sm.yaw + wrapAngle(g.yaw - sm.yaw), sv.yaw, o1, dt);
     sm.pitch = spring(sm.pitch, g.pitch, sv.pitch, o1, dt);
-    sm.dist = spring(sm.dist, g.dist, sv.dist, o1, dt);
+    // (a tracking shot that has to widen to keep two animals in frame does it quickly, not at the pace of a glide)
+    const omd = this.follower && this.frame?.distRate ? Math.max(om, this.frame.distRate * 1.6) : om;
+    sm.dist = spring(sm.dist, g.dist, sv.dist, Math.min(40, 3 * omd), dt);
     sm.lift = spring(sm.lift, g.lift, sv.lift, o1, dt);
     // second stage: the camera. The focus speed is capped (smoothly: the chase is toward a point at most L away, which gives a cruising
     // speed of omega * L / 2).
@@ -466,7 +496,7 @@ export class DroneCamera {
     c.tz = spring(c.tz, c.tz - ez, this.vz, omF, dt);
     c.yaw = spring(c.yaw, c.yaw + wrapAngle(sm.yaw - c.yaw), this.vyaw, om, dt);
     c.pitch = clamp(spring(c.pitch, sm.pitch, this.vpitch, om, dt), MIN_PITCH, MAX_PITCH);
-    c.dist = clamp(spring(c.dist, sm.dist, this.vdist, om, dt), MIN_DIST, MAX_DIST);
+    c.dist = clamp(spring(c.dist, sm.dist, this.vdist, omd, dt), MIN_DIST, MAX_DIST);
     c.lift = spring(c.lift, sm.lift, this.vlift, om, dt);
     this.gy = spring(this.gy, this.opt.ground(c.tx, c.tz), this.vgy, GROUND_OMEGA, dt);
     this.avoid(dt, false);
@@ -483,7 +513,7 @@ export class DroneCamera {
   /** An editor's cut to the framed shot of the subject (standing where it belongs in the frame at once), keeping the heading the shot has. */
   private frameCut(p: { x: number; y: number }, F: FollowFrame): void {
     const g = this.goal, D = F.dist, pch = F.pitchDeg * DEG;
-    const phi = Math.atan(-FRAME_NDC_Y * Math.tan((this.camera.fov * DEG) / 2));
+    const phi = Math.atan(-(F.ndcY ?? FRAME_NDC_Y) * Math.tan((this.camera.fov * DEG) / 2));
     const a = clamp(D * Math.cos(pch) - (D * Math.sin(pch)) / Math.tan(pch + phi), 0, 0.5 * D);
     g.tx = clamp(p.x - Math.sin(g.yaw) * a, 0, this.opt.worldSize);
     g.tz = clamp(p.y - Math.cos(g.yaw) * a, 0, this.opt.worldSize);
@@ -502,7 +532,7 @@ export class DroneCamera {
     const g = this.goal, c = this.cur, fv = this.fv, fh = this.fh;
     if (this.fPrev.ok && dt > 1e-4) {
       let vx = (p.x - this.fPrev.x) / dt, vz = (p.y - this.fPrev.z) / dt;
-      if (Math.hypot(vx, vz) > 80) vx = vz = 0; // a jump (a respawn, a cut), not a speed
+      if (Math.hypot(vx, vz) > 80 * Math.max(1, F.timeScale ?? 1)) vx = vz = 0; // a jump (a respawn, a cut), not a speed
       const k1 = 1 - Math.exp(-dt / 0.4), k2 = 1 - Math.exp(-dt / 1.0);
       fv.x += (vx - fv.x) * k1; fv.z += (vz - fv.z) * k1;
       fh.x += (vx - fh.x) * k2; fh.z += (vz - fh.z) * k2;
@@ -519,7 +549,7 @@ export class DroneCamera {
     // distance: the shot's own, pulled out a little in a sprint
     const spK = smoothstep(3, 14, Math.min(speed, 30));
     if (this.frameAuto.dist) {
-      this.fDist = spring(this.fDist, F.dist * (1 + (F.pull ?? 0.25) * spK), this.vfDist, 1.3, dt);
+      this.fDist = spring(this.fDist, F.dist * (1 + (F.pull ?? 0.25) * spK), this.vfDist, F.distRate ?? 1.3, dt);
       g.dist = clamp(this.fDist, MIN_DIST, MAX_DIST);
     } else { this.fDist = g.dist; this.vfDist.v = 0; }
     if (this.frameAuto.pitch) {
@@ -529,22 +559,23 @@ export class DroneCamera {
     // yaw: behind and to one side of where the subject is heading (the side nearest to where the camera already is, kept for the whole follow)
     if (hs > 2.2) { // (a grazer's wander has a smoothed velocity well under this: the shot only turns for a subject that is going somewhere)
       const base = Math.atan2(-fh.x, -fh.z);
+      const sd = F.side ?? FRAME_SIDE;
       if (!this.fSideSet) {
         this.fSideSet = true;
-        this.fSide = Math.abs(wrapAngle(base + FRAME_SIDE - g.yaw)) <= Math.abs(wrapAngle(base - FRAME_SIDE - g.yaw)) ? 1 : -1;
-        this.fYawT = base + this.fSide * FRAME_SIDE;
+        this.fSide = Math.abs(wrapAngle(base + sd - g.yaw)) <= Math.abs(wrapAngle(base - sd - g.yaw)) ? 1 : -1;
+        this.fYawT = base + this.fSide * sd;
       } else {
-        const want = base + this.fSide * FRAME_SIDE;
-        if (Math.abs(wrapAngle(want - this.fYawT)) > FRAME_YAW_BAND) this.fYawT = want;
+        const want = base + this.fSide * sd;
+        if (Math.abs(wrapAngle(want - this.fYawT)) > (F.yawBand ?? FRAME_YAW_BAND)) this.fYawT = want;
       }
     }
     if (this.frameAuto.yaw) {
-      this.fYaw = spring(this.fYaw, this.fYaw + wrapAngle(this.fYawT - this.fYaw), this.vfYaw, 0.55, dt);
+      this.fYaw = spring(this.fYaw, this.fYaw + wrapAngle(this.fYawT - this.fYaw), this.vfYaw, F.yawRate ?? 0.55, dt);
       g.yaw = this.fYaw;
     } else { this.fYaw = this.fYawT = g.yaw; this.vfYaw.v = 0; }
     // where the focus goes
     const D = c.dist, pch = this.pitchNow();
-    const phi = Math.atan(-FRAME_NDC_Y * Math.tan((this.camera.fov * DEG) / 2));
+    const phi = Math.atan(-(F.ndcY ?? FRAME_NDC_Y) * Math.tan((this.camera.fov * DEG) / 2));
     const a = clamp(D * Math.cos(pch) - (D * Math.sin(pch)) / Math.tan(pch + phi), 0, 0.5 * D);
     const yaw = c.yaw + this.av.off;
     let ox = -Math.sin(yaw) * a, oz = -Math.cos(yaw) * a;
@@ -556,7 +587,7 @@ export class DroneCamera {
       const ff = FRAME_SMOOTH * stretch * (4 / 3);
       ox += fv.x * ff; oz += fv.z * ff;
     }
-    const ol = Math.hypot(ox, oz), cap = 0.8 * D;
+    const ol = Math.hypot(ox, oz), cap = 0.8 * D * Math.max(1, F.timeScale ?? 1);
     if (ol > cap) { ox *= cap / ol; oz *= cap / ol; }
     return { x: p.x + ox, z: p.y + oz };
   }
