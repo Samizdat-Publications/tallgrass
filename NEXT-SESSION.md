@@ -2,16 +2,14 @@
 
 **Updated:** 2026-10-04 afternoon, at the end of the v2 planning session. v1 is finished and live; v2 starts now. The plan is `V2-PLAN.md`.
 
-## Night of 2026-10-09 (03:30 to 13:00): v10 "The long breath" (read NIGHT-PLAN.md first)
-State at 08:20:
-- Default world on main and live is still v9. Live deploy 07:45 (main at that time). Everything below is on main unless marked.
-- Merged tonight: climate regimes (climate2, off), climatePrairie, s-perf (bit-identical 1.39x), r-director3, r-breath, r-lapse, r-rare (rare sightings), r-trails (long exposure), s-bands (herdBands, off), climate narrator lines, The long breath scenario (now v10b params), vite watch fix (.claude ignored), charts seeds-grid log axis.
-- RUNNING v10 acceptance and shocks from frozen 97eef97 (scratch/v10/accept.sh; logs scratch/v10/accept_v10.log, shocks_v10.log; out scratch/frozen/97eef97/review/stability/v10-97eef97[-shocks]; ETA about 10:10 and 11:10). Candidate v10 = evolution2 1, climate2 0.3, wolfDenMinDist 280, wolfTerritory 130.
-- QUEUED after them: v10b acceptance and shocks from frozen 1f3f658 (scratch/v10/accept_v10b.sh; v10b adds deer.maxLitter 2, wolf.sprintCost 0.3, raven.initial 250, coyote.initial 30). They run past 13:00; the next session reads review/stability/v10b-1f3f658[-shocks] under scratch/frozen/1f3f658.
-- RUNNING: v10ctl screen (matched control for v10b on seeds 101-108, ETA about 08:55); round 23 video (Gemini, review/round-23-video) after the verification run (scratch/v10/tests_main3.log).
-- Builders: r-uifix (scratch/wt-uifix: migrant away state, fixed card order, one season vocabulary) and r-closeup (scratch/wt-closeup: selection glow, close ground detail, rim, poses). Merge when they report; both branched from main before the rare/trails/bands merges.
-- Adoption prep: branch v10-adopt (scratch/wt-adopt), all tests pass there except it needs a re-merge of main. Plan: if v10 passes persistence, presence and shocks, adopt it even if wolf tracking is just under 0.4 (owner ruling: stability over cycles), and say so in MORNING; v10b becomes the next adoption once its runs finish.
-- Reviews tonight: round 21 (charts), round 22 (game stills: 6/5/6/7/7/6). Triage in REVIEWS.md.
+## Night of 2026-10-09 (03:30 to 13:00): v10 "The long breath" ADOPTED (read NIGHT-PLAN.md and MORNING.md's top section first)
+State at 10:45:
+- Default world is checkpoint v10: v9 + evolution2 1, climate2 0.3, wolfDenMinDist 280, wolfTerritory 130. Golden 29b70982, 00c0d105, b5760934. Live (deploy 10:36, live check clean). Data and RESULT.md: review/stability/v10-97eef97 and -shocks.
+- Merged tonight on main: climate regimes + climatePrairie, s-perf (bit-identical 1.39x), director v3, r-breath (climate look, graph band, slate word, chronicle), r-lapse (damped seasons and steady light from 30x), r-trails (long exposure), r-rare (rare sightings journal), r-uifix (migrants away, fixed card order, one season vocabulary), r-closeup (selection arcs, ground grain, rim, lying poses), species glyphs at speed, s-bands (herdBands, off), climate narrator lines, The long breath scenario (= v10b params), vite ignores .claude/.
+- RUNNING (started 10:22, outlives the session): v10b acceptance (20 x 1,200 yr) and shocks (12 x 500 yr) from frozen 1f3f658 (scratch/v10/accept_v10b.sh; logs scratch/v10/accept_v10b.log and shocks_v10b.log; out scratch/frozen/1f3f658/review/stability/v10b-1f3f658[-shocks]). v10b = v10 + deer.maxLitter 2, wolf.sprintCost 0.3, raven.initial 250, coyote.initial 30. NEXT SESSION FIRST: if acceptance (tools/adoption.py, --burn 0.15) and shocks (bison recovered >= 80%) pass, adopt v10b like v10 (flip the four in params.ts, extend V7C_OFF and CHALLENGE_PIN with deer.maxLitter 99, wolf.sprintCost 0 or whatever evolution2 sets (0.15: careful, evolution2 sets wolf 0.15 when not overridden), raven.initial 30, coyote.initial 12; re-record golden; challenge suite; tests; playtest; deploy).
+- Parked branches: r-snow (pushed; re-bench frame cost on an idle machine), s-bands is merged but off (costs 12 to 15% of bison).
+- Reviews tonight: 21 (charts, ecosystem 6), 22 (stills 6/5/6/7/7/6), 23 (Gemini video, motion 4). Triage in REVIEWS.md. Next-cycle list is MORNING.md "Next 5".
+- Builder worktrees made by hand tonight: scratch/wt-adopt, wt-lapse, wt-uifix, wt-closeup, wt-snow (node_modules junctions inside: remove a junction with `cmd //c rmdir` before any worktree removal, never rm -rf).
 
 ## State now (2026-10-09 ~01:40)
 - Default world is checkpoint v9 (v8b + ravenNestFood 1, muledeerCover 0.15, bison.initial 550). Golden 55737903, 465f73d6, 27e42109. Live and checked. Everything merged, pushed, deployed; nothing running.
