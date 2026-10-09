@@ -57,6 +57,8 @@ const WATCHED: boolean[] = SPECIES.map((s) => s.key === 'wolf' || s.key === 'coy
 /** Alert range (m), the range inside which the body turns the full half step, and the turn limits (rad): far (a glance) and near (a startled half step, 30 degrees). */
 const ALERT_R = 60, ALERT_NEAR = 25, ALERT_TURN_FAR = 0.2, ALERT_TURN_NEAR = 0.52;
 const ALERT_CELL = 48;
+/** How far the head comes up past its neutral carriage in an alert (the head-down weight goes negative by this much: a share of the grazing pitch). */
+const ALERT_RAISE = 0.4;
 const RAVEN: boolean[] = SPECIES.map((s) => s.key === 'raven');
 /** Animals that swim on the water's surface where there is water (the beaver, S14). */
 const SWIMS: boolean[] = SPECIES.map((s) => s.key === 'beaver');
@@ -758,7 +760,8 @@ export class AnimalLayer {
   private alZ = new Float32Array(256);
   private alGW = 0;
   private alSnap: Snapshot | null = null;
-  /** Dev hook: set true to time the alert pass (ms per frame in alertMs, averaged over alertFrames). */
+  private alClock = -1;
+  /** Dev hook: set true to time the predator grid build (ms in alertMs over alertFrames frames); the per-grazer scan is measured by A/B on update() with alertEnabled (tools/r_life_shots.mjs --bench). */
   alertProfile = false;
   alertMs = 0;
   alertFrames = 0;
@@ -1950,7 +1953,9 @@ export class AnimalLayer {
     let tlBudget = tl > 0.05 ? TL_PUFFS_PER_FRAME : 0;
     this.contact.begin();
     const alertOn = this.alertEnabled && this.timeScale > 0 && this.timeScale <= 3;
-    if (alertOn && this.alSnap !== snap) {
+    if (this.alertProfile) this.alertFrames++;
+    if (alertOn && (this.alSnap !== snap || this.clock - this.alClock > 0.15)) {
+      this.alClock = this.clock;
       const t0 = this.alertProfile ? performance.now() : 0;
       this.buildAlertGrid(snap);
       if (this.alertProfile) this.alertMs += performance.now() - t0;
@@ -2216,7 +2221,6 @@ export class AnimalLayer {
       // patch inside 40 m. The predators are bucketed once a snapshot and each grazer looks again every 0.1 to 0.2 s.
       let alW = 0;
       if (ALERTS[sp]) {
-        const alT0 = this.alertProfile ? performance.now() : 0;
         const standing = alertOn && (state === St.Graze || state === St.Idle || state === St.Drink) && S.lie[slot] < 0.5;
         if (standing && clock >= S.alN[slot]) {
           S.alN[slot] = clock + 0.1 + 0.1 * hash01(id * 5 + (Math.floor(clock * 5) & 63));
@@ -2234,7 +2238,6 @@ export class AnimalLayer {
           const lim = ALERT_TURN_FAR + (ALERT_TURN_NEAR - ALERT_TURN_FAR) * near;
           h += clamp(wrapPi(S.alB[slot] - h), -lim, lim) * alW;
         }
-        if (this.alertProfile) this.alertMs += performance.now() - alT0;
       }
 
       // A bedded animal never lies on a pond: the sim lets a grazer settle for the night wherever it stands, water included, so the drawn body is
@@ -2293,7 +2296,7 @@ export class AnimalLayer {
         if (bo.lie >= 0) lieT = bo.lie;
         if (bo.head >= 0) hdT = bo.head;
       }
-      if (alW > 0.002) hdT *= 1 - alW;
+      if (alW > 0.002) hdT = hdT * (1 - alW) - ALERT_RAISE * alW; // (past 0, the neutral head: it comes up above the line of the back)
       if (flier) {
         const grounded = groundedBird;
         crT = grounded ? 1 : 0; // wing fold

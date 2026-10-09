@@ -124,7 +124,7 @@ export class Rain {
         varying float vZ;
         void main() {
           // soft across, rounded ends along
-          float a = exp(-2.4 * vQ.x * vQ.x) * (1.0 - smoothstep(0.55, 1.0, abs(vQ.y)));
+          float a = exp(-1.8 * vQ.x * vQ.x) * (1.0 - smoothstep(0.25, 1.0, abs(vQ.y)));
           a *= vA;
           if (a < 0.003) discard;
           // hand depth test against the scene (streaks are not in the depth buffer, and the pass runs after the fog)
@@ -157,7 +157,7 @@ export class Rain {
     const vw = 0.4 + 8.5 * Math.pow(ws, 1.5);
     (u.uWindV.value as THREE.Vector2).set(p.windX * vw, p.windZ * vw);
     u.uFall.value = 8.2 + 1.2 * fall;
-    u.uShutter.value = 0.022;
+    u.uShutter.value = 0.017;
     // the volume is small near the ground and widens with altitude
     u.uBox.value = clamp(24 + 0.3 * p.aboveGround, 24, 64);
     u.uT.value = this.clock;
@@ -169,7 +169,8 @@ export class Rain {
     // the visibility range: rain in the air dims what is far, more so in a downpour
     u.uExt.value = 0.008 + 0.014 * fall;
     (u.uColor.value as THREE.Color).copy(p.color);
-    u.uAlpha.value = 0.3 + 0.2 * fall;
+    // (r-life: softer and more transparent: the round 23 and 24 critics read the old streaks as white dashes; the soft falloff is wider and the alpha lower)
+    u.uAlpha.value = 0.17 + 0.1 * fall;
   }
 
   dispose(): void { this.geo.dispose(); this.material.dispose(); }
