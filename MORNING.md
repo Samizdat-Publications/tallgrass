@@ -46,6 +46,7 @@
 - Round 21 (blind critic, charts only): ecosystem believability 6, up from 5 in every round since 15.
 - Round 22 (blind critic, game stills): 6/5/6/7/7/6; ecosystem 7, UI 7. Its top complaint was the close follow view (fixed in part tonight).
 - Round 23 (Gemini video): life and motion 4, up from 2 in rounds 18 and 19; ecosystem 7, UI 7. Its top complaint, species unreadable at 100x, is fixed.
+- Round 24 (Gemini video of the deployed v10): readability 8 (was 4), UI 8, visual 6, motion 3, ecosystem 5 (single Gemini rounds swing 2 to 3 points). It caught a strobe at 100x (lightning flashes and the season swing), fixed and deployed at 12:03. Its other items (herds not reacting to a passing wolf, sliding gaits, kills that read as a bump, wolves on the river surface) are next-cycle work, listed in REVIEWS.md.
 
 ### Decisions you might want to overrule
 - **Adopted v10 tonight** (the four switches above), with the acceptance over 1,200 valley years instead of 1,000 bison generations (see Numbers).
@@ -73,7 +74,7 @@ ElevenLabs: 5 narrator lines, 486 characters (about $0.10). Gemini: 1 video crit
 4. Close-up pass two: lying bison legs (dark slabs), pack wolves overlapping at rest, raven flocking at carcasses, exposure jumps between director cuts.
 5. Snow: re-bench r-snow on an idle machine and merge if it fits the frame budget; wet ground in rain.
 
-Last deploy: 11:41 Friday (main with v10 adopted and every merge from tonight, including the documentary cuts); tests, playtest and live check clean (no console or page errors).
+Last deploy: 12:03 Friday (main with v10 adopted and every merge from tonight, including the documentary cuts and the lightning and season strobe fix at speed); tests, playtest and live check clean (no console or page errors).
 
 ## 2026-10-08 and 09: the design calls (live)
 - **Ecology, checkpoint v9:** ravens now breed to the carrion supply instead of sitting at a fixed ceiling, mule deer have more woody-cover habitat, and new valleys start with 550 bison instead of 800 so the opening is not a brown carpet. Passed the 20-world acceptance (every species held in all 20) and the shock tests.
