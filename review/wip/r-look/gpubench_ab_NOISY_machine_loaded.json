@@ -1,0 +1,342 @@
+{
+  "mode": "ab",
+  "date": "2026-10-09T22:10:06.380Z",
+  "size": "2560x1440",
+  "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 5070 Ti Laptop GPU (0x00002F58) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+  "A": "C:\\Users\\stewa\\Documents\\Claude\\ecosystem-sim",
+  "B": "C:\\Users\\stewa\\Documents\\Claude\\ecosystem-sim\\scratch\\wt-look",
+  "order": [
+    "A1",
+    "B1",
+    "B2",
+    "A2"
+  ],
+  "deltas": {
+    "wide_golden": {
+      "medianDeltaMs": 4.579,
+      "medianDeltas": [
+        5.8,
+        3.358
+      ],
+      "medianDeltaPct": 35.11,
+      "p90DeltaMs": 52.993,
+      "p90Deltas": [
+        121.399,
+        -15.413
+      ],
+      "agree": false
+    },
+    "low_golden": {
+      "medianDeltaMs": 4.988,
+      "medianDeltas": [
+        9.307,
+        0.669
+      ],
+      "medianDeltaPct": 27.95,
+      "p90DeltaMs": 343.753,
+      "p90Deltas": [
+        699.91,
+        -12.404
+      ],
+      "agree": false
+    },
+    "herd": {
+      "medianDeltaMs": 1.332,
+      "medianDeltas": [
+        1.593,
+        1.07
+      ],
+      "medianDeltaPct": 12.43,
+      "p90DeltaMs": 1.631,
+      "p90Deltas": [
+        11.325,
+        -8.063
+      ],
+      "agree": true
+    },
+    "top": {
+      "medianDeltaMs": 4.203,
+      "medianDeltas": [
+        6.415,
+        1.991
+      ],
+      "medianDeltaPct": 39.02,
+      "p90DeltaMs": 38.947,
+      "p90Deltas": [
+        71.823,
+        6.07
+      ],
+      "agree": false
+    },
+    "winter": {
+      "medianDeltaMs": 3.353,
+      "medianDeltas": [
+        4.677,
+        2.028
+      ],
+      "medianDeltaPct": 28.49,
+      "p90DeltaMs": 99.323,
+      "p90Deltas": [
+        198.734,
+        -0.088
+      ],
+      "agree": false
+    },
+    "night": {
+      "medianDeltaMs": -2.544,
+      "medianDeltas": [
+        -7.941,
+        2.852
+      ],
+      "medianDeltaPct": -13.6,
+      "p90DeltaMs": 1.587,
+      "p90Deltas": [
+        -3.952,
+        7.126
+      ],
+      "agree": false
+    },
+    "blizzard": {
+      "medianDeltaMs": 0.383,
+      "medianDeltas": [
+        -2.192,
+        2.957
+      ],
+      "medianDeltaPct": 2.47,
+      "p90DeltaMs": 2.365,
+      "p90Deltas": [
+        -1.389,
+        6.12
+      ],
+      "agree": false
+    },
+    "storm": {
+      "medianDeltaMs": -1.616,
+      "medianDeltas": [
+        -5.919,
+        2.687
+      ],
+      "medianDeltaPct": -8.28,
+      "p90DeltaMs": 10.704,
+      "p90Deltas": [
+        -6.38,
+        27.788
+      ],
+      "agree": false
+    }
+  },
+  "raw": {
+    "A1": {
+      "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 5070 Ti Laptop GPU (0x00002F58) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+      "views": {
+        "wide_golden": {
+          "median": 14.714,
+          "p90": 17.742,
+          "n": 40,
+          "disjoint": false
+        },
+        "low_golden": {
+          "median": 18.634,
+          "p90": 24.901,
+          "n": 40,
+          "disjoint": false
+        },
+        "herd": {
+          "median": 11.167,
+          "p90": 14.146,
+          "n": 40,
+          "disjoint": false
+        },
+        "top": {
+          "median": 11.124,
+          "p90": 11.981,
+          "n": 40,
+          "disjoint": false
+        },
+        "winter": {
+          "median": 12.369,
+          "p90": 13.558,
+          "n": 40,
+          "disjoint": false
+        },
+        "night": {
+          "median": 24.462,
+          "p90": 32.063,
+          "n": 40,
+          "disjoint": false
+        },
+        "blizzard": {
+          "median": 19.767,
+          "p90": 24.512,
+          "n": 40,
+          "disjoint": false
+        },
+        "storm": {
+          "median": 26.036,
+          "p90": 31.834,
+          "n": 40,
+          "disjoint": false
+        }
+      }
+    },
+    "B1": {
+      "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 5070 Ti Laptop GPU (0x00002F58) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+      "views": {
+        "wide_golden": {
+          "median": 20.514,
+          "p90": 139.141,
+          "n": 40,
+          "disjoint": false
+        },
+        "low_golden": {
+          "median": 27.941,
+          "p90": 724.811,
+          "n": 40,
+          "disjoint": false
+        },
+        "herd": {
+          "median": 12.76,
+          "p90": 25.471,
+          "n": 40,
+          "disjoint": false
+        },
+        "top": {
+          "median": 17.539,
+          "p90": 83.804,
+          "n": 40,
+          "disjoint": false
+        },
+        "winter": {
+          "median": 17.046,
+          "p90": 212.292,
+          "n": 40,
+          "disjoint": false
+        },
+        "night": {
+          "median": 16.521,
+          "p90": 28.111,
+          "n": 40,
+          "disjoint": false
+        },
+        "blizzard": {
+          "median": 17.575,
+          "p90": 23.123,
+          "n": 40,
+          "disjoint": false
+        },
+        "storm": {
+          "median": 20.117,
+          "p90": 25.454,
+          "n": 40,
+          "disjoint": false
+        }
+      }
+    },
+    "B2": {
+      "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 5070 Ti Laptop GPU (0x00002F58) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+      "views": {
+        "wide_golden": {
+          "median": 14.726,
+          "p90": 47.089,
+          "n": 40,
+          "disjoint": false
+        },
+        "low_golden": {
+          "median": 17.732,
+          "p90": 19.705,
+          "n": 40,
+          "disjoint": false
+        },
+        "herd": {
+          "median": 11.326,
+          "p90": 29.254,
+          "n": 40,
+          "disjoint": false
+        },
+        "top": {
+          "median": 12.408,
+          "p90": 22.525,
+          "n": 40,
+          "disjoint": false
+        },
+        "winter": {
+          "median": 13.196,
+          "p90": 16.9,
+          "n": 40,
+          "disjoint": false
+        },
+        "night": {
+          "median": 15.802,
+          "p90": 34.916,
+          "n": 40,
+          "disjoint": false
+        },
+        "blizzard": {
+          "median": 14.169,
+          "p90": 18.432,
+          "n": 40,
+          "disjoint": false
+        },
+        "storm": {
+          "median": 15.692,
+          "p90": 86.048,
+          "n": 40,
+          "disjoint": false
+        }
+      }
+    },
+    "A2": {
+      "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 5070 Ti Laptop GPU (0x00002F58) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+      "views": {
+        "wide_golden": {
+          "median": 11.368,
+          "p90": 62.502,
+          "n": 40,
+          "disjoint": false
+        },
+        "low_golden": {
+          "median": 17.063,
+          "p90": 32.109,
+          "n": 40,
+          "disjoint": false
+        },
+        "herd": {
+          "median": 10.256,
+          "p90": 37.317,
+          "n": 40,
+          "disjoint": false
+        },
+        "top": {
+          "median": 10.417,
+          "p90": 16.455,
+          "n": 40,
+          "disjoint": false
+        },
+        "winter": {
+          "median": 11.168,
+          "p90": 16.988,
+          "n": 40,
+          "disjoint": false
+        },
+        "night": {
+          "median": 12.95,
+          "p90": 27.79,
+          "n": 40,
+          "disjoint": false
+        },
+        "blizzard": {
+          "median": 11.212,
+          "p90": 12.312,
+          "n": 40,
+          "disjoint": false
+        },
+        "storm": {
+          "median": 13.005,
+          "p90": 58.26,
+          "n": 40,
+          "disjoint": false
+        }
+      }
+    }
+  }
+}
