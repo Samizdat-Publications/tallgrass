@@ -297,3 +297,18 @@ Scores: charts 7, readability 5, life (from charts) 6, ecosystem believability 6
 | 6 | Bison sight and speed fall while wolf speed rises | fix next cycle | Bison sprintCost 0.2 (evolution2) is heavy; v10b raises the wolf sprint cost to 0.3; a lighter bison cost is the next screen. |
 | 7 | Weather barely shows in the populations | partly | 60% more grass and +40% bison in wet runs on average; a stronger climate2 (0.4) is a next-cycle screen; the r-breath graph band makes it visible in the game. |
 | 8 to 10 | Chart readability and polish | defer | tools/charts.py polish. |
+
+## Round 22 (blind critic, game stills of The long breath on main after director v3, r-breath and r-lapse, plus the 400-year climate chart, 2026-10-09 07:50) -> `review/round-22/critique.md`
+Scores: visual 6 (wide 7 to 8, close-ups 3 to 4), readability 5, life 6, ecosystem 7 (rounds 15 to 20: 5), UI 7, keep watching 6 (round 20: 7/4/6/5/6/6).
+| # | Issue | Triage | Reason / outcome |
+|---|---|---|---|
+| 1 | Close-up follow view: wolves merge into one mass, bison clip, ground a brown smear, selection ring a flat plate | fix (part) | Builder r-closeup: selection marker as a soft ground glow, close-range ground detail under animals. Bodies passing through each other is sim spacing (packs at rest, herds): next cycle with herd bands. |
+| 2 | Predation never visible in the stills | partly a capture artifact | The stills script picks a wolf by state at one instant; in game, director v3 films chases and carcasses (91% of hunt seconds with both animals in frame). Fix the review set to wait for a chase. |
+| 3 | Species not distinguishable at normal distance | defer | r-far-read (10-08) helped above 210 m; mid zoom needs another pass. Next cycle. |
+| 4 | Top map is confetti | defer | Glyph clustering by herd; next cycle. |
+| 5 | 100x ran at 9.7x | not a game bug tonight | Three CPU batches (22 threads) were running; the sim is now 1.39x faster (s-perf). Owner's idle machine: re-measure. A 'skip a decade' control is a good idea for the next plan. |
+| 6 | Wolves move in step with prey; pronghorn spikes; a regime shift near year 180 | fix next cycle | Twins cap for pronghorn (v10b screen), lagged wolf breeding (wolfBreedStore screen queued). |
+| 7 | Migrants (hawks, eagles) read as extinct when they leave for the season | fix | Builder r-uifix: an 'away for the season' state in the population panel. |
+| 8 | Population cards move around | fix | r-uifix: fixed order. |
+| 9 | Snow as cow-print blobs | defer | Snow placement by slope and wind is a render item for later. |
+| 10 | HUD footprint; season words disagree (header vs card vs chronicle) | fix (wording) | r-uifix: one season vocabulary everywhere. HUD footprint stays (calm UI fades it after 8 s idle; captures run with dim=0). |
