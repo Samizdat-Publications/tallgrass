@@ -662,7 +662,11 @@ engine.onFrame((dt, t) => {
   if (pending) {
     ui.update({
       tick: pending.tick, env: pending.env, pop: pending.pop, history: pendingHistory, events: pendingEvents,
-      selected: pending.selected, speed: pending.speed, ticksPerSec: pending.ticksPerSec, seed: seedStr,
+      // the detail of the animal that is selected now (a snapshot from before the click may still carry the last one's), and, while the
+      // worker has not answered yet, the species of the one just picked, so the inspector opens at once instead of after the round trip
+      selected: pending.selected && pending.selected.id === selectedAnimal ? pending.selected : null,
+      selecting: selectedAnimal !== null && pending.selected?.id !== selectedAnimal && !pending.selectedGone ? animals.getSpecies(selectedAnimal) : null,
+      speed: pending.speed, ticksPerSec: pending.ticksPerSec, seed: seedStr,
       scenario: scenario.id, following, story: pending.story, storyId: pending.storyId,
       packs: pending.packs.length / 4, autoCamera: autoCam, narrator: narrator.enabled, caption: narrator.caption, sky: (engine.skyNow(skyView), skyView),
     });

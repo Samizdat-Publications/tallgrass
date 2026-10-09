@@ -6,17 +6,25 @@ import type { OverlayId, UIActions } from './types';
 
 const SPEEDS = [1, 10, 100];
 
+/**
+ * The speed this machine really reaches when it cannot keep up with the one asked for (a number of times real time,
+ * rounded for reading), or null when it keeps up (within 15 percent) or nothing is running.
+ */
+export function achievedSpeed(ticksPerSec: number, speed: number): number | null {
+  const nominal = speed * TICKS_PER_SECOND;
+  if (!(nominal > 0) || !(ticksPerSec > 0) || ticksPerSec >= nominal * 0.85) return null;
+  const actual = ticksPerSec / TICKS_PER_SECOND;
+  return actual >= 10 ? Math.round(actual) : Math.max(0.1, Math.round(actual * 10) / 10);
+}
+
 /** Plain-language pace of the valley's calendar: "1 year every 4 min", "1 year every 24 s", "1 year every 2.4 s". */
 export function paceText(ticksPerSec: number, speed: number): string {
   let tps = ticksPerSec;
   // within a few percent of the nominal rate, show the nominal one so the text does not flicker
   const nominal = speed * TICKS_PER_SECOND;
   // the machine cannot keep up with what was asked for: say what is really happening, in plain words
-  if (nominal > 0 && tps > 0 && tps < nominal * 0.85) {
-    const actual = tps / TICKS_PER_SECOND;
-    const a = actual >= 10 ? Math.round(actual) : Math.round(actual * 10) / 10;
-    return `${speed}\u00d7: this machine is running at ${a}\u00d7`;
-  }
+  const a = achievedSpeed(tps, speed);
+  if (a !== null) return `this machine is running at ${a}\u00d7`;
   if (nominal > 0 && Math.abs(tps - nominal) / nominal < 0.06) tps = nominal;
   if (!(tps > 0)) return '';
   const sec = YEAR_TICKS / tps;
@@ -43,6 +51,9 @@ export class TimeBar {
   readonly overlayEl: HTMLElement;
   private pauseBtn: HTMLButtonElement;
   private speedBtns = new Map<number, HTMLButtonElement>();
+  /** The small second line of each speed button: what this machine really reaches when it cannot keep up. */
+  private speedSubs = new Map<number, HTMLElement>();
+  private lagText = new Map<number, string>();
   private nextBtn: HTMLButtonElement;
   private rate: HTMLElement;
 
@@ -71,15 +82,20 @@ export class TimeBar {
     });
     const group = h('div', { class: 'tg-time tg-glass tg-leaf', role: 'group', 'aria-label': 'Time' }, this.pauseBtn);
     SPEEDS.forEach((s, i) => {
-      const b = button({
-        class: 'tg-tbtn tg-tspeed',
-        title: `${s} times speed (${i + 1})`,
-        'aria-label': `${s} times speed`,
-        'aria-pressed': 'false',
-        text: `${s}×`,
-        onclick: () => this.setSpeed(s),
-      });
+      const sub = h('span', { class: 'tg-tspeed-sub', 'aria-hidden': 'true' });
+      const b = button(
+        {
+          class: 'tg-tbtn tg-tspeed',
+          title: `${s} times speed (${i + 1})`,
+          'aria-label': `${s} times speed`,
+          'aria-pressed': 'false',
+          onclick: () => this.setSpeed(s),
+        },
+        h('span', { class: 'tg-tspeed-main', text: `${s}×` }),
+        sub,
+      );
       this.speedBtns.set(s, b);
+      this.speedSubs.set(s, sub);
       group.append(b);
     });
     group.append(h('span', { class: 'tg-tsep', 'aria-hidden': 'true' }));
@@ -172,6 +188,17 @@ export class TimeBar {
     if (text !== this.lastRateText) {
       this.lastRateText = text;
       setText(this.rate, text);
+    }
+    // the button that is running says so when the machine falls short of it: "100×" over "at 15×"
+    for (const [s, sub] of this.speedSubs) {
+      const a = v === s ? achievedSpeed(ticksPerSec, s) : null;
+      const t = a === null ? '' : `at ${a}×`;
+      if (t === (this.lagText.get(s) ?? '')) continue;
+      this.lagText.set(s, t);
+      setText(sub, t);
+      const b = this.speedBtns.get(s);
+      b?.classList.toggle('is-lag', t !== '');
+      b?.setAttribute('title', t ? `${s} times speed asked for. This machine is running at ${a}×.` : `${s} times speed (${SPEEDS.indexOf(s) + 1})`);
     }
   }
 

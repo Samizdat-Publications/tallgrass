@@ -14,12 +14,18 @@ export interface RowsData {
   grass: number[];
   grassMax: number;
   markers: { tick: number; major: boolean }[];
-  /** Log scale inside each row (only where the row's range stays above zero). */
+  /** Log scale inside each row: every species row runs from 1 up to a round number at the top (a count of zero sits on the floor). */
   log: boolean;
+  /** Draw the slim grass row under the species rows (default true). A two-column chart gives it to the second column only. */
+  grassRow?: boolean;
 }
 
+/** Room left of the plot for the row's name (in its colour) and its axis numbers, and right of it for the current value. */
+const GUTTER_L = 136;
+const GUTTER_R = 46;
+
 export function rowsPlot(w: number, h: number, u: number): { l: number; r: number; t: number; b: number } {
-  return { l: 46 * u, r: w - 14 * u, t: 5 * u, b: h - 22 * u };
+  return { l: GUTTER_L * u, r: w - GUTTER_R * u, t: 5 * u, b: h - 22 * u };
 }
 
 /** A round-number axis range around a series: [lo, hi]. */
@@ -53,11 +59,12 @@ export function drawRows(g: CanvasRenderingContext2D, w: number, h: number, u: n
   const X = (t: number) => P.l + ((t - t0) / (t1 - t0)) * pw;
   const step = Math.max(1, Math.floor(n / (pw * 1.2)));
 
-  const rows: ({ kind: 'sp'; sp: number } | { kind: 'grass' })[] = [...d.species.map((sp) => ({ kind: 'sp' as const, sp })), { kind: 'grass' as const }];
+  const withGrass = d.grassRow !== false;
+  const rows: ({ kind: 'sp'; sp: number } | { kind: 'grass' })[] = [...d.species.map((sp) => ({ kind: 'sp' as const, sp })), ...(withGrass ? [{ kind: 'grass' as const }] : [])];
   const gap = 5 * u;
   // species rows share the height equally; the grass row is a little slimmer
   const GRASS_W = 0.86;
-  const unitH = (P.b - P.t - gap * (rows.length - 1)) / (d.species.length + GRASS_W);
+  const unitH = (P.b - P.t - gap * (rows.length - 1)) / (d.species.length + (withGrass ? GRASS_W : 0));
   const rowTop: number[] = [];
   const rowHs: number[] = [];
   let yy = P.t;
@@ -132,7 +139,12 @@ export function drawRows(g: CanvasRenderingContext2D, w: number, h: number, u: n
     } else {
       [aLo, aHi] = axisRange(lo, hi, 0.18);
     }
-    const useLog = d.log && !isGrass && aLo >= 1;
+    // log: the floor is 1 (zero cannot be drawn on a log axis, so a count of zero sits on the floor), the top a round number
+    const useLog = d.log && !isGrass;
+    if (useLog) {
+      aLo = Math.max(1, aLo);
+      if (aHi < aLo * 1.5) aHi = aLo * 2;
+    }
     const Y = useLog
       ? (v: number) => py1 - ((Math.log10(Math.max(v, aLo)) - Math.log10(aLo)) / (Math.log10(aHi) - Math.log10(aLo))) * (py1 - py0)
       : (v: number) => py1 - ((v - aLo) / (aHi - aLo)) * (py1 - py0);
@@ -146,29 +158,16 @@ export function drawRows(g: CanvasRenderingContext2D, w: number, h: number, u: n
     g.stroke();
     g.font = axisFont;
     g.textAlign = 'right';
-    // the row's numbers wear its colour and hang off a short tick, so each pair reads as belonging to its own row
-    g.fillStyle = hexA(color, 0.9);
     const fmtAxis = (v: number) => (isGrass ? v.toFixed(2).replace(/0$/, '') : fmtInt(v));
-    // two labels per row, each inset well inside its own band, so a row's low number never meets the next row's high
-    g.fillText(fmtAxis(aHi), P.l - 8 * u, top + 7 * u);
-    // the low number is quieter, so a row's floor and the next row's ceiling never read as one column of figures
-    g.fillStyle = hexA(color, 0.5);
-    g.fillText(fmtAxis(aLo), P.l - 8 * u, bottom - 8 * u);
-    g.strokeStyle = hexA(color, 0.55);
-    g.lineWidth = 1.3 * u;
-    g.beginPath();
-    g.moveTo(P.l - 5 * u, top + 7 * u);
-    g.lineTo(P.l - 1 * u, top + 7 * u);
-    g.moveTo(P.l - 5 * u, bottom - 8 * u);
-    g.lineTo(P.l - 1 * u, bottom - 8 * u);
-    g.stroke();
-    // a thin bracket joining the pair, so the two numbers are one scale
-    g.strokeStyle = hexA(color, 0.28);
-    g.lineWidth = 1;
-    g.beginPath();
-    g.moveTo(P.l - 3 * u, top + 7 * u);
-    g.lineTo(P.l - 3 * u, bottom - 8 * u);
-    g.stroke();
+    const tall = bottom - top >= 28 * u;
+    // the row's numbers wear its colour, high at the top of the row and low at its foot, in the gutter beside the plot (never over a line)
+    g.fillStyle = hexA(color, 0.92);
+    g.fillText(fmtAxis(aHi), P.l - 7 * u, top + (tall ? 7 : 8) * u);
+    if (tall) {
+      // the low number is quieter, so a row's floor and the next row's ceiling never read as one column of figures
+      g.fillStyle = hexA(color, 0.5);
+      g.fillText(fmtAxis(aLo), P.l - 7 * u, bottom - 7 * u);
+    }
 
     // year hairlines
     g.strokeStyle = 'rgba(239,230,208,0.05)';
@@ -205,20 +204,26 @@ export function drawRows(g: CanvasRenderingContext2D, w: number, h: number, u: n
     g.fillStyle = color;
     g.fill();
 
-    // the row's name and its current value, with a soft halo so they hold over the line
+    // the row's name sits in the left gutter and its current value in the right one, so no line ever runs through a word
+    const nameSize = (small ? 11.5 : 12.5) * u;
+    const label = isGrass ? 'Grass cover' : SPECIES_NAMES[row.sp];
+    g.font = axisFont;
+    const room = P.l - 7 * u - g.measureText(fmtAxis(aHi)).width - 8 * u - 3 * u;
     g.save();
-    g.shadowColor = 'rgba(18,13,7,0.95)';
-    g.shadowBlur = 4 * u;
     g.textAlign = 'left';
-    g.font = `500 ${(small ? 11.5 : 12.5) * u}px ${SANS}`;
-    g.fillStyle = color;
-    g.fillText(isGrass ? 'Grass cover, 0 to 1' : SPECIES_NAMES[row.sp], P.l + 7 * u, top + 8.5 * u);
-    if (!isGrass) {
-      g.textAlign = 'right';
-      g.font = `700 ${(small ? 11.5 : 12.5) * u}px ${SANS}`;
-      g.fillStyle = '#EFE6D0';
-      g.fillText(fmtInt(vals[n - 1]), P.r - 5 * u, top + 8.5 * u);
+    let size = nameSize;
+    g.font = `500 ${size}px ${SANS}`;
+    for (let tries = 0; tries < 6 && g.measureText(label).width > room && size > 9 * u; tries++) {
+      size -= 0.75 * u;
+      g.font = `500 ${size}px ${SANS}`;
     }
+    g.fillStyle = color;
+    g.fillText(label, 3 * u, (py0 + py1) / 2 + (tall ? 0 : 1 * u));
+    const lastV = vals[n - 1];
+    const endY = Math.max(top + 8 * u, Math.min(bottom - 8 * u, Y(lastV)));
+    g.font = `700 ${nameSize}px ${SANS}`;
+    g.fillStyle = '#EFE6D0';
+    g.fillText(isGrass ? `${Math.round((lastV / (d.grassMax > 1.0001 ? d.grassMax : 1)) * 100)}%` : fmtInt(lastV), P.r + 7 * u, endY);
     g.restore();
 
     if (hoverIdx >= 0) hoverDots.push({ x: X(d.ticks[hoverIdx]), y: Y(vals[hoverIdx]), color });

@@ -7,6 +7,7 @@ import { icon } from './icons';
 import { backstory, buildStory, diedEntry, memorialText } from './story';
 import { traitIndex } from './traits';
 import { COAT_BASE } from '../sim/species';
+import { SPECIES_NAMES } from '../sim/types';
 import type { UIActions } from './types';
 
 interface TraitDef {
@@ -60,6 +61,8 @@ export class Inspector {
   private open = false;
   private hideTimer = 0;
   private lastKey = '';
+  /** Species of the pick whose detail has not arrived yet (see update), or null. */
+  private pending: number | null = null;
 
   // life story and memorial
   private storyEl: HTMLElement;
@@ -153,6 +156,7 @@ export class Inspector {
       'section',
       { class: 'tg-insp tg-glass tg-leaf', 'aria-label': 'Selected animal', hidden: true },
       h('header', { class: 'tg-insp-head' }, this.caption, this.lineage),
+      h('p', { class: 'tg-insp-pending', text: 'Looking closely.' }),
       memorial,
       this.activity,
       this.chips,
@@ -205,12 +209,17 @@ export class Inspector {
     this.actions.follow(this.following ? null : this.currentId);
   }
 
-  update(sel: AnimalDetail | null, followingId: number | null, story: StoryEntry[] = [], storyId = 0): void {
+  /**
+   * `pendingSp` is the species of an animal that has just been picked whose detail has not arrived yet (the worker answers a click a
+   * moment later): the card opens at once on its name and fills in when the detail comes, so a selection always shows a card.
+   */
+  update(sel: AnimalDetail | null, followingId: number | null, story: StoryEntry[] = [], storyId = 0, pendingSp: number | null = null): void {
     if (sel) {
       if (this.memorial) {
         this.memorial = false;
         this.el.classList.remove('is-memorial');
       }
+      this.setPending(null);
       this.show();
       if (sel.id !== this.currentId) this.rebuild(sel);
       this.currentId = sel.id;
@@ -225,6 +234,17 @@ export class Inspector {
       this.renderStory(storyId === sel.id ? story : [], sel);
       return;
     }
+    if (pendingSp !== null && pendingSp >= 0) {
+      if (this.memorial) {
+        this.memorial = false;
+        this.el.classList.remove('is-memorial');
+        this.lastDetail = null;
+      }
+      this.show();
+      this.setPending(pendingSp);
+      return;
+    }
+    if (this.pending !== null) this.setPending(null);
     if (this.memorial) return; // stays until the player closes it
     if (!this.open) return;
     // the selection vanished: a death keeps the card open as a memorial, a deselect closes it
@@ -232,6 +252,19 @@ export class Inspector {
     const died = d && storyId === d.id ? diedEntry(story) : null;
     if (d && died) this.enterMemorial(d, story, died);
     else this.hide();
+  }
+
+  /** The opening card for a pick whose detail is on its way: the species' name and a short note, nothing that could be wrong. */
+  private setPending(sp: number | null): void {
+    if (sp === this.pending) return;
+    this.pending = sp;
+    this.el.classList.toggle('is-pending', sp !== null);
+    if (sp === null) return;
+    this.currentId = -1;
+    this.storySig = '';
+    this.el.style.setProperty('--sp', `var(--sp-${sp})`);
+    setText(this.caption, SPECIES_NAMES[sp] ?? 'Animal');
+    setText(this.lineage, '');
   }
 
   private enterMemorial(d: AnimalDetail, story: StoryEntry[], died: StoryEntry): void {

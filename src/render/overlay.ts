@@ -103,29 +103,39 @@ void main() {
       float wob = (vnoise(dir * 1.5 + fi * 3.1) - 0.5) * 0.36 + (vnoise(dir * 4.1 + 9.0 + fi * 1.7) - 0.5) * 0.12;
       float R = p.z * (1.0 + wob);
       float r = d / max(R, 1.0);
-      // a feathered tint over the range, mottled a little like a stain that has soaked into the turf, denser toward the edge
+      // The range is an outline with a faint tint and a light hatch inside, not a solid fill: animals inside a range stay in view
+      // (round 20: the saturated fills smothered the scene). A feathered tint, mottled a little, a touch denser toward the edge.
       float inside = 1.0 - smoothstep(0.80, 1.02, r);
       float mott = 0.84 + 0.32 * vnoise(vXZ * 0.11 + fi * 5.0);
-      float wash = inside * (0.27 + 0.13 * smoothstep(0.2, 0.95, r)) * mott;
+      float wash = inside * (0.075 + 0.075 * smoothstep(0.35, 0.95, r)) * mott;
+      // a light diagonal hatch, anti-aliased by the screen footprint and faded out where it would shimmer (far away)
+      float hv = (vXZ.x - vXZ.y) / 8.0;
+      float hw = max(fwidth(hv), 1e-4);
+      float hatch = (1.0 - smoothstep(0.045, 0.045 + 1.5 * hw, abs(fract(hv) - 0.5))) * (1.0 - smoothstep(0.18, 0.42, hw));
+      // a soft rim just inside the border, so the range reads as a shape at a glance
+      float rim = smoothstep(0.80, 0.985, r) * (1.0 - smoothstep(0.985, 1.03, r));
       // the den: a small dot and a faint breathing ring
       float dr = 3.2 + 0.5 * sin(uTime * 1.6 + fi);
       float de = (d - dr) / max(0.9, aa);
       float den = (1.0 - smoothstep(0.7, 0.7 + aa, d)) * 0.85 + exp(-de * de) * 0.35;
-      // the pack's own colour, lit like the ground under it; the border and the den are a brighter tone of it
-      vec3 base = uPackCol[i] * lit;
-      vec3 bright = mix(uPackCol[i], vec3(1.0), 0.3);
-      col = over(col, base, clamp(wash, 0.0, 0.7));
-      // a thin border that follows the range's own outline, a little broken along its length, never a drawn circle
-      // it tapers: a slow swell along the outline thins it to a hair in places and fattens it a little in others, and it is fine overall
+      // the pack's own colour, a little desaturated and lit like the ground under it; the border and the den are a brighter tone of it
+      vec3 pc = mix(uPackCol[i], vec3(dot(uPackCol[i], vec3(0.3, 0.55, 0.15))), 0.2);
+      vec3 base = pc * lit;
+      vec3 bright = mix(pc, vec3(1.0), 0.18);
+      col = over(col, base, clamp(wash + inside * hatch * 0.1 * mott + rim * 0.1, 0.0, 0.4));
+      // a clear border that follows the range's own outline, a little broken along its length, never a drawn circle
+      // it tapers: a slow swell along the outline thins it in places and fattens it a little in others
       float swell = smoothstep(0.15, 0.85, vnoise(dir * 2.6 + fi * 4.7));
-      float soft = max(0.7, aa * 0.9) * (0.55 + 0.75 * swell);
+      // two or three pixels wide at any distance (the width is the screen footprint of a pixel, not a fixed number of metres)
+      float px = max(fwidth(d), 0.05);
+      float soft = max(px * 2.3, 0.2) * (0.75 + 0.5 * swell);
       float le = (d - R * 0.985) / soft;
-      float line = exp(-le * le) * (0.22 + 0.5 * swell) * (0.75 + 0.25 * vnoise(dir * 6.0 + fi * 2.3));
-      col = over(col, bright, clamp(line, 0.0, 0.85));
+      float line = exp(-le * le) * (0.78 + 0.2 * swell) * (0.85 + 0.15 * vnoise(dir * 6.0 + fi * 2.3));
+      col = over(col, bright, clamp(line, 0.0, 0.95));
       col = over(col, bright, clamp(den, 0.0, 0.9));
     }
     // at night the ground is dark and the tint needs a little more body to hold
-    col.a = min(col.a * (1.0 + 0.35 * uNight), 0.88);
+    col.a = min(col.a * (1.0 + 0.35 * uNight), 0.92);
   } else if (uMode == 4) {
     // five soft taps, so the 16 m cells read as regions rather than tiles
     float o = 0.8 / 32.0;
@@ -320,7 +330,7 @@ export class OverlayLayer {
     } else {
       const note = document.createElement('div');
       note.className = 'tg-map-legend-note';
-      note.textContent = 'Each tinted patch is one pack\'s range; the small mark is its den.';
+      note.textContent = 'Each outlined range is one pack\'s; the small mark is its den.';
       this.legend.append(note);
     }
   }

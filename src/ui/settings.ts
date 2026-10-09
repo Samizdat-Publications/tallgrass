@@ -130,7 +130,7 @@ export class SettingsPanel extends ModalPanel {
       this.s.autoCamera = on;
       this.commit('autoCamera');
     });
-    this.idleDim = switchRow('Dim the panels when idle', 'The side panels settle to half strength after twenty seconds with no input.', s.idleDim, (on) => {
+    this.idleDim = switchRow('Dim the panels when idle', 'The tools button, chronicle, population and time bar fade to a faint outline after eight seconds with no pointer or key input.', s.idleDim, (on) => {
       this.s.idleDim = on;
       this.commit('idleDim');
     });
