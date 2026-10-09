@@ -1,0 +1,76 @@
+{
+ "args": {
+  "seeds": 20,
+  "seedBase": 1,
+  "ticks": 1440000,
+  "generations": 1000,
+  "sampleEvery": 2000,
+  "threads": 8,
+  "scenarios": [
+   "baseline"
+  ],
+  "params": {
+   "evolution2": 1,
+   "climate2": 0.3,
+   "wolfDenMinDist": 280,
+   "wolfTerritory": 130
+  },
+  "mock": false,
+  "maxMinutes": 0,
+  "progressSec": 600,
+  "out": "C:\\Users\\stewa\\Documents\\Claude\\ecosystem-sim\\scratch\\frozen\\97eef97\\review\\stability\\v10-97eef97",
+  "argv": [
+   "--seeds",
+   "20",
+   "--generations",
+   "1000",
+   "--ticks",
+   "1440000",
+   "--sample",
+   "2000",
+   "--threads",
+   "8",
+   "--params",
+   "{\"evolution2\":1,\"climate2\":0.3,\"wolfDenMinDist\":280,\"wolfTerritory\":130}",
+   "--out",
+   "review/stability/v10-97eef97",
+   "--progress-sec",
+   "600"
+  ]
+ },
+ "commit": "97eef97 (frozen copy)",
+ "node": "v24.19.0",
+ "platform": "win32 x64",
+ "startedAt": "2026-10-09T09:37:00.171Z",
+ "finishedAt": "2026-10-09T14:09:04.227Z",
+ "wallSeconds": 16324.04,
+ "stopReason": null,
+ "tasks": {
+  "total": 20,
+  "completed": 20,
+  "errors": 0,
+  "aborted": 0,
+  "skipped": 0
+ },
+ "msPerTick": 4.307127,
+ "ticksRun": 28800000,
+ "ticksPerSecWall": 1764,
+ "scenarios": {
+  "baseline": {
+   "seeds": 20,
+   "completed": 20,
+   "persistencePct": {
+    "bison": 100,
+    "wolf": 100,
+    "raven": 100,
+    "pronghorn": 100,
+    "rabbit": 100,
+    "cougar": 95,
+    "coyote": 100,
+    "prairiedog": 95,
+    "muledeer": 100
+   },
+   "maxGen": 560.8860465116279
+  }
+ }
+}
