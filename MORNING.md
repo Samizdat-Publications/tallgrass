@@ -13,12 +13,12 @@
 - **The herd overshot and starved about every 8 years**, too fast to read as anything but noise.
 
 ### What changed
-1. **Climate regimes (new):** wet and dry runs of decades, with a megadrought of 3 to 6 years now and then. They move how much grass the land carries, summer dry spells, lightning fires, cottonwood seedlings and the pronghorn the prairie sends back. In wet runs the valley carries 60% more standing grass than in dry runs, and dry runs see twice the lightning fires.
+1. **Climate regimes (new):** wet and dry runs of decades, with a megadrought of 3 to 6 years now and then. They move how much grass the land carries, summer dry spells, lightning fires, cottonwood seedlings and the pronghorn the prairie sends back. In wet runs the valley carries about 60% more standing grass than in dry runs, and dry runs see twice the lightning fires (acceptance data: 63% and 2.2x).
 2. **Bounded evolution switched on**: bison keep single calves and their herding; traits stay believable for centuries.
 3. **Fewer, bigger wolf packs** (dens 280 m apart, 130 m territories).
 4. **You can see it:** dry runs bleach the valley to straw and haze, wet runs deepen the greens, a megadrought goes to pale bone; the big graph (G) has a climate band behind the populations; the header says Wet years, Dry years or Megadrought; the chronicle and the narrator mark the turns.
 5. **Fast-forward made for watching decades:** from about 30x the light holds a steady morning and the seasons are damped, so the decades breathe instead of the days and seasons strobing; moving herds and packs leave long-exposure trails on the land; each species shows in its own colour from the drone views. The sim itself is 1.4x faster with identical results, so 100x is closer to real 100x on an idle machine.
-6. **Documentary camera v3:** it films running animals alongside at rider height, keeps both hunter and prey in frame (or drops the shot), and only shows a card or a narrator line once the camera is on that event.
+6. **Documentary camera v3:** it films running animals alongside at rider height, keeps both hunter and prey in frame (or drops the shot), and only shows a card or a narrator line once the camera is on that event; cuts now dip briefly through a soft dark and the exposure adapts over about a second, so a dark close shot no longer slams into a bright hillside.
 7. **Rare sightings (your idle idea):** Menu, Rare sightings. Thirteen moments unlock with real time watched at 1x (10 minutes, 1, 4 and 12 hours): a great stampede, a cougar out on open ground, a pale bison, a comet over the valley, a great aurora. Each is kept with a photo, the valley year and a line of chronicle.
 8. **Smaller fixes from tonight's reviews:** migrating hawks and eagles read "away for the winter" instead of extinct, the population cards keep their places, one season vocabulary everywhere, a softer selection marker, ground detail and stubble under close follow shots, lying bison no longer stretched.
 
@@ -46,10 +46,11 @@
 - Round 21 (blind critic, charts only): ecosystem believability 6, up from 5 in every round since 15.
 - Round 22 (blind critic, game stills): 6/5/6/7/7/6; ecosystem 7, UI 7. Its top complaint was the close follow view (fixed in part tonight).
 - Round 23 (Gemini video): life and motion 4, up from 2 in rounds 18 and 19; ecosystem 7, UI 7. Its top complaint, species unreadable at 100x, is fixed.
+- Round 24 (Gemini video of the deployed v10): readability 8 (was 4), UI 8, visual 6, motion 3, ecosystem 5 (single Gemini rounds swing 2 to 3 points). It caught a strobe at 100x (lightning flashes and the season swing), fixed and deployed at 12:03. Its other items (herds not reacting to a passing wolf, sliding gaits, kills that read as a bump, wolves on the river surface) are next-cycle work, listed in REVIEWS.md.
 
 ### Decisions you might want to overrule
 - **Adopted v10 tonight** (the four switches above), with the acceptance over 1,200 valley years instead of 1,000 bison generations (see Numbers).
-- **Fewer wolves on purpose:** 4 to 6 packs, about 37 wolves. If you liked seeing more wolves, set wolfDenMinDist back toward 200.
+- **Fewer wolves on purpose:** 4 or 5 packs (measured), about 37 wolves. If you liked seeing more wolves, set wolfDenMinDist back toward 200.
 - **The fast-forward look** (steady morning light and damped seasons from about 30x, long-exposure trails at 10x and 100x, species colours at speed) is my call for "breathing". `?lapse=0` and `?trails=0`, or Settings, Long exposure at speed, turn parts off.
 - **Rare sightings rules:** patience counts only real time at 1x with the tab visible and nobody touching it; tiers at 10 minutes, 1, 4 and 12 hours.
 - **Herd bands stay off** (they cost 12 to 15% of the bison); **the new snow look stays on its branch** (r-snow) until its frame cost is measured on an idle machine.
@@ -67,13 +68,13 @@ You allowed it; I did not do it tonight. A read-only study is in `VALLEY-SIZE.md
 ElevenLabs: 5 narrator lines, 486 characters (about $0.10). Gemini: 1 video critique (about $0.05). Everything is in `ASSETS.md`.
 
 ### Next 5
-1. Read the v10b acceptance and shocks; if they pass, adopt v10b (pronghorn twins cap, wolf sprint cost, equilibrium starts): it fixes v10's weak spots (mule deer, pronghorn spikes, wolf tracking).
+1. Read the v10b acceptance and shocks (they finish around 12:30 and 13:00); if they pass, merge branch `v10b-adopt`, which is ready and tested (new golden hashes, pins, challenge suite passing): it fixes v10's weak spots (mule deer, pronghorn spikes, wolf tracking).
 2. Re-measure 100x on an idle machine (tonight three CPU batches held the browser to 10x to 40x) and consider a 300x or "skip a decade" control now that the sim is 1.4x faster.
 3. Herd bands without the bison cost (bigger bands, or more forage for banded bison), then a screen with v10b: the real fix for the "bison carpet".
 4. Close-up pass two: lying bison legs (dark slabs), pack wolves overlapping at rest, raven flocking at carcasses, exposure jumps between director cuts.
 5. Snow: re-bench r-snow on an idle machine and merge if it fits the frame budget; wet ground in rain.
 
-Last deploy: 10:36 Friday (main with v10 adopted, every merge from tonight); playtest clean, live check clean (no console or page errors).
+Last deploy: 12:03 Friday (main with v10 adopted and every merge from tonight, including the documentary cuts and the lightning and season strobe fix at speed); tests, playtest and live check clean (no console or page errors).
 
 ## 2026-10-08 and 09: the design calls (live)
 - **Ecology, checkpoint v9:** ravens now breed to the carrion supply instead of sitting at a fixed ceiling, mule deer have more woody-cover habitat, and new valleys start with 550 bison instead of 800 so the opening is not a brown carpet. Passed the 20-world acceptance (every species held in all 20) and the shock tests.

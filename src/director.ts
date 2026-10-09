@@ -8,6 +8,7 @@
 // animals are a blur, so the camera flies slow, high drone moves over the valley instead and nothing close is filmed.
 import * as THREE from 'three';
 import type { DroneCamera, FollowFrame } from './render/camera';
+import type { CutFx } from './render/cutfx';
 import { followFrameFor } from './render/followframes';
 import { AGENT_STRIDE, CARCASS_STRIDE, F_INFECTED, F_MANGE, F_MIGRANT, F_STOT, Sp, St } from './sim/types';
 import { SPECIES, canHunt, isPredator } from './sim/species';
@@ -211,6 +212,13 @@ export interface DirectorStats {
 export class Director {
   enabled = false;
   current: Shot | null = null;
+  /**
+   * The dip at an edit (render/cutfx.ts). When set, a hard cut between two shots goes through a soft dark: the director asks for the fade,
+   * keeps the old shot on until the picture is dark, and only then moves the camera. Null (the unit tests, `?cuts=0`) cuts at once.
+   */
+  cutFx: CutFx | null = null;
+  /** A shot chosen but not yet begun: the picture is falling to dark, and the camera moves when it is. */
+  private pend: { shot: Shot; wait: number } | null = null;
   readonly stats: DirectorStats = { on: false, secs: { real: 0, fast: 0, lapse: 0 }, runnerNear: { real: 0, fast: 0, lapse: 0 }, huntSecs: 0, huntBoth: 0, kindSecs: {}, log: [] };
   private t = 0;
   private scan = 0;
@@ -221,6 +229,7 @@ export class Director {
   private pa = new THREE.Vector3();
   private pb = new THREE.Vector3();
   private pv = new THREE.Vector3();
+  private pv2 = new THREE.Vector3();
   /** Cuts that events asked for (R3): immigrants, plague in a town, coyotes taking over. Newest last, with the clock they were asked at. */
   private cuts: Cut[] = [];
   private clock = 0;
@@ -294,6 +303,8 @@ export class Director {
     this.t = 0;
     this.current = null;
     this.chain = null;
+    this.pend = null;
+    this.cutFx?.cancel(); // (the player taking the camera, or the documentary starting, is an instant cut: no dip is left running)
     this.cuts = []; // a player who takes the camera is never pulled away by a cut that was queued before
     this.cam.cinematicAuto = true;
     if (!on) {
@@ -373,6 +384,18 @@ export class Director {
     if (cls === 'lapse') this.cuts.length = 0; // nothing close is filmed at 100x, not even a moment
     if (f.events && f.events.length) this.takeEvents(f);
     this.monitor(f, dt);
+    if (this.pend) {
+      // the picture is falling to dark for an edit: nothing else is decided until the camera has moved (a dip nobody uses is dropped)
+      const p = this.pend;
+      p.wait += dt;
+      if (!this.cutFx || this.cutFx.dark || p.wait > 0.4) {
+        this.pend = null;
+        this.beginShot(p.shot, f, true);
+        this.cutFx?.fadeIn();
+      }
+      this.tally(dt, f);
+      return;
+    }
     // a moment (a field note, a headline event) holds the camera: no hunt or stoop scan cuts away from it
     const inMoment = this.current?.moment === true;
     // an animal running is worth cutting to early (checked twice a second, after 3 s of a static shot), and a better chase over a poorer one
@@ -423,12 +446,45 @@ export class Director {
     const chained = this.chain;
     this.chain = null;
     const shot = huntNow ?? evNow ?? chained ?? this.pick(f);
+    const fx = this.cutFx;
+    if (fx && fx.enabled) {
+      // (the first shot after the player's camera is an edit too: the picture the player had falls to dark, the camera moves, the shot rises)
+      if (!this.current || this.willCut(shot)) {
+        // a hard cut is an edit: fall to dark first, move the camera in the dark (above), rise into the new shot
+        this.pend = { shot, wait: 0 };
+        fx.fadeOut();
+        this.tally(dt, f);
+        return;
+      }
+    }
     this.beginShot(shot, f);
     this.tally(dt, f);
   }
 
+  /** Would beginning this shot now be a hard cut (the camera jumps) and not a glide? The same test beginShot makes, without moving anything. */
+  private willCut(shot: Shot): boolean {
+    if (shot.track && shot.id !== null) return true; // (a tracking shot always begins with a cut)
+    const v = this.pv2;
+    const ok = shot.id !== null ? this.getPos(shot.id, v) : false;
+    const sx = shot.id !== null ? (ok ? v.x : NaN) : shot.x, sy = shot.id !== null ? (ok ? v.z : NaN) : shot.y;
+    const known = Number.isFinite(sx) && Number.isFinite(sy);
+    let yaw = shot.yaw;
+    if (known && !shot.track && !shot.drone) yaw = this.clearYaw(sx, sy, shot.pitch, shot.yaw, shot.dist, shot.air && ok ? Math.max(0, v.y - this.cam.groundAt(sx, sy)) : 0);
+    return this.isCut(shot, known, sx, sy, yaw);
+  }
+
+  /** The cut test of beginShot: a subject across the valley, off centre in a moment, a big turn or a big change of distance. */
+  private isCut(shot: Shot, known: boolean, sx: number, sy: number, yaw: number): boolean {
+    const focus = this.cam.getFocus(this.tmp);
+    const far = known && Math.hypot(sx - focus.x, sy - focus.z) > 0.6 * Math.max(this.cam.distance, shot.dist) + 40;
+    const turn = Math.abs(((yaw - this.cam.yawDeg) % 360 + 540) % 360 - 180);
+    // (a moment is a cut unless the subject is already in the middle of the frame: an eased glide takes longer than the couple of seconds it has)
+    const offCentre = shot.moment === true && known && Math.hypot(sx - focus.x, sy - focus.z) > 8;
+    return far || offCentre || turn > 75 || Math.abs(shot.dist - this.cam.distance) > 0.6 * Math.max(shot.dist, this.cam.distance);
+  }
+
   /** Begin a shot: the camera is told where to stand, what to follow and how fast to move. */
-  private beginShot(shot: Shot, f: DirectorFrame): void {
+  private beginShot(shot: Shot, f: DirectorFrame, forceCut = false): void {
     if (this.current && isMotionKind(this.current.kind) && this.current.id !== null) this.lastMotion = { id: this.current.id, at: this.clock };
     this.current = shot;
     this.t = shot.hold;
@@ -448,12 +504,8 @@ export class Director {
     if (known && !shot.track && !shot.drone) shot.yaw = this.clearYaw(sx, sy, shot.pitch, shot.yaw, shot.dist, shot.air && ok ? Math.max(0, v.y - this.cam.groundAt(sx, sy)) : 0);
     // an editor cuts to a subject across the valley rather than flying the camera through the trees to reach it;
     // near subjects get a glide that eases in and out
-    const focus = this.cam.getFocus(this.tmp);
-    const far = known && Math.hypot(sx - focus.x, sy - focus.z) > 0.6 * Math.max(this.cam.distance, shot.dist) + 40;
-    const turn = Math.abs(((shot.yaw - this.cam.yawDeg) % 360 + 540) % 360 - 180);
-    // (a moment is a cut unless the subject is already in the middle of the frame: an eased glide takes longer than the couple of seconds it has)
-    const offCentre = shot.moment === true && known && Math.hypot(sx - focus.x, sy - focus.z) > 8;
-    const cut = far || offCentre || turn > 75 || Math.abs(shot.dist - this.cam.distance) > 0.6 * Math.max(shot.dist, this.cam.distance);
+    // (a shot that waited for a dip is a cut whatever the camera has drifted to meanwhile)
+    const cut = forceCut || this.isCut(shot, known, sx, sy, shot.yaw);
     // a documentary operator lets the subject drift in frame and eases after it, so the background doesn't judder
     // (a stoop is a 30 m/s dive: the operator has to stay with it, so the follow is tight)
     const diving = shot.kind === 'stoop';
