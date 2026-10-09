@@ -61,6 +61,7 @@ You allowed it; I did not do it tonight. A read-only study is in `VALLEY-SIZE.md
 - Bison herd bands work visually (separate groups with grass between them) but cost 12 to 15% of the bison in every variant tried, so they stay off.
 - Builder worktree isolation failed under the CPU load late in the night; I created worktrees by hand instead (no effect on the work).
 - Captures and playtests timed out for a while because the dev server was watching 37 builder worktrees; fixed (vite ignores .claude/).
+- The making-of page (claude.ai artifact) was not republished tonight; tonight's images are in `journey/` (INDEX.md). To refresh it: `.venv/Scripts/python tools/journey_page.py --artifact --out scratch/making-of/index.html`, then republish.
 
 ### API spend tonight
 ElevenLabs: 5 narrator lines, 486 characters (about $0.10). Gemini: 1 video critique (about $0.05). Everything is in `ASSETS.md`.
