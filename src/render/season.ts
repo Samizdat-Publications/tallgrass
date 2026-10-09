@@ -36,6 +36,18 @@ export const PACK_KEYS: Keys = [
   [0, 0], [3.1, 0], [3.35, 0.3], [3.5, 0.36], [3.7, 0.3], [3.9, 0.06], [4.0, 0],
 ];
 
+/**
+ * Time-lapse damping of the seasonal look (r-lapse). At true fast-forward the valley's year laps every second or so and the seasonal
+ * swing (green, cured gold, winter dun, snow) drowns the decades-long wet and dry breath. While the lapse is on, every seasonal output is
+ * blended toward the look of LAPSE_SEASON (a steady early-summer growing season), keeping LAPSE_SWING of the swing around it. The climate
+ * (wet and dry) looks are separate and stay at full strength.
+ */
+export const LAPSE_SEASON = 1.2;
+/** The share of the seasonal colour swing kept while the lapse is fully on. */
+export const LAPSE_SWING = 1 / 3;
+/** The share of the snowpack kept while the lapse is fully on (a light dusting in deep winter). */
+export const LAPSE_SNOW = 0.2;
+
 /** Hermite smoothstep on a unit-clamped input. */
 export function smooth01(t: number): number {
   t = Math.max(0, Math.min(1, t));

@@ -406,6 +406,7 @@ export class Water {
         uSnow: shared.snow,
         uFrost: shared.frost,
         uSeason: shared.season,
+        uSeasonKeep: shared.seasonKeep,
         uLeaf: shared.leafAmount,
         uLeafA: shared.leafColorA,
         uGrassGreen: shared.grassGreen,
@@ -462,6 +463,7 @@ export class Water {
         uniform float uSnow;
         uniform float uFrost;
         uniform float uSeason;
+        uniform float uSeasonKeep;
         uniform float uLeaf;
         uniform vec3 uLeafA;
         uniform vec3 uGrassGreen;
@@ -641,7 +643,7 @@ export class Water {
           vec3 irr = ambC + uLightColor * max(uLightDir.y, 0.0) * shadow;
 
           // winter: still water freezes from the shore inward; the creek's current keeps its channel open longest
-          float winterK = smoothstep(2.45, 2.85, uSeason) * (1.0 - smoothstep(3.55, 3.9, uSeason));
+          float winterK = smoothstep(2.45, 2.85, uSeason) * (1.0 - smoothstep(3.55, 3.9, uSeason)) * uSeasonKeep;
           float cold = winterK * (0.45 + 0.55 * max(uSnow, uFrost));
           float dry = max(uSnow * 0.85, cold * 0.7);
 

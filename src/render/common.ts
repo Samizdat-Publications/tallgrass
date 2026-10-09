@@ -49,6 +49,8 @@ export interface SharedUniforms {
   leafColorB: U<THREE.Color>;
   frost: U<number>;
   snow: U<number>;
+  /** 1 normally; falls toward LAPSE_SWING while the time-lapse damping is on (r-lapse). Scales the shaders' winter and autumn amounts. */
+  seasonKeep: U<number>;
   /** S11 snow depth field: a 32 x 32 single-channel texture (world square, linear filtered), 1 while the sim sends it (snowDepth param on), else 0. */
   snowDepthTex: U<THREE.Texture | null>;
   snowDepthOn: U<number>;
@@ -115,6 +117,7 @@ export function createSharedUniforms(worldSize: number): SharedUniforms {
     leafColorA: c(), leafColorB: c(),
     frost: { value: 0 },
     snow: { value: 0 },
+    seasonKeep: { value: 1 },
     snowDepthTex: { value: null },
     snowDepthOn: { value: 0 },
     snowDepthFall: { value: 0 },
