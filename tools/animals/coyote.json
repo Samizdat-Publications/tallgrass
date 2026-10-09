@@ -1,0 +1,106 @@
+{
+ "species": "coyote",
+ "source": "scratch/a3/raw/coyote/coyote.glb",
+ "work": "scratch/a3/work/coyote",
+ "pose": "POSE",
+ "forward": [
+  0,
+  -1,
+  0
+ ],
+ "height": 0.81,
+ "nose_x": 0.7,
+ "tris": 6500,
+ "tex": 1024,
+ "xscale": 1.0,
+ "xshift": -0.05,
+ "zshift": 0.0,
+ "xsplit": 0.0,
+ "leg_top": 0.6,
+ "leg_rx_max": 0.08,
+ "leg_rz_max": 0.055,
+ "leg_pad": 0.02,
+ "leg_fade": 0.2,
+ "knee_w": 0.06,
+ "hip_blend": 0.22,
+ "hip_blend_up": 0.06,
+ "rig": {
+  "front": {
+   "hip": [
+    0.245,
+    0.475
+   ],
+   "knee": [
+    0.266,
+    0.194
+   ],
+   "foot": [
+    0.286,
+    0.0
+   ]
+  },
+  "hind": {
+   "hip": [
+    -0.317,
+    0.475
+   ],
+   "knee": [
+    -0.36,
+    0.194
+   ],
+   "foot": [
+    -0.33,
+    0.0
+   ]
+  }
+ },
+ "neck": [
+  0.36,
+  0.6,
+  0.0
+ ],
+ "head_w": [
+  0.3,
+  0.55
+ ],
+ "head_x": [
+  0.5,
+  0.6
+ ],
+ "neck_low": [
+  0.4,
+  0.5,
+  0.6,
+  0.05
+ ],
+ "tail": {
+  "pivot": [
+   -0.4,
+   0.5,
+   0.0
+  ],
+  "x0": -0.38,
+  "z": 0.0,
+  "half": 0.07,
+  "ymin": 0.1,
+  "blend": 0.1,
+  "first": true
+ },
+ "coat": 0.4,
+ "coat_mid": [
+  0.51,
+  0.38,
+  0.225
+ ],
+ "ground": 0.46,
+ "ao_r": 0.04,
+ "ao_reach": 0.3,
+ "grade": {
+  "sat": 0.8,
+  "gain": [
+   0.95,
+   0.97,
+   1.0
+  ]
+ }
+}

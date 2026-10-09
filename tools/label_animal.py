@@ -27,6 +27,8 @@ xs, xo, zs = cfg.get('xscale', 1.0), cfg.get('xshift', 0.0), cfg.get('zshift', 0
 pos[:, 0] = pos[:, 0] * xs + xo
 pos[:, 2] += zs
 orig = pos.copy()
+_t = cfg['tail']
+tmask0 = (pos[:, 0] < _t['x0']) & (abs(pos[:, 2] - _t.get('z', 0.0)) < _t.get('half', 0.2)) & (pos[:, 1] > _t.get('ymin', 0.3))   # tail vertices: no leg takes them
 
 # ---- 2. the four source legs: track each leg's axis up from the foot (x window around the previous slice), per slice y
 xsplit = cfg['xsplit']
@@ -95,6 +97,8 @@ for j, name in enumerate(names):
     front = L['front']
     m *= ((pos[:, 0] > xsplit) == front) | (abs(pos[:, 0] - xsplit) < 0.25)
     m *= (pos[:, 2] * L['side'] > -0.12)
+    if _t.get('first'):
+        m *= ~tmask0
     memb[:, j] = m
 
 # retarget displacement (x, y only; z keeps the source's stance)
@@ -147,7 +151,8 @@ for j, name in enumerate(names):
     w1[sel] = smooth(ky + cfg.get('knee_w', 0.11), ky - cfg.get('knee_w', 0.11), pos[sel, 1])
     wb[sel] = smooth(R['hip'][1] - cfg.get('hip_blend', 0.4), R['hip'][1] + cfg.get('hip_blend_up', 0.12), pos[sel, 1])
 # the tail: behind tail x0 and within its width of the axis
-tmask = (~isleg) & (pos[:, 0] < tail['x0']) & (abs(pos[:, 2] - tail.get('z', 0.0)) < tail.get('half', 0.2)) & (pos[:, 1] > tail.get('ymin', 0.3))
+tmask = (pos[:, 0] < tail['x0']) & (tail.get('first', False) | ~isleg) & (abs(pos[:, 2] - tail.get('z', 0.0)) < tail.get('half', 0.2)) & (pos[:, 1] > tail.get('ymin', 0.3))
+if tail.get('first'): isleg &= ~tmask   # (the tail wins over a leg envelope it hangs inside)
 part[tmask] = 6
 piv[tmask] = tpiv
 piv2[tmask] = tpiv
@@ -208,6 +213,10 @@ cc = cfg.get('coat', 0.25)
 col = np.ones((n, 3)) * (1.0 / ((1 - cc) + cc * cm))[None, :]
 col *= cfg.get('color', 1.0)
 aPart = np.stack([part, w1, coat, wb], 1)
+WP = cfg.get('white_patch')   # reserve a white texel strip (top right corner) for geometry that is added at load time (the mule deer's procedural antlers)
+WS = 0.96
+if WP:
+    uv = (uv * WS).astype(np.float32)
 shade = np.stack([dark, np.zeros(n), np.zeros(n)], 1)
 out_dir = P('public/models/a3')
 os.makedirs(out_dir, exist_ok=True)
@@ -236,15 +245,21 @@ for kind in ('albedo', 'normal'):
         # mean colour (linear) of the albedo over the mesh, sampled at the vertices: the far LOD is tinted toward it (src/render/models/index.ts)
         a8 = np.asarray(im, np.float32) / 255.0
         W_, H_ = im.size
-        px = np.clip((uv[:, 0] * W_).astype(int), 0, W_ - 1); py = np.clip(((1 - uv[:, 1]) * H_).astype(int), 0, H_ - 1)
+        uvs_ = uv / WS if WP else uv
+        px = np.clip((uvs_[:, 0] * W_).astype(int), 0, W_ - 1); py = np.clip(((1 - uvs_[:, 1]) * H_).astype(int), 0, H_ - 1)
         smp = a8[py, px]
         lin = np.where(smp <= 0.04045, smp / 12.92, ((smp + 0.055) / 1.055) ** 2.4)
         avg_lin = lin.mean(0).tolist()
+    if WP:
+        w_, h_ = im.size
+        canvas = Image.new('RGB', (w_, h_), (255, 255, 255) if kind == 'albedo' else (128, 128, 255))
+        canvas.paste(im.resize((int(w_ * WS), int(h_ * WS)), Image.LANCZOS), (0, h_ - int(h_ * WS)))
+        im = canvas
     if kind == 'albedo':
         im.save(os.path.join(out_dir, f'{sp}_{kind}.jpg'), quality=90)
     else:
         im.save(os.path.join(out_dir, f'{sp}_{kind}.png'), optimize=True)
-json.dump({'species': sp, 'vertices': n, 'triangles': len(tris), 'attributes': meta, 'indexOffset': idx_off, 'albedo': f'{sp}_albedo.jpg', 'normal': f'{sp}_normal.png', 'avg': avg_lin, 'coat': cc},
+json.dump({'species': sp, 'vertices': n, 'triangles': len(tris), 'attributes': meta, 'indexOffset': idx_off, 'albedo': f'{sp}_albedo.jpg', 'normal': f'{sp}_normal.png', 'avg': avg_lin, 'coat': cc, 'whiteUV': [0.985, 0.985] if WP else None},
           open(os.path.join(out_dir, sp + '.json'), 'w'))
 np.savez(os.path.join(work, 'final.npz'), pos=pos.astype(np.float32), uv=uv, tris=tris, part=part, w1=w1, wb=wb, dark=dark)
 print('wrote', sp, 'verts', n, 'tris', len(tris), 'bytes', len(blob))

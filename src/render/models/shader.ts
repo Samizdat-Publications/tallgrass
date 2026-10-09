@@ -62,10 +62,11 @@ type Variant = 'single' | 'near' | 'far';
 export const R8_SHADER = { on: true, bison: true, flare: true };
 
 /** R6 mule deer: the antler anchor and the growth at which the forks and the second tines come out (defaults for every other model). */
-function seasonDefines(def?: ModelDef): string {
+function seasonDefines(def?: ModelDef, variant: Variant = 'single'): string {
   const s = def?.seasonal;
+  const sh = variant === 'near' && def?.a3?.antlerShift ? def.a3.antlerShift : [0, 0, 0]; // (an authored head: the antlers sit elsewhere)
   return [
-    `#define ANT_BASE vec3(${(s?.antlerBase ?? [0, 0, 0]).map(f).join(',')})`,
+    `#define ANT_BASE vec3(${(s?.antlerBase ?? [0, 0, 0]).map((x, k) => f(x + sh[k])).join(',')})`,
     `#define ANT_FORK ${f(s?.forkAt ?? 0.3)}`, `#define ANT_TINE ${f(s?.tineAt ?? 0.7)}`,
   ].join('\n');
 }

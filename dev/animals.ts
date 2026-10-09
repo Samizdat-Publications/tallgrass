@@ -232,7 +232,7 @@ function buildScene(): void {
     sps.forEach((sp, i) => {
       if (ONLY && onlyId[ONLY] !== sp) return;
       if (!ONLY && (sp === Sp.MuleDeer || sp === Sp.Coyote)) return; // (the default lineup stays the six it always was)
-      const a = add(sp, 'lineup', STAGE.x + (ONLY ? -3 : (i - 2.5) * gap), STAGE.y, 0, { coat: sp === Sp.Wolf ? 0.2 : sp === Sp.Bison ? 0.6 : 0.4 });
+      const a = add(sp, 'lineup', STAGE.x + (ONLY ? -3 : (i - 2.5) * gap), STAGE.y, 0, { coat: sp === Sp.Wolf ? 0.2 : sp === Sp.Bison ? 0.6 : 0.4, fl: sp === Sp.MuleDeer ? F_MALE : 0 });
       a.seed = 0.37 + i * 0.11;
       roles['lineup' + sp] = a.id;
     });

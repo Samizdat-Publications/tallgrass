@@ -10,16 +10,19 @@ export interface A3Asset {
   /** Mean albedo of the mesh (linear rgb) and the coat influence its vertices carry (the far LOD is tinted toward it). */
   avg: [number, number, number];
   coat: number;
+  /** A white texel of the albedo (and a flat one of the normal map) for geometry added at load time (antlers), when the asset reserves one. */
+  whiteUV: [number, number] | null;
 }
 
 /** Per species pose tuning of the authored mesh (see ModelDef.a3): graze head angle multiplier, forebody pitch (rad) and neck drop (m). */
-export const A3_TUNE: Record<string, { grazeK?: number; grazePitch?: number; grazeDrop?: number }> = {
+export const A3_TUNE: Record<string, { grazeK?: number; grazePitch?: number; grazeDrop?: number; antlerShift?: [number, number, number]; antlerScale?: number }> = {
   bison: { grazeK: 1.3, grazePitch: 0.12, grazeDrop: 0.12 },
+  muledeer: { antlerShift: [0.12, 0.07, 0], antlerScale: 1.15 },
 };
 
 const assets = new Map<string, A3Asset>();
 /** Species keys with an authored mesh. */
-export const A3_SPECIES = ['bison', 'wolf', 'pronghorn'];
+export const A3_SPECIES = ['bison', 'wolf', 'pronghorn', 'muledeer', 'coyote', 'cougar'];
 
 /** The authored meshes are the default; `?a3=0` switches them off (the procedural near LOD returns). */
 export function a3Enabled(): boolean {
@@ -62,7 +65,7 @@ async function loadOne(key: string): Promise<void> {
     normalMap = await load(base + meta.normal);
     normalMap.anisotropy = 8;
   }
-  assets.set(key, { geometry: g, map, normalMap, avg: meta.avg ?? [0.1, 0.1, 0.1], coat: meta.coat ?? 0.25 });
+  assets.set(key, { geometry: g, map, normalMap, avg: meta.avg ?? [0.1, 0.1, 0.1], coat: meta.coat ?? 0.25, whiteUV: meta.whiteUV ?? null });
 }
 
 /** Loads the authored meshes this page asked for. A failed load is logged and that species keeps its procedural near LOD. */

@@ -1,0 +1,107 @@
+{
+ "species": "muledeer",
+ "source": "scratch/a3/raw/deer/deer.glb",
+ "work": "scratch/a3/work/muledeer",
+ "exclude_objects": [
+  "Icosphere",
+  "Deer_Antler_M_DeerAntler_0",
+  "Deer_Antler.001_M_DeerAntler_0"
+ ],
+ "pose": "POSE",
+ "forward": [
+  0,
+  -1,
+  0
+ ],
+ "height": 1.25,
+ "nose_x": 1.125,
+ "tris": 7000,
+ "tex": 1024,
+ "xscale": 1.1,
+ "xshift": 0.0,
+ "zshift": 0.0,
+ "xsplit": 0.0,
+ "leg_top": 0.95,
+ "leg_rx_max": 0.1,
+ "leg_rz_max": 0.07,
+ "leg_pad": 0.02,
+ "leg_fade": 0.25,
+ "knee_w": 0.08,
+ "hip_blend": 0.32,
+ "hip_blend_up": 0.08,
+ "hip_src_x": {
+  "front": 0.33,
+  "hind": -0.3
+ },
+ "rig": {
+  "front": {
+   "hip": [
+    0.36,
+    0.77
+   ],
+   "knee": [
+    0.38,
+    0.34
+   ],
+   "foot": [
+    0.39,
+    0.0
+   ]
+  },
+  "hind": {
+   "hip": [
+    -0.4,
+    0.79
+   ],
+   "knee": [
+    -0.5,
+    0.36
+   ],
+   "foot": [
+    -0.48,
+    0.0
+   ]
+  }
+ },
+ "neck": [
+  0.62,
+  0.95,
+  0.0
+ ],
+ "head_w": [
+  0.6,
+  0.95
+ ],
+ "head_x": [
+  0.9,
+  1.05
+ ],
+ "neck_low": [
+  0.65,
+  0.85,
+  0.8,
+  0.06
+ ],
+ "tail": {
+  "pivot": [
+   -0.57,
+   0.86,
+   0.0
+  ],
+  "x0": -0.56,
+  "z": 0.0,
+  "half": 0.05,
+  "ymin": 0.6,
+  "blend": 0.1
+ },
+ "coat": 0.4,
+ "coat_mid": [
+  0.287,
+  0.12,
+  0.046
+ ],
+ "ground": 0.74,
+ "ao_r": 0.04,
+ "ao_reach": 0.35,
+ "white_patch": true
+}
