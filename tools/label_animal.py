@@ -201,7 +201,12 @@ dark = dark + np.where(nrm[:, 1] < 0, 0.7 * -nrm[:, 1] * (1 - smooth(0, ground *
 dark = np.minimum(0.7, dark)
 
 # ---- 5. write
-col = np.ones((n, 3)) * cfg.get('color', 1.0)
+# the coat tint: the shader multiplies the vertex colour by (1 - c) + c * coat, so a gain of 1 / that at a mid coat keeps the baked albedo as it is
+# at a middling coat and lets the per-animal coat value (pale to dark) and the juvenile / mange tints move it
+cm = np.array(cfg.get('coat_mid', [0.2, 0.2, 0.2]))
+cc = cfg.get('coat', 0.25)
+col = np.ones((n, 3)) * (1.0 / ((1 - cc) + cc * cm))[None, :]
+col *= cfg.get('color', 1.0)
 aPart = np.stack([part, w1, coat, wb], 1)
 shade = np.stack([dark, np.zeros(n), np.zeros(n)], 1)
 out_dir = P('public/models/a3')
@@ -228,10 +233,18 @@ for kind in ('albedo', 'normal'):
         a = np.clip(a * np.array(g.get('gain', [1, 1, 1]), np.float32), 0, 1)
         im = Image.fromarray((a * 255 + 0.5).astype(np.uint8))
     if kind == 'albedo':
+        # mean colour (linear) of the albedo over the mesh, sampled at the vertices: the far LOD is tinted toward it (src/render/models/index.ts)
+        a8 = np.asarray(im, np.float32) / 255.0
+        W_, H_ = im.size
+        px = np.clip((uv[:, 0] * W_).astype(int), 0, W_ - 1); py = np.clip(((1 - uv[:, 1]) * H_).astype(int), 0, H_ - 1)
+        smp = a8[py, px]
+        lin = np.where(smp <= 0.04045, smp / 12.92, ((smp + 0.055) / 1.055) ** 2.4)
+        avg_lin = lin.mean(0).tolist()
+    if kind == 'albedo':
         im.save(os.path.join(out_dir, f'{sp}_{kind}.jpg'), quality=90)
     else:
         im.save(os.path.join(out_dir, f'{sp}_{kind}.png'), optimize=True)
-json.dump({'species': sp, 'vertices': n, 'triangles': len(tris), 'attributes': meta, 'indexOffset': idx_off, 'albedo': f'{sp}_albedo.jpg', 'normal': f'{sp}_normal.png'},
+json.dump({'species': sp, 'vertices': n, 'triangles': len(tris), 'attributes': meta, 'indexOffset': idx_off, 'albedo': f'{sp}_albedo.jpg', 'normal': f'{sp}_normal.png', 'avg': avg_lin, 'coat': cc},
           open(os.path.join(out_dir, sp + '.json'), 'w'))
 np.savez(os.path.join(work, 'final.npz'), pos=pos.astype(np.float32), uv=uv, tris=tris, part=part, w1=w1, wb=wb, dark=dark)
 print('wrote', sp, 'verts', n, 'tris', len(tris), 'bytes', len(blob))

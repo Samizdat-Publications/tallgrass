@@ -20,6 +20,8 @@ const az = Number(arg('az', '100')), el = Number(arg('el', '8'));
 const [W, H] = arg('size', '1280x720').split('x').map(Number);
 const wait = Number(arg('wait', '2600'));
 const fov = Number(arg('fov', '30'));
+const initPose = arg('initpose', ''); // (?pose= at load: 'dead' builds the carcass lineup)
+const cam = arg('cam', 'lineup');
 const SPNUM = { bison: 0, wolf: 1 };
 mkdirSync(out, { recursive: true });
 const kill = setTimeout(() => { console.error('a3shots: hard timeout'); process.exit(2); }, 25 * 60 * 1000);
@@ -38,7 +40,7 @@ try {
       const page = await ctx.newPage();
       page.on('pageerror', (e) => console.log('[page exception]', e.message.slice(0, 300)));
       page.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warning') console.log('[console]', m.text().slice(0, 240)); });
-      await page.goto(`${base}/dev/animals.html?cam=lineup&only=${sp}&focus=${SPNUM[sp]}&a3=${mode}&az=${az}&el=${el}&dist=20&fov=${fov}`, { waitUntil: 'load', timeout: 240000 });
+      await page.goto(`${base}/dev/animals.html?cam=${cam}&only=${sp}&focus=${SPNUM[sp]}&a3=${mode}&az=${az}&el=${el}&dist=20&fov=${fov}${initPose ? '&pose=' + initPose : ''}`, { waitUntil: 'load', timeout: 240000 });
       await page.waitForFunction(() => window.__ready === true, null, { timeout: 240000 });
       for (const pose of poses) {
         for (const d of dists) {

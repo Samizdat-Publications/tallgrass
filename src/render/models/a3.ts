@@ -7,16 +7,25 @@ export interface A3Asset {
   geometry: THREE.BufferGeometry;
   map: THREE.Texture;
   normalMap: THREE.Texture | null;
+  /** Mean albedo of the mesh (linear rgb) and the coat influence its vertices carry (the far LOD is tinted toward it). */
+  avg: [number, number, number];
+  coat: number;
 }
+
+/** Per species pose tuning of the authored mesh (see ModelDef.a3): graze head angle multiplier, forebody pitch (rad) and neck drop (m). */
+export const A3_TUNE: Record<string, { grazeK?: number; grazePitch?: number; grazeDrop?: number }> = {
+  bison: { grazeK: 1.3, grazePitch: 0.12, grazeDrop: 0.12 },
+};
 
 const assets = new Map<string, A3Asset>();
 /** Species keys with an authored mesh. */
 export const A3_SPECIES = ['bison', 'wolf'];
 
+/** The authored meshes are the default; `?a3=0` switches them off (the procedural near LOD returns). */
 export function a3Enabled(): boolean {
   if (typeof location === 'undefined') return false;
   const v = new URLSearchParams(location.search).get('a3');
-  return v !== null && v !== '0';
+  return v === null || v !== '0';
 }
 
 /** The species a3 applies to for this page: `?a3=1` all of them, `?a3=bison,wolf` a list. */
@@ -53,7 +62,7 @@ async function loadOne(key: string): Promise<void> {
     normalMap = await load(base + meta.normal);
     normalMap.anisotropy = 8;
   }
-  assets.set(key, { geometry: g, map, normalMap });
+  assets.set(key, { geometry: g, map, normalMap, avg: meta.avg ?? [0.1, 0.1, 0.1], coat: meta.coat ?? 0.25 });
 }
 
 /** Loads the authored meshes this page asked for. A failed load is logged and that species keeps its procedural near LOD. */

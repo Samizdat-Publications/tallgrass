@@ -96,6 +96,8 @@ function lodDefines(def: ModelDef | undefined, variant: Variant): string[] {
     `#define FUR_DORSAL ${f(fur?.dorsal ?? 0)}`, `#define FUR_BELLY ${f(fur?.belly ?? 0)}`,
     `#define FUR_STREAK ${f(fur?.streak ?? 0)}`, `#define FUR_MOTTLE ${f(fur?.mottle ?? 0)}`, `#define FUR_MOTTLE_SCALE ${f(fur?.mottleScale ?? 7)}`, `#define FUR_INDIV ${f(fur?.indiv ?? 0)}`,
     `#define A3SKIN ${variant === 'near' && def?.a3 ? 1 : 0}`,
+    // a3 graze: the head angle multiplier, the forebody pitch down and the neck drop (m) while grazing (an authored head is shorter than the procedural one)
+    `#define A3_DN ${f(variant === 'near' ? def?.a3?.grazeK ?? 1 : 1)}`, `#define A3_PITCH ${f(variant === 'near' ? def?.a3?.grazePitch ?? 0 : 0)}`, `#define A3_DROP ${f(variant === 'near' ? def?.a3?.grazeDrop ?? 0 : 0)}`,
     `#define SHELL ${variant === 'near' && sh ? 1 : 0}`,
     `#define SHELL_SCALE ${f(sh?.scale ?? 30)}`, `#define SHELL_ALONG ${f(sh?.along ?? 0.5)}`, `#define SHELL_SPARSE ${f(sh?.sparse ?? 0.4)}`,
     `#define SHELL_D0 ${f(sh?.d0 ?? 30)}`, `#define SHELL_D1 ${f(sh?.d1 ?? 50)}`,
@@ -567,6 +569,9 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
 #endif
   // gentle breathing and walk roll
   float breathe = 0.004 * sin(t * 1.9 + seed * 30.0) * COM_Y;
+#if A3SKIN
+  pitch -= A3_PITCH * (dead ? 0.0 : aGait.z) * (1.0 - lie); // grazing: the forebody dips (the leg IK keeps the feet down)
+#endif
 
   // feeding at a carcass. Predators tear: the head hauls up and back slowly with the meat in its teeth, shakes it, then
   // snaps back down for the next bite, with the whole body heaving back a little. Ravens peck in quick bursts.
@@ -949,7 +954,7 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
     float nod = (wWalk + wTrot) * NOD_W * sin(2.0 * cyc + 1.0) + wGal * NOD_G * sin(cyc + 2.0);
     float chew = dn * 0.05 * sin(t * 7.0 + seed * 20.0);
     float yaw = LOOK_YAW * sin(t * 0.45 + seed * 13.0) * (1.0 - dn) * (1.0 - wGal) * (1.0 - lie * 0.5);
-    float ang = -HEAD_DN * dn + nod + chew - 0.45 * crouchBody - 0.5 * sick * (1.0 - 0.5 * dn);
+    float ang = -HEAD_DN * A3_DN * dn + nod + chew - 0.45 * crouchBody - 0.5 * sick * (1.0 - 0.5 * dn);
     ang += tugPull * 0.75 + tugSwallow * 1.5 - tugBite * 0.3 - peck * 1.0 + peckUp + biteUp;
     yaw += tugShake * 0.55;
     // holding the prey by the throat or flank: the head shakes it hard from side to side
@@ -1040,6 +1045,9 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
     }
     tgRotY(p, n, aPivot, yaw * hw);
     tgRotZ(p, n, aPivot, ang * hw);
+#if A3SKIN
+    p.y -= A3_DROP * dn * hw;
+#endif
 #if RAPTOR
     // (the bird sits upright, so its body axis is the vertical: a roll about it swings the beak round over the shoulder)
     if (preen > 0.001) tgRotX(p, n, aPivot, (fract(seed * 4.7) > 0.5 ? 1.0 : -1.0) * preen * 2.2 * hw);
