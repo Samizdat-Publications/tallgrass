@@ -2,6 +2,13 @@
 
 *(Updated 10:40 Friday 2026-10-09. This file is refreshed at every milestone.)*
 
+## 2026-10-09 to 10 day run (in progress; the plan is DAY-PLAN.md)
+**Status 16:20 Friday:** five builders at work (golden-hour look, photo ground up close, real animal models on our rig as a 3-hour trial, a performance pass, animals that notice and wade), all at Idle CPU priority since you asked at 16:00; the v11 band screen runs on 3 threads until you say full speed.
+- **Merged so far:** the snow look (snow by landform, ragged edges, no lavender dusk; +0.17 ms in winter), the v11 sim lever (bison bands move on to fresh grass; off until screened, golden unchanged), a field-note card that reads as a notebook entry ("Added to your field notes") instead of contradicting the shot.
+- **Measuring fixed:** the video critic now sees 8 frames a second (it saw 1, which hides every stride). Its first 8 fps read of today's build: motion 3, ecosystem 2; top complaint, animals walking on top of the river (builder on it now).
+- **Found on the idle machine:** the low golden view costs 18.8 ms at 1440p (the gate is 16.7), so a performance pass runs before the new visuals merge.
+- Not deployed yet; the first deploy of the day is planned for about 19:30.
+
 ## 2026-10-09 night: "The long breath" (v10)
 **Play it:** https://tallgrass.stewartgregerson.workers.dev (or `npm run dev`, then http://localhost:5199/). **v10b is now the default world** (v10 adopted at 10:30, then its refinement v10b at 13:00, each after its acceptance and shocks passed; live, see the last line of this section).
 
