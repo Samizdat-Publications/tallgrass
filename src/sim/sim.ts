@@ -1,6 +1,7 @@
 // The Tallgrass simulation core. Deterministic from the seed, renderer-independent.
 import { Agents, G_BOLD, G_COAT, G_HERD, G_LITTER, G_SIGHT, G_SIZE, G_SPEED, NG, GENE_NAMES } from './agents';
 import { COYOTE_GROUP_BASE, Disease, IS_CANID } from './disease';
+import { ClimateRegime } from './climate';
 import { Environment } from './env';
 import { DEATH_CAUSES, Lineage } from './lineage';
 import { BucketGrid } from './grid';
@@ -39,7 +40,8 @@ export type SimEventKind =
   | 'immigrated' | 'emigrated' | 'recolonized' | 'distemper' | 'mange' | 'townFounded' | 'townLost' | 'sylvaticPlague'
   | 'hareBoom' | 'hareCrash' | 'coyotePups' | 'mesoRelease' | 'storm' | 'lightningFire' | 'eaglesArrive' | 'hawksReturn'
   | 'blizzard' | 'hardWinter' | 'flood' | 'grovePlanted' | 'dustStorm' | 'grasshopperOutbreak' | 'springFlood' | 'encroachment'
-  | 'damBuilt' | 'pondFilled' | 'damBreached' | 'beaverMeadow' | 'colonyLeft';
+  | 'damBuilt' | 'pondFilled' | 'damBreached' | 'beaverMeadow' | 'colonyLeft'
+  | 'climateWet' | 'climateDry' | 'climateMild' | 'megadrought';
 
 export interface SimEvent {
   tick: number;
@@ -198,6 +200,9 @@ export class Sim implements SimLike {
   private lastStampede = -99999;
   private lastOutbreak = -99999;
   private wasDrought = false;
+  /** Climate regime phase last announced (v10): 1 wet, -1 dry, 0 neither; and whether a megadrought was on. */
+  private climPhase = 0;
+  private wasMega = false;
   private groundB = 0.6;
   private firstKillLogged = false;
   /** Storm cells and lightning (params.stormCells; null when off). */
@@ -241,6 +246,11 @@ export class Sim implements SimLike {
     this.env.climateAmp = this.p.climateAmp;
     this.env.greenUpShift = this.p.greenUpShift;
     this.env.droughtChance = this.p.summerDroughtP;
+    if (this.p.climate2 > 0) {
+      this.env.regime = new ClimateRegime(this.seed, this.p);
+      this.env.climate2 = this.p.climate2;
+      this.env.climateDrought = this.p.climateDrought;
+    }
     this.veg = new Vegetation(this.world, this.p, this.env, this.rng.fork(12));
     if (this.p.stormCells > 0) this.storms = new StormCells(this.seed, this.world.size, this.p, DT);
     if (this.p.snowDepth > 0) this.winter = new Winter(this.seed, this.world, this.p, this.env, { event: (kind, sp, x, y, a, b) => this.event(kind, sp, x, y, a, b) });
@@ -2317,6 +2327,7 @@ export class Sim implements SimLike {
   private stepStorms(t: number): void {
     const st = this.storms!;
     const veg = this.veg, water = this.world.water, size = this.world.size;
+    if (this.env.regime !== null) st.igniteMul = Math.max(0.2, 1 - this.p.climateFire * this.env.climateNow);
     st.update(t, this.env.state, (x, y) => {
       if (x < 0 || y < 0 || x >= size || y >= size) return 0;
       const c = veg.cellAt(x, y);
@@ -2330,12 +2341,36 @@ export class Sim implements SimLike {
     }
   }
 
+  /** Chronicle the slow climate (v10): a wet or dry run of years begins (index past +-0.45), eases back to ordinary years
+   *  (inside +-0.15), or a megadrought sets in. a = the index x 100, b = the megadrought's length in valley years. */
+  private checkClimate(t: number): void {
+    const r = this.env.regime!;
+    const c = this.env.climateNow;
+    let ph = this.climPhase;
+    if (c > 0.45) ph = 1;
+    else if (c < -0.45) ph = -1;
+    else if (Math.abs(c) < 0.15) ph = 0;
+    if (ph !== this.climPhase) {
+      this.event(ph > 0 ? 'climateWet' : ph < 0 ? 'climateDry' : 'climateMild', -1, 0, 0, Math.round(c * 100), this.climPhase);
+      this.climPhase = ph;
+    }
+    const mega = r.inMegadrought(t);
+    if (mega && !this.wasMega) {
+      const y0 = Math.floor(t / YEAR_TICKS);
+      let n = 0;
+      while (n < 12 && r.inMegadrought((y0 + n) * YEAR_TICKS)) n++;
+      this.event('megadrought', -1, 0, 0, Math.round(c * 100), n);
+    }
+    this.wasMega = mega;
+  }
+
   private checkEvents(): void {
     const t = this.tick;
     const drought = this.env.droughtTicks > 0;
     if (drought && !this.wasDrought) this.event('drought', -1, 0, 0, this.env.droughtTicks, this.env.droughtSeverity);
     if (!drought && this.wasDrought) this.event('droughtEnd', -1, 0, 0, 0, 0);
     this.wasDrought = drought;
+    if (this.env.regime !== null && (t % 60) === 0) this.checkClimate(t);
     if ((t & 15) === 0) {
       const a = this.a;
       let fleeing = 0, sx = 0, sy = 0;
@@ -3181,6 +3216,7 @@ export class Sim implements SimLike {
     row.packs = packs;
     row.carcasses = this.cN;
     row.drought = this.env.droughtTicks > 0 ? 1 : 0;
+    row.climate = this.env.climateNow;
     // open prairie (S1): arrivals and departures since the last sample, vagrant ravens, and the two calibration inputs
     for (let s = 0; s < SPECIES_COUNT; s++) {
       row['imm_' + SPECIES_KEYS[s]] = this.cImm[s];

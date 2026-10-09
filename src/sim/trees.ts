@@ -499,7 +499,8 @@ export class Trees {
       const inFlood = fm !== null && fm[c] !== 0;
       if (inFlood) { bare = Math.max(bare, this.floodSev); boost = 1 + p.treeFloodBoost * this.floodSev; }
       const m = Math.min(1, Math.max(0, (w.moisture[c] - 0.5) / 0.3));
-      const pr = p.treeCwRecruit * s * bare * m * boost * room / cal;
+      let pr = p.treeCwRecruit * s * bare * m * boost * room / cal;
+      if (this.env.regime !== null) pr *= Math.max(0, 1 + p.climateTrees * this.env.climateNow);
       if (rng.next() < pr) {
         const [x, y] = this.jitterPos(c, rng);
         if (this.spawn(Kind.Cottonwood, x, y, 0, rng) >= 0) {

@@ -91,6 +91,8 @@ export interface EnvState {
   windStrength: number;
   /** Temperature proxy 0 (frost) .. 1 (hot). */
   warmth: number;
+  /** Climate regime index (v10): -1 the driest run of years .. +1 the wettest; 0 when climate2 is off. */
+  climate?: number;
 }
 
 /** Vegetation texture layout: RGBA8, n * n, row-major by y then x. */

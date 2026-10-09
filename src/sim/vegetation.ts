@@ -65,7 +65,7 @@ export class Vegetation {
     const sb = this.w.soilBase[c];
     let f = this.soil[c] / (sb > 0.15 ? sb : 0.15);
     f = f < 0.35 ? 0.35 : f > 1.5 ? 1.5 : f;
-    return this.w.capacity[c] * f;
+    return this.w.capacity[c] * f * this.env.capMul;
   }
 
   step(tick: number): void {

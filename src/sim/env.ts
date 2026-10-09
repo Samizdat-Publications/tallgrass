@@ -1,4 +1,5 @@
 // Calendar, day/night, weather. Deterministic from the sim RNG.
+import { ClimateRegime } from './climate';
 import { Rng } from './rng';
 import { BASE_YEAR_TICKS, DAY_TICKS, EnvState, SEASON_TICKS, Weather, YEAR_TICKS } from './types';
 
@@ -9,7 +10,7 @@ export const START_DAY = 0.27;
 export class Environment {
   state: EnvState = {
     tick: 0, year: 0, season: START_SEASON, dayFrac: START_DAY, weather: Weather.Clear,
-    rain: 0, windDir: 0.6, windStrength: 0.45, warmth: 0.7,
+    rain: 0, windDir: 0.6, windStrength: 0.45, warmth: 0.7, climate: 0,
   };
   /** Ticks left on a forced drought (from an intervention or a dry year). */
   droughtTicks = 0;
@@ -26,6 +27,16 @@ export class Environment {
   /** Slow climate swing in grass growth (0 = off): wet and dry runs of years from two incommensurate cycles. */
   climateAmp = 0;
   private climatePhase = -1;
+  /** Climate regimes (v10; null = off): the seeded wet and dry decades (climate.ts). */
+  regime: ClimateRegime | null = null;
+  /** How far the regime moves grass growth and the land's carrying capacity: x (1 + climate2 x index). */
+  climate2 = 0;
+  /** How much a dry run of years raises the chance of a summer dry spell (and a wet run lowers it). */
+  climateDrought = 0;
+  /** Multiplier on every cell's grass capacity (1 = off; set each tick from the regime). */
+  capMul = 1;
+  /** The regime index now (-1..1; 0 when off). Mirrored into state.climate for the renderer. */
+  climateNow = 0;
 
   /** -1 (driest) .. 1 (wettest) on the slow climate cycle; 0 when the cycle is off. */
   climate(): number {
@@ -62,6 +73,12 @@ export class Environment {
     if (this.droughtTicks > 0) this.droughtTicks--;
     if (this.rainTicks > 0) this.rainTicks--;
     if (this.snowTicks > 0) this.snowTicks--;
+    if (this.regime !== null) {
+      const c = this.regime.value(tick);
+      s.climate = c;
+      this.climateNow = c;
+      this.capMul = 1 + this.climate2 * c;
+    }
 
     // weather rolls once per day
     if (--this.weatherTimer <= 0) {
@@ -81,7 +98,9 @@ export class Environment {
     const r = this.rng.next();
     const si = Math.floor(season) % 4;
     // natural dry spells: mostly summer
-    if (si === 1 && r < this.droughtChance) {
+    let dc = this.droughtChance;
+    if (this.regime !== null) dc *= Math.max(0.15, 1 - this.climateDrought * this.climateNow) * (this.regime.inMegadrought(this.state.tick) ? 2 : 1);
+    if (si === 1 && r < dc) {
       this.droughtTicks = Math.round((BASE_YEAR_TICKS / 4) * (1 + this.rng.next() * 1.5));
       this.droughtSeverity = 0.6 + 0.3 * this.rng.next();
       return;
@@ -110,6 +129,7 @@ export class Environment {
     if (this.droughtTicks > 0) f *= 1 - this.droughtSeverity;
     if (this.state.rain > 0.3 && s < 3) f *= 1 + 0.35 * this.state.rain;
     if (this.climateAmp > 0) f *= 1 + this.climateAmp * this.climate();
+    if (this.regime !== null) f *= this.capMul;
     return f;
   }
 
