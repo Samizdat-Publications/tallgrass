@@ -312,3 +312,15 @@ Scores: visual 6 (wide 7 to 8, close-ups 3 to 4), readability 5, life 6, ecosyst
 | 8 | Population cards move around | fix | r-uifix: fixed order. |
 | 9 | Snow as cow-print blobs | defer | Snow placement by slope and wind is a render item for later. |
 | 10 | HUD footprint; season words disagree (header vs card vs chronicle) | fix (wording) | r-uifix: one season vocabulary everywhere. HUD footprint stays (calm UI fades it after 8 s idle; captures run with dim=0). |
+
+## Round 23 (Gemini video, The long breath on main with director v3, r-breath, r-lapse, trails and rare sightings; 117 s: 1x and 10x documentary, then 100x with the graph, 2026-10-09 08:37) -> `review/round-23-video/reel.gemini.md`
+Scores: visual 5, readability 4, life and motion 4 (rounds 18 and 19: 2), ecosystem 7, UI 7, keep watching 5. The machine ran three CPU batches, so 100x reached about 20x to 40x.
+| # | Issue | Triage | Reason / outcome |
+|---|---|---|---|
+| 1 | At 100x every species is the same dark speck | fixed | Species glyphs now fade in from 90 m (was 210 m) at 30x and up, so the drone vistas show species colours (scratch/v10/lapseglyphs). |
+| 2 | Exposure jump and jerky camera between shots in cinematic view | defer | Exposure adaptation between director cuts; next cycle. |
+| 3 | Flat painted-on snow, muddy terrain | defer | Same as round 22 item 9. |
+| 4 | UI covers the world at 100x | partly by design | The reel opened the big graph on purpose to show the climate band; cinematic mode (C) and the 8 s idle fade already hide the UI. |
+| 5 | Floating, sliding animals in close-up runs | defer | Grounding work continues; r-closeup is on poses and ground detail. |
+| 6 | Ravens circle like a looping particle effect | defer | Flocking variety for ravens at carcasses; next cycle. |
+| 7 | Rain does not wet the ground | defer | Wet-ground darkening in storms; next cycle. |

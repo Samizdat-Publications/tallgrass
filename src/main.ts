@@ -759,6 +759,7 @@ engine.onFrame((dt, t) => {
   const alpha = Math.min(1, (performance.now() - lastTickChange) / Math.max(16, tickInterval));
   // legs keep pace with how fast the sim actually moves animals (capped where gaits would alias)
   animals.timeScale = speed > 0 ? Math.min(speed, 12) : 0;
+  animals.simSpeed = speed > 0 ? speed : 0;
   // years flying by: let the camera drift slowly instead of sitting like a security camera
   engine.cam.idleDrift = speed >= 10 ? 0.025 : 0;
   // the follow ring goes when the camera lets go of the animal (a pan, a fly-to, the director)
