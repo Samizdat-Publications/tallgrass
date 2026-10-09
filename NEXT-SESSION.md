@@ -2,6 +2,12 @@
 
 **Updated:** 2026-10-04 afternoon, at the end of the v2 planning session. v1 is finished and live; v2 starts now. The plan is `V2-PLAN.md`.
 
+## Day run 2026-10-09 ~15:30 to 2026-10-10 ~15:30: READ DAY-PLAN.md FIRST
+- Planned Friday afternoon at extra-high effort; executes at high effort once the owner switches. The plan: `DAY-PLAN.md` (stock-take, bang-for-buck ranking, blocks, gates, quota targets).
+- Start state: main 442a648 + the plan commit, v10b default and live (deploy 13:04), CPU idle, no builders, nothing running. Weekly quota 31% at 14:30.
+- First steps (Block 0): write "2026-10-10 15:30" to `.claude/hooks/run_until.local.txt`; idle-machine baselines (gpubench, 100x rate, r-snow A/B); the look-set capture and `tools/look_stats.py`; Gemini `videoMetadata.fps`; start v11 screen 1 on the CPU; brief builders B1 r-look, B2 r-ground, B3 a3-spike.
+- Owner plays tonight: deploy D1 about 19:30; CPU batches at 8 threads from 18:00 to 23:00 (4 if he says "playing").
+
 ## Night of 2026-10-09 (03:30 to 13:05): v10, then v10b, ADOPTED and live (default world is v10b since 13:00; golden 77fd982c, 2fc8dc7c, 37517a14; deploy 13:04) (read NIGHT-PLAN.md and MORNING.md's top section first)
 State at 11:45:
 - Last deploy 11:41 (main with v10 and r-cuts), live check clean.
