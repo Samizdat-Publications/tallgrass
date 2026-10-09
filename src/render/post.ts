@@ -115,6 +115,10 @@ class FogPass extends Pass {
         uDust: { value: 0.0 },
         // S12 dust storm: strength at the camera 0..1 (0 = no storm, the extra terms are skipped) and the colour of the dust-laden air
         uDustStorm: { value: 0.0 },
+        // blizzard whiteout (r-far-read): amount, the lit snow-white of the air, and the wind's direction on the screen
+        uBlizz: { value: 0.0 },
+        uBlizzCol: { value: new THREE.Color(0.8, 0.85, 0.95) },
+        uBlizzDir: { value: new THREE.Vector2(1, -0.3) },
         uDustCol: { value: new THREE.Color(0.3, 0.2, 0.1) },
         uAerialWarm: { value: 0.0 },
         uAerialNight: { value: 0.0 },
@@ -153,6 +157,9 @@ class FogPass extends Pass {
         uniform float uHorGlow;
         uniform float uDust;
         uniform float uDustStorm;
+        uniform float uBlizz;
+        uniform vec3 uBlizzCol;
+        uniform vec2 uBlizzDir;
         uniform vec3 uDustCol;
         uniform float uAerialWarm;
         uniform float uAerialNight;
@@ -174,6 +181,20 @@ class FogPass extends Pass {
           float peak = (1.0 - g2) / pow(max(1.0 + g2 - 2.0 * g, 1e-4), 1.5);
           return ((1.0 - g2) / pow(1.0 + g2 - 2.0 * g * cosT, 1.5)) / peak;
         }
+        // Wind-driven snow seen as streaks: three layers of noise stretched along the wind's direction on the screen and carried along it at
+        // their own speeds (the near ones faster and broader), in screen pixels of a 900 px tall frame. 0..about 1.
+        float tgBlizzStreaks(vec2 fc, vec2 dir, float t) {
+          vec2 perp = vec2(-dir.y, dir.x);
+          float al = dot(fc, dir), ac = dot(fc, perp);
+          float s = 0.0;
+          for (int i = 0; i < 3; i++) {
+            float fi = float(i);
+            float sc = 1.0 + 0.9 * fi;
+            vec2 q = vec2((al - t * (430.0 + 270.0 * fi)) / (74.0 * sc), ac / (1.6 * sc) + fi * 31.0);
+            s += smoothstep(0.72, 0.97, tgNoise2(q)) * (0.55 - 0.13 * fi);
+          }
+          return s;
+        }
         void main() {
           vec4 c = texture2D(tDiffuse, vUv);
           float d = texture2D(tDepth, vUv).x;
@@ -183,7 +204,16 @@ class FogPass extends Pass {
           float dn = min(min(texture2D(tDepth, vUv + vec2(uTexel.x, 0.0)).x, texture2D(tDepth, vUv - vec2(uTexel.x, 0.0)).x),
                          min(texture2D(tDepth, vUv + vec2(0.0, uTexel.y)).x, texture2D(tDepth, vUv - vec2(0.0, uTexel.y)).x));
           float dNear = min(d, dn);
-          if (d >= 0.999999 && dNear >= 0.999999) { gl_FragColor = c; return; }
+          if (d >= 0.999999 && dNear >= 0.999999) {
+            gl_FragColor = c;
+            if (uBlizz > 0.002) {
+              // the sky of a whiteout is the flat white of the air itself, the sun a faint glow in it
+              float bs = 0.9 * uBlizz;
+              gl_FragColor.rgb = mix(c.rgb, uBlizzCol, bs);
+              gl_FragColor.rgb += uBlizzCol * 0.2 * uBlizz * tgBlizzStreaks(gl_FragCoord.xy / (uTexel.y * 900.0), uBlizzDir, uTime);
+            }
+            return;
+          }
           if (d >= 0.999999) d = dNear;
           d = dNear;
           vec4 vp = uInvProj * vec4(vUv * 2.0 - 1.0, d * 2.0 - 1.0, 1.0);
@@ -233,6 +263,23 @@ class FogPass extends Pass {
             } else dustOd = k0 * ed0 * dist;
             dustOd = min(max(dustOd, 0.0), 8.0);
           }
+          // Blizzard whiteout: a ground-hugging snow haze (density falling off with height, scale about 40 m) that closes the valley in to
+          // 80 to 150 m at ground level and thins with the camera's height. Drifting banks of it thicken and thin on the wind, so the
+          // visibility swells and shrinks. The analytic form of the dust storm and the mist.
+          float bzOd = 0.0;
+          if (uBlizz > 0.002) {
+            float kb = 0.03;
+            // (from a high camera the whiteout thins: the drone and map views see the valley through a veil, the ground sees nothing past about a hundred metres)
+            float k0b = 0.034 * pow(uBlizz, 1.1) * (0.34 + 0.66 * exp(-max(y0, 0.0) / 75.0));
+            vec3 gp = uCamPos + dir * min(dist, 300.0) * 0.5;
+            float gust = 0.7 + 0.6 * tgNoise2(gp.xz * 0.02 - uWind.xy * (1.0 + 3.0 * uWind.z) * uTime * 0.6);
+            float eb0 = exp(clamp(-kb * y0, -60.0, 60.0));
+            if (abs(dy * kb) > 1e-4) {
+              float eb1 = exp(clamp(-kb * (y0 + dy * dist), -60.0, 60.0));
+              bzOd = k0b * gust * (eb0 - eb1) / (kb * dy);
+            } else bzOd = k0b * gust * eb0 * dist;
+            bzOd = min(max(bzOd, 0.0), 6.0);
+          }
           // Dawn pool: after a clear, calm night mist lies in the low ground. The pool surface is read from a coarse map of the valley
           // floor (tPool: the local lowest ground a few metres up, built once from the terrain), so it fills creek valleys and swales
           // and leaves hilltops and upper slopes clear above a soft top surface. The ray is marched a few steps through the part of it
@@ -275,7 +322,7 @@ class FogPass extends Pass {
           float aerOd = max(dist - 90.0, 0.0) * uAerial * alt * (1.0 + 0.9 * uDust) * aerMid;
           float cosS = dot(dir, uSunDir);
           float aerFog = 1.0 - exp(-aerOd);
-          float fog0 = min(1.0 - exp(-(od + mistOd + dawnOd + dustOd)), uFogMax);
+          float fog0 = min(1.0 - exp(-(od + mistOd + dawnOd + dustOd + bzOd)), uFogMax);
           float fog = min(1.0 - (1.0 - fog0) * (1.0 - aerFog), uFogMax);
 
           vec3 fdir = normalize(vec3(dir.x, max(dir.y, 0.0) * 0.5 + 0.015, dir.z));
@@ -321,7 +368,18 @@ class FogPass extends Pass {
             }
             base *= vec3(1.0 - sh, 1.0 - sh * 0.94, 1.0 - sh * 0.86);
           }
-          gl_FragColor = vec4(mix(base, fc, fog), c.a);
+          if (bzOd > 0.0) {
+            // the whiteout air is the lit snow-white, not the sky's horizon colour
+            float bsh = bzOd / (od + mistOd + dawnOd + dustOd + bzOd + 1e-5);
+            fc = mix(fc, uBlizzCol, clamp(bsh * 0.96, 0.0, 1.0));
+          }
+          vec3 outc = mix(base, fc, fog);
+          if (uBlizz > 0.002) {
+            // snow streaks across the picture, a little stronger where the air is thick, a little weaker right at the lens
+            float st = tgBlizzStreaks(gl_FragCoord.xy / (uTexel.y * 900.0), uBlizzDir, uTime);
+            outc += uBlizzCol * st * 0.2 * uBlizz * (0.45 + 0.55 * fog);
+          }
+          gl_FragColor = vec4(outc, c.a);
         }`,
       depthTest: false, depthWrite: false,
     });
@@ -1087,6 +1145,9 @@ export class PostFX {
     f.uHaze.value = L.hazeDensity + (Math.max(L.hazeDensity, 0.0065) - L.hazeDensity) * bz;
     f.uFogMax.value = 0.94 + 0.035 * bz + 0.03 * this.dustStorm;
     f.uDustStorm.value = this.dustStorm;
+    f.uBlizz.value = this.blizzard;
+    (f.uBlizzCol.value as THREE.Color).copy(this.blizzCol);
+    (f.uBlizzDir.value as THREE.Vector2).copy(this.blizzDir);
     if (this.dustStorm > 0.002) {
       // the dust-laden air takes the (already ochre) horizon colour of the sky, a touch browner
       const hc = this.shared.skyHorizon.value;
@@ -1164,7 +1225,10 @@ export class PostFX {
   /** Falling snow: `fall` is the eased snowfall 0..1 (0 = off, the pass is skipped), `aboveGround` the camera height in metres. */
   updateSnow(dt: number, fall: number, env: EnvState, aboveGround: number, L: Lighting): void {
     const ws = clamp(env.windStrength, 0, 1);
-    this.blizzard = blizzardAmount(fall, ws);
+    // the whiteout comes up over a few seconds and clears over a few more (the snowfall and the wind each ease on their own, this evens out the sum)
+    const bzTarget = blizzardAmount(fall, ws);
+    this.blizzard += (bzTarget - this.blizzard) * (1 - Math.exp(-Math.min(dt, 0.25) / (bzTarget > this.blizzard ? 3.5 : 6)));
+    if (bzTarget === 0 && this.blizzard < 0.004) this.blizzard = 0;
     this.camAbove = aboveGround;
     if (fall <= 0.01) { this.snow.update(dt, this.camera, { fall: 0, windStrength: ws, windX: 1, windZ: 0, aboveGround, color: _snowCol }); return; }
     const lc = this.shared.lightColor.value;
@@ -1173,7 +1237,20 @@ export class PostFX {
       L.hemiSky.r * L.hemiIntensity + lc.r * 0.45, L.hemiSky.g * L.hemiIntensity + lc.g * 0.45, L.hemiSky.b * L.hemiIntensity + lc.b * 0.45,
     ).multiplyScalar(0.92 / Math.PI * 1.7);
     this.snow.update(dt, this.camera, { fall, windStrength: ws, windX: Math.cos(env.windDir), windZ: Math.sin(env.windDir), aboveGround, color: _snowCol });
+    // the whiteout air: lit like the snowpack it blows off (so a hillside fades into it without a seam); the streaks run along the wind
+    // as it is seen from this camera, with a downward slant
+    // (shaded snow: the sky light and only a little of the key, so the air is no brighter than the snow it hides)
+    this.blizzCol.setRGB(
+      L.hemiSky.r * L.hemiIntensity + lc.r * 0.14, L.hemiSky.g * L.hemiIntensity + lc.g * 0.14, L.hemiSky.b * L.hemiIntensity + lc.b * 0.14,
+    ).multiplyScalar(0.92 / Math.PI * 1.7 * 0.92);
+    const e = this.camera.matrixWorld.elements;
+    const wx = Math.cos(env.windDir) * 0.9, wz = Math.sin(env.windDir) * 0.9, wy = -0.35;
+    const sx = wx * e[0] + wy * e[1] + wz * e[2], sy = wx * e[4] + wy * e[5] + wz * e[6];
+    const sl = Math.hypot(sx, sy);
+    if (sl > 0.05) this.blizzDir.set(sx / sl, sy / sl); else this.blizzDir.set(1, -0.3);
   }
+  private blizzCol = new THREE.Color(0.8, 0.85, 0.95);
+  private blizzDir = new THREE.Vector2(1, -0.3);
 
   /**
    * Falling rain (see rain.ts): `rain` is the eased 0..1 visible rain (already faded out when looking steeply down). Streaks are

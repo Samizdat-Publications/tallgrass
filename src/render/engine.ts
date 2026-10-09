@@ -603,7 +603,7 @@ export class Engine {
     // 10x or 100x) instead of popping when the weather flips. Sim time comes from env.tick (10 ticks per second at 1x);
     // pages that never advance the tick (dev pages) fall back to real time. Paused sim = frozen weather state.
     const w = env.weather;
-    const overTarget = w === 3 ? 0.95 : w === 1 ? 0.8 + 0.15 * env.rain : w === 4 ? 0.4 : 0;
+    const overTarget = w === 3 ? 0.95 : w === 1 ? 0.8 + 0.15 * env.rain : w === 4 ? 0.4 + 0.5 * this.post.blizzard : 0; // (a blizzard closes the sky right over: a flat white overcast)
     // visible rain (streaks in the grade pass): rain and storm only, building at once rather than with the sim's slow rain value
     const rainTarget = w === 3 ? 1 : w === 1 ? 0.55 + 0.45 * env.rain : 0;
     const snowTarget = w === 4 ? 1 : 0;
@@ -680,6 +680,8 @@ export class Engine {
     }
     computeAtmosphere(atmoEnv, sm, u, this.lighting);
     if (storm > 0.002) this.applyDustStorm(storm);
+    const bzK = this.post.blizzard;
+    if (bzK > 0.002) this.applyBlizzard(bzK);
     if (fast > 0) {
       // the key light's direction is the harshest part of a fast-forward: it laps the sky (and swings through the zenith where the
       // moon takes over) faster than a shadow can read. The sky and the sun disc keep their true motion; the light that casts the
@@ -723,7 +725,7 @@ export class Engine {
     // contrast alike), the shadow map's edge widens and its depth drops. All of it is exactly zero at 1x.
     const softKey = 1 - 0.38 * fast;
     u.lightColor.value.multiplyScalar(softKey);
-    this.sun.shadow.intensity = 0.92 * (1 - 0.82 * sm.overcast) * (1 - 0.55 * fast) * (1 - 0.7 * storm);
+    this.sun.shadow.intensity = 0.92 * (1 - 0.82 * sm.overcast) * (1 - 0.55 * fast) * (1 - 0.7 * storm) * (1 - 0.6 * bzK);
     this.sun.shadow.radius = 1.8 + 2.4 * sm.overcast + 3.2 * fast + 3 * storm;
     this.sun.position.copy(u.lightDir.value);
     this.sun.color.copy(u.lightColor.value);
@@ -821,6 +823,21 @@ export class Engine {
     L.exposure *= 1 + 0.18 * k;   // the eye adapts: not as dark as the light meter says
     L.gradeSat -= 0.1 * k;
     L.gradeContrast -= 0.08 * k;
+  }
+
+  /**
+   * A blizzard at strength `a` (0..1): the light goes flat. The key light is dimmed (the sun is a faint disc behind the snow, its shadows
+   * nearly gone, see the sun's shadow intensity), the sky light carries a little more of the picture, and the grade loses some contrast and
+   * colour, so the white of the air and the snow close to the same value. The fog's density and colour and the streaks are in the post pass.
+   */
+  private applyBlizzard(a: number): void {
+    const u = this.uniforms, L = this.lighting;
+    u.lightColor.value.multiplyScalar(1 - 0.55 * a);
+    u.sunDiskColor.value.multiplyScalar(1 - 0.85 * a);
+    L.hemiIntensity *= 1 + 0.22 * a;
+    L.exposure *= 1 + 0.1 * a;
+    L.gradeSat -= 0.1 * a;
+    L.gradeContrast -= 0.1 * a;
   }
 
   private applySeason(season: number): void {

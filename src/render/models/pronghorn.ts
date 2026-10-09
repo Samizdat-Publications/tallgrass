@@ -181,9 +181,9 @@ export function buildPronghorn(): ModelDef {
     // from the drone view the pale coat is pulled down a little so a herd reads as tan and white, not a bright smear
     // R-readable: guild value separation and edge lift at the default distances (see ModelDef.read)
     read: { pale: 0.3, rim: [1.0, 0.92, 0.78, 0.45] },
-    far: { gain: 0.9, rim: 0, hunt: 0, rimCol: [1, 1, 1], d0: 100, d1: 340, tint: [0.4, 0.255, 0.13], mix: 0.28, lowFill: 0.3,
-    // pale all over with a tan back and a white rump; the pale legs read as bones from above, so they are toned down
-    top: [0.5, 0.34, 0.19], topMix: 0.75, side: 0.12, legs: 0.5, calm: 0.8, widen: 0.4 },
+    far: { gain: 0.85, rim: 0, hunt: 0, rimCol: [1, 1, 1], d0: 100, d1: 340, tint: [0.4, 0.255, 0.13], mix: 0.55, lowFill: 0.3,
+    // r-far-read: a warm tan back with a white rump; the pale belly and legs read as chalk specks from above, so the flanks darken and the legs tone down
+    top: [0.5, 0.33, 0.17], topMix: 0.95, side: 0.4, legs: 0.38, calm: 0.85, widen: 0.4 },
     params: {
       ...DEFAULT_PARAMS,
       kind: 0,
