@@ -38,7 +38,6 @@ const SETS = {
       window.__lkPick = (sp, st) => { const c = (st !== undefined ? window.__find(sp, st) : []).concat(window.__find(sp)); return c.length ? c[0] : null; };
       window.__lkFollow = (sp, st, dist, pitch) => { const id = window.__lkPick(sp, st); window.__followId(id); e.cam.setView({ distance: dist, pitchDeg: pitch }); };
     })()`, wait: 6000 },
-    { name: 'lk_01_concept', eval: "window.__concept()", wait: 4000 },
     { name: 'lk_02_golden_low', eval: "window.__cam('low')", wait: 3500 },
     { name: 'lk_03_golden_wide', eval: "window.__cam('wide')", wait: 3500 },
     { name: 'lk_04_herd_mid', eval: "window.__focusHerd(); window.__engine.cam.setView({ distance: 60, pitchDeg: 16 })", wait: 3500 },
@@ -48,6 +47,8 @@ const SETS = {
     { name: 'lk_08_midday_mid', eval: "window.__followId(null); window.__env({ dayFrac: 0.45 }); window.__focusHerd(); window.__engine.cam.setView({ distance: 90, pitchDeg: 24 })", wait: 3500 },
     { name: 'lk_09_night', eval: "window.__env({ dayFrac: 0.95 }); window.__focusHerd(); window.__engine.cam.setView({ distance: 70, pitchDeg: 22 })", wait: 3500 },
     { name: 'lk_10_winter_mid', eval: "window.__env({ season: 3.4, dayFrac: 0.42, warmth: 0.1 }); window.__focusHerd(); window.__engine.cam.setView({ distance: 90, pitchDeg: 24 })", wait: 4000 },
+    // last: __concept() installs a per-frame light hold that outranks __env (found by the r-look builder), so it must come after the others
+    { name: 'lk_01_concept', eval: "window.__concept()", wait: 4000 },
   ],
   // r-look regression set: the lighting cases the look set does not cover. NOTE: in the look set, lk_01's __concept() installs a per-frame
   // env hold (day 0.28, season 1.8) that outranks every later __env() call, so lk_02 to lk_10 all share that dawn light and lk_08 to
