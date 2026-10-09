@@ -132,6 +132,14 @@ const DRY_KEYS: PalKey[] = [
 ];
 // the cure, seed-head and winter curves and the riparian season factors live in season.ts (shared with the ground shader and engine)
 
+/**
+ * Climate regimes: how wet the run of years is, 0..1 (the engine eases it and sets it each frame; 0 in ordinary years and with climate2 off).
+ * Wet years deepen the living green and richen the cured gold in the growing seasons (winter is untouched). It is applied to the palette
+ * on the CPU, so the blade layer and the ground probes (grassTint) agree and the shaders pay nothing. Dry years ride the drought path instead.
+ */
+export const CLIMATE_GRADE = { wet: 0, dry: 0, mega: 0 };
+
+const BONE = new THREE.Color().setRGB(0.47, 0.39, 0.25);
 const _c0 = new THREE.Color();
 const _c1 = new THREE.Color();
 function seasonColor(keys: PalKey[], season: number, slot: number, out: THREE.Color): void {
@@ -144,6 +152,25 @@ function seasonColor(keys: PalKey[], season: number, slot: number, out: THREE.Co
   _c0.setHex(a[slot + 1]);
   _c1.setHex(b[slot + 1]);
   out.copy(_c0).lerp(_c1, e);
+  const w = CLIMATE_GRADE.wet, m = CLIMATE_GRADE.mega;
+  if (w > 0 || m > 0) {
+    const wk = 1 - winterK(season);
+    const green = keys === GREEN_KEYS;
+    const k = w * wk;
+    if (k > 0) {
+      if (green) {
+        out.r *= 1 - 0.34 * k;
+        out.g *= 1 + 0.1 * k;
+        out.b *= 1 - 0.26 * k;
+      } else {
+        out.r *= 1 + 0.12 * k;
+        out.g *= 1 + 0.04 * k;
+        out.b *= 1 - 0.4 * k;
+      }
+    }
+    // a megadrought bleaches what is left toward pale, dusty bone
+    if (m > 0) out.lerp(BONE, (green ? 0.5 : 0.4) * m * wk);
+  }
 }
 
 const _gt = new THREE.Color();
@@ -269,6 +296,7 @@ uniform float uMaxH;
 uniform float uBladeW;
 uniform float uCure;
 uniform float uDrought;
+uniform float uWetYr;
 uniform float uWinterK;
 uniform float uSeedFrac;
 uniform float uMoistK;
@@ -648,6 +676,7 @@ void main() {
   }
   // same order as the ground shader: late-summer cure floor, then the drought's push to dry, then the belt's own cap
   dry = tgCuredFloor(dry, uCure, rip);
+  dry = tgWetDry(dry, uWetYr, uCure);
   dry = tgDroughtDry(dry, uDrought, rip);
   dry = tgRiparianDry(dry, uCure, stub, rip);
 
@@ -1158,6 +1187,7 @@ export class GrassField {
       uCure: { value: 0.5 },
       uWinterK: { value: 0 },
       uDrought: { value: 0 },
+      uWetYr: { value: 0 },
       uSeedFrac: { value: 0.1 },
       uMoistK: { value: 1.1 },
       uWindGain: { value: 1 },
@@ -1437,7 +1467,8 @@ export class GrassField {
     u.uWindGain.value = P.windGain;
     u.uCam.value.copy(cam);
     u.uCamDy.value = camDy;
-    u.uMaxH.value = P.maxHeight;
+    // climate regimes: dry years cut the sward short, wet years let it stand a little taller (render only; the sim's own grass is separate)
+    u.uMaxH.value = P.maxHeight * (1 - 0.3 * CLIMATE_GRADE.dry + 0.08 * CLIMATE_GRADE.wet);
     u.uBladeW.value = P.bladeWidth;
     u.uTrans.value = P.translucency;
     u.uSpec.value = P.specular;
@@ -1465,6 +1496,7 @@ export class GrassField {
     // which would read as a frosted field all day
     u.uFrostG.value = (this.frostU?.value ?? 0) * (1 - smooth01((env.dayFrac - 0.26) / 0.06));
     u.uDrought.value = this.droughtU?.value ?? 0;
+    u.uWetYr.value = CLIMATE_GRADE.wet;
     // grass blades under moonlight (blue key light) must not sparkle like static: damp the specular sheen there
     const moon = Math.max(0, Math.min(1, (sun.color.b / Math.max(sun.color.r, 1e-3) - 0.95) * 3));
     u.uSpecK.value = 1 - 0.93 * moon;

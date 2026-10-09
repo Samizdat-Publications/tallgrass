@@ -179,6 +179,27 @@
   color: #e6dcc5;
   font-weight: 500;
 }
+/* the slow climate, only while it matters: a wet or dry run of years, or a megadrought */
+.tg-slate-clim {
+  margin-left: calc(8 * var(--u));
+  padding-left: calc(9 * var(--u));
+  border-left: 1px solid rgba(239, 230, 208, 0.3);
+  font-style: italic;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+.tg-slate-clim[hidden] {
+  display: none;
+}
+.tg-slate-clim.is-wet {
+  color: #b5d98c;
+}
+.tg-slate-clim.is-dry {
+  color: #e2c27e;
+}
+.tg-slate-clim.is-mega {
+  color: #f0a074;
+}
 
 /* ---- right column: menu chips, chronicle, inspector ---------------------------------------------------------- */
 .tg-right {
@@ -994,6 +1015,36 @@ button.tg-ent-b:hover {
 }
 .tg-pop.is-open .tg-pop-sub {
   display: none;
+}
+/* the key to the wet and dry band behind the graph (climate regimes), only in the expanded population view and only for the kinds shown */
+.tg-pop-clim {
+  display: none;
+  gap: calc(12 * var(--u));
+  font-size: calc(12 * var(--u));
+  color: var(--paper-dim);
+}
+.tg-pop.is-open[data-view='pop'] .tg-pop-clim:not([hidden]) {
+  display: flex;
+}
+.tg-clim-k {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(5 * var(--u));
+}
+.tg-clim-sw {
+  width: calc(14 * var(--u));
+  height: calc(9 * var(--u));
+  border-radius: calc(2 * var(--u));
+  background: var(--k);
+}
+.tg-clim-k.is-wet {
+  --k: rgba(124, 184, 84, 0.75);
+}
+.tg-clim-k.is-dry {
+  --k: rgba(214, 170, 122, 0.8);
+}
+.tg-clim-k.is-mega {
+  --k: rgba(190, 84, 40, 0.85);
 }
 .tg-grow {
   flex: 1;

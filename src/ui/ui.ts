@@ -56,7 +56,7 @@ const CARD_COOLDOWN_MS = 8000;
 /** A high-ranking card held back by the cooldown is still worth showing for this long. */
 const CARD_HOLD_MS = 20000;
 /** Events the graph marks with a line (the rest would only add noise). */
-const MARK_KINDS = new Set(['drought', 'droughtEnd', 'outbreak', 'stampede', 'extinct', 'introduced', 'removed', 'culled', 'fire', 'plague']);
+const MARK_KINDS = new Set(['drought', 'droughtEnd', 'outbreak', 'stampede', 'extinct', 'introduced', 'removed', 'culled', 'fire', 'plague', 'megadrought']);
 /** A quiet hint about H and C appears once after this long with no input (a second monitor, a lazy afternoon). */
 const HINT_IDLE_MS = 60000;
 const HINT_KEY = 'tallgrass.hint.v1';

@@ -18,6 +18,47 @@ export interface RowsData {
   log: boolean;
   /** Draw the slim grass row under the species rows (default true). A two-column chart gives it to the second column only. */
   grassRow?: boolean;
+  /**
+   * The climate index per history row (-1 driest .. 1 wettest) and 1 where a megadrought holds. When given, a soft band runs behind the
+   * rows along the time axis: green for wet runs, tan for dry, rust for a megadrought, clear in ordinary years. Leave it out (as the
+   * caller does while every value is 0) and nothing is drawn.
+   */
+  climate?: number[];
+  mega?: number[];
+}
+
+/** Band colours (rgb) and the strongest alpha each reaches behind the rows. */
+export const CLIMATE_BAND = { wet: [124, 184, 84], dry: [214, 170, 122], mega: [190, 84, 40], wetA: 0.32, dryA: 0.38, megaA: 0.42 } as const;
+/** Index at which a run of years starts to tint the band, and where the tint is full. */
+const BAND_FROM = 0.2;
+const BAND_TO = 0.9;
+
+/** The climate band behind the rows: one column of pixels per x, the colour of whatever the index was at that moment. */
+function drawClimateBand(g: CanvasRenderingContext2D, d: RowsData, P: { l: number; r: number; t: number; b: number }, t0: number, t1: number): void {
+  const clim = d.climate;
+  if (!clim) return;
+  const n = d.ticks.length;
+  const x0 = Math.ceil(P.l), x1 = Math.floor(P.r);
+  let j = 0;
+  for (let px = x0; px <= x1; px++) {
+    const tick = t0 + ((px - P.l) / (P.r - P.l)) * (t1 - t0);
+    while (j + 1 < n && d.ticks[j + 1] <= tick) j++;
+    const c = clim[j] ?? 0;
+    let rgb: readonly number[] | null = null;
+    let a = 0;
+    if (d.mega?.[j]) {
+      rgb = CLIMATE_BAND.mega;
+      a = CLIMATE_BAND.megaA;
+    } else if (Math.abs(c) > BAND_FROM) {
+      const k = Math.min(1, (Math.abs(c) - BAND_FROM) / (BAND_TO - BAND_FROM));
+      const e = k * k * (3 - 2 * k);
+      rgb = c > 0 ? CLIMATE_BAND.wet : CLIMATE_BAND.dry;
+      a = (c > 0 ? CLIMATE_BAND.wetA : CLIMATE_BAND.dryA) * e;
+    }
+    if (!rgb || a < 0.01) continue;
+    g.fillStyle = `rgba(${rgb[0]},${rgb[1]},${rgb[2]},${a.toFixed(3)})`;
+    g.fillRect(px, P.t, 1, P.b - P.t);
+  }
 }
 
 /** Room left of the plot for the row's name (in its colour) and its axis numbers, and right of it for the current value. */
@@ -87,6 +128,9 @@ export function drawRows(g: CanvasRenderingContext2D, w: number, h: number, u: n
     if (x < P.l + 2 || x > P.r - 4 * u) continue;
     yearX.push(x);
   }
+
+  // the wet and dry decades, softly, behind everything else
+  if (d.climate) drawClimateBand(g, d, P, t0, t1);
 
   // event hairlines behind the data
   for (const m of d.markers) {

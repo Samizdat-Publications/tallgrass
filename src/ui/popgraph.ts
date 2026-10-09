@@ -62,6 +62,12 @@ export class PopGraph {
   private pops: number[][] = Array.from({ length: SPECIES_COUNT }, () => []);
   private grass: number[] = [];
   private grassMax = 1;
+  /** Climate regime index per history row, 1 where a megadrought holds, and whether any row was non-zero (the graph shows its band only then). */
+  private climate: number[] = [];
+  private mega: number[] = [];
+  private climateAny = false;
+  /** Which kinds of year the band has shown so far, for its key in the expanded header. */
+  private keySeen = { wet: false, dry: false, mega: false };
   private seen: boolean[] = Array.from({ length: SPECIES_COUNT }, (_, i) => alwaysShown(i));
   private markers: Marker[] = [];
   /** Mean heritable traits per history row, one array per trait (see traits.ts). NaN when absent. */
@@ -92,6 +98,7 @@ export class PopGraph {
   private logBtn: HTMLButtonElement;
   private expandBtn: HTMLButtonElement;
   private sub: HTMLElement;
+  private climKey: HTMLElement;
   private tabBtns: Record<'pop' | 'evo', HTMLButtonElement>;
   private evoLegend: HTMLElement;
   private evoLegendText: HTMLElement[] = [];
@@ -100,6 +107,7 @@ export class PopGraph {
   constructor() {
     this.cellsEl = h('div', { class: 'tg-cells' });
     this.sub = h('span', { class: 'tg-pop-sub', text: 'since the start' });
+    this.climKey = h('span', { class: 'tg-pop-clim', hidden: '', 'aria-label': 'Key to the shaded bands behind the graph: the wet and dry years' });
     this.chipsEl = h('div', { class: 'tg-pop-chips', role: 'group', 'aria-label': 'Species shown on the graph, by name and colour' });
     this.logBtn = button({
       class: 'tg-btn tg-pop-log',
@@ -148,6 +156,7 @@ export class PopGraph {
       h('span', { class: 'tg-pop-title', text: 'Population' }),
       tabs,
       this.sub,
+      this.climKey,
       this.evoLegend,
       h('span', { class: 'tg-grow' }),
       this.logBtn,
@@ -183,6 +192,11 @@ export class PopGraph {
     this.pops.forEach((p) => (p.length = 0));
     this.grass = [];
     this.grassMax = 1;
+    this.climate = [];
+    this.mega = [];
+    this.climateAny = false;
+    this.keySeen = { wet: false, dry: false, mega: false };
+    this.setClimKey();
     this.markers = [];
     this.traitSeries.forEach((t) => (t.length = 0));
     this.seen = this.seen.map((_, i) => alwaysShown(i));
@@ -206,11 +220,33 @@ export class PopGraph {
         }
       }
       this.grass.push(r.grass);
+      const cl = r.climate ?? 0;
+      this.climate.push(cl);
+      this.mega.push(r.mega ?? 0);
+      if (cl !== 0) this.climateAny = true;
+      if (r.mega) this.keySeen.mega = true;
+      else if (cl > 0.3) this.keySeen.wet = true;
+      else if (cl < -0.3) this.keySeen.dry = true;
       if (r.grass > this.grassMax) this.grassMax = r.grass;
       for (let k = 0; k < TRAIT_COUNT; k++) this.traitSeries[k].push(r.traits?.[k] ?? NaN);
     }
     if (seenChanged) this.rebuildCells();
+    this.setClimKey();
     this.dirty = true;
+  }
+
+  /** The key to the climate band (expanded graph, header): only the kinds of year it has shown. */
+  private setClimKey(): void {
+    const k = this.keySeen;
+    const sig = `${+k.wet}${+k.dry}${+k.mega}`;
+    if (this.climKey.dataset.sig === sig) return;
+    this.climKey.dataset.sig = sig;
+    this.climKey.hidden = !(k.wet || k.dry || k.mega);
+    this.climKey.replaceChildren(
+      ...([[k.wet, 'wet', 'wet years'], [k.dry, 'dry', 'dry years'], [k.mega, 'mega', 'megadrought']] as const)
+        .filter(([on]) => on)
+        .map(([, cls, label]) => h('span', { class: `tg-clim-k is-${cls}` }, h('i', { class: 'tg-clim-sw' }), label)),
+    );
   }
 
   addMarkers(ms: Marker[]): void {
@@ -635,7 +671,7 @@ export class PopGraph {
       const lx = c === hc ? localX : frac >= 0 ? P.l + frac * (P.r - P.l) : -1;
       const got = drawRows(
         g, cw, ht, u,
-        { ticks: this.ticks, pops: this.pops, species: group, grass: this.grass, grassMax: this.grassMax, markers: this.markers, log: this.log, grassRow: twoCols ? c === 1 : true },
+        { ticks: this.ticks, pops: this.pops, species: group, grass: this.grass, grassMax: this.grassMax, markers: this.markers, log: this.log, grassRow: twoCols ? c === 1 : true, climate: this.climateAny ? this.climate : undefined, mega: this.climateAny ? this.mega : undefined },
         lx,
         c === hc ? hit : -1,
       );
@@ -660,6 +696,13 @@ export class PopGraph {
       );
     }
     rows.push(h('div', { class: 'tg-tip-r is-grass' }, h('i', { class: 'tg-dot' }), h('span', { text: 'Grass' }), h('b', { text: `${Math.round((this.grass[idx] / (this.grassMax > 1.0001 ? this.grassMax : 1)) * 100)}%` })));
+    // the wet and dry decades, when the row sits in one
+    if (this.climateAny) {
+      const cl = this.climate[idx] ?? 0;
+      const mega = !!this.mega[idx];
+      const cw = mega ? 'Megadrought' : cl > 0.45 ? 'Wet years' : cl < -0.45 ? 'Dry years' : cl > 0.2 ? 'Wetter than usual' : cl < -0.2 ? 'Drier than usual' : '';
+      if (cw) rows.push(h('div', { class: 'tg-tip-r', style: `--c:${mega ? '#B2502A' : cl > 0 ? '#7CB054' : '#D6A85C'}` }, h('i', { class: 'tg-dot' }), h('span', { text: 'Climate' }), h('b', { text: cw })));
+    }
     // an event the pointer is on: its sentence, in the chronicle's own words, with the year it happened
     if (event) {
       rows.length = 0;

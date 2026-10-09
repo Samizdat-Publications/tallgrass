@@ -160,6 +160,15 @@ const worker = new Worker(new URL('./sim/worker.ts', import.meta.url), { type: '
 const send = (m: ToWorker) => worker.postMessage(m);
 
 const skyView: SkyView = { snow: 0, blizzard: 0, rain: 0, drought: 0, dustStorm: 0, flood: 0, overcast: 0 };
+// dev: ?clim=<-1..1> (or ?clim=mega) forces the climate index the renderer and the UI see (look, header word, graph band), to inspect the
+// wet and dry extremes without waiting decades. It is applied to the snapshots on this side only and never reaches the sim.
+const climOverride: { c: number; mega: boolean } | null = (() => {
+  const v = q.get('clim');
+  if (v === null) return null;
+  if (v === 'mega') return { c: -0.8, mega: true };
+  const n = Number(v);
+  return v !== '' && Number.isFinite(n) ? { c: Math.max(-1, Math.min(1, n)), mega: false } : null;
+})();
 let speed = Number(q.get('speed') ?? 1);
 let following: number | null = null;
 let armed: ToolId | null = null;
@@ -194,6 +203,16 @@ worker.onmessage = (e: MessageEvent<FromWorker>) => {
     const ev = evs[evs.length - 1];
     if (ev) { takeCamera(); engine.cam.follow(null); following = null; engine.cam.flyTo(ev.x, ev.y, 150, 28); }
   }
+  if (climOverride) {
+    m.env.climate = climOverride.c;
+    m.mega = climOverride.mega;
+    for (const r of m.history) {
+      r.climate = climOverride.c;
+      if (climOverride.mega) r.mega = 1;
+      else delete r.mega;
+    }
+  }
+  engine.megadrought = !!m.mega;
   // keep events and history from every message even if frames skip some
   pendingEvents = pendingEvents.concat(m.events);
   pendingHistory = pendingHistory.concat(m.history);
