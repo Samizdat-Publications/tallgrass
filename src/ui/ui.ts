@@ -31,7 +31,7 @@ import { DEFAULT_SETTINGS, SettingsPanel, loadSettings, type Settings } from './
 import { SetupPanel } from './setup';
 import { FirstRunTips, TitleCard } from './title';
 import { Toast } from './toast';
-import { cardRank, ChronicleVoice, describeEvent, describeFolded, eventWeight, foldKey, foldWindow, seasonName, seasonOfTick, yearOfTick, type DescribeContext } from './describe';
+import { cardRank, ChronicleVoice, describeEvent, describeFolded, eventWeight, foldKey, foldWindow, sameSeasonName, sameSeasonPhrase, seasonNameAt, yearOfTick, type DescribeContext } from './describe';
 import { FeedFilter } from './feed';
 import { DecadeLines, SeasonLines } from './seasonlines';
 import { button, h, unitPx } from './dom';
@@ -378,6 +378,7 @@ export class GameUI {
     // a hint pill never shares the screen with a title card (the card owns the lower third)
     this.ui.classList.toggle('has-chapter', this.chapterCard.isOn);
     this.time.update(f.speed, f.ticksPerSec, now);
+    if (f.slots) this.pop.setSlots(f.slots);
     if (f.history.length) {
       this.pop.addHistory(f.history);
       this.addSeasonLines(f.history, f.speed);
@@ -957,12 +958,14 @@ export class GameUI {
    */
   private showCard(c: { title: string; subtitle: string; rank: number; tick: number }): void {
     const cur = this.lastTick;
-    const sameSeason = yearOfTick(c.tick) === yearOfTick(cur) && seasonName(seasonOfTick(c.tick)) === seasonName(seasonOfTick(cur));
     let subtitle: string | undefined = c.subtitle;
-    if (!sameSeason) {
+    if (!sameSeasonName(c.tick, cur)) {
       this.queued = null;
       if (c.rank < 4) return;
       subtitle = this.degrade(subtitle, c.tick, 10); // keep only the year
+    } else if (!sameSeasonPhrase(c.tick, cur)) {
+      // still the same season, but the header has moved on from "midwinter" to "late winter": name only the season, which cannot disagree
+      subtitle = this.coarsen(subtitle, c.tick);
     }
     this.chapter(c.title, this.degrade(subtitle, c.tick, this.speed < 0 ? 100 : this.speed));
     this.cardTick = c.tick;
@@ -977,8 +980,15 @@ export class GameUI {
     this.cardCheckAt = now;
     const t = this.cardTick;
     const cur = this.lastTick;
-    const same = yearOfTick(t) === yearOfTick(cur) && seasonName(seasonOfTick(t)) === seasonName(seasonOfTick(cur));
-    if (!same) this.chapterCard.setSubtitleIf(/^Year \d+, /, `Year ${yearOfTick(t)}`);
+    if (sameSeasonPhrase(t, cur)) return;
+    const coarse = sameSeasonName(t, cur);
+    this.chapterCard.setSubtitleIf(/^Year \d+, /, coarse ? `Year ${yearOfTick(t)}, ${seasonNameAt(t)}` : `Year ${yearOfTick(t)}`);
+  }
+
+  /** "Year 3, midwinter" becomes "Year 3, winter": the same moment in the coarse word the header's phrase is built from. */
+  private coarsen(subtitle: string | undefined, tick: number): string | undefined {
+    if (!subtitle || !/^Year \d+, /.test(subtitle)) return subtitle;
+    return `Year ${yearOfTick(tick)}, ${seasonNameAt(tick)}`;
   }
 
   /**

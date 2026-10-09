@@ -3,7 +3,7 @@
 import { SPECIES_COUNT, YEAR_TICKS } from '../sim/types';
 import { SPECIES, isPredator as isRegistryPredator } from '../sim/species';
 import type { StoryEntry } from '../sim/sim';
-import { ageText, countWord, plural, seasonName, seasonOfTick, seasonPhrase, singular, yearOfTick } from './describe';
+import { ageText, countWord, plural, seasonNameAt, seasonPhraseAt, singular, yearOfTick } from './describe';
 
 export interface StoryLine {
   tick: number;
@@ -43,7 +43,7 @@ const validSp = (a: number): boolean => a >= 0 && a < SPECIES_COUNT;
 
 /** "Spring, year 4": the season name and the valley year of a tick. */
 export function whenShort(tick: number): string {
-  return `${cap(seasonName(seasonOfTick(tick)))}, year ${yearOfTick(tick)}`;
+  return `${cap(seasonNameAt(tick))}, year ${yearOfTick(tick)}`;
 }
 
 interface Group {
@@ -114,8 +114,8 @@ function lineText(g: Group, who: StorySubject): string {
     }
     case 'illness': {
       if (g.recovered === undefined) return 'Fell ill.';
-      const same = seasonName(seasonOfTick(g.recovered)) === seasonName(seasonOfTick(g.first)) && yearOfTick(g.recovered) === yearOfTick(g.first);
-      return same ? 'Fell ill and recovered soon after.' : `Fell ill; recovered by ${seasonName(seasonOfTick(g.recovered))}.`;
+      const same = seasonNameAt(g.recovered) === seasonNameAt(g.first) && yearOfTick(g.recovered) === yearOfTick(g.first);
+      return same ? 'Fell ill and recovered soon after.' : `Fell ill; recovered by ${seasonNameAt(g.recovered)}.`;
     }
     case 'recovered':
       return 'Recovered from an illness.';
@@ -188,7 +188,7 @@ export function memorialText(
   children: number,
 ): string {
   const cause = causePhrase(died.a, who, entries, died.tick);
-  const when = `${seasonPhrase(seasonOfTick(died.tick))}, year ${yearOfTick(died.tick)}`;
+  const when = `${seasonPhraseAt(died.tick)}, year ${yearOfTick(died.tick)}`;
   let s = `${cause} in ${when}, at ${ageText(ageTicks, who.sp, maxAge)} old.`;
   if (children > 0) s += ` ${who.male ? 'Father' : 'Mother'} of ${countWord(children)} ${youngOf(who.sp, children)}.`;
   return s;

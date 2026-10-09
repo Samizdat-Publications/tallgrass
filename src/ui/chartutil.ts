@@ -39,3 +39,57 @@ export function roundRect(g: CanvasRenderingContext2D, x: number, y: number, w: 
   g.arcTo(x, y, x + w, y, r);
   g.closePath();
 }
+
+/**
+ * Stroke a line through points, drawing every segment that touches an "away" point (a visitor that is out of the valley for the
+ * season) as a faint dashed stretch, and the rest solid. `faint` is the opacity of the dashed part.
+ */
+export function strokeWithGaps(g: CanvasRenderingContext2D, xs: number[], ys: number[], away: boolean[], color: string, width: number, dash: [number, number], faint = 0.4): void {
+  const n = xs.length;
+  if (n < 2) return;
+  g.lineWidth = width;
+  g.strokeStyle = color;
+  g.setLineDash([]);
+  g.beginPath();
+  let pen = false;
+  for (let i = 1; i < n; i++) {
+    if (away[i - 1] || away[i]) { pen = false; continue; }
+    if (!pen) g.moveTo(xs[i - 1], ys[i - 1]);
+    g.lineTo(xs[i], ys[i]);
+    pen = true;
+  }
+  g.stroke();
+  if (!away.some(Boolean)) return;
+  g.save();
+  g.setLineDash(dash);
+  g.globalAlpha *= faint;
+  g.beginPath();
+  for (let i = 1; i < n; i++) {
+    if (!(away[i - 1] || away[i])) continue;
+    g.moveTo(xs[i - 1], ys[i - 1]);
+    g.lineTo(xs[i], ys[i]);
+  }
+  g.stroke();
+  g.restore();
+}
+
+/** Fill the area under a line down to `baseY`, but only under the stretches that are not away (an away gap has nothing under it). */
+export function fillSolidRuns(g: CanvasRenderingContext2D, xs: number[], ys: number[], away: boolean[], baseY: number, fill: string | CanvasGradient): void {
+  const n = xs.length;
+  g.fillStyle = fill;
+  let i = 0;
+  while (i < n) {
+    if (away[i]) { i++; continue; }
+    let j = i;
+    while (j + 1 < n && !away[j + 1]) j++;
+    if (j > i) {
+      g.beginPath();
+      g.moveTo(xs[i], baseY);
+      for (let k = i; k <= j; k++) g.lineTo(xs[k], ys[k]);
+      g.lineTo(xs[j], baseY);
+      g.closePath();
+      g.fill();
+    }
+    i = j + 1;
+  }
+}

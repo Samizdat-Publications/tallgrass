@@ -143,6 +143,30 @@ export function seasonOfTick(tick: number): number {
   return (((tick + calendarOffset()) % YEAR_TICKS) + YEAR_TICKS) % YEAR_TICKS / SEASON_TICKS;
 }
 
+/**
+ * The one place a tick becomes a season in words. The header (seasonPhrase of env.season), the chapter cards, the graph tips and the
+ * chronicle tags all read the calendar through these, so one moment never carries two names. They agree with the header by
+ * construction: env.season at a tick is exactly seasonOfTick(tick), and the coarse name is the phrase without its early / mid / late.
+ */
+export function seasonPhraseAt(tick: number): string {
+  return seasonPhrase(seasonOfTick(tick));
+}
+
+/** Coarse season name ("summer") at a tick: the chronicle's tag. */
+export function seasonNameAt(tick: number): string {
+  return seasonName(seasonOfTick(tick));
+}
+
+/** True when two ticks fall in the same year and read the same in the header ("midwinter" and "late winter" do not). */
+export function sameSeasonPhrase(a: number, b: number): boolean {
+  return yearOfTick(a) === yearOfTick(b) && seasonPhraseAt(a) === seasonPhraseAt(b);
+}
+
+/** True when two ticks are in the same year and the same season (the coarse name). */
+export function sameSeasonName(a: number, b: number): boolean {
+  return yearOfTick(a) === yearOfTick(b) && seasonNameAt(a) === seasonNameAt(b);
+}
+
 /** "Year 12, late summer" */
 export function whenPhrase(tick: number): string {
   return `Year ${yearOfTick(tick)}, ${seasonPhrase(seasonOfTick(tick))}`;
