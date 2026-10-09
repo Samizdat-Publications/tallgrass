@@ -424,101 +424,184 @@
   white-space: nowrap;
 }
 
-/* ---- left rail: god tools ------------------------------------------------------------------------------------ */
+/* ---- left: the tools button and its drawer ---------------------------------------------------------------------- */
+/* One quiet button under the slate. The drawer with the god tools opens from it on a click or the I key, and puts itself away
+   when a tool is used, the ground is clicked, or Esc is pressed, so nothing of it sits over the scene until it is asked for. */
 .tg-rail {
-  --tool: calc(36 * var(--u));
-  /* icon-only by default so the scene stays clear; the pills open on hover or focus, and for a few seconds at the
-     start so the labels are seen once */
-  --tool-w: var(--tool);
+  --tool: calc(34 * var(--u));
   position: absolute;
   left: var(--m);
   top: calc(var(--m) + 72 * var(--u));
-  /* stop above the population panel; when a challenge card pushes the rail down on a short screen, the tools wrap
-     into a second column instead of running under the panel */
-  bottom: calc(var(--stack) + var(--rail-h, 92 * var(--u)) + 12 * var(--u));
   display: flex;
   flex-direction: column;
-  flex-wrap: wrap;
-  align-content: flex-start;
   align-items: flex-start;
-  gap: calc(6 * var(--u));
-  /* the box reaches down to the panel: only the tools themselves take clicks, the ground behind stays clickable */
+  /* the box is only as big as the button (the drawer hangs below it): the ground around stays clickable */
   pointer-events: none;
-}
-/* The population panel's collapsed height, which the rail stops above. It does not change when the graph opens: the open panel
-   overlays the rail instead, so the rail keeps the same columns whether the graph is open or not. (--pop-h, set from the
-   measured panel, is what the toasts ride above.) */
-.tg-ui:has(.tg-pop[data-rows='2']) {
-  --pop-h: calc(146 * var(--u));
-  --rail-h: calc(146 * var(--u));
-}
-.tg-ui:has(.tg-pop[data-rows='3']) {
-  --pop-h: calc(202 * var(--u));
-  --rail-h: calc(202 * var(--u));
-}
-.tg-ui:has(.tg-pop[data-rows='4']) {
-  --pop-h: calc(258 * var(--u));
-  --rail-h: calc(258 * var(--u));
-}
-.tg-ui:has(.tg-pop.is-open) {
-  --pop-h: calc(300 * var(--u));
+  z-index: 3;
 }
 .tg-rail > * {
   pointer-events: auto;
 }
-/* a visual group of tools: it stays whole when the rail wraps into another column. Only its buttons take clicks. */
+/* The population panel's collapsed height, which the toasts ride above. (--pop-h, set from the measured panel once it is on screen,
+   is what they use; these are the starting values.) */
+.tg-ui:has(.tg-pop[data-rows='2']) {
+  --pop-h: calc(146 * var(--u));
+}
+.tg-ui:has(.tg-pop[data-rows='3']) {
+  --pop-h: calc(202 * var(--u));
+}
+.tg-ui:has(.tg-pop[data-rows='4']) {
+  --pop-h: calc(258 * var(--u));
+}
+.tg-ui:has(.tg-pop.is-open) {
+  --pop-h: calc(300 * var(--u));
+}
+.tg-tools-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(8 * var(--u));
+  height: calc(36 * var(--u));
+  padding: 0 calc(15 * var(--u)) 0 calc(12 * var(--u));
+  border-radius: 999px;
+  color: var(--paper);
+  font-weight: 500;
+  font-size: calc(14 * var(--u));
+  white-space: nowrap;
+  transition: background-color 0.18s, border-color 0.18s, color 0.18s, opacity 0.35s var(--ease);
+}
+.tg-tools-btn:hover,
+.tg-tools-btn:focus-visible,
+.tg-rail.is-open .tg-tools-btn {
+  background-color: rgba(70, 58, 38, 0.62);
+  border-color: var(--edge-hi);
+}
+.tg-tools-ic {
+  display: grid;
+  place-items: center;
+}
+.tg-tools-kbd {
+  display: none;
+  height: calc(18 * var(--u));
+  min-width: calc(18 * var(--u));
+  line-height: calc(16 * var(--u));
+  font-size: calc(11 * var(--u));
+  padding: 0 calc(5 * var(--u));
+  color: var(--paper-dim);
+}
+.tg-tools-btn:hover .tg-tools-kbd,
+.tg-tools-btn:focus-visible .tg-tools-kbd,
+.tg-rail.is-open .tg-tools-kbd {
+  display: inline-block;
+}
+/* a first session: the button says what it holds, for two minutes */
+.tg-tools-intro {
+  display: none;
+  font-size: calc(12.5 * var(--u));
+  font-weight: 400;
+  color: var(--paper-dim);
+}
+.tg-rail.is-intro:not(.is-open):not(.is-armed) .tg-tools-intro {
+  display: inline;
+}
+.tg-rail.is-intro:not(.is-open):not(.is-armed) .tg-tools-btn {
+  animation: tg-tools-nudge 2.8s var(--ease) 1.2s 2;
+}
+@keyframes tg-tools-nudge {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(217, 182, 92, 0);
+  }
+  35% {
+    box-shadow: 0 0 0 calc(5 * var(--u)) rgba(217, 182, 92, 0.22);
+  }
+}
+/* the interventions a challenge has left */
+.tg-tools-badge {
+  display: inline-grid;
+  place-items: center;
+  min-width: calc(20 * var(--u));
+  height: calc(20 * var(--u));
+  padding: 0 calc(6 * var(--u));
+  border-radius: 999px;
+  background: var(--gold);
+  color: var(--ink);
+  font-size: calc(12 * var(--u));
+  font-weight: 700;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+.tg-rail.is-spent .tg-tools-badge {
+  background: transparent;
+  color: var(--ember);
+  box-shadow: inset 0 0 0 1px var(--ember);
+}
+/* a positional tool is armed: the button says which, in gold (ember for the ones that destroy), and a click on it lets it go */
+.tg-rail.is-armed .tg-tools-btn {
+  border-color: var(--gold);
+  color: var(--gold);
+  background-color: rgba(217, 182, 92, 0.2);
+  box-shadow: 0 0 0 calc(3 * var(--u)) rgba(217, 182, 92, 0.16);
+}
+.tg-tools-btn.is-flash {
+  animation: tg-flash 0.5s var(--ease);
+}
+@keyframes tg-flash {
+  0% {
+    box-shadow: 0 0 0 0 rgba(239, 230, 208, 0.45);
+  }
+  100% {
+    box-shadow: 0 0 0 calc(12 * var(--u)) rgba(239, 230, 208, 0);
+  }
+}
+.tg-rail-drawer {
+  position: absolute;
+  left: 0;
+  top: calc(100% + 8 * var(--u));
+  width: max-content;
+  max-width: calc(100vw - 2 * var(--m));
+  max-height: calc(100vh - var(--m) - 72 * var(--u) - 56 * var(--u) - var(--m) - var(--bar-h) - 24 * var(--u));
+  overflow: auto;
+  padding: calc(12 * var(--u)) calc(14 * var(--u)) calc(10 * var(--u));
+  border-radius: calc(14 * var(--u));
+  background: rgba(26, 23, 17, 0.86);
+  -webkit-backdrop-filter: blur(calc(20 * var(--u))) saturate(1.15) brightness(var(--glass-dim));
+  backdrop-filter: blur(calc(20 * var(--u))) saturate(1.15) brightness(var(--glass-dim));
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(calc(-6 * var(--u)));
+  transition: opacity 0.18s var(--ease), transform 0.18s var(--ease), visibility 0s linear 0.18s;
+}
+.tg-rail.is-open .tg-rail-drawer {
+  opacity: 1;
+  visibility: visible;
+  transform: none;
+  transition-delay: 0s;
+}
+.tg-ui.is-cinematic .tg-rail-drawer,
+.tg-ui.is-hidden .tg-rail-drawer {
+  display: none;
+}
+.tg-rail-cols {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: calc(8 * var(--u)) calc(16 * var(--u));
+}
 .tg-rail-group {
   display: flex;
   flex-direction: column;
+  gap: calc(5 * var(--u));
   flex: none;
-  gap: calc(6 * var(--u));
-  margin-bottom: calc(10 * var(--u));
-  pointer-events: none;
+  width: calc(150 * var(--u));
 }
-.tg-rail-group > * {
-  pointer-events: auto;
-}
-/* too short for a whole group: the buttons wrap on their own, with a small gap where a group began */
-.tg-rail.is-flat .tg-rail-group {
-  display: contents;
-}
-.tg-rail.is-flat .tg-rail-group:not(:first-of-type) > :first-child {
-  margin-top: calc(10 * var(--u));
-}
-.tg-rail:hover,
-.tg-rail:focus-within,
-.tg-rail.is-intro {
-  --tool-w: calc(140 * var(--u));
-}
-@media (max-height: 700px) {
-  .tg-rail {
-    --tool: calc(32 * var(--u));
-    top: calc(var(--m) + 70 * var(--u));
-    gap: calc(5 * var(--u));
-  }
-  .tg-ui.has-challenge .tg-rail {
-    top: calc(var(--m) + 58 * var(--u) + var(--goal-h, 0px));
-  }
-}
-.tg-rail-title {
-  margin: 0 0 calc(2 * var(--u)) calc(2 * var(--u));
+.tg-rail-gtitle {
+  margin: 0 0 calc(2 * var(--u)) calc(6 * var(--u));
   font: italic 400 calc(15 * var(--u)) / 1 var(--serif);
-  color: var(--paper);
-  text-shadow: var(--shadow-text);
-  pointer-events: none;
+  color: var(--paper-dim);
 }
 .tg-toolwrap {
   position: relative;
   height: var(--tool);
-  width: var(--tool-w);
   display: flex;
-  transition: width 0.22s var(--ease);
-}
-.tg-rail:not(:hover):not(:focus-within) .tg-toolwrap {
-  transition-delay: 0.25s;
-}
-.tg-rail.is-intro .tg-toolwrap {
-  transition-delay: 0s;
 }
 .tg-tool {
   width: 100%;
@@ -528,9 +611,11 @@
   align-items: center;
   gap: calc(9 * var(--u));
   overflow: hidden;
-  padding: 0 calc(14 * var(--u)) 0 calc((var(--tool) - 22 * var(--u)) / 2 - 1px);
+  padding: 0 calc(12 * var(--u)) 0 calc(10 * var(--u));
   color: var(--paper);
   white-space: nowrap;
+  background-color: rgba(240, 228, 200, 0.06);
+  border: 1px solid var(--edge);
   transition: background-color 0.18s, border-color 0.18s, color 0.18s, transform 0.18s var(--ease), opacity 0.35s var(--ease);
 }
 .tg-tool-ic {
@@ -541,19 +626,12 @@
 }
 .tg-tool-text {
   font-weight: 500;
-  font-size: calc(13 * var(--u));
+  font-size: calc(13.5 * var(--u));
   line-height: 1;
-  opacity: 0;
-  transition: opacity 0.12s;
 }
-.tg-rail:hover .tg-tool-text,
-.tg-rail:focus-within .tg-tool-text,
-.tg-rail.is-intro .tg-tool-text {
-  opacity: 1;
-  transition: opacity 0.18s 0.1s;
-}
-.tg-tool:hover {
-  background-color: rgba(70, 58, 38, 0.62);
+.tg-tool:hover,
+.tg-tool:focus-visible {
+  background-color: rgba(70, 58, 38, 0.7);
   border-color: var(--edge-hi);
 }
 .tg-tool.is-danger {
@@ -575,7 +653,6 @@
   border-color: var(--gold);
   color: var(--gold);
   background-color: rgba(217, 182, 92, 0.2);
-  box-shadow: 0 0 0 calc(3 * var(--u)) rgba(217, 182, 92, 0.16);
 }
 .tg-toolwrap.is-armed .tg-tool .tg-tool-text {
   color: var(--gold);
@@ -584,62 +661,26 @@
   color: var(--ember);
   border-color: var(--ember);
   background-color: rgba(224, 118, 60, 0.2);
-  box-shadow: 0 0 0 calc(3 * var(--u)) rgba(224, 118, 60, 0.18);
 }
 .tg-toolwrap.is-armed .tg-tool.is-danger .tg-tool-text {
   color: var(--paper);
 }
-.tg-toolwrap.is-flash .tg-tool {
-  animation: tg-flash 0.5s var(--ease);
-}
-@keyframes tg-flash {
-  0% {
-    box-shadow: 0 0 0 0 rgba(239, 230, 208, 0.45);
-  }
-  100% {
-    box-shadow: 0 0 0 calc(12 * var(--u)) rgba(239, 230, 208, 0);
-  }
-}
-.tg-tool-label {
-  position: absolute;
-  left: calc(100% + 8 * var(--u));
-  top: 50%;
-  transform: translate(calc(-6 * var(--u)), -50%);
-  display: grid;
-  gap: 0;
-  padding: calc(5 * var(--u)) calc(12 * var(--u)) calc(6 * var(--u));
-  border-radius: calc(10 * var(--u));
-  white-space: nowrap;
-  opacity: 0;
-  visibility: hidden;
-  pointer-events: none;
-  transition: opacity 0.16s var(--ease), transform 0.16s var(--ease), visibility 0s linear 0.16s;
-  z-index: 2;
-}
-.tg-tool-name {
-  font-weight: 700;
-  font-size: calc(14 * var(--u));
-  line-height: 1.2;
-}
-.tg-tool-hint {
-  font-size: calc(12 * var(--u));
+.tg-rail-hint {
+  margin: calc(10 * var(--u)) 0 0;
+  max-width: calc(3 * 150 * var(--u) + 2 * 16 * var(--u));
+  min-height: calc(2 * 15 * var(--u));
+  font-size: calc(12.5 * var(--u));
+  line-height: 1.3;
   color: var(--paper-dim);
-  line-height: 1.25;
 }
-.tg-toolwrap:hover .tg-tool-label,
-.tg-toolwrap:focus-within .tg-tool-label,
-.tg-toolwrap.is-armed .tg-tool-label {
-  opacity: 1;
-  visibility: visible;
-  transform: translate(0, -50%);
-  transition-delay: 0s;
-}
-.tg-toolwrap.is-armed .tg-tool-hint {
-  color: var(--gold);
-}
-.tg-ui.is-cinematic .tg-tool-label,
-.tg-ui.is-hidden .tg-tool-label {
-  display: none;
+@media (max-height: 700px) {
+  .tg-rail {
+    --tool: calc(30 * var(--u));
+    top: calc(var(--m) + 70 * var(--u));
+  }
+  .tg-ui.has-challenge .tg-rail {
+    top: calc(var(--m) + 58 * var(--u) + var(--goal-h, 0px));
+  }
 }
 
 /* ---- chronicle ----------------------------------------------------------------------------------------------- */
@@ -898,37 +939,40 @@ button.tg-ent-b:hover {
 .tg-pop[data-rows='4'] .tg-cells {
   row-gap: calc(3 * var(--u));
 }
+/* The open graph docks along the bottom, above the time bar, instead of sitting over the middle of the scene. Wide and low: with
+   many species the rows run in two columns (PopGraph.drawChart), so each row keeps a readable height. The right column (the
+   chronicle) gives up the room the dock takes. */
 .tg-pop.is-open {
-  height: calc(300 * var(--u));
-  /* the open panel sits beside the tool rail, whatever number of columns the rail has (ToolRail.onCols sets --rail-cols), and the
-     rail keeps its layout while the graph is open */
-  left: calc(var(--m) + var(--rail-cols, 1) * var(--rail-col-w, 42 * var(--u)) + 6 * var(--u));
-  width: min(calc(640 * var(--u)), calc(100vw - 2 * var(--m) - var(--rail-cols, 1) * var(--rail-col-w, 42 * var(--u)) - 6 * var(--u) - var(--right-w) - 12 * var(--u)));
+  left: var(--m);
+  width: min(calc(1400 * var(--u)), calc(100vw - 2 * var(--m)));
+  height: min(calc(240 * var(--u)), 34vh);
 }
-/* the population view also carries a legend strip of species names: one row's worth more height */
+/* the evolution view stacks a hero chart over four small ones, and its tooltip lists every line: a little taller */
+.tg-pop.is-open[data-view='evo'] {
+  height: min(calc(330 * var(--u)), 44vh);
+}
+/* the population view also carries a legend strip of species names (one row, or two on a narrow screen) */
 .tg-pop.is-open[data-view='pop'] {
-  height: calc(326 * var(--u));
+  height: min(calc(270 * var(--u)), 37vh);
 }
-/* four or more species rows need a little more height to keep every row readable */
-.tg-pop.is-open[data-view='pop'][data-rows='2'],
-.tg-pop.is-open[data-view='pop'][data-rows='3'],
-.tg-pop.is-open[data-view='pop'][data-rows='4'],
-.tg-pop.is-open[data-view='pop'][data-cols='2'] {
-  height: calc(362 * var(--u));
-}
-/* five or six species: seven rows want more room still */
+/* five or more species: seven or more rows, in two columns */
 .tg-pop.is-open[data-view='pop'][data-count='5'],
-.tg-pop.is-open[data-view='pop'][data-count='6'] {
-  height: min(calc(412 * var(--u)), calc(100vh - 210 * var(--u)));
-}
-/* seven to twelve species: as tall as the screen allows */
+.tg-pop.is-open[data-view='pop'][data-count='6'],
 .tg-pop.is-open[data-view='pop'][data-count='7'],
 .tg-pop.is-open[data-view='pop'][data-count='8'],
 .tg-pop.is-open[data-view='pop'][data-count='9'],
 .tg-pop.is-open[data-view='pop'][data-count='10'],
 .tg-pop.is-open[data-view='pop'][data-count='11'],
 .tg-pop.is-open[data-view='pop'][data-count='12'] {
-  height: min(calc(486 * var(--u)), calc(100vh - 210 * var(--u)));
+  height: min(calc(324 * var(--u)), 40vh);
+}
+.tg-ui:has(.tg-pop.is-open) .tg-right {
+  bottom: calc(var(--stack) + var(--pop-h, calc(300 * var(--u))) + 10 * var(--u));
+}
+@media (max-width: 899px) {
+  .tg-pop.is-open {
+    width: calc(100vw - 2 * var(--m));
+  }
 }
 .tg-pop-head {
   display: flex;
@@ -1182,6 +1226,19 @@ button.tg-ent-b:hover {
   font: italic 400 calc(15 * var(--u)) / 1.1 var(--serif);
   margin-bottom: calc(5 * var(--u));
 }
+/* a long list (many species) runs in two columns under the date */
+.tg-tip.is-cols {
+  min-width: calc(330 * var(--u));
+  max-width: calc(380 * var(--u));
+}
+.tg-tip-cols {
+  column-count: 2;
+  column-gap: calc(18 * var(--u));
+}
+.tg-tip-cols .tg-tip-r {
+  break-inside: avoid;
+  line-height: 1.4;
+}
 .tg-tip-r {
   display: flex;
   align-items: center;
@@ -1228,6 +1285,22 @@ button.tg-ent-b:hover {
 .tg-insp.is-open {
   opacity: 1;
   transform: none;
+}
+/* a pick whose detail is still on its way: the name and a short note, so the card never lags the selection ring */
+.tg-insp-pending {
+  display: none;
+  font-size: calc(13 * var(--u));
+  color: var(--paper-dim);
+  font-style: italic;
+}
+.tg-insp.is-pending .tg-insp-pending {
+  display: block;
+}
+.tg-insp.is-pending .tg-live,
+.tg-insp.is-pending .tg-story,
+.tg-insp.is-pending .tg-insp-family,
+.tg-insp.is-pending .tg-insp-lineage {
+  display: none;
 }
 .tg-insp-head {
   display: grid;
@@ -1660,31 +1733,23 @@ button.tg-ent-b:hover {
   top: calc(var(--m) + 58 * var(--u) + var(--goal-h, 0px));
 }
 .tg-rail-note {
-  position: absolute;
-  left: calc(var(--tool-w) + 10 * var(--u));
-  top: calc(var(--tool) / 2 - 15 * var(--u));
-  margin: 0;
+  margin: calc(10 * var(--u)) 0 0;
   padding: calc(6 * var(--u)) calc(12 * var(--u));
   border-radius: 999px;
   font-size: calc(12.5 * var(--u));
   font-weight: 700;
   color: var(--ember);
-  background: var(--smoke);
   border: 1px solid rgba(224, 118, 60, 0.45);
   white-space: nowrap;
   text-align: center;
-  pointer-events: auto;
 }
 .tg-rail.is-disabled .tg-tool {
   opacity: 0.4;
   cursor: not-allowed;
 }
 .tg-rail.is-disabled .tg-tool:hover {
-  background-color: var(--smoke);
+  background-color: rgba(240, 228, 200, 0.06);
   border-color: var(--edge);
-}
-.tg-rail.is-disabled .tg-tool-label {
-  display: none;
 }
 .tg-sc-meta {
   font-size: calc(12 * var(--u));
@@ -1765,17 +1830,28 @@ button.tg-ent-b:hover {
   display: none;
 }
 
-/* ---- idle: the side panels settle to three quarters (enough backing to stay readable over trees) after a while with no input, and come back on any move or key ----- */
-.tg-ui.is-idle:not(.is-cinematic):not(.is-hidden) .tg-tool,
-.tg-ui.is-idle:not(.is-cinematic):not(.is-hidden) .tg-rail-title {
-  opacity: 0.75;
-  transition: opacity 1.2s var(--ease);
+/* ---- idle: after about eight seconds with no pointer or key input the chrome fades to a faint, low-opacity outline, so a second monitor
+   shows the valley and not a dashboard; any move or key brings it back at once (GameUI.updateDim decides when) ----- */
+.tg-ui.is-idle:not(.is-cinematic):not(.is-hidden) .tg-pop,
+.tg-ui.is-idle:not(.is-cinematic):not(.is-hidden) .tg-chron {
+  opacity: 0.3;
+  transition: opacity 1.4s var(--ease);
 }
-/* the reading panels dim less when idle, so their text stays legible */
-.tg-ui.is-idle:not(.is-cinematic):not(.is-hidden) .tg-chron,
-.tg-ui.is-idle:not(.is-cinematic):not(.is-hidden) .tg-pop {
-  opacity: 0.9;
-  transition: opacity 1.2s var(--ease);
+.tg-ui.is-idle:not(.is-cinematic):not(.is-hidden) .tg-time,
+.tg-ui.is-idle:not(.is-cinematic):not(.is-hidden) .tg-ov-btn,
+.tg-ui.is-idle:not(.is-cinematic):not(.is-hidden) .tg-shutter,
+.tg-ui.is-idle:not(.is-cinematic):not(.is-hidden) .tg-topright-row .tg-leaf {
+  opacity: 0.34;
+  transition: opacity 1.4s var(--ease);
+}
+.tg-ui.is-idle:not(.is-cinematic):not(.is-hidden) .tg-tools-btn {
+  opacity: 0.42;
+  transition: opacity 1.4s var(--ease);
+}
+/* a first session's introduced button, and an armed tool, stay at full strength */
+.tg-ui.is-idle:not(.is-cinematic):not(.is-hidden) .tg-rail.is-intro .tg-tools-btn,
+.tg-ui.is-idle:not(.is-cinematic):not(.is-hidden) .tg-rail.is-armed .tg-tools-btn {
+  opacity: 1;
 }
 
 /* ---- the documentary camera chip, beside the time controls while the camera drives itself ---------------------- */
@@ -2230,6 +2306,25 @@ button.tg-ent-b:hover {
 .tg-tspeed {
   min-width: calc(50 * var(--u));
 }
+/* a speed the machine cannot reach says so on the button itself: "100x" over "at 15x" */
+.tg-tspeed.is-lag {
+  flex-direction: column;
+  gap: calc(1 * var(--u));
+  min-width: calc(62 * var(--u));
+}
+.tg-tspeed.is-lag .tg-tspeed-main {
+  line-height: 1;
+}
+.tg-tspeed-sub {
+  display: none;
+  font-size: calc(10.5 * var(--u));
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0.01em;
+}
+.tg-tspeed.is-lag .tg-tspeed-sub {
+  display: block;
+}
 .tg-tnext {
   font-weight: 500;
   font-size: calc(14 * var(--u));
@@ -2485,22 +2580,13 @@ button.tg-ent-b:hover {
   }
 }
 @media (max-width: 899px) {
-  /* narrow: the rail falls back to round icon buttons, with the name in the slide-out */
-  .tg-rail {
-    grid-template-columns: var(--tool);
+  /* narrow: the tools button keeps only its icon, and the drawer's columns stack */
+  .tg-tools-text,
+  .tg-tools-intro {
+    display: none !important;
   }
-  .tg-tool {
-    justify-content: center;
-    padding: 0;
-    border-radius: 50%;
-  }
-  .tg-tool-text {
-    display: none;
-  }
-}
-@media (max-width: 899px) and (max-height: 700px) {
-  .tg-tool-label {
-    display: none;
+  .tg-tools-btn {
+    padding: 0 calc(11 * var(--u));
   }
 }
 @media (prefers-reduced-motion: reduce) {

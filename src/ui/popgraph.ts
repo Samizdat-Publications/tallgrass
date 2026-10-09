@@ -601,28 +601,50 @@ export class PopGraph {
       return;
     }
     const species = this.visible.filter((sp) => this.on[sp]);
+    // Many species: the rows run in two columns (the grass row closes the second), so each row keeps a readable height on the
+    // wide, low dock. Both columns share the time axis and the pointer's crosshair.
+    const twoCols = w >= 720 * u && species.length + 1 >= 6;
+    const gapX = 22 * u;
+    const cw = twoCols ? (w - gapX) / 2 : w;
+    const split = twoCols ? Math.ceil((species.length + 1) / 2) : species.length;
+    const groups = twoCols ? [species.slice(0, split), species.slice(split)] : [species];
     // the event marker nearest the pointer (within a generous reach), so a diamond can be read without aiming at it
-    const P = this.plotRect(w, ht);
+    const P = this.plotRect(cw, ht);
     const t0 = this.ticks[0];
     const t1 = Math.max(this.ticks[n - 1], t0 + YEAR_TICKS * 0.5);
+    const hc = twoCols && hoverX >= cw + gapX ? 1 : 0;
+    const localX = hoverX >= 0 ? hoverX - hc * (cw + gapX) : -1;
+    const inPlot = localX >= P.l && localX <= P.r;
+    const frac = inPlot ? (localX - P.l) / (P.r - P.l) : -1;
     let hit = -1;
     let hitD = 12 * u;
-    if (hoverX >= P.l && hoverX <= P.r) {
+    if (inPlot) {
       this.markers.forEach((m, i) => {
         if (m.tick < t0 || m.tick > t1) return;
-        const d = Math.abs(P.l + ((m.tick - t0) / (t1 - t0)) * (P.r - P.l) - hoverX);
+        const d = Math.abs(P.l + ((m.tick - t0) / (t1 - t0)) * (P.r - P.l) - localX);
         if (d < hitD) { hitD = d; hit = i; }
       });
     }
-    const idx = drawRows(
-      g, w, ht, u,
-      { ticks: this.ticks, pops: this.pops, species, grass: this.grass, grassMax: this.grassMax, markers: this.markers, log: this.log },
-      hoverX,
-      hit,
-    );
+    let idx = -1;
+    groups.forEach((group, c) => {
+      g.save();
+      g.translate(c * (cw + gapX), 0);
+      g.beginPath();
+      g.rect(0, 0, cw, ht);
+      g.clip();
+      const lx = c === hc ? localX : frac >= 0 ? P.l + frac * (P.r - P.l) : -1;
+      const got = drawRows(
+        g, cw, ht, u,
+        { ticks: this.ticks, pops: this.pops, species: group, grass: this.grass, grassMax: this.grassMax, markers: this.markers, log: this.log, grassRow: twoCols ? c === 1 : true },
+        lx,
+        c === hc ? hit : -1,
+      );
+      if (c === hc) idx = got;
+      g.restore();
+    });
     this.chart.style.cursor = hit >= 0 ? 'pointer' : 'crosshair';
     if (idx >= 0) {
-      this.showTip(idx, P.l + ((this.ticks[idx] - t0) / (t1 - t0)) * (P.r - P.l), w, hit >= 0 ? this.markers[hit] : null);
+      this.showTip(idx, hc * (cw + gapX) + P.l + ((this.ticks[idx] - t0) / (t1 - t0)) * (P.r - P.l), w, hit >= 0 ? this.markers[hit] : null);
     } else {
       this.tip.classList.remove('is-on');
     }
@@ -643,12 +665,16 @@ export class PopGraph {
       rows.length = 0;
       rows.push(h('div', { class: 'tg-tip-h', text: `Year ${yearOfTick(event.tick)}, ${seasonPhrase(seasonOfTick(event.tick))}` }), h('div', { class: 'tg-tip-ev is-solo', text: event.sentence }));
     }
-    this.tip.replaceChildren(...rows);
+    // a long list (many species) runs in two columns under the date, so it fits the low dock
+    const cols = !event && rows.length > 8;
+    if (cols) this.tip.replaceChildren(rows[0], h('div', { class: 'tg-tip-cols' }, ...rows.slice(1)));
+    else this.tip.replaceChildren(...rows);
+    this.tip.classList.toggle('is-cols', cols);
     this.tip.classList.add('is-on');
     const tw = this.tip.offsetWidth;
     const left = x + 14 * this.unit + tw > w ? x - 14 * this.unit - tw : x + 14 * this.unit;
     this.tip.style.left = `${Math.max(0, left)}px`;
-    this.tip.style.top = `${10 * this.unit}px`;
+    this.tip.style.top = `${6 * this.unit}px`;
   }
 
   private onHover(e: PointerEvent | null): void {

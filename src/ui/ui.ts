@@ -43,7 +43,7 @@ import { PopGraph, type Marker } from './popgraph';
 import { Slate } from './slate';
 import { applySpeciesVars } from './palette';
 import { TimeBar } from './timebar';
-import { ToolRail } from './tools';
+import { ToolRail, TOOLS_KEY } from './tools';
 import type { ToolId, UIActions, UIFrame } from './types';
 
 export { describeEvent } from './describe';
@@ -60,8 +60,8 @@ const MARK_KINDS = new Set(['drought', 'droughtEnd', 'outbreak', 'stampede', 'ex
 /** A quiet hint about H and C appears once after this long with no input (a second monitor, a lazy afternoon). */
 const HINT_IDLE_MS = 60000;
 const HINT_KEY = 'tallgrass.hint.v1';
-/** The side panels (tools, chronicle, population) dim to about half after this long with no input; any input restores them. */
-const DIM_IDLE_MS = 20000;
+/** The chrome (tools button, chronicle, population, time bar) fades to a faint outline after this long with no pointer or key input; any input restores it. */
+const DIM_IDLE_MS = 8000;
 /** Packs that lasted fewer ticks than this are left out of the chronicle altogether. */
 const FLASH_PACK_TICKS = 300;
 /** Events older than this many ticks when they arrive (a backgrounded tab, a bulk fill) never earn a card. */
@@ -168,10 +168,6 @@ export class GameUI {
 
   constructor(root: HTMLElement, private actions: UIActions) {
     this.tools = new ToolRail(actions);
-    this.tools.onCols = (n, wide) => {
-      this.ui.style.setProperty('--rail-cols', String(n));
-      this.ui.style.setProperty('--rail-col-w', wide ? 'calc(146 * var(--u))' : 'calc(42 * var(--u))');
-    };
     this.time = new TimeBar(actions);
     this.chron = new Chronicle((x, y) => actions.flyTo(x, y));
     this.family = new FamilyPanel(actions);
@@ -376,7 +372,7 @@ export class GameUI {
     if (f.history.length || f.events.length) this.addDecadeLines(f.history, f.events);
     if (f.events.length) this.handleEvents(f.events, now, f.tick, f.pop);
     this.pop.update(now, f.pop, f.speed);
-    this.inspector.update(f.selected, f.following, f.story, f.storyId);
+    this.inspector.update(f.selected, f.following, f.story, f.storyId, f.selecting ?? null);
     if (f.selected) this.family.noteDetail(f.selected);
     this.family.frame(f.tick, f.selected ? f.selected.id : null);
     this.lastYear = f.env.year + 1;
@@ -688,6 +684,8 @@ export class GameUI {
 
   private syncToolLock(): void {
     this.tools.setDisabled(!!this.run && this.run.exhausted, 'No interventions left');
+    const max = this.run ? this.run.challenge.maxTools : null;
+    this.tools.setBudget(this.run && max !== null ? Math.max(0, max - this.run.toolsUsed) : null);
   }
 
   private syncGoalHeight(): void {
@@ -697,13 +695,14 @@ export class GameUI {
   }
 
   /**
-   * A second monitor does not need the side panels at full strength: after a while with no input the tools, chronicle
-   * and population strip settle to about half. Never while a challenge is running or something is open that is being
-   * read (the menu, the notebook, the expanded graph, an inspected animal), and the ambient and cinematic views already
-   * handle themselves.
+   * A second monitor does not need a dashboard: after about eight seconds with no pointer or key input the tools button,
+   * chronicle, population strip and time bar fade to a faint, low-opacity outline, and any move or key brings them back.
+   * Never while something is open that is being used or read (the tools drawer or an armed tool, the menu, the notebook,
+   * the expanded graph), and the ambient and cinematic views already handle themselves. The challenge card stays at full
+   * strength, and so does a challenge's own tool use (an armed tool keeps its button lit).
    */
   private updateDim(now: number): void {
-    const busy = (!!this.run && !this.run.finished) || this.top.isOpen || this.time.isMenuOpen || this.notesPanel.isOpen || this.paneOpen || this.titleOpen || this.pop.isExpanded || this.result.isOpen;
+    const busy = this.tools.isOpen || this.top.isOpen || this.time.isMenuOpen || this.notesPanel.isOpen || this.paneOpen || this.titleOpen || this.pop.isExpanded || this.result.isOpen || this.photo.isOpen;
     const want = !busy && !this.hidden && !this.cinematic && now - this.lastInput > this.dimAfter;
     if (want !== this.dimmed) this.setDimmed(want);
   }
@@ -817,6 +816,7 @@ export class GameUI {
     this.title?.destroy();
     this.tips.destroy();
     this.chron.destroy();
+    this.tools.destroy();
     this.time.destroy();
     this.top.destroy();
     this.pop.destroy();
@@ -989,10 +989,11 @@ export class GameUI {
       this.panelRectsAt = now;
       this.panelRects = [];
       const pad = 10 * this.unitPx();
-      for (const sel of ['.tg-rail', '.tg-chron', '.tg-insp', '.tg-goal', '.tg-topright-row', '.tg-map-legend', '.tg-pop']) {
+      for (const sel of ['.tg-tools-btn', '.tg-rail-drawer', '.tg-chron', '.tg-insp', '.tg-goal', '.tg-topright-row', '.tg-map-legend', '.tg-pop']) {
         const el = this.ui.querySelector<HTMLElement>(sel);
         if (!el || el.hidden) continue;
         if (sel === '.tg-insp' && !el.classList.contains('is-open')) continue;
+        if (sel === '.tg-rail-drawer' && !this.tools.isOpen) continue;
         const r = el.getBoundingClientRect();
         if (r.width < 2 || r.height < 2) continue;
         this.panelRects.push({ l: r.left - pad, t: r.top - pad, r: r.right + pad, b: r.bottom + pad });
@@ -1098,6 +1099,9 @@ export class GameUI {
       case 'c':
         if (!e.repeat) this.setCinematic(!this.cinematic);
         break;
+      case TOOLS_KEY:
+        if (!e.repeat) this.tools.toggle();
+        break;
       case 'g':
         if (!e.repeat) this.pop.toggleExpanded();
         break;
@@ -1140,6 +1144,8 @@ export class GameUI {
       this.top.close();
     } else if (this.time.isMenuOpen) {
       this.time.closeMenu();
+    } else if (this.tools.isOpen) {
+      this.tools.close();
     } else if (this.tools.armedTool) {
       this.tools.setArmed(null);
       this.actions.armTool(null);

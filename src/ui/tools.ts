@@ -1,30 +1,38 @@
-// Left rail: the god tools. Round icon buttons, labels slide out on hover or focus.
+// Top left, under the slate: one quiet "Tools" button. It opens a drawer with the god tools, labelled, in three groups; the drawer
+// closes again when a tool is used, when the ground is clicked, on Esc, or on the shortcut (I). Nothing of it sits over the scene
+// until it is asked for. A challenge keeps the button (with the interventions left on it), and the drawer greys out when none are.
 import { Sp } from '../sim/types';
-import { button, h } from './dom';
+import { button, h, setText } from './dom';
 import { icon } from './icons';
 import { POSITIONAL_TOOLS, type ToolId, type UIActions } from './types';
 
 interface ToolDef {
   id: ToolId;
-  /** The short word that sits in the rail beside the icon. */
+  /** The short word that sits in the drawer beside the icon. */
   short: string;
-  /** The fuller name shown in the slide-out. */
+  /** The fuller name (the button's accessible name). */
   label: string;
   /** Species the tool is about: tints its icon so the animal tools are told apart at a glance. */
   species?: number;
   hint: string;
   armedHint: string;
   danger?: boolean;
-  /** Visual group: a small gap separates groups. */
+  /** Visual group: the drawer has one column per group. */
   group: number;
 }
 
-/** How long the rail shows its labels when a session opens: two minutes, long enough to learn what each icon does. */
+/** The three columns of the drawer. */
+const GROUP_NAMES = ['Weather', 'Disasters', 'Wildlife and land'];
+
+/** How long a first session's Tools button carries a line saying what it holds: two minutes, long enough to find it. */
 const INTRO_MS = 120000;
 
 const RAIL_SEEN_KEY = 'tallgrass.rail.seen.v1';
 
-/** Has this browser already had its first session with the labelled rail? Marks it seen as a side effect (the first call returns false). */
+/** The shortcut that opens and closes the drawer. */
+export const TOOLS_KEY = 'i';
+
+/** Has this browser already had its first session with the introduced Tools button? Marks it seen as a side effect (the first call returns false). */
 function railSeen(): boolean {
   try {
     if (window.localStorage.getItem(RAIL_SEEN_KEY) === '1') return true;
@@ -52,88 +60,134 @@ export const TOOL_DEFS: ToolDef[] = [
   { id: 'removeWolves', short: 'Remove wolves', species: Sp.Wolf, label: 'Remove the wolves', hint: 'Every wolf leaves the valley', armedHint: '', group: 2 },
 ];
 
+const DEFAULT_HINT = 'Pick a tool. Fire, lightning, wolves, bison, prairie dogs and groves then ask for a click on the ground.';
+
 export class ToolRail {
   readonly el: HTMLElement;
   private armed: ToolId | null = null;
   private wraps = new Map<ToolId, { wrap: HTMLElement; btn: HTMLButtonElement; hint: HTMLElement }>();
   private note: HTMLElement;
-  private groups: HTMLElement[] = [];
-  private lastRoom = -1;
-  private lastCols = -1;
+  private toggleBtn: HTMLButtonElement;
+  private toggleText: HTMLElement;
+  private badge: HTMLElement;
+  private drawer: HTMLElement;
+  private hintLine: HTMLElement;
+  private isOpenNow = false;
   private disabled = false;
-  /** Told how many columns the rail currently has, and whether its labels are showing (the opening intro), so the open graph can sit beside it instead of over it. */
-  onCols?: (n: number, wide: boolean) => void;
+  private onDocDown: (e: PointerEvent) => void;
+  /** Told when the drawer opens or closes (the UI keeps the idle fade off while it is open). */
+  onOpenChange?: (open: boolean) => void;
 
   constructor(private actions: UIActions) {
-    this.el = h('nav', { class: 'tg-rail', 'aria-label': 'God tools', role: 'toolbar' });
-    this.note = h('p', { class: 'tg-rail-note', role: 'status', hidden: true });
-    this.el.append(h('p', { class: 'tg-rail-title tg-leaf', text: 'Tools' }), this.note);
-    // open with labels for the first session only, so the labels are seen once; every later visit starts as plain icons
-    // (a calmer frame, more landscape). Storage may be blocked: then the intro just shows each time, as before.
+    this.el = h('nav', { class: 'tg-rail', 'aria-label': 'God tools' });
+    // a first session's button carries a line saying what it holds; every later visit starts as the plain button
+    // (a calmer frame, more landscape). Storage may be blocked: then the line just shows each time, as before.
     if (!railSeen()) {
       this.el.classList.add('is-intro');
       window.setTimeout(() => this.el.classList.remove('is-intro'), INTRO_MS);
     }
-    // each visual group sits in its own box: when the rail wraps into more columns the groups stay whole
+
+    this.toggleText = h('span', { class: 'tg-tools-text', text: 'Tools' });
+    this.badge = h('span', { class: 'tg-tools-badge', hidden: true, 'aria-hidden': 'true' });
+    this.toggleBtn = button(
+      {
+        class: 'tg-tools-btn tg-glass tg-leaf',
+        'aria-haspopup': 'true',
+        'aria-expanded': 'false',
+        'aria-controls': 'tg-tools-drawer',
+        title: `Tools: weather, disasters and wildlife (${TOOLS_KEY.toUpperCase()})`,
+        onclick: () => this.onToggle(),
+      },
+      h('span', { class: 'tg-tools-ic', html: icon('wand', 18) }),
+      this.toggleText,
+      this.badge,
+      h('kbd', { class: 'tg-kbd tg-tools-kbd', text: TOOLS_KEY.toUpperCase() }),
+      h('span', { class: 'tg-tools-intro', text: 'rain, fire, wolves and more' }),
+    );
+
+    this.note = h('p', { class: 'tg-rail-note', role: 'status', hidden: true });
+    this.hintLine = h('p', { class: 'tg-rail-hint', text: DEFAULT_HINT });
+    const cols = h('div', { class: 'tg-rail-cols' });
     let lastGroup = -1;
     let groupEl: HTMLElement | null = null;
     for (const t of TOOL_DEFS) {
       if (t.group !== lastGroup || !groupEl) {
-        groupEl = h('div', { class: 'tg-rail-group' });
-        this.groups.push(groupEl);
-        this.el.append(groupEl);
+        groupEl = h('div', { class: 'tg-rail-group', role: 'group', 'aria-label': GROUP_NAMES[t.group] ?? 'Tools' }, h('p', { class: 'tg-rail-gtitle tg-leaf', text: GROUP_NAMES[t.group] ?? '' }));
+        cols.append(groupEl);
         lastGroup = t.group;
       }
       const btn = button(
         {
-          class: `tg-tool tg-glass tg-leaf${t.danger ? ' is-danger' : ''}${t.species !== undefined ? ' is-species' : ''}`,
+          class: `tg-tool${t.danger ? ' is-danger' : ''}${t.species !== undefined ? ' is-species' : ''}`,
           style: t.species !== undefined ? `--tc:var(--sp-${t.species})` : undefined,
           'aria-label': t.label,
           'aria-pressed': POSITIONAL_TOOLS.has(t.id) ? 'false' : undefined,
+          title: `${t.label}. ${t.hint}`,
           dataset: { tool: t.id },
           onclick: () => this.press(t),
         },
         h('span', { class: 'tg-tool-ic', html: icon(t.id, 20) }),
         h('span', { class: 'tg-tool-text', text: t.short }),
       );
-      const hint = h('span', { class: 'tg-tool-hint', text: t.hint });
-      const label = h('span', { class: 'tg-tool-label tg-glass' }, h('span', { class: 'tg-tool-name', text: t.label }), hint);
-      const wrap = h('div', { class: 'tg-toolwrap' }, btn, label);
+      const hint = h('span', { class: 'tg-tool-hint tg-sr', text: t.hint });
+      const wrap = h('div', { class: 'tg-toolwrap' }, btn, hint);
+      const say = () => { this.hintLine.textContent = `${t.label}. ${this.armed === t.id && t.armedHint ? t.armedHint : t.hint}`; };
+      btn.addEventListener('pointerenter', say);
+      btn.addEventListener('focus', say);
+      btn.addEventListener('pointerleave', () => { this.hintLine.textContent = DEFAULT_HINT; });
+      btn.addEventListener('blur', () => { this.hintLine.textContent = DEFAULT_HINT; });
       groupEl.append(wrap);
       this.wraps.set(t.id, { wrap, btn, hint });
     }
-    // When even the tallest group is taller than the room the rail has (a short window under a challenge card), drop the
-    // groups and let the plain buttons wrap column by column instead, so none runs under the population panel.
-    // The room the rail has changes with the window, the challenge card and the population panel, so look again when the window
-    // resizes and twice a second (cheap: nothing is measured again unless the height changed). A ResizeObserver on the rail would
-    // fire inside the observers that move the card and the panel, and the browser would report a loop.
-    window.addEventListener('resize', () => { this.fit(true); this.syncCols(); });
-    window.setInterval(() => { this.fit(false); this.syncCols(); }, 500);
-    window.requestAnimationFrame(() => { this.fit(true); this.syncCols(); });
+    this.drawer = h('div', { class: 'tg-rail-drawer tg-glass', id: 'tg-tools-drawer', role: 'toolbar', 'aria-label': 'God tools' }, cols, this.note, this.hintLine);
+    this.el.append(this.toggleBtn, this.drawer);
+    this.onDocDown = (e) => {
+      if (this.isOpenNow && !this.el.contains(e.target as Node)) this.close();
+    };
+    document.addEventListener('pointerdown', this.onDocDown);
   }
 
-  /** How many columns the buttons sit in right now (one for a tall window, more when the rail wraps). */
-  private syncCols(): void {
-    const lefts = new Set<number>();
-    for (const w of this.wraps.values()) lefts.add(w.wrap.offsetLeft);
-    const n = Math.max(1, lefts.size);
-    const wide = this.el.classList.contains('is-intro');
-    const key = n * 2 + (wide ? 1 : 0);
-    if (key === this.lastCols) return;
-    this.lastCols = key;
-    this.onCols?.(n, wide);
+  destroy(): void {
+    document.removeEventListener('pointerdown', this.onDocDown);
   }
 
-  private fit(force: boolean): void {
-    const el = this.el;
-    const room = el.clientHeight;
-    if (room < 40 || (room === this.lastRoom && !force)) return;
-    this.lastRoom = room;
-    el.classList.remove('is-flat');
-    const title = el.querySelector<HTMLElement>('.tg-rail-title');
-    let need = 0;
-    this.groups.forEach((g, i) => { need = Math.max(need, g.offsetHeight + (i === 0 && title ? title.offsetHeight + 8 : 0)); });
-    el.classList.toggle('is-flat', need > room);
+  // ---- the drawer --------------------------------------------------------------------------------------------
+
+  get isOpen(): boolean {
+    return this.isOpenNow;
+  }
+
+  open(): void {
+    if (this.isOpenNow) return;
+    this.isOpenNow = true;
+    this.el.classList.add('is-open');
+    this.toggleBtn.setAttribute('aria-expanded', 'true');
+    this.onOpenChange?.(true);
+  }
+
+  close(): void {
+    if (!this.isOpenNow) return;
+    this.isOpenNow = false;
+    this.el.classList.remove('is-open');
+    this.toggleBtn.setAttribute('aria-expanded', 'false');
+    this.hintLine.textContent = DEFAULT_HINT;
+    this.onOpenChange?.(false);
+  }
+
+  /** The shortcut: open the drawer, or put it away. */
+  toggle(): void {
+    if (this.isOpenNow) this.close();
+    else this.open();
+  }
+
+  private onToggle(): void {
+    // while a positional tool is armed the button says so, and a click on it lets the tool go
+    if (this.armed) {
+      this.setArmed(null);
+      this.actions.armTool(null);
+      return;
+    }
+    this.toggle();
   }
 
   private press(t: ToolDef): void {
@@ -145,6 +199,8 @@ export class ToolRail {
       this.actions.applyTool(t.id);
       this.flash(t.id);
     }
+    // the drawer gets out of the way: a positional tool needs the ground, an instant one is done
+    this.close();
   }
 
   /** Visual state only: main calls this when it arms or disarms on its own. */
@@ -157,6 +213,10 @@ export class ToolRail {
       const def = TOOL_DEFS.find((d) => d.id === id);
       if (def) w.hint.textContent = on && def.armedHint ? def.armedHint : def.hint;
     }
+    const def = tool ? TOOL_DEFS.find((d) => d.id === tool) : null;
+    this.el.classList.toggle('is-armed', !!def);
+    setText(this.toggleText, def ? `${def.short}: click the ground` : 'Tools');
+    this.toggleBtn.title = def ? `${def.label}. Click the ground to place it, or click here or press Esc to let it go.` : `Tools: weather, disasters and wildlife (${TOOLS_KEY.toUpperCase()})`;
   }
 
   /** Lock the whole rail (a challenge has spent its interventions) and say why in a short note. */
@@ -173,16 +233,24 @@ export class ToolRail {
     if (on && this.armed) this.setArmed(null);
   }
 
+  /** The interventions a challenge still allows, shown on the button (null: no limit, nothing shown). */
+  setBudget(left: number | null): void {
+    this.badge.hidden = left === null;
+    if (left !== null) setText(this.badge, String(left));
+    this.el.classList.toggle('has-budget', left !== null);
+    this.el.classList.toggle('is-spent', left === 0);
+    this.toggleBtn.setAttribute('aria-label', left === null ? 'Tools' : `Tools, ${left} ${left === 1 ? 'intervention' : 'interventions'} left`);
+  }
+
   get armedTool(): ToolId | null {
     return this.armed;
   }
 
-  /** A short confirming pulse on an instant tool. */
+  /** A short confirming pulse on the button after an instant tool (the drawer has already closed). */
   private flash(id: ToolId): void {
-    const w = this.wraps.get(id);
-    if (!w) return;
-    w.wrap.classList.remove('is-flash');
-    void w.wrap.offsetWidth;
-    w.wrap.classList.add('is-flash');
+    void id;
+    this.toggleBtn.classList.remove('is-flash');
+    void this.toggleBtn.offsetWidth;
+    this.toggleBtn.classList.add('is-flash');
   }
 }

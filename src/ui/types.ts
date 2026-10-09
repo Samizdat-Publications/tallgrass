@@ -54,6 +54,8 @@ export interface UIFrame {
   /** New events since the last frame. */
   events: SimEvent[];
   selected: AnimalDetail | null;
+  /** Species of an animal that has just been picked but whose detail the worker has not sent yet (null otherwise): the inspector opens on it at once. */
+  selecting?: number | null;
   /** -1 while skipping to the next event. */
   speed: number;
   ticksPerSec: number;
