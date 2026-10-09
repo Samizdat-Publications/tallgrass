@@ -1200,6 +1200,22 @@ button.tg-ent-b:hover {
 .tg-cell.is-gone {
   opacity: 0.55;
 }
+/* a visitor (eagle, hawk) out of the valley for its season: not greyed like a species that is gone, and its count reads as a quiet note */
+.tg-cell.is-away .tg-cell-top {
+  flex-wrap: wrap;
+  row-gap: 0;
+}
+.tg-cell.is-away .tg-cell-n {
+  /* its own line under the name, in the space the sparkline gives up: "away for the winter" does not fit beside "Red-tailed hawk" */
+  flex: 1 0 100%;
+  padding-left: calc(12 * var(--u));
+  font: italic 400 calc(12.5 * var(--u)) / 1.1 var(--serif);
+  color: var(--paper-dim);
+  white-space: nowrap;
+}
+.tg-cell.is-away .tg-spark {
+  height: calc(17 * var(--u));
+}
 /* 10x and 100x: the panel eases (see PopGraph.update). The numbers change a few times a second, so they sit a little quieter
    than at 1x, and at 100x the whole strip reads as a time-lapse. */
 .tg-pop.is-fast .tg-cell-n {
@@ -1303,6 +1319,10 @@ button.tg-ent-b:hover {
 .tg-tip-r b {
   font-weight: 700;
   font-variant-numeric: lining-nums tabular-nums;
+}
+.tg-tip-r b.is-away {
+  font: italic 400 calc(13 * var(--u)) / 1 var(--serif);
+  color: var(--paper-dim);
 }
 .tg-tip-r.is-grass .tg-dot {
   background: var(--sage);

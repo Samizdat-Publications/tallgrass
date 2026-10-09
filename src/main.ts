@@ -11,6 +11,7 @@ import { SmallPreyOverlay } from './render/smalloverlay';
 import { GameUI, type OverlayId, type ToolId } from './ui/ui';
 import { loadSettings, type QualityPreset, type Settings } from './ui/settings';
 import { titleWanted } from './ui/title';
+import { expectedSpecies } from './ui/slots';
 import { decodeShare, shareUrl, type DecodedShare, type LoggedIntervention } from './sim/sharecode';
 import { packName, type SkyView } from './ui/describe';
 import { generateWorld } from './sim/world';
@@ -273,9 +274,12 @@ const simParams: Record<string, number> = shared ? { ...shared.state.params } : 
 try { setCalendarScale(applyOverrides(defaultParams(), simParams).calendarScale); } catch { /* unknown dev param: the worker reports it */ }
 // small-prey web (R3): prairie dog towns and jackrabbits, drawn only when the sim sends the small-prey fields (smallPrey param on)
 let smallCaps = { hareK: 3, dogK: 4 };
+// the species this valley can show, so the population panel gives each a fixed card from the first frame (undefined: cards appear as species do)
+let popSlots: number[] | undefined;
 try {
   const rp = applyOverrides(defaultParams(), simParams);
   smallCaps = { hareK: rp.hareK, dogK: rp.dogK };
+  popSlots = expectedSpecies(rp);
 } catch { /* unknown dev param: the worker reports it */ }
 const smallprey = new SmallPreyLayer(renderWorld, { ...smallCaps, shared: engine.uniforms });
 // where a dog yips or an alarm wave starts: the audio places it in the world
@@ -787,7 +791,7 @@ engine.onFrame((dt, t) => {
       selected: pending.selected && pending.selected.id === selectedAnimal ? pending.selected : null,
       selecting: selectedAnimal !== null && pending.selected?.id !== selectedAnimal && !pending.selectedGone ? animals.getSpecies(selectedAnimal) : null,
       speed: pending.speed, ticksPerSec: pending.ticksPerSec, seed: seedStr,
-      scenario: scenario.id, following, story: pending.story, storyId: pending.storyId,
+      scenario: scenario.id, slots: popSlots, following, story: pending.story, storyId: pending.storyId,
       packs: pending.packs.length / 4, autoCamera: autoCam, narrator: narrator.enabled, caption: narrator.caption, sky: (engine.skyNow(skyView), skyView),
     });
     if (pending.selectedGone && following !== null) { following = null; engine.cam.follow(null); }

@@ -5,7 +5,7 @@
 import { SEASON_TICKS } from '../sim/types';
 import type { SimEvent } from '../sim/sim';
 import type { HistoryRow } from '../sim/worker';
-import { fmtInt, regionWord, seasonName, seasonOfTick, yearOfTick, yearStartTick } from './describe';
+import { fmtInt, regionWord, seasonName, seasonNameAt, seasonOfTick, yearOfTick, yearStartTick } from './describe';
 
 export interface SeasonLine {
   /** Tick just before the season ended, so the chronicle tags it with the season it is about. */
@@ -53,7 +53,6 @@ const PER_YEAR_FAST = 2;
 /** A season needs this share of its rows to count (a partial first season, or rows missed while the tab slept, do not). */
 const COVERAGE = 0.7;
 
-const SEASON_NAMES = ['spring', 'summer', 'autumn', 'winter'];
 const NAME = ['bison', 'wolves', 'ravens', 'pronghorn'];
 
 function hash(a: number, b: number, c: number): number {
@@ -132,7 +131,7 @@ export class SeasonLines {
     const covered = c.lastTick - c.firstTick >= COVERAGE * SEASON_TICKS - 60;
     const tick = yearStartTick(c.year) + (c.idx + 1) * SEASON_TICKS - 1; // the last tick of this season
     if (c.hasStart && covered) {
-      const season = SEASON_NAMES[c.idx];
+      const season = seasonName(c.idx);
       const h0 = hash(c.year, c.idx, 0);
 
       // records: the biggest herd, the most wolves
@@ -379,7 +378,7 @@ export class DecadeLines {
       this.arc = { startTick: e.tick, startYear: yearOfTick(e.tick), grass0: this.grassBefore, fires: [], endTick: -1, endYear: -1 };
     } else if (this.arc && (e.kind === 'fire' || e.kind === 'lightningFire') && this.arc.fires.length < 3) {
       const where = regionWord(e.x, e.y);
-      this.arc.fires.push(`${e.kind === 'lightningFire' ? 'lightning set' : 'fire took'} the ${where && where !== 'central' ? `${where} ` : ''}prairie in ${seasonName(seasonOfTick(e.tick))} of year ${yearOfTick(e.tick)}`);
+      this.arc.fires.push(`${e.kind === 'lightningFire' ? 'lightning set' : 'fire took'} the ${where && where !== 'central' ? `${where} ` : ''}prairie in ${seasonNameAt(e.tick)} of year ${yearOfTick(e.tick)}`);
     } else if (this.arc && e.kind === 'droughtEnd' && this.arc.endTick < 0) {
       this.arc.endTick = e.tick;
       this.arc.endYear = yearOfTick(e.tick);

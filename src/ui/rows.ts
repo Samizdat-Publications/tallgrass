@@ -1,8 +1,9 @@
 // The expanded population view as small multiples: one row per species on a shared time axis, each scaled to its own
 // range with its real numbers on the axis, so every species shows its swings. Grass gets a slim row of its own.
 import { SPECIES_NAMES, YEAR_TICKS } from '../sim/types';
-import { yearOfTick, yearStartTick, fmtInt } from './describe';
-import { niceStep, niceStepInt, hexA } from './chartutil';
+import { yearOfTick, yearStartTick, fmtInt, seasonOfTick } from './describe';
+import { niceStep, niceStepInt, hexA, strokeWithGaps, fillSolidRuns } from './chartutil';
+import { awayRows, holdAway, isMigrant } from './away';
 import { GOLD, GRASS_COLOR, PAPER_DIM, SANS, SERIF, SPECIES_COLORS } from './palette';
 
 export interface RowsData {
@@ -162,16 +163,23 @@ export function drawRows(g: CanvasRenderingContext2D, w: number, h: number, u: n
     const bottom = top + rowHs[i];
     const py0 = top + 6 * u, py1 = bottom - 4 * u;
     const isGrass = row.kind === 'grass';
-    const vals = isGrass ? d.grass : d.pops[row.sp];
     const color = isGrass ? GRASS_COLOR : SPECIES_COLORS[row.sp];
+    // A visitor (eagle, hawk) at zero in its off season is away, not gone: that stretch is held level (drawn faint and dashed) so it never
+    // reads as a crash, and it does not set the row's range.
+    const rawVals = isGrass ? d.grass : d.pops[row.sp];
+    const away = !isGrass && isMigrant(row.sp) ? awayRows(row.sp, rawVals, (k) => seasonOfTick(d.ticks[k])) : null;
+    const vals = away ? holdAway(rawVals, away) : rawVals;
+    const isAway = (k: number): boolean => (away ? away[k] : false);
 
     // this row's own range
     let lo = Infinity, hi = -Infinity;
     for (let k = 0; k < n; k++) {
+      if (isAway(k)) continue;
       const v = vals[k];
       if (v < lo) lo = v;
       if (v > hi) hi = v;
     }
+    if (lo > hi) { lo = 0; hi = 0; }
     let aLo: number, aHi: number;
     if (isGrass) {
       // grass is a fraction of full cover; its band is scaled to its own range so the seasonal wave shows
@@ -222,31 +230,26 @@ export function drawRows(g: CanvasRenderingContext2D, w: number, h: number, u: n
       g.stroke();
     }
 
-    // area under the line and the line itself
-    g.beginPath();
-    g.moveTo(X(d.ticks[0]), py1);
-    for (let k = 0; k < n; k += step) g.lineTo(X(d.ticks[k]), Y(vals[k]));
-    g.lineTo(X(d.ticks[n - 1]), Y(vals[n - 1]));
-    g.lineTo(X(d.ticks[n - 1]), py1);
-    g.closePath();
+    // area under the line and the line itself (a visitor's away stretch is a faint dashed level, with nothing under it)
+    const xs: number[] = [], ys: number[] = [], aw: boolean[] = [];
+    for (let k = 0; k < n; k += step) { xs.push(X(d.ticks[k])); ys.push(Y(vals[k])); aw.push(isAway(k)); }
+    if ((n - 1) % step !== 0) { xs.push(X(d.ticks[n - 1])); ys.push(Y(vals[n - 1])); aw.push(isAway(n - 1)); }
     const grad = g.createLinearGradient(0, py0, 0, py1);
     grad.addColorStop(0, hexA(color, isGrass ? 0.2 : 0.22));
     grad.addColorStop(1, hexA(color, 0));
-    g.fillStyle = grad;
-    g.fill();
-    g.beginPath();
-    for (let k = 0; k < n; k += step) {
-      const x = X(d.ticks[k]), y = Y(vals[k]);
-      if (k === 0) g.moveTo(x, y); else g.lineTo(x, y);
-    }
-    g.lineTo(X(d.ticks[n - 1]), Y(vals[n - 1]));
-    g.lineWidth = (isGrass ? 1.3 : 1.7) * u;
-    g.strokeStyle = isGrass ? hexA(color, 0.75) : color;
-    g.stroke();
+    fillSolidRuns(g, xs, ys, aw, py1, grad);
+    strokeWithGaps(g, xs, ys, aw, isGrass ? hexA(color, 0.75) : color, (isGrass ? 1.3 : 1.7) * u, [3 * u, 3.5 * u], 0.5);
     g.beginPath();
     g.arc(X(d.ticks[n - 1]), Y(vals[n - 1]), 2.6 * u, 0, Math.PI * 2);
-    g.fillStyle = color;
-    g.fill();
+    if (isAway(n - 1)) {
+      g.lineWidth = 1.2 * u;
+      g.strokeStyle = hexA(color, 0.55);
+      g.setLineDash([]);
+      g.stroke();
+    } else {
+      g.fillStyle = color;
+      g.fill();
+    }
 
     // the row's name sits in the left gutter and its current value in the right one, so no line ever runs through a word
     const nameSize = (small ? 11.5 : 12.5) * u;
@@ -267,10 +270,15 @@ export function drawRows(g: CanvasRenderingContext2D, w: number, h: number, u: n
     const endY = Math.max(top + 8 * u, Math.min(bottom - 8 * u, Y(lastV)));
     g.font = `700 ${nameSize}px ${SANS}`;
     g.fillStyle = '#EFE6D0';
-    g.fillText(isGrass ? `${Math.round((lastV / (d.grassMax > 1.0001 ? d.grassMax : 1)) * 100)}%` : fmtInt(lastV), P.r + 7 * u, endY);
+    if (isAway(n - 1)) {
+      // away, not zero: a quiet italic note in the value's place
+      g.font = `italic 400 ${nameSize}px ${SERIF}`;
+      g.fillStyle = PAPER_DIM;
+      g.fillText('away', P.r + 7 * u, endY);
+    } else g.fillText(isGrass ? `${Math.round((lastV / (d.grassMax > 1.0001 ? d.grassMax : 1)) * 100)}%` : fmtInt(lastV), P.r + 7 * u, endY);
     g.restore();
 
-    if (hoverIdx >= 0) hoverDots.push({ x: X(d.ticks[hoverIdx]), y: Y(vals[hoverIdx]), color });
+    if (hoverIdx >= 0 && !isAway(hoverIdx)) hoverDots.push({ x: X(d.ticks[hoverIdx]), y: Y(vals[hoverIdx]), color });
   });
 
   // x axis under the last row
