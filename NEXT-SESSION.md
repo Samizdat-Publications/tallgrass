@@ -3,10 +3,14 @@
 **Updated:** 2026-10-04 afternoon, at the end of the v2 planning session. v1 is finished and live; v2 starts now. The plan is `V2-PLAN.md`.
 
 ## Night of 2026-10-09 (03:30 to 13:00): v10 "The long breath" (read NIGHT-PLAN.md first)
-- Plan: NIGHT-PLAN.md. Design call logged in DECISIONS.md (03:40). Climate regimes built (a48bf72, climate2 off by default, hash unchanged).
-- Key finding (03:50): the long-run drift (wolves 45 to 77, the 1:7 ratio, mule deer 63 to 12, bison bearing 2.4 calves a birth, herding 0.92 to 0.2) is runaway evolution. evolution2 (S9, off by default) bounds it; it is in screen 2.
-- CPU: screen 1 (scratch/v10/screen1.sh, out scratch/frozen/44415b1/scratch/v10s1, variants c0 b1 b2 w1 b2w1 b1w1, 14 seeds x 150 yr) then screen 2 queued (scratch/v10/screen2.sh, frozen a48bf72, out scratch/frozen/a48bf72/scratch/v10s2: E, EA, optional EAX from scratch/v10/screen2_extra.json, 14 seeds x 400 yr). Compare with: .venv/Scripts/python scratch/v10/compare.py <outdir>.
-- Builders (worktrees under .claude/worktrees): s-perf (bit-identical sim speedup), r-breath (climate look, graph band, status word, chronicle), r-director3 (motion shots, truthful cuts, 100x vistas). Bison herd bands wait for s-perf.
+State at 06:00:
+- v10 CANDIDATE = evolution2 1, climate2 0.3, wolfDenMinDist 280, wolfTerritory 130 (climate regimes a48bf72 + climatePrairie 97eef97; evolution2 is S9 from 2026-10-06). Also a menu scenario, The long breath (src/scenarios.ts LONG_BREATH).
+- RUNNING from frozen 97eef97 (scratch/v10/accept.sh): acceptance 20 x 1,200 valley years (log scratch/v10/accept_v10.log, out scratch/frozen/97eef97/review/stability/v10-97eef97, ETA about 09:10) and shocks 12 x 500 years x cull70, drought, wolfwipe (log scratch/v10/shocks_v10.log, out .../v10-97eef97-shocks, ETA about 09:40).
+- Adoption is prepared on branch v10-adopt (worktree scratch/wt-adopt): defaults flipped, V7C_OFF and CHALLENGE_PIN extended, applyOverrides applies evolution2 even with no overrides. Still to do there: tools/golden.json (new hashes in scratch/v10/adopt_hashes.log), npm test, challenge_suite, playtest, then merge, deploy.
+- Merged on main: s-perf (bit-identical 1.39x sim speedup; 7467e9e). Candidate hash on main = acceptance build (29b70982, seed 3, 24,000 ticks).
+- Builders still running: r-breath (climate look, graph band, status word, chronicle text) and r-director3 (motion shots, truthful cuts, 100x vistas). s-bands (51161a2, pushed, not merged) is back with its builder for a vigilance fix (bison were 12% lower with bands on).
+- Next cycle items found tonight: pronghorn.maxLitter 2 (litter gene drifts to 2.3; spikes to 1,400 in wet years under evolution2); wolf speed still evolves to about 1.3 under evolution2 (wolf sprintCost 0.15 may be light); bands screen after the vigilance fix.
+- Screens: scratch/frozen/44415b1/scratch/v10s1 (150 yr: c0 b1 b2 w1) and scratch/frozen/97eef97/scratch/v10s2 (400 yr: E EA). Compare: .venv/Scripts/python scratch/v10/compare.py <dir> [burn] [maxyear]. Breath chart: scratch/v10/breath_chart.py.
 
 ## State now (2026-10-09 ~01:40)
 - Default world is checkpoint v9 (v8b + ravenNestFood 1, muledeerCover 0.15, bison.initial 550). Golden 55737903, 465f73d6, 27e42109. Live and checked. Everything merged, pushed, deployed; nothing running.
