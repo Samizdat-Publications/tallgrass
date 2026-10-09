@@ -131,3 +131,10 @@ Music cues are in `public/audio/music/`, stereo mp3 96 kbps, levelled to -20 LUF
 | `blizzard.mp3` | 18.5 s loop | ElevenLabs sound-generation (loop=true) | blizzard wind bed, 1.5 s crossfade |
 | `grasshopper.mp3` | 10.5 s loop | ElevenLabs sound-generation (loop=true) | grasshopper buzz bed, 1.5 s crossfade |
 | 10-09 06:10 | ElevenLabs text-to-speech `eleven_multilingual_v2`, voice George (stock) | v10 narrator: 5 climate lines (climateWet_1, climateWet_2, climateDry_1, megadrought_1, climateMild_1; `tools/narration.py`, speed 0.8) -> `public/audio/narration/*.mp3`; loudness checked against the existing lines (-22.9 to -24.1 dB mean vs -24.0 to -24.3) | 5 takes, 486 characters | about $0.10 |
+
+## a3 spike downloads (2026-10-09, Sketchfab, free downloads, no credits spent)
+| Model | Author | License | Used for |
+|---|---|---|---|
+| Bison - animal (uid 4b8f112f...) | Brian Trepanier | CC BY 4.0 | a3 bison near LOD |
+| WOLF - Realistic 3D Model (DEMO FREE) (uid 8840b859...) | WildMesh 3D | CC BY-NC 4.0 | a3 wolf near LOD |
+Also downloaded for comparison and not used: European Bison NHMW (e8166095..., CC BY-NC, Natural History Museum Vienna). Meshy: not used.

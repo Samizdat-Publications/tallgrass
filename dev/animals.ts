@@ -9,6 +9,7 @@ import type { World } from '../src/sim/world';
 import { AGENT_STRIDE, CARCASS_STRIDE, F_JUVENILE, F_MALE, Sp, St, SPECIES_COUNT } from '../src/sim/types';
 import type { Snapshot } from '../src/sim/types';
 import { AnimalLayer } from '../src/render/animals';
+import { preloadA3 } from '../src/render/models/a3';
 
 declare global {
   interface Window {
@@ -25,7 +26,10 @@ const q = new URLSearchParams(location.search);
 const qNum = (k: string, d: number): number => (q.has(k) ? Number(q.get(k)) : d);
 const CAM0 = q.get('cam') ?? 'wide';
 const BISON_COUNT = Math.max(1, Math.floor(qNum('count', 300)));
-const POSE = q.get('pose') ?? 'idle';
+let POSE = q.get('pose') ?? 'idle';
+// a3 spike: ?only=bison|wolf keeps the lineup to one species (clean shots), ?move=1 lets a walking or running lineup animal travel along +x
+const ONLY = q.get('only');
+let MOVE = q.get('move') === '1';
 
 // ---------------------------------------------------------------------------------------------------------
 // tiny seeded rng
@@ -179,6 +183,8 @@ interface Ag {
   id: number; sp: number; x: number; y: number; h: number; spd: number; sc: number; coat: number;
   st: number; fl: number; alt: number; energy: number; age: number;
   kind: string; ox: number; oy: number; seed: number; rest: boolean; t0: number;
+  /** where it was first placed (the lab page's reset puts a lineup animal back here) */
+  hx: number; hy: number;
 }
 interface Carc { x: number; y: number; rem: number; sp: number }
 
@@ -198,7 +204,7 @@ const roles: Record<string, number> = {};
 function add(sp: number, kind: string, x: number, y: number, h: number, o: Partial<Ag> = {}): Ag {
   const a: Ag = {
     id: nextId++, sp, x, y, h, spd: 0, sc: 1, coat: 0.5, st: St.Idle, fl: 0, alt: 0, energy: 0.7, age: 0.4,
-    kind, ox: 0, oy: 0, seed: rnd(), rest: false, t0: rnd() * 100, ...o,
+    kind, ox: 0, oy: 0, seed: rnd(), rest: false, t0: rnd() * 100, hx: x, hy: y, ...o,
   };
   agents.push(a);
   return a;
@@ -223,13 +229,16 @@ function buildScene(): void {
     const sps = [Sp.Bison, Sp.Wolf, Sp.Deer, Sp.Cougar, Sp.Rabbit, Sp.Raven];
     const gap = 4.2;
     sps.forEach((sp, i) => {
-      const a = add(sp, 'lineup', STAGE.x + (i - 2.5) * gap, STAGE.y, 0, { coat: sp === Sp.Wolf ? 0.2 : sp === Sp.Bison ? 0.6 : 0.4 });
+      if (ONLY && ONLY !== (sp === Sp.Bison ? 'bison' : sp === Sp.Wolf ? 'wolf' : sp === Sp.Deer ? 'deer' : sp === Sp.Cougar ? 'cougar' : '')) return;
+      const a = add(sp, 'lineup', STAGE.x + (ONLY ? -3 : (i - 2.5) * gap), STAGE.y, 0, { coat: sp === Sp.Wolf ? 0.2 : sp === Sp.Bison ? 0.6 : 0.4 });
       a.seed = 0.37 + i * 0.11;
       roles['lineup' + sp] = a.id;
     });
     // a juvenile bison and a pale wolf for scale / coat range
-    add(Sp.Bison, 'lineup', STAGE.x - 3.2 * gap, STAGE.y + 2, 0, { sc: 0.5, coat: 0.3, fl: F_JUVENILE });
-    add(Sp.Wolf, 'lineup', STAGE.x + 3.6 * gap, STAGE.y, 0, { coat: 0.75 });
+    if (!ONLY) {
+      add(Sp.Bison, 'lineup', STAGE.x - 3.2 * gap, STAGE.y + 2, 0, { sc: 0.5, coat: 0.3, fl: F_JUVENILE });
+      add(Sp.Wolf, 'lineup', STAGE.x + 3.6 * gap, STAGE.y, 0, { coat: 0.75 });
+    }
     carcs.length = 0;
     if (POSE === 'dead') {
       const cx = [-8, -2.5, 3, 8.5];
@@ -443,7 +452,7 @@ function stepSim(dt: number, t: number): void {
       default:
         break;
     }
-    if (a.kind !== 'stamp' && a.kind !== 'chase' && a.kind !== 'circle' && a.kind !== 'prongflee' && a.kind !== 'cougar' && a.kind !== 'lineup') {
+    if (a.kind !== 'stamp' && a.kind !== 'chase' && a.kind !== 'circle' && a.kind !== 'prongflee' && a.kind !== 'cougar' && (a.kind !== 'lineup' || MOVE)) {
       a.x += Math.cos(a.h) * a.spd * dt;
       a.y += Math.sin(a.h) * a.spd * dt;
     }
@@ -475,6 +484,7 @@ function makeSnapshot(tick: number): Snapshot {
 
 // ---------------------------------------------------------------------------------------------------------
 // layer and loop
+await preloadA3(); // (?a3=1: the authored near-LOD meshes)
 const layer = new AnimalLayer(world);
 scene.add(layer.object3D);
 window.__layer = layer;
@@ -524,18 +534,29 @@ function presets(): Record<string, Preset> {
     cougar: { az: 40 * deg, el: 10 * deg, dist: 6, extent: 40, target: () => { if (followPos('cougar', tmp)) tgt.copy(tmp).add(new THREE.Vector3(0, 0.4, 0)); } },
     carcass: { az: 30 * deg, el: 22 * deg, dist: 11, extent: 40, target: () => setXY(carcA.x, carcA.y, 0.6) },
     lineup: { az: 90 * deg, el: 6 * deg, dist: 34, extent: 24, target: () => {
-      const f = q.get('focus');
+      const f = focusSp ?? q.get('focus');
       if (f !== null && followPos('lineup' + f, tmp)) tgt.copy(tmp).add(new THREE.Vector3(0, qNum('yoff', 0.6), 0));
       else setXY(STAGE.x, STAGE.y, 0.9);
     } },
   };
 }
+let focusSp: string | null = null;
 const PRE = presets();
 function setCam(name: string): void {
   camName = PRE[name] ? name : 'wide';
   userAz = userEl = userDist = null;
 }
 window.__cam = setCam;
+// a3 spike: retarget the lineup between shots without a reload ({ pose, dist, az, el, focus, move })
+(window as unknown as Record<string, unknown>).__lab = (o: { pose?: string; dist?: number; az?: number; el?: number; focus?: string; move?: boolean; yoff?: number; reset?: boolean }): void => {
+  if (o.reset) for (const a of agents) if (a.kind === 'lineup') { a.x = a.hx; a.y = a.hy; }
+  if (o.pose !== undefined) POSE = o.pose;
+  if (o.dist !== undefined) userDist = o.dist;
+  if (o.az !== undefined) userAz = (o.az * Math.PI) / 180;
+  if (o.el !== undefined) userEl = (o.el * Math.PI) / 180;
+  if (o.focus !== undefined) focusSp = o.focus;
+  if (o.move !== undefined) MOVE = o.move;
+};
 // project each living animal to the screen and make sure pick() finds something at its centre
 window.__pickTest = (): string => {
   const rc = new THREE.Raycaster();

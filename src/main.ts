@@ -4,6 +4,7 @@ import { Engine } from './render/engine';
 import { GrassField } from './render/grass';
 import { AnimalLayer } from './render/animals';
 import { OverlayLayer } from './render/overlay';
+import { preloadA3 } from './render/models/a3';
 import { Trails, type TrailFrame } from './render/trails';
 import { Cranes } from './render/cranes';
 import { SmallPreyLayer } from './render/smallprey';
@@ -67,6 +68,7 @@ const grass = new GrassField(renderWorld, engine.vegTexture, { quality: qualityT
 engine.scene.add(grass.object3D);
 engine.excludeFromAO(grass.object3D);
 if (q.get('grass') === '0') grass.object3D.visible = false;
+await preloadA3(); // (?a3=1: the authored near-LOD meshes load first, so the model builders stay synchronous)
 const animals = new AnimalLayer(renderWorld);
 engine.scene.add(animals.object3D);
 animals.snowField = engine.snowDepth;

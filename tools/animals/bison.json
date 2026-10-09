@@ -1,0 +1,89 @@
+{
+ "species": "bison",
+ "source": "scratch/a3/raw/bisonanimal/bisonanimal.glb",
+ "work": "scratch/a3/work/bison",
+ "forward": [
+  0,
+  1,
+  0
+ ],
+ "height": 1.9,
+ "yaw": 31,
+ "nose_x": 2.23,
+ "tris": 9000,
+ "tex": 1024,
+ "xscale": 0.92,
+ "xshift": -0.2,
+ "zshift": 0.14,
+ "xsplit": -0.1,
+ "rig": {
+  "front": {
+   "hip": [
+    0.52,
+    1.1
+   ],
+   "knee": [
+    0.56,
+    0.52
+   ],
+   "foot": [
+    0.55,
+    0.0
+   ]
+  },
+  "hind": {
+   "hip": [
+    -0.95,
+    1.12
+   ],
+   "knee": [
+    -1.0,
+    0.5
+   ],
+   "foot": [
+    -0.97,
+    0.0
+   ]
+  }
+ },
+ "neck": [
+  1.0,
+  1.4,
+  0.0
+ ],
+ "head_w": [
+  0.85,
+  1.3
+ ],
+ "tail": {
+  "pivot": [
+   -1.3,
+   1.03,
+   0.0
+  ],
+  "x0": -1.28,
+  "z": 0.0,
+  "half": 0.2,
+  "ymin": 0.3,
+  "blend": 0.14
+ },
+ "ground": 1.0,
+ "head_x": [
+  1.3,
+  1.55
+ ],
+ "neck_low": [
+  0.85,
+  1.2,
+  0.8,
+  0.15
+ ],
+ "grade": {
+  "sat": 0.8,
+  "gain": [
+   0.98,
+   0.97,
+   0.97
+  ]
+ }
+}
