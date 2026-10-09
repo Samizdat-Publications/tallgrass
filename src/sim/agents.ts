@@ -53,6 +53,8 @@ export class Agents {
   mother!: Int32Array;
   motherId!: Uint32Array;
   pack!: Int16Array;
+  /** Herd band id (bison only, herdBands on); -1 = none. */
+  band!: Int32Array;
   /** Same-species herd-mates within reach at the last herd scan (herbivores). */
   nbr!: Uint8Array;
   gen!: Uint16Array;
@@ -116,6 +118,7 @@ export class Agents {
     this.mother = g(Int32Array, this.mother);
     this.motherId = g(Uint32Array, this.motherId);
     this.pack = g(Int16Array, this.pack);
+    this.band = g(Int32Array, this.band);
     this.nbr = g(Uint8Array, this.nbr);
     this.gen = g(Uint16Array, this.gen);
     this.kills = g(Uint16Array, this.kills);
@@ -157,6 +160,7 @@ export class Agents {
     this.mother[i] = -1;
     this.motherId[i] = 0;
     this.pack[i] = -1;
+    this.band[i] = -1;
     this.nbr[i] = 0;
     this.gen[i] = 0;
     this.kills[i] = 0;
