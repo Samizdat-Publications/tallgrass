@@ -1,0 +1,64 @@
+{
+  "mode": "single",
+  "date": "2026-10-09T18:51:17.975Z",
+  "size": "2560x1440",
+  "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 5070 Ti Laptop GPU (0x00002F58) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+  "dir": "C:\\Users\\stewa\\Documents\\Claude\\ecosystem-sim",
+  "extra": "",
+  "git": {
+    "head": "b89bb30",
+    "dirtyFiles": []
+  },
+  "warmupFrames": 6,
+  "timedFrames": 40,
+  "views": {
+    "wide_golden": {
+      "median": 13.123,
+      "p90": 15.874,
+      "n": 40,
+      "disjoint": false
+    },
+    "low_golden": {
+      "median": 18.778,
+      "p90": 25.46,
+      "n": 40,
+      "disjoint": false
+    },
+    "herd": {
+      "median": 12.05,
+      "p90": 13.845,
+      "n": 40,
+      "disjoint": false
+    },
+    "top": {
+      "median": 11.762,
+      "p90": 13.554,
+      "n": 40,
+      "disjoint": false
+    },
+    "winter": {
+      "median": 12.925,
+      "p90": 14.804,
+      "n": 40,
+      "disjoint": false
+    },
+    "night": {
+      "median": 15.425,
+      "p90": 17.346,
+      "n": 40,
+      "disjoint": false
+    },
+    "blizzard": {
+      "median": 13.808,
+      "p90": 15.063,
+      "n": 40,
+      "disjoint": false
+    },
+    "storm": {
+      "median": 14.921,
+      "p90": 16.02,
+      "n": 40,
+      "disjoint": false
+    }
+  }
+}
