@@ -19,7 +19,7 @@ export const A3_TUNE: Record<string, { grazeK?: number; grazePitch?: number; gra
 
 const assets = new Map<string, A3Asset>();
 /** Species keys with an authored mesh. */
-export const A3_SPECIES = ['bison', 'wolf'];
+export const A3_SPECIES = ['bison', 'wolf', 'pronghorn'];
 
 /** The authored meshes are the default; `?a3=0` switches them off (the procedural near LOD returns). */
 export function a3Enabled(): boolean {

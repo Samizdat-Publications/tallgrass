@@ -226,10 +226,12 @@ function buildScene(): void {
   }
   const lineup = CAM0 === 'lineup';
   if (lineup) {
-    const sps = [Sp.Bison, Sp.Wolf, Sp.Deer, Sp.Cougar, Sp.Rabbit, Sp.Raven];
+    const sps = [Sp.Bison, Sp.Wolf, Sp.Deer, Sp.Cougar, Sp.Rabbit, Sp.Raven, Sp.MuleDeer, Sp.Coyote];
+    const onlyId: Record<string, number> = { bison: Sp.Bison, wolf: Sp.Wolf, pronghorn: Sp.Deer, cougar: Sp.Cougar, coyote: Sp.Coyote, muledeer: Sp.MuleDeer };
     const gap = 4.2;
     sps.forEach((sp, i) => {
-      if (ONLY && ONLY !== (sp === Sp.Bison ? 'bison' : sp === Sp.Wolf ? 'wolf' : sp === Sp.Deer ? 'deer' : sp === Sp.Cougar ? 'cougar' : '')) return;
+      if (ONLY && onlyId[ONLY] !== sp) return;
+      if (!ONLY && (sp === Sp.MuleDeer || sp === Sp.Coyote)) return; // (the default lineup stays the six it always was)
       const a = add(sp, 'lineup', STAGE.x + (ONLY ? -3 : (i - 2.5) * gap), STAGE.y, 0, { coat: sp === Sp.Wolf ? 0.2 : sp === Sp.Bison ? 0.6 : 0.4 });
       a.seed = 0.37 + i * 0.11;
       roles['lineup' + sp] = a.id;
@@ -340,7 +342,7 @@ function stepSim(dt: number, t: number): void {
         a.alt = 0;
         const sp = a.sp;
         const pose = POSE;
-        const walkV = [1.3, 1.4, 1.4, 1.2, 1.0, 8][sp], runV = [11, 12, 15, 10, 4, 9][sp];
+        const walkV = [1.3, 1.4, 1.4, 1.2, 1.0, 8][sp] ?? 1.3, runV = [11, 12, 15, 10, 4, 9][sp] ?? 12;
         a.spd = pose === 'walk' ? walkV : pose === 'run' ? runV : 0;
         a.st = pose === 'walk' ? St.Walk : pose === 'run' ? (sp === Sp.Wolf ? St.Chase : St.Run) : pose === 'graze' ? St.Graze : pose === 'rest' ? St.Rest : pose === 'stalk' ? St.Stalk : St.Idle;
         if (sp === Sp.Raven) {

@@ -6,13 +6,24 @@ import { readFileSync } from 'node:fs';
 import * as THREE from 'three';
 import { buildBison } from '../src/render/models/bison';
 import { buildWolf } from '../src/render/models/wolf';
+import { buildPronghorn } from '../src/render/models/pronghorn';
+import { buildMuleDeer } from '../src/render/models/muledeer';
+import { buildCoyote } from '../src/render/models/coyote';
+import { buildCougar } from '../src/render/models/cougar';
 import { legRigOf } from '../src/render/models/legmath';
 
-const BUILD: Record<string, () => { geometry: THREE.BufferGeometry }> = { bison: buildBison, wolf: buildWolf };
-const names = process.argv.slice(2).length ? process.argv.slice(2) : ['bison', 'wolf'];
+const BUILD: Record<string, () => { geometry: THREE.BufferGeometry }> = { bison: buildBison, wolf: buildWolf, pronghorn: buildPronghorn, muledeer: buildMuleDeer, coyote: buildCoyote, cougar: buildCougar };
+// `--far` prints only the far rigs (the numbers for tools/animals/<species>.json)
+const farOnly = process.argv.includes('--far');
+const names = process.argv.slice(2).filter((a) => !a.startsWith('--')).length ? process.argv.slice(2).filter((a) => !a.startsWith('--')) : ['bison', 'wolf'];
 let bad = 0;
 const f2 = (v: number[]): string => `(${v.map((x) => x.toFixed(3)).join(', ')})`;
 for (const key of names) {
+  if (farOnly) {
+    const r = legRigOf(BUILD[key]().geometry);
+    console.log(key, 'front', JSON.stringify(r.front), 'hind', JSON.stringify(r.hind));
+    continue;
+  }
   const meta = JSON.parse(readFileSync(`public/models/a3/${key}.json`, 'utf8'));
   const buf = readFileSync(`public/models/a3/${key}.bin`);
   const ab = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);

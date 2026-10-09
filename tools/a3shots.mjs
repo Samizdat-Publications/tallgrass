@@ -22,7 +22,7 @@ const wait = Number(arg('wait', '2600'));
 const fov = Number(arg('fov', '30'));
 const initPose = arg('initpose', ''); // (?pose= at load: 'dead' builds the carcass lineup)
 const cam = arg('cam', 'lineup');
-const SPNUM = { bison: 0, wolf: 1 };
+const SPNUM = { bison: 0, wolf: 1, pronghorn: 3, cougar: 5, coyote: 6, muledeer: 10 };
 mkdirSync(out, { recursive: true });
 const kill = setTimeout(() => { console.error('a3shots: hard timeout'); process.exit(2); }, 25 * 60 * 1000);
 const server = await createServer({
