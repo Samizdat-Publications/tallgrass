@@ -45,6 +45,8 @@ export class StormCells {
   private strikes: number[] = [];
   /** Filled by update(), cleared at the start of the next one: fires as x, y pairs; storm starts as x, y, cells. */
   fires: number[] = [];
+  /** Multiplier on lightningIgnite (1 = as screened; the climate regime raises it in dry decades). */
+  igniteMul = 1;
   starts: number[] = [];
   private prevStorm = false;
 
@@ -121,7 +123,7 @@ export class StormCells {
         const rad = c.r * Math.sqrt(rng.next());
         const x = c.x + Math.cos(ang) * rad, y = c.y + Math.sin(ang) * rad;
         let ignited = 0;
-        if (lit && x >= 0 && y >= 0 && x < this.size && y < this.size && fuelAt(x, y) > 0.3 && rng.next() < this.p.lightningIgnite) {
+        if (lit && x >= 0 && y >= 0 && x < this.size && y < this.size && fuelAt(x, y) > 0.3 && rng.next() < this.p.lightningIgnite * this.igniteMul) {
           ignited = 1;
           this.fires.push(x, y);
         }

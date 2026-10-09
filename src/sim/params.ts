@@ -119,8 +119,27 @@ export interface Params {
   bandMin: number;
   /** Strength of the push away from other bands (and of the pull home for a bison with no band-mate in reach). */
   bandPush: number;
+  /** Distance (m) from its band's centre beyond which a bison is drawn back toward it (10 m, or less, when no band-mate is in reach). */
+  bandReach: number;
+  /** Strength of that pull back, as a multiple of bandPush. */
+  bandPull: number;
   /** Amplitude of the slow climate cycle on grass growth (0 = off; 0.3 = +/-30%). */
   climateAmp: number;
+  /** Climate regimes (v10, climate.ts; 0 = off): a seeded wet and dry index of the decades (-1..1) moves the grass the land can carry and how fast it
+   *  regrows by x (1 + climate2 x index). The knobs below only act while this is on. */
+  climate2: number;
+  /** Typical length in valley years of one wet-and-dry swell (the regime mixes three swells around it). */
+  climatePeriod: number;
+  /** Chance per valley year, on the dry side of the swell, that a megadrought of 3 to 6 years begins. */
+  climateMegaP: number;
+  /** Summer dry spells are x (1 - climateDrought x index) as likely (more in a dry run, fewer in a wet one; twice as likely in a megadrought). */
+  climateDrought: number;
+  /** Lightning starts fires x (1 - climateFire x index) as often. */
+  climateFire: number;
+  /** Cottonwood seedlings take x (1 + climateTrees x index) as often. */
+  climateTrees: number;
+  /** The pronghorn the wider prairie sends back each spring (deerKb) scale by x (1 + climatePrairie x index): the region dries with the valley. */
+  climatePrairie: number;
   /** Shortens the valley year k-fold (1 = 2,400-tick years). Biology per tick is unchanged, so animals live k times as
    *  many valley-years and booms and recoveries take k times as many years; only the seasons turn faster. Wolf litters
    *  are divided by k because wolves breed once a year. Timers that aren't seasons (carcass life, immunity, outbreak
@@ -600,7 +619,16 @@ export function defaultParams(): Params {
     bandMax: 60,
     bandMin: 6,
     bandPush: 0.6,
+    bandReach: 15,
+    bandPull: 0.9,
     climateAmp: 0,
+    climate2: 0,
+    climatePeriod: 40,
+    climateMegaP: 0.03,
+    climateDrought: 0.8,
+    climateFire: 0.8,
+    climateTrees: 0.8,
+    climatePrairie: 0.5,
     calendarScale: 2,
     droughtRefuge: 0,
     sprintCost: 0,

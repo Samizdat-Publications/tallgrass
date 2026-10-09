@@ -2,6 +2,12 @@
 
 **Updated:** 2026-10-04 afternoon, at the end of the v2 planning session. v1 is finished and live; v2 starts now. The plan is `V2-PLAN.md`.
 
+## Night of 2026-10-09 (03:30 to 13:00): v10 "The long breath" (read NIGHT-PLAN.md first)
+- Plan: NIGHT-PLAN.md. Design call logged in DECISIONS.md (03:40). Climate regimes built (a48bf72, climate2 off by default, hash unchanged).
+- Key finding (03:50): the long-run drift (wolves 45 to 77, the 1:7 ratio, mule deer 63 to 12, bison bearing 2.4 calves a birth, herding 0.92 to 0.2) is runaway evolution. evolution2 (S9, off by default) bounds it; it is in screen 2.
+- CPU: screen 1 (scratch/v10/screen1.sh, out scratch/frozen/44415b1/scratch/v10s1, variants c0 b1 b2 w1 b2w1 b1w1, 14 seeds x 150 yr) then screen 2 queued (scratch/v10/screen2.sh, frozen a48bf72, out scratch/frozen/a48bf72/scratch/v10s2: E, EA, optional EAX from scratch/v10/screen2_extra.json, 14 seeds x 400 yr). Compare with: .venv/Scripts/python scratch/v10/compare.py <outdir>.
+- Builders (worktrees under .claude/worktrees): s-perf (bit-identical sim speedup), r-breath (climate look, graph band, status word, chronicle), r-director3 (motion shots, truthful cuts, 100x vistas). Bison herd bands wait for s-perf.
+
 ## State now (2026-10-09 ~01:40)
 - Default world is checkpoint v9 (v8b + ravenNestFood 1, muledeerCover 0.15, bison.initial 550). Golden 55737903, 465f73d6, 27e42109. Live and checked. Everything merged, pushed, deployed; nothing running.
 - Today (design calls): follow camera and readable animals, water, UI fixes, animation polish (gallop spine, splashes, snow easing), far-view readability and map glyphs, blizzard whiteout, calm UI (Tools drawer, idle fade, docked graph), v9 ecology. Reviews 19 and 20 in REVIEWS.md.

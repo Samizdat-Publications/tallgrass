@@ -1,5 +1,8 @@
 # Tallgrass plan
 
+## Tonight (2026-10-09, 03:30 to 13:00): NIGHT-PLAN.md
+Checkpoint v10 "The long breath": climate regimes, bounded evolution, bison on a slower clock, fewer and bigger wolf packs; plus a faster sim, the breathing-valley look, documentary camera v3 and bison herd bands. Stages, gates and fallbacks are in NIGHT-PLAN.md.
+
 ## v2 (current, from 2026-10-04): the plan is V2-PLAN.md
 | Phase | Work packages | Status |
 |---|---|---|

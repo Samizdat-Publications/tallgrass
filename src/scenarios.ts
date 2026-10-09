@@ -43,11 +43,19 @@ const stormSchedule = (): { tick: number; iv: Intervention }[] => {
   return out;
 };
 
+/** Checkpoint v10 candidate (2026-10-09): climate regimes, bounded evolution, fewer and bigger wolf packs. */
+export const LONG_BREATH: Record<string, number> = { evolution2: 1, climate2: 0.3, wolfDenMinDist: 280, wolfTerritory: 130 };
+
 export const SCENARIOS: Scenario[] = [
   {
     id: 'prairie', name: 'Open prairie',
     blurb: 'Bison, pronghorn, wolves and ravens on an open prairie: herds boom, wolves follow a few years behind, pronghorn come and go with the seasons, and distemper and mange keep the packs in check.',
     params: {}, schedule: [],
+  },
+  {
+    id: 'longbreath', name: 'The long breath',
+    blurb: 'Wet and dry runs of decades roll over the valley. In the wet years the grass stands tall, the herds swell and the groves spread; in the dry years fires run, the herds thin and the packs go hungry. Set it to 100x and watch the valley breathe.',
+    params: LONG_BREATH, schedule: [],
   },
   {
     id: 'sealed', name: 'The sealed valley',

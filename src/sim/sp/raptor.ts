@@ -83,8 +83,10 @@ export function flightStep(a: Agents, i: number, dt: number, size: number, targe
   a.vy[i] += (a.dvy[i] - a.vy[i]) * velGain;
   a.x[i] = Math.max(2, Math.min(size - 2, a.x[i] + a.vx[i] * dt));
   a.y[i] = Math.max(2, Math.min(size - 2, a.y[i] + a.vy[i] * dt));
-  const sp = Math.hypot(a.vx[i], a.vy[i]);
-  if (sp > 0.1) a.heading[i] = Math.atan2(a.vy[i], a.vx[i]);
+  // sp > 0.1 decided from the squared length unless it falls in the thin band where only the exact Math.hypot can say
+  const fvx = a.vx[i], fvy = a.vy[i];
+  const fq = fvx * fvx + fvy * fvy;
+  if (fq > 0.010000001 || (fq >= 0.00999999 && Math.hypot(fvx, fvy) > 0.1)) a.heading[i] = Math.atan2(fvy, fvx);
   if (a.x[i] <= 2 || a.x[i] >= size - 2 || a.y[i] <= 2 || a.y[i] >= size - 2) a.heading[i] += Math.PI * 0.5;
 }
 
