@@ -55,6 +55,8 @@ export type { OverlayId, ToolId, UIActions, UIFrame } from './types';
 const CARD_COOLDOWN_MS = 8000;
 /** A high-ranking card held back by the cooldown is still worth showing for this long. */
 const CARD_HOLD_MS = 20000;
+/** A card held back because the documentary camera is not on its event waits this long for the camera to get there, then is dropped. */
+const GATE_HOLD_MS = 14000;
 /** Events the graph marks with a line (the rest would only add noise). */
 const MARK_KINDS = new Set(['drought', 'droughtEnd', 'outbreak', 'stampede', 'extinct', 'introduced', 'removed', 'culled', 'fire', 'plague']);
 /** A quiet hint about H and C appears once after this long with no input (a second monitor, a lazy afternoon). */
@@ -76,6 +78,12 @@ interface QueuedCard {
   at: number;
   /** Sim tick of the event the card is about. */
   tick: number;
+  /** Where (sim metres) and what the event was, for the camera gate (see GameUI.cardGate). */
+  x?: number;
+  y?: number;
+  kind?: string;
+  /** Held back because the camera was not on the event: it waits only GATE_HOLD_MS for the camera to get there. */
+  gated?: boolean;
 }
 
 export class GameUI {
@@ -157,6 +165,12 @@ export class GameUI {
   /** Latest sim speed from the frame (0 paused, -1 skipping). */
   private speed = 1;
   private queued: QueuedCard | null = null;
+  /**
+   * The documentary camera's say in when an event's card may show: asked with the event's place (sim metres) and kind, it answers whether
+   * the camera is on that event right now. A card for a located event that gets "no" waits (GATE_HOLD_MS) for the camera, so a title
+   * never sits over a scene that does not show it. Null (or an event with no place: a drought, a blizzard) means no gate.
+   */
+  cardGate: ((x: number, y: number, kind: string) => boolean) | null = null;
   private feed = new FeedFilter();
   /** Writes the chronicle's event lines without repeating itself; and the open runs of arrivals and departures that fold into one line. */
   private voice = new ChronicleVoice();
@@ -869,7 +883,7 @@ export class GameUI {
   private handleEvents(events: SimEvent[], now: number, tick: number, pop?: number[]): void {
     const entries: ChronicleEntry[] = [];
     const markers: Marker[] = [];
-    let best: { title: string; subtitle: string; rank: number; tick: number } | null = null;
+    let best: { title: string; subtitle: string; rank: number; tick: number; x: number; y: number; kind: string } | null = null;
     let refolded = false;
 
     // A pack that is founded and lost within a blink is a dispersal that never took: it is not news.
@@ -908,7 +922,7 @@ export class GameUI {
       if (MARK_KINDS.has(e.kind)) markers.push({ tick: e.tick, sentence: d.sentence, major });
       if (d.card && tick - e.tick <= STALE_TICKS) {
         const rank = cardRank(e.kind);
-        if (!best || rank > best.rank) best = { title: d.card.title, subtitle: d.card.subtitle, rank, tick: e.tick };
+        if (!best || rank > best.rank) best = { title: d.card.title, subtitle: d.card.subtitle, rank, tick: e.tick, x: e.x, y: e.y, kind: e.kind };
       }
     }
 
@@ -917,7 +931,10 @@ export class GameUI {
     this.pop.addMarkers(markers);
 
     if (best && best.rank >= this.cardMinRank()) {
-      if (now - this.lastCardAt >= CARD_COOLDOWN_MS) {
+      if (this.gateBlocks(best)) {
+        // the camera is elsewhere: the card waits for it (the director may cut to the event), and goes if it never does
+        if (!this.queued || best.rank > this.queued.rank) this.queued = { ...best, at: now, gated: true };
+      } else if (now - this.lastCardAt >= CARD_COOLDOWN_MS) {
         this.showCard(best);
       } else if (best.rank >= 4 && (!this.queued || best.rank > this.queued.rank)) {
         // an important card held back by the rate limit waits for its turn
@@ -1051,12 +1068,19 @@ export class GameUI {
     return this.unitCache;
   }
 
+  /** Does the camera gate say the camera is not on this card's event? (Only a located event is gated, and only while a gate is set.) */
+  private gateBlocks(c: { x?: number; y?: number; kind?: string }): boolean {
+    if (!this.cardGate || c.x === undefined || c.y === undefined || (c.x === 0 && c.y === 0)) return false;
+    return !this.cardGate(c.x, c.y, c.kind ?? '');
+  }
+
   private flushQueuedCard(now: number): void {
     const q = this.queued;
     if (!q) return;
-    if (now - q.at > CARD_HOLD_MS) {
+    const blocked = this.gateBlocks(q);
+    if (now - q.at > (q.gated ? GATE_HOLD_MS : CARD_HOLD_MS)) {
       this.queued = null;
-    } else if (now - this.lastCardAt >= CARD_COOLDOWN_MS) {
+    } else if (!blocked && now - this.lastCardAt >= CARD_COOLDOWN_MS) {
       this.showCard(q);
     }
   }
