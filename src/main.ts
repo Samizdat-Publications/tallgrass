@@ -4,6 +4,7 @@ import { Engine } from './render/engine';
 import { GrassField } from './render/grass';
 import { AnimalLayer } from './render/animals';
 import { OverlayLayer } from './render/overlay';
+import { Trails, type TrailFrame } from './render/trails';
 import { Cranes } from './render/cranes';
 import { SmallPreyLayer } from './render/smallprey';
 import { SmallPreyOverlay } from './render/smalloverlay';
@@ -477,6 +478,9 @@ function applySetting(s: Settings, changed: keyof Settings): void {
     case 'narration':
       busAudio.setBusVolume?.('voice', s.narration);
       break;
+    case 'longExposure':
+      trails.enabled = s.longExposure;
+      break;
     case 'autoCamera':
       autoCamEnabled = s.autoCamera;
       if (!autoCamEnabled && autoCam) takeCamera();
@@ -494,6 +498,13 @@ const overlay = new OverlayLayer(world.size, (x, z) => engine.groundHeight(x, z)
 });
 engine.scene.add(overlay.object3D);
 engine.excludeFromAO(overlay.object3D);
+// long exposure at speed (render/trails.ts): ?trails=0 never draws it, ?trails=1 draws it at any speed (captures)
+const trails = new Trails(world.size, (x, z) => engine.groundHeight(x, z), engine.uniforms);
+trails.enabled = savedSettings.longExposure;
+trails.mode = q.get('trails') === '0' ? 'off' : q.get('trails') === '1' ? 'on' : 'auto';
+const trailFrame: TrailFrame = { speed: 1, tick: 0, count: 0, ids: new Uint32Array(0), agents: new Float32Array(0) };
+engine.scene.add(trails.object3D);
+engine.excludeFromAO(trails.object3D);
 // the Small prey overlay is its own mesh (render/smalloverlay.ts): choosing it hides the other overlay and the reverse
 const smallOverlay = new SmallPreyOverlay(world.size, (x, z) => engine.groundHeight(x, z), engine.uniforms, document.querySelector<HTMLElement>('.tg-overlay') ?? document.body);
 engine.scene.add(smallOverlay.object3D);
@@ -635,6 +646,7 @@ function predatorWithin(x: number, y: number, r: number): boolean {
 }
 const w = window as unknown as Record<string, unknown>;
 w.__overlay = overlay;
+w.__trails = trails;
 engine.onFrame((dt, t) => {
   const alpha = Math.min(1, (performance.now() - lastTickChange) / Math.max(16, tickInterval));
   // legs keep pace with how fast the sim actually moves animals (capped where gaits would alias)
@@ -656,6 +668,10 @@ engine.onFrame((dt, t) => {
   if (!ui.photo.isOpen) director.update(dt, pending ? { count: pending.count, ids: pending.ids, agents: pending.agents, carcassCount: pending.carcassCount, carcasses: pending.carcasses, dayFrac: pending.env.dayFrac, small: lastSmall, events: pendingEvents } : null);
   grass.viewportHeight = engine.renderer.domElement.height;
   overlay.update(dt, engine.camera, engine.renderer.domElement);
+  if (pending) {
+    trailFrame.speed = pending.speed; trailFrame.tick = pending.tick; trailFrame.count = pending.count; trailFrame.ids = pending.ids; trailFrame.agents = pending.agents;
+  }
+  trails.update(dt, engine.renderer, pending ? trailFrame : null);
   grass.update(engine.camera, t, engine.env, sun);
   lens.update(dt);
   if (ui.photo.isOpen && selectionRing) selectionRing.visible = false; // a photograph never carries the selection ring
