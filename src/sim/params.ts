@@ -478,7 +478,7 @@ export function defaultParams(): Params {
     // v5: one calf about every 1,450 ticks and a longer life, so the herd can't outbreed a crash in a season
     maxAge: 8000, matureAge: 600, gestation: 200, birthCooldown: 1250, litter: 1.0,
     walkSpeed: 1.5, runSpeed: 10, stamina: 140, sight: 38, metabolism: 1 / 1300, thirst: 1 / 1500,
-    bite: 0.0065, foodValue: 0.55, meat: 7, toughness: 3.6, initial: 800, herdRadius: 14,
+    bite: 0.0065, foodValue: 0.55, meat: 7, toughness: 3.6, initial: 550, herdRadius: 14, // v9: initial 550 (was 800)
     wariness: 0.4, defense: 0.6, camo: 0.25,
   });
   species[Sp.Wolf] = base({
@@ -631,7 +631,7 @@ export function defaultParams(): Params {
     coyotePupFeed: 0.0025,
     coyoteOutAfter: 1.0,
     coyoteInRate: 1,
-    muledeerCover: 0.25,
+    muledeerCover: 0.15, // v9 (was 0.25)
     muledeerDrawDist: 40,
     muledeerGroupMin: 3,
     muledeerGroupMax: 10,
@@ -764,7 +764,7 @@ export function defaultParams(): Params {
     wolfScentPow: 1,
     wolfSmallGame: 0.5,
     ravenNestSites: 320,
-    ravenNestFood: 0,
+    ravenNestFood: 1, // v9 (was 0)
     ravenNestCarrionRef: 900,
     carcassRot: 0.0009,
     carcassSoil: 0.05,

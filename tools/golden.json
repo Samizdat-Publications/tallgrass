@@ -1,9 +1,9 @@
 {
-  "note": "Golden hashes (V2-PLAN.md S0): default params, src/headless/hash.ts. Checkpoint v8b (adopted 2026-10-08): v7c + snowDepth 1, dynamicTrees 1, treeCwRecruit 0.003, dogRescueYears 8. v7c hashes were 2cabdb62, 5ad21d26, 904ebf61 (reproduced by pinning those four back); v6b 340c052c, 714770ae, 617dea6c; v6 79f7ab0f, ef09535f, 032d866a; v5 e6b99005, 19759373, 7bc34541. Update only when a WP's adoption rule changes the default world, and say so in TRACK-S.md.",
+  "note": "Golden hashes (V2-PLAN.md S0): default params, src/headless/hash.ts. Checkpoint v9 (adopted 2026-10-09): v8b + ravenNestFood 1, muledeerCover 0.15, bison.initial 550. v8b hashes were 2b8abd08, 810eb241, b162b93a (reproduced by pinning those three back); v7c 2cabdb62, 5ad21d26, 904ebf61; v6b 340c052c, 714770ae, 617dea6c; v6 79f7ab0f, ef09535f, 032d866a; v5 e6b99005, 19759373, 7bc34541. Update only when a WP's adoption rule changes the default world.",
   "ticks": 24000,
   "seeds": {
-    "3": "2b8abd08",
-    "7": "810eb241",
-    "11": "b162b93a"
+    "3": "55737903",
+    "7": "465f73d6",
+    "11": "27e42109"
   }
 }

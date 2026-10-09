@@ -71,6 +71,8 @@ export const CHALLENGE_PIN: Record<string, number> = {
   raptors: 0, 'cougar.initial': 0, 'muledeer.initial': 0, herdSpacingGraze: 0, raptorDogPref: 1,
   // checkpoint v8b: snow depth, dynamic trees, prairie dog rescue interval
   snowDepth: 0, dynamicTrees: 0, treeCwRecruit: 0.0015, dogRescueYears: 20,
+  // checkpoint v9: food-linked raven nesting, mule deer cover, bison start
+  ravenNestFood: 0, muledeerCover: 0.25, 'bison.initial': 800,
 };
 /** The calendar the challenges were tuned on, with every v2 mechanism pinned off. */
 const CLASSIC = { calendarScale: 1, ...CHALLENGE_PIN };
@@ -154,7 +156,7 @@ export const CHALLENGES: Challenge[] = [
     name: 'Pull it back',
     blurb: 'Fifteen hundred bison and a single small pack. Without more predators the pronghorn boom and then crash. Keep them from collapsing.',
     get goals() { return [`Keep the pronghorn above 100 from year ${Y(3)} on`, 'Nothing goes extinct', `Survive ${Y(30)} years`, 'At most 4 interventions']; },
-    seed: '23', scenario: 'collapse', get years() { return Y(30); }, maxTools: 4, params: CLASSIC,
+    seed: '23', scenario: 'collapse', get years() { return Y(30); }, maxTools: 4, params: { ...CLASSIC, 'bison.initial': 1500 }, // the scenario's overstock (CHALLENGE_PIN's bison start would override it)
     makeCheck() {
       const guard = extinctionGuard(CORE);
       return (s) => {

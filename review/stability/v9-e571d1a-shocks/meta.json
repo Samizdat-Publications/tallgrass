@@ -1,0 +1,107 @@
+{
+ "args": {
+  "seeds": 20,
+  "seedBase": 1,
+  "ticks": 720000,
+  "generations": null,
+  "sampleEvery": 1500,
+  "threads": 15,
+  "scenarios": [
+   "cull70",
+   "drought",
+   "wolfwipe"
+  ],
+  "params": {
+   "ravenNestFood": 1,
+   "muledeerCover": 0.15,
+   "bison.initial": 550
+  },
+  "mock": false,
+  "maxMinutes": 0,
+  "progressSec": 15,
+  "out": "C:\\Users\\stewa\\Documents\\Claude\\ecosystem-sim\\scratch\\frozen\\e571d1a\\review\\stability\\v9-e571d1a-shocks",
+  "argv": [
+   "--seeds",
+   "20",
+   "--ticks",
+   "720000",
+   "--sample",
+   "1500",
+   "--scenario",
+   "cull70,drought,wolfwipe",
+   "--threads",
+   "15",
+   "--params",
+   "{\"ravenNestFood\":1,\"muledeerCover\":0.15,\"bison.initial\":550}",
+   "--out",
+   "review/stability/v9-e571d1a-shocks"
+  ]
+ },
+ "commit": "e571d1a (frozen copy)",
+ "node": "v24.19.0",
+ "platform": "win32 x64",
+ "startedAt": "2026-10-09T02:28:22.716Z",
+ "finishedAt": "2026-10-09T05:19:43.551Z",
+ "wallSeconds": 10280.81,
+ "stopReason": null,
+ "tasks": {
+  "total": 60,
+  "completed": 60,
+  "errors": 0,
+  "aborted": 0,
+  "skipped": 0
+ },
+ "msPerTick": 3.241106,
+ "ticksRun": 43200000,
+ "ticksPerSecWall": 4202,
+ "scenarios": {
+  "cull70": {
+   "seeds": 20,
+   "completed": 20,
+   "persistencePct": {
+    "bison": 100,
+    "wolf": 100,
+    "raven": 100,
+    "pronghorn": 100,
+    "rabbit": 100,
+    "cougar": 100,
+    "coyote": 100,
+    "prairiedog": 100,
+    "muledeer": 100
+   },
+   "maxGen": 389.3818181818182
+  },
+  "drought": {
+   "seeds": 20,
+   "completed": 20,
+   "persistencePct": {
+    "bison": 95,
+    "wolf": 95,
+    "raven": 100,
+    "pronghorn": 100,
+    "rabbit": 100,
+    "cougar": 100,
+    "coyote": 100,
+    "prairiedog": 95,
+    "muledeer": 100
+   },
+   "maxGen": 361.993961352657
+  },
+  "wolfwipe": {
+   "seeds": 20,
+   "completed": 20,
+   "persistencePct": {
+    "bison": 100,
+    "wolf": 100,
+    "raven": 100,
+    "pronghorn": 100,
+    "rabbit": 100,
+    "cougar": 100,
+    "coyote": 100,
+    "prairiedog": 100,
+    "muledeer": 100
+   },
+   "maxGen": 370.17293233082705
+  }
+ }
+}
