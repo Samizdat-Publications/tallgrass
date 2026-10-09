@@ -5,7 +5,7 @@
 // Writes <out>/<sp>_<pose>_<off|a3>.mp4 and <sp>_<pose>_<off|a3>_strip.jpg (8 frames 4 apart).
 import { chromium } from 'playwright';
 import { createServer } from 'vite';
-import { mkdirSync, rmSync } from 'node:fs';
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { execFileSync } from 'node:child_process';
 
@@ -53,7 +53,7 @@ try {
     const start = Math.floor(n / 2) - 16;
     const picks = [0, 1, 2, 3, 4, 5, 6, 7].map((j) => resolve(dir, `f${String(start + j * 4).padStart(4, '0')}.jpg`));
     const list = resolve(dir, 'list.txt');
-    (await import('node:fs')).writeFileSync(list, picks.map((p) => `file '${p.replace(/\/g, '/')}'\nduration 1`).join('\n') + '\n');
+    writeFileSync(list, picks.map((p) => `file '${p.split(String.fromCharCode(92)).join('/')}'\nduration 1`).join('\n') + '\n');
     execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-f', 'concat', '-safe', '0', '-i', list, '-vf', 'crop=iw*0.62:ih*0.62:iw*0.19:ih*0.25,tile=4x2', '-frames:v', '1', '-q:v', '3', resolve(out, tag + '_strip.jpg')]);
     rmSync(dir, { recursive: true, force: true });
     console.log('saved', tag);
