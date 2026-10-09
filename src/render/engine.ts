@@ -25,7 +25,7 @@ import { Fireflies, fireflyAmount } from './fireflies';
 import { Storms } from './storms';
 import { DroneCamera, CameraPreset } from './camera';
 import { CLIMATE_GRADE, grassTint } from './grass';
-import { CURE_KEYS, LEAF_KEYS, PACK_KEYS, keyCurve } from './season';
+import { CURE_KEYS, LAPSE_SEASON, LAPSE_SNOW, LAPSE_SWING, LEAF_KEYS, PACK_KEYS, keyCurve } from './season';
 import { SnowDepth } from './snowdepth';
 import { Flood } from './flood';
 import { DustStorm } from './dust';
@@ -49,6 +49,9 @@ const HOLD_EL = 40 * Math.PI / 180;
 const HOLD_DIR = new THREE.Vector3();
 /** The time of day (0..1, 0.25 = sunrise, 0.5 = noon) the light settles on while time flies: a warm, fairly high mid-morning. */
 const LAPSE_DAY = 0.42;
+/** The season-driven uniforms the time-lapse damping blends toward the steady growing season (engine.applySeason). */
+const LAPSE_COLS = ['grassLush', 'grassCured', 'stubble', 'soil', 'leafColorA', 'leafColorB', 'grassGreen', 'grassDry'] as const;
+const LAPSE_NUMS = ['greenHigh', 'greenLow', 'leafAmount', 'cure'] as const;
 
 const DEFAULT_ENV: EnvState = {
   tick: 0, year: 0, season: 1.2, dayFrac: 0.3, weather: 0, rain: 0, windDir: 0.35, windStrength: 0.35, warmth: 0.7,
@@ -201,6 +204,14 @@ export class Engine {
   private holdSm = 0;
   /** Latched once the sim sends a non-zero climate index (climate2 on). The time-lapse light is part of that mode: with the param off the light behaves as it always did. */
   private climateOn = false;
+  /**
+   * Time-lapse seasons (r-lapse): same gate as the daylight hold (from about 30x, climate regimes on), eased in real time. lapseSm is the eased
+   * 0..1 amount; at 1 the seasonal look keeps LAPSE_SWING of its swing around a steady growing season and the snowpack shrinks to LAPSE_SNOW.
+   * The climate (wet and dry) looks are untouched. `?lapse=0` turns it off (lapseEnabled), for comparison captures.
+   */
+  private lapseSm = 0;
+  lapseEnabled = typeof location === 'undefined' || new URLSearchParams(location.search).get('lapse') !== '0';
+  private readonly lapseSnap = { cols: [] as THREE.Color[], nums: [] as number[] };
   private readonly envDisp: EnvState = { ...DEFAULT_ENV };
   private tickPool = 0;
   private _focus = new THREE.Vector3();
@@ -739,10 +750,17 @@ export class Engine {
       HOLD_DIR.set(Math.sin(HOLD_AZ) * Math.cos(HOLD_EL), Math.sin(HOLD_EL), Math.cos(HOLD_AZ) * Math.cos(HOLD_EL));
       u.lightDir.value.lerp(HOLD_DIR, 0.88 * fast).normalize();
     }
+    // r-lapse: the share of the seasonal swing kept (1 at 1x and 10x) and of the snowpack (1 likewise); eased in real time, outside the fast block so it can never go stale
+    const lapseT = this.climateOn && this.lapseEnabled ? smoothstep(30, 70, this.simSpeed) : 0;
+    this.lapseSm = this.firstFrame ? lapseT : this.lapseSm + (lapseT - this.lapseSm) * (1 - Math.exp(-dt / 0.9));
+    if (lapseT === 0 && this.lapseSm < 0.004) this.lapseSm = 0;
+    const swingK = 1 - this.lapseSm * (1 - LAPSE_SWING);
+    const snowK = 1 - this.lapseSm * (1 - LAPSE_SNOW);
+    u.seasonKeep.value = swingK;
     this.applySeason(env.season);
-    const winter = smoothstep(2.4, 3.1, u.season.value) * (1 - smoothstep(3.55, 3.95, u.season.value));
+    const winter =smoothstep(2.4, 3.1, u.season.value) * (1 - smoothstep(3.55, 3.95, u.season.value));
     const frostTime = 1 - smoothstep(0.36, 0.5, env.dayFrac) * (1 - smoothstep(0.62, 0.74, env.dayFrac));
-    const frostTarget = winter * frostTime * (1 - 0.6 * env.warmth);
+    const frostTarget = winter * frostTime * (1 - 0.6 * env.warmth) * swingK;
     this.frostSm = this.firstFrame ? frostTarget : this.frostSm + (frostTarget - this.frostSm) * (1 - Math.exp(-simTicks / (90 * cal)));
     if (frostTarget === 0 && this.frostSm < 0.01) this.frostSm = 0;
     u.frost.value = this.frostSm;
@@ -753,13 +771,14 @@ export class Engine {
     const packTarget = keyCurve(PACK_KEYS, u.season.value);
     this.packSm = ease(this.packSm, packTarget, 1, 0.9);
     if (packTarget === 0 && this.packSm < 0.004) this.packSm = 0;
-    u.snow.value = Math.max(sm.snow, this.packSm);
+    u.snow.value = Math.max(sm.snow, this.packSm) * snowK;
     // S11: with the sim's per-cell depth field the shaders read the local depth instead (the seasonal pack is the sim's own now);
     // a falling snowfall still contributes a floor so a blizzard shows before the depth has built
     this.snowDepth.update(dt);
     this.flood.update(dt);
     u.snowDepthOn.value = this.snowDepth.on ? 1 : 0;
-    u.snowDepthFall.value = 0.35 * this.snowfallSm;
+    this.snowDepth.gain = snowK;
+    u.snowDepthFall.value = 0.35 * this.snowfallSm * snowK;
     u.rain.value = this.rainSm;
     // the streak volume (rain.ts) reads as rain from a side-on view; looking steeply down (the map view) it would be a scatter of
     // dashes in front of the lens, so it fades out there and the wet ground carries the rain alone (it also thins with altitude)
@@ -841,7 +860,7 @@ export class Engine {
     this.terrain.updateShadow(this.renderer, u.lightDir.value);
     this.cloudShadow.update(this.renderer, dt, this.firstFrame);
     this.hoppers.update(dt, focus0.x, focus0.z, this.camera.position.x, camY, this.camera.position.z, camY - aboveGround, this.renderer.domElement.height, this.camera.fov);
-    this.post.updateSnow(dt, this.snowfallSm, env, aboveGround, L);
+    this.post.updateSnow(dt, this.snowfallSm * snowK, env, aboveGround, L);
     this.post.updateRain(dt, L.rain, env, aboveGround, L);
     this.post.apply(L);
   }
@@ -891,6 +910,26 @@ export class Engine {
   }
 
   private applySeason(season: number): void {
+    this.writeSeason(season);
+    const u = this.uniforms;
+    if (this.lapseSm > 0.002) {
+      // time-lapse (r-lapse): write the steady growing-season look, then pull it toward the real season by the kept share of the swing
+      const sw = u.seasonKeep.value, snap = this.lapseSnap;
+      LAPSE_COLS.forEach((k, i) => { (snap.cols[i] ??= new THREE.Color()).copy(u[k].value); });
+      LAPSE_NUMS.forEach((k, i) => { snap.nums[i] = u[k].value; });
+      this.writeSeason(LAPSE_SEASON);
+      // (the crowns' autumn gold is the most vivid thing in the valley and blinks the loudest, so the leaf colours keep a smaller share)
+      LAPSE_COLS.forEach((k, i) => { u[k].value.lerp(snap.cols[i], k.startsWith('leafColor') ? sw * 0.6 : sw); });
+      LAPSE_NUMS.forEach((k, i) => { u[k].value = lerp(u[k].value, snap.nums[i], sw); });
+    }
+    if (this.dryLook > 0) {
+      // a dry run of years: cottonwood crowns thin a little (the crown colour is left alone: the tree shader reads the leaf colour's red-to-green ratio as the season)
+      u.leafAmount.value *= 1 - 0.2 * this.dryLook;
+    }
+    this.trees.setLeafAmount(u.leafAmount.value);
+  }
+
+  private writeSeason(season: number): void {
     const u = this.uniforms;
     const s = ((season % 4) + 4) % 4;
     const f = s / 0.5;
@@ -907,11 +946,6 @@ export class Engine {
     u.greenHigh.value = lerp(a.gH, b.gH, t);
     u.greenLow.value = lerp(a.gL, b.gL, t);
     u.leafAmount.value = keyCurve(LEAF_KEYS, s);
-    if (this.dryLook > 0) {
-      // a dry run of years: cottonwood crowns thin a little (the crown colour is left alone: the tree shader reads the leaf colour's red-to-green ratio as the season)
-      u.leafAmount.value *= 1 - 0.2 * this.dryLook;
-    }
-    this.trees.setLeafAmount(u.leafAmount.value);
 
     // terrain grass color = the blade layer's own palette (probes into grassTint, see grass.ts), so ground and blades match
     const cure = keyCurve(CURE_KEYS, s);

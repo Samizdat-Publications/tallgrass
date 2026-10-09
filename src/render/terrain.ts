@@ -800,6 +800,7 @@ export class Terrain {
       u.uDrought = sh.drought;
       u.uWetYr = sh.wetYears;
       u.uSeason = sh.season;
+      u.uSeasonKeep = sh.seasonKeep;
       u.uFrost = sh.frost;
       u.uSnow = sh.snow;
       u.uSnowTex = sh.snowDepthTex;
@@ -940,6 +941,7 @@ uniform float uCure;
 uniform float uDrought;
 uniform float uWetYr;
 uniform float uSeason;
+uniform float uSeasonKeep;
 uniform vec3 uStubble;
 uniform vec3 uSoil;
 uniform vec3 uRock;
@@ -1054,8 +1056,8 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
   float wdR = mix(90.0, st.a * 64.0, 1.0 - smoothstep(-95.0, 6.0, sd));
 
   float slopeG = sqrt(max(1.0 - nrm.y * nrm.y, 0.0)) / max(nrm.y, 0.05);
-  float winterK = tgWinterK(uSeason);
-  float autumnK = smoothstep(1.8, 2.2, uSeason) * (1.0 - smoothstep(2.6, 3.0, uSeason));
+  float winterK = tgWinterK(uSeason) * uSeasonKeep;
+  float autumnK = smoothstep(1.8, 2.2, uSeason) * (1.0 - smoothstep(2.6, 3.0, uSeason)) * uSeasonKeep;
   float curv = vTgCurv;
   float ridgeK = smoothstep(0.04, 0.7, curv);
   float hollowK = smoothstep(0.04, 0.7, -curv);
