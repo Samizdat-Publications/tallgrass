@@ -121,6 +121,7 @@ class FogPass extends Pass {
         uBlizzDir: { value: new THREE.Vector2(1, -0.3) },
         uDustCol: { value: new THREE.Color(0.3, 0.2, 0.1) },
         uAerialWarm: { value: 0.0 },
+        uAerialPale: { value: 0.0 },
         uAerialNight: { value: 0.0 },
         // dawn pool (R2.8): mist density (extinction per metre at the valley floor), height falloff, and the clock and wind that drift it
         uDawn: { value: 0.0 },
@@ -162,6 +163,7 @@ class FogPass extends Pass {
         uniform vec2 uBlizzDir;
         uniform vec3 uDustCol;
         uniform float uAerialWarm;
+        uniform float uAerialPale;
         uniform float uAerialNight;
         uniform float uDawn;
         uniform float uDawnFall;
@@ -346,6 +348,8 @@ class FogPass extends Pass {
           // golden light turns the haze itself gold (saturated, not grey): push the fog colour toward amber in proportion to the aerial share
           fc = mix(fc, fc * vec3(1.22, 1.0, 0.68) + uSunTint * 0.02, uAerialWarm * aerShare * (0.4 + 0.6 * lobe));
           fc = mix(fc, fc * vec3(1.18, 0.98, 0.7) + uSunTint * 0.04, uDust * aerShare * 0.6);
+          // low sun: the far air goes paler and creamier with distance (the hills layer into lighter, less saturated bands)
+          fc = mix(fc, vec3(dot(fc, vec3(0.2126, 0.7152, 0.0722))) * vec3(1.04, 1.0, 0.9), uAerialPale * aerShare);
           // the dust itself: brown-ochre air, a little lighter toward the sun (forward scatter)
           if (dustOd > 0.0) {
             float dsh = dustOd / (od + mistOd + dawnOd + dustOd + 1e-5);
@@ -1412,17 +1416,20 @@ export class PostFX {
     const el = Math.max(sh.sunDir.value.y, 0);
     // thicker when the sun is low (long path through the haze), thinner at high noon so midday stays crisp
     const low = 1 - smoothstep(0.1, 0.65, el);
+    // r-look: the golden-hour air of the look pass (sun below about 8 degrees, gone by 20): less wash, a creamier far haze
     const dust = this.dust;
     // deep winter: thinner, cleaner air
     const winter = smoothstep(2.4, 3.1, season) * (1 - smoothstep(3.55, 3.95, season));
+    const lowK = (1 - smoothstep(0.14, 0.35, el)) * (1 - 0.75 * winter);
     const clean = 1 - 0.4 * winter;
-    f.uAerial.value = 0.00014 * (0.55 + 0.7 * summer + 0.35 * low) * (1 + 0.5 * over) * clean;
-    f.uAerialLum.value = (0.8 + 0.6 * summer + 0.5 * dust) * (1 - 0.85 * over) * (0.7 + 0.5 * low) * clean;
+    f.uAerial.value = 0.00014 * (0.55 + 0.7 * summer + (0.35 - 0.15 * lowK) * low) * (1 + 0.5 * over) * clean;
+    f.uAerialLum.value = (0.8 + 0.6 * summer + 0.5 * dust) * (1 - 0.85 * over) * (0.7 + (0.5 - 0.2 * lowK) * low) * clean;
     f.uHorGlow.value = (0.35 + 0.35 * summer + 0.3 * dust) * (0.4 + 0.6 * low) * (1 - 0.8 * over);
     f.uDust.value = dust;
-    f.uAerialWarm.value = (0.35 + 0.65 * low) * (1 - over) * (1 - 0.5 * winter);
-    this.hazeBloom = 1 + 0.3 * low * (1 - over) * (1 - night);
+    f.uAerialWarm.value = (0.35 + (0.65 - 0.3 * lowK) * low) * (1 - over) * (1 - 0.5 * winter);
+    this.hazeBloom = 1 + (0.3 - 0.1 * lowK) * low * (1 - over) * (1 - night);
     f.uAerialNight.value = Math.min(1, night * 1.15);
+    f.uAerialPale.value = 0.3 * lowK * low * (1 - over) * (1 - 0.6 * winter) * (1 - night);
     // god rays: need a sun above the horizon and no cloud; stronger in haze and dust and with the sun low, off at night
     const haze = clamp(f.uAerial.value / 0.00022, 0, 1.6);
     const sunUp = smoothstep(0.0, 0.1, sh.sunDir.value.y);
