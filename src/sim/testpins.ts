@@ -9,6 +9,8 @@ export const V7C_OFF: Record<string, number> = {
   snowDepth: 0, dynamicTrees: 0, treeCwRecruit: 0.0015, dogRescueYears: 20,
   // checkpoint v9 additions
   ravenNestFood: 0, muledeerCover: 0.25, 'bison.initial': 800,
+  // checkpoint v10 additions
+  evolution2: 0, climate2: 0, wolfDenMinDist: 200, wolfTerritory: 100,
 };
 
 export function createSim(opts: { seed: number; params?: Record<string, number> }): Sim {

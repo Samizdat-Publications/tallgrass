@@ -594,7 +594,7 @@ export function defaultParams(): Params {
     drinkSpots: 0,
     herdSpacingGraze: 1.6, // v7c (was 0)
     climateAmp: 0,
-    climate2: 0,
+    climate2: 0.3, // v10 (was 0)
     climatePeriod: 40,
     climateMegaP: 0.03,
     climateDrought: 0.8,
@@ -605,7 +605,7 @@ export function defaultParams(): Params {
     droughtRefuge: 0,
     sprintCost: 0,
     herdEyes: 0,
-    evolution2: 0,
+    evolution2: 1, // v10 (was 0)
     coatSearch: 0,
     coatSearchRate: 0.15,
     coatSearchBoost: 1.3,
@@ -769,8 +769,8 @@ export function defaultParams(): Params {
     wolfEatRate: 0.012,
     wolfPackStoreShare: 0.45,
     wolfPackMax: 7,
-    wolfDenMinDist: 200,
-    wolfTerritory: 100,
+    wolfDenMinDist: 280, // v10 (was 200)
+    wolfTerritory: 130, // v10 (was 100)
     wolfPupDenAge: 450,
     wolfInjuryChance: 0.01,
     wolfImmigration: 0,
@@ -816,7 +816,8 @@ export function defaultParams(): Params {
 
 /** Apply flat overrides like {"grassGrowth": 0.002, "bison.metabolism": 0.0008}. Unknown keys throw. */
 export function applyOverrides(p: Params, o: Record<string, number> | undefined): Params {
-  if (!o) return p;
+  // v10: evolution2 is on by default, so its values are applied even with no overrides (pin evolution2 0 for the older worlds)
+  if (!o) o = {};
   for (const [k, v] of Object.entries(o)) {
     const dot = k.indexOf('.');
     if (dot > 0) {
