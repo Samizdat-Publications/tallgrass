@@ -220,7 +220,7 @@ export function buildCoyote(): ModelDef {
       crouchDrop: 0.18 * K, hunts: true,
       curl: 1, curlAng: 1.6, curlX: 0.14 * K, curlLen: 0.95 * K,
       deadDrop: 0.36 * K, deadHipF: 0.9, deadHipH: -0.6,
-      length: 1.5 * K, height: 0.85 * K, ring: 0.85, minPx: 10.5, boostLen: 1.5 * K,
+      length: 1.5 * K, height: 0.85 * K, ring: 0.85, minPx: 11.5, boostLen: 1.5 * K,
     },
   };
 }

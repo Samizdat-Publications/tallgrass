@@ -34,6 +34,8 @@ const VIEW_SETUPS = {
   top: `() => { e.cam.preset('top', true); }`,
   winter: `() => { Object.assign(e.env, { dayFrac: 0.34, season: 3.2, weather: 4 }); e.applyEnvNow(); e.cam.preset('wide', true); }`,
   night: `() => { Object.assign(e.env, { dayFrac: 0.97, season: 2.2 }); e.applyEnvNow(); window.__focusHerd(); }`,
+  // r-far-read: a blizzard (snow, gale) from the wide view: the whiteout fog, the streaks and the flat light
+  blizzard: `() => { Object.assign(e.env, { dayFrac: 0.4, season: 3.4, weather: 4, windStrength: 0.95 }); e.applyEnvNow(); e.snowfallSm = 1; if (e.post) e.post.blizzard = 0.95; e.cam.preset('wide', true); }`,
   // R4: a thunderstorm day seen from a low drone angle, with two cells (cloud masses, rain shafts, ground shade, sky gloom) and a
   // strike mid-flash. A build without the storm module (engine.storms undefined) just renders the stormy weather, so an A/B of
   // an old build against this one shows the cost of the cells.

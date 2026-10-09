@@ -19,6 +19,7 @@ import { getModel } from './models';
 import { antlerOf, deerSeason } from './models/muledeer';
 import type { DeerSeason } from './models/muledeer';
 import type { AnimParams, ModelDef } from './models';
+import { MapGlyphs } from './glyphs';
 import { IK_FAR, IK_NEAR, gaitMix, gaitStride, legRigOf, slopeStrideK, stanceBodyDy, timelapseGaitSpd, timelapseHz, timelapseK } from './models/legmath';
 import type { LegRig } from './models/legmath';
 import { ContactShadows } from './models/contact';
@@ -203,6 +204,11 @@ const SPLASH_RANGE = 60;
 const SPLASH_BUDGET = 10;
 /** Furthest a bedded animal or a carcass in a pond is moved to reach the shore (m); further than that it stays where the sim put it. */
 const SHORE_MAX = 36;
+/** r-far-read: a standing or grazing animal in water deeper than WADE_DEEP (m) is drawn in the shallows instead (water no deeper than WADE_OK), never afloat in a pond's middle. */
+const WADE_DEEP = 0.6;
+const WADE_OK = 0.4;
+/** ...unless it is moving faster than this (m/s on screen: a walk is 1 to 2, a trot over 3), then it wades on across. */
+const WADE_SLOW = 3.0;
 
 /**
  * Render-side heading dynamics per species: natural frequency (rad/s) of the critically damped spring that chases the sim
@@ -790,6 +796,8 @@ export class AnimalLayer {
     },
   };
   private lit = new SceneLit();
+  /** The small species marks of the map and drone views (camera about 250 m above the ground and up). */
+  private glyphs: MapGlyphs;
   /** The engine's shared uniforms (scene.userData.tgUniforms), found on the first main-view draw; feeds the hill-shadow lookup. */
   private tg: SharedUniforms | null = null;
   /** A species material compiled before `tg` was known (it has no hill shadow until it is rebuilt). */
@@ -804,6 +812,7 @@ export class AnimalLayer {
   private splash: Splash;
   /** Nearest dry ground to a water cell (offset in m from the cell centre to the bank plus a margin), cleared now and then (ponds change). */
   private shoreCache = new Map<number, number>();
+  private wadeCache = new Map<number, number>();
   private shoreAge = 0;
   private splashBudget = 0;
   /** Soft contact shadow under every ground animal (see models/contact.ts). */
@@ -873,6 +882,9 @@ export class AnimalLayer {
   private halo: THREE.Mesh;
   private haloMat: THREE.ShaderMaterial;
   private ring: THREE.Mesh;
+  /** r-far-read: the depth-tested twin of the ring: the part of the ring that lies behind a body or a leg is hidden, not drawn across it. `ring` (not depth tested) is only its faint ghost near the animal, and the whole ring from afar. */
+  private ringSolid: THREE.Mesh;
+  private ringSolidMat: THREE.ShaderMaterial;
   private ringGeo: THREE.PlaneGeometry;
   private ringBase: Float32Array;
   private ringMat: THREE.ShaderMaterial;
@@ -932,6 +944,8 @@ export class AnimalLayer {
     this.markers = new Markers(world.size);
     this.contact = new ContactShadows(this.shared);
     this.object3D.add(this.kills.mesh, this.contact.mesh, this.dust.mesh, this.splash.drops, this.splash.rings, this.markers.mesh, this.markers.pingMesh);
+    this.glyphs = new MapGlyphs(this.shared.uLow);
+    this.object3D.add(this.glyphs.mesh);
 
     // Selection ring: a crisp thin cream ring with a dark edge on both sides (so it reads on gold grass, snow and dusk alike),
     // hugging the terrain under the selected animal. Its line stays about 2.5 px wide at any camera distance.
@@ -975,6 +989,16 @@ export class AnimalLayer {
     this.ring.onBeforeRender = (_r, scene) => { if (scene.overrideMaterial) this.ringGeo.setDrawRange(0, 0); };
     this.ring.onAfterRender = () => this.ringGeo.setDrawRange(0, Infinity);
     this.object3D.add(this.ring);
+    this.ringSolidMat = this.ringMat.clone();
+    this.ringSolidMat.depthTest = true;
+    this.ringSolid = new THREE.Mesh(this.ringGeo, this.ringSolidMat);
+    this.ringSolid.frustumCulled = false;
+    this.ringSolid.renderOrder = 51;
+    this.ringSolid.visible = false;
+    this.ringSolid.name = 'selection-ring-solid';
+    this.ringSolid.onBeforeRender = (_r, scene) => { if (scene.overrideMaterial) this.ringGeo.setDrawRange(0, 0); };
+    this.ringSolid.onAfterRender = () => this.ringGeo.setDrawRange(0, Infinity);
+    this.object3D.add(this.ringSolid);
     // Follow halo: a soft warm band on the ground round the followed animal, depth tested (so it lies under the belly and legs, never over
     // the body), fading in for the first seconds of a follow and gone after. It shares the ring's geometry (one more small draw).
     this.haloMat = new THREE.ShaderMaterial({
@@ -1686,17 +1710,26 @@ export class AnimalLayer {
   private rvB = [0, 0];
 
   private shoreV = { dx: 0, dz: 0 };
+  /** Depth of the water over the terrain at the centre of water cell (i, j), m (0 or less: dry). */
+  private depthAt(i: number, j: number): number {
+    const w = this.world;
+    return w.waterHeight[j * w.n + i] - sampleHeight(w.height, w.hn, w.cell, (i + 0.5) * w.cell, (j + 0.5) * w.cell);
+  }
   /**
    * Where a body that lies in water is moved to: the offset (m) from (x, z) to dry ground on the nearest bank, a metre or two inland and spread along
    * the bank by the body's own seed so a pile of them does not stack on one point. False when (x, z) is not in water or no bank is within SHORE_MAX.
    * The bank search is cached per water cell (the cache is cleared every ten seconds or so, ponds come and go).
    */
-  private shoreOffset(x: number, z: number, id: number, out: { dx: number; dz: number }): boolean {
+  private shoreOffset(x: number, z: number, id: number, out: { dx: number; dz: number }, shallow = false): boolean {
     const w = this.world, n = w.n, cs = w.cell;
     const ci = Math.min(n - 1, Math.max(0, Math.floor(x / cs))), cj = Math.min(n - 1, Math.max(0, Math.floor(z / cs)));
+    // shallow: from deep water (more than WADE_DEEP) to the nearest cell no deeper than WADE_OK (dry land counts), for a standing animal;
+    // otherwise from any water to the nearest dry cell, for a body that lies down
     if (!w.water[cj * n + ci]) return false;
+    if (shallow && this.depthAt(ci, cj) <= WADE_DEEP) return false;
     const key = cj * n + ci;
-    let packed = this.shoreCache.get(key);
+    const cache = shallow ? this.wadeCache : this.shoreCache;
+    let packed = cache.get(key);
     if (packed === undefined) {
       // nearest dry cell by growing square rings; the packed value is the cell offset (i, j) in two 16-bit halves, or -1 for none
       const R = Math.ceil(SHORE_MAX / cs);
@@ -1708,14 +1741,16 @@ export class AnimalLayer {
           const edge = j === -r || j === r;
           for (let i = -r; i <= r; i += edge ? 1 : 2 * r) {
             const ii = ci + i;
-            if (ii < 0 || ii >= n || w.water[jj * n + ii]) continue;
+            if (ii < 0 || ii >= n) continue;
+            const wi = jj * n + ii;
+            if (shallow ? w.water[wi] !== 0 && this.depthAt(ii, jj) > WADE_OK : w.water[wi]) continue;
             const d = i * i + j * j;
             if (d < bd) { bd = d; bi = i; bj = j; }
           }
         }
       }
       packed = bd === 1e9 ? -1 : (bi + 512) * 1024 + (bj + 512);
-      this.shoreCache.set(key, packed);
+      cache.set(key, packed);
     }
     if (packed < 0) return false;
     const bi = Math.floor(packed / 1024) - 512, bj = (packed % 1024) - 512;
@@ -1768,8 +1803,10 @@ export class AnimalLayer {
     this.dust.update(running);
     this.splash.update(running);
     this.splashBudget = SPLASH_BUDGET;
-    if (++this.shoreAge > 600) { this.shoreAge = 0; this.shoreCache.clear(); }
+    if (++this.shoreAge > 600) { this.shoreAge = 0; this.shoreCache.clear(); this.wadeCache.clear(); }
     this.markers.begin();
+    // map glyphs: only staged from a high camera
+    const glyphsOn = this.glyphs.begin(this.shared.uCamPos.value.y - sampleHeight(H, hn, cell, this.shared.uCamPos.value.x, this.shared.uCamPos.value.z));
     const dustRate = Math.min(this.timeScale, 3);
     // time-lapse (see timelapseK in models/legmath.ts): 0 up to 3x, 1 from 8x. Drives the bound pose, the cadence and the landing dust.
     const tl = timelapseK(this.timeScale);
@@ -2039,7 +2076,19 @@ export class AnimalLayer {
           nw = smoothstep(0.1, 0.9, S.lie[slot]);
           S.snx[slot] = this.shoreV.dx * nw;
           S.snz[slot] = this.shoreV.dz * nw;
-        } else if (S.snw[slot] > 0) { S.snx[slot] = 0; S.snz[slot] = 0; }
+        } else if (this.timeScale <= 4 && S.vis[slot] < WADE_SLOW && this.shoreOffset(x, z, id, this.shoreV, true)) {
+          // r-far-read: a standing or grazing animal that the sim has in deep water is drawn in the shallows (eased over about a second)
+          nw = S.snw[slot] + (1 - S.snw[slot]) * kLie;
+          S.snx[slot] = this.shoreV.dx * nw;
+          S.snz[slot] = this.shoreV.dz * nw;
+        } else if (S.snw[slot] > 0) {
+          // (it has set off, or the pond is gone: the offset eases out rather than snapping back)
+          const f = Math.exp(-dt * 2.5);
+          nw = S.snw[slot] * f;
+          if (nw < 0.01) nw = 0;
+          S.snx[slot] *= nw > 0 ? f : 0;
+          S.snz[slot] *= nw > 0 ? f : 0;
+        }
         S.snw[slot] = nw;
         x += S.snx[slot];
         z += S.snz[slot];
@@ -2477,7 +2526,10 @@ export class AnimalLayer {
           const surf = world.waterHeight[wc];
           const belly = pr.height * 0.36 * vs;
           if (surf - ground > belly) {
-            y = surf - belly + 0.04 * Math.sin(this.timeSec * 1.7 + hash01(id) * 40);
+            // (r-far-read: the deeper the water, the further the body sinks, to about the middle of its depth, so a crosser reads as wading chest-deep, not afloat)
+            const dep = surf - ground;
+            const sink = belly + 0.3 * pr.height * vs * smoothstep(belly, belly + 0.7 * vs, dep);
+            y = surf - sink + 0.04 * Math.sin(this.timeSec * 1.7 + hash01(id) * 40);
             pitch *= 0.25;
             roll *= 0.25;
           }
@@ -2545,6 +2597,12 @@ export class AnimalLayer {
         }
       }
       if (fadeQ < 8) this.markers.add(sp, x, y + (FLIES[sp] ? 0.3 : pr.height * 0.6 * vs), z, pr.boostLen, vs);
+      if (glyphsOn && fadeQ < 8) {
+        // over the body, above it at the height the distance boost draws it (an animal this far out is scaled up to about minPx pixels)
+        const gpx = (pr.boostLen * vs * this.shared.uPxK.value) / Math.max(camD, 1);
+        const gb = clamp(pr.minPx / Math.max(gpx, 0.01), 1, 7);
+        this.glyphs.add(sp, x, y + pr.height * vs * gb * (FLIES[sp] ? 0.5 : 1.05), z, Math.cos(hd), Math.sin(hd), vs);
+      }
       // from the wide view, a faint ripple where a predator is actually chasing
       if (state === St.Chase && HUNTER[sp]) this.markers.addPing(sp, x, y + 0.3, z);
 
@@ -2770,6 +2828,7 @@ export class AnimalLayer {
       }
     }
     this.markers.end();
+    this.glyphs.end();
     this.contact.end();
     this.updateRing();
   }
@@ -2832,6 +2891,7 @@ export class AnimalLayer {
     const si = this.selInfo;
     if ((this.selectedId === null && this._followedId === null) || !si.found) {
       this.ring.visible = false;
+      this.ringSolid.visible = false;
       this.halo.visible = false;
       return;
     }
@@ -2851,13 +2911,19 @@ export class AnimalLayer {
     for (let i = 0; i < arr.length; i += 3) {
       const wx = si.x + this.ringBase[i] * R, wz = si.z + this.ringBase[i + 2] * R;
       arr[i] = wx;
-      arr[i + 1] = sampleHeight(w.height, w.hn, w.cell, wx, wz) + 0.18;
+      arr[i + 1] = sampleHeight(w.height, w.hn, w.cell, wx, wz) + 0.26;
       arr[i + 2] = wz;
     }
     pos.needsUpdate = true;
     this.ringGeo.computeBoundingSphere();
-    this.ringMat.uniforms.uOpacity.value = (0.88 + 0.12 * Math.sin(this.timeSec * 4)) * quiet;
+    // up close the ring is depth tested (it passes behind the legs and under the belly), with only a faint ghost drawn over everything so it
+    // is never lost in the grass; from a distance, where a boosted body would swallow it, the whole ring is drawn over everything
+    const op = (0.88 + 0.12 * Math.sin(this.timeSec * 4)) * quiet;
+    const ghost = 0.16 + 0.84 * smoothstep(45, 130, cd);
+    this.ringMat.uniforms.uOpacity.value = op * ghost;
+    this.ringSolidMat.uniforms.uOpacity.value = op;
     this.ring.visible = true;
+    this.ringSolid.visible = true;
     this.haloMat.uniforms.uHalo.value = haloK;
     this.halo.visible = haloK > 0.004;
   }
@@ -2893,7 +2959,7 @@ export class AnimalLayer {
 
   setSelected(id: number | null): void {
     this.selectedId = id;
-    if (id === null && this._followedId === null) this.ring.visible = false;
+    if (id === null && this._followedId === null) { this.ring.visible = false; this.ringSolid.visible = false; }
   }
 
   /** The animal the camera follows (null: none). A new follow restarts the bloom of the marker. */
@@ -2956,12 +3022,14 @@ export class AnimalLayer {
     }
     this.heightTex.dispose();
     this.markers.dispose();
+    this.glyphs.dispose();
     this.dust.dispose();
     this.splash.dispose();
     this.contact.dispose();
     this.kills.dispose();
     this.ringGeo.dispose();
     this.ringMat.dispose();
+    this.ringSolidMat.dispose();
     this.haloMat.dispose();
   }
 }

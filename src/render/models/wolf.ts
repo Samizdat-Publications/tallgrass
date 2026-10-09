@@ -195,7 +195,7 @@ export function buildWolf(): ModelDef {
     read: { dark: [0.74, 0.78, 0.88], rim: [0.72, 0.84, 1.0, 0.7] },
     far: { gain: 0.8, rim: 0.05, hunt: 0.25, rimCol: [0.92, 0.93, 0.95], d0: 70, d1: 280, tint: [0.105, 0.1, 0.092], mix: 0.7, floor: 0.12,
       // a slim cool-grey form with a paler back; the legs swing less so the outline is not a crumpled scrap
-      top: [0.29, 0.275, 0.255], topMix: 0.55, side: 0.22, legs: 0.85, calm: 0.6, widen: 0.1 },
+      top: [0.29, 0.275, 0.255], topMix: 0.55, side: 0.3, legs: 0.85, calm: 0.6, widen: 0.1 },
     params: {
       ...DEFAULT_PARAMS,
       kind: 0,
@@ -215,7 +215,7 @@ export function buildWolf(): ModelDef {
       crouchDrop: 0.18, hunts: true,
       curl: 1, curlAng: 1.6, curlX: 0.14, curlLen: 0.95,
       deadDrop: 0.36, deadHipF: 0.9, deadHipH: -0.6,
-      length: 1.5, height: 0.85, ring: 1.1, minPx: 10.5, boostLen: 1.5,
+      length: 1.5, height: 0.85, ring: 1.1, minPx: 13, boostLen: 1.5,
     },
   };
 }
