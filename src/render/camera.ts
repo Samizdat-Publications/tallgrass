@@ -65,6 +65,13 @@ function spring(x: number, target: number, s: Vel, omega: number, dt: number): n
   return target + (d + t) * ex;
 }
 
+/** Keeps `v` in [lo, hi] with a smooth bend over the last `k` metres at each end (equal to `v` inside, the slope continuous, approaching the limit and never past it). */
+function softLimit(v: number, lo: number, hi: number, k = 8): number {
+  if (v > hi - k) return hi - k * Math.exp(-(v - hi + k) / k);
+  if (v < lo + k) return lo + k * Math.exp(-(lo + k - v) / k);
+  return v;
+}
+
 /** A dead zone with a smooth edge: 0 well inside `dz`, the excess beyond it well outside, and a quadratic blend between (continuous slope). */
 function softExcess(d: number, dz: number): number {
   const w = 0.5 * dz, x = d - dz;
@@ -580,11 +587,14 @@ export class DroneCamera {
     const yaw = c.yaw + this.av.off;
     let ox = -Math.sin(yaw) * a, oz = -Math.cos(yaw) * a;
     if (speed > 0.6) {
-      const lead = Math.min(speed * 0.3, 0.14 * D);
+      // (r-cuts: the look-ahead and the lag feed-forward fade in over 0.6 to 1.4 m/s. They used to switch on at 0.6, which moved the target by
+      // most of a metre in one frame whenever a wandering animal crossed that speed, and the picture ticked)
+      const on = smoothstep(0.6, 1.4, speed);
+      const lead = Math.min(speed * 0.3, 0.14 * D) * on;
       ox += (fv.x / speed) * lead; oz += (fv.z / speed) * lead;
       // the chase lags a steady-speed subject by (smoothing time x its stretch) x 4/3 (both springs); feed that distance forward
       const stretch = 1 + 1.6 * (1 - smoothstep(0, 3.5, this.moveT));
-      const ff = FRAME_SMOOTH * stretch * (4 / 3);
+      const ff = FRAME_SMOOTH * stretch * (4 / 3) * on;
       ox += fv.x * ff; oz += fv.z * ff;
     }
     const ol = Math.hypot(ox, oz), cap = 0.8 * D * Math.max(1, F.timeScale ?? 1);
@@ -740,9 +750,11 @@ export class DroneCamera {
     const S = this.opt.worldSize;
     const low = 1 - smoothstep(35, 90, py - this.opt.ground(px, pz));
     if (low > 0) {
+      // (r-cuts: a soft edge, not a wall. The hard clamp stopped a camera that was gliding at 80 m/s dead on the edge, a kick in the picture;
+      // now the position eases onto the same limit, with the same slope where it starts to bend)
       const m = 6;
-      px = px + (clamp(px, m, S - m) - px) * low;
-      pz = pz + (clamp(pz, m, S - m) - pz) * low;
+      px = px + (softLimit(px, m, S - m) - px) * low;
+      pz = pz + (softLimit(pz, m, S - m) - pz) * low;
     }
     const floor = this.opt.ground(px, pz) + 1.6;
     if (py < floor) py = floor;

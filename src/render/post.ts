@@ -558,16 +558,94 @@ class GodRayPass extends Pass {
   }
 }
 
+/** Eye adaptation (r-cuts): seconds the exposure takes to follow the picture when it gets brighter, and when it gets darker. */
+const ADAPT_TAU_UP = 0.4;
+const ADAPT_TAU_DOWN = 0.55;
+
 class GradePass extends Pass {
   material: THREE.ShaderMaterial;
   private quad: FullScreenQuad;
+  /**
+   * Eye adaptation. A 1 x 1 target holds (adapted, measured) log luminance of the frame, the adapted one following the measured one with
+   * a time constant of about half a second. The grade multiplies the frame by exp(strength x (adapted - measured)): when the measured
+   * picture jumps (a cut from a dark carcass to a bright hillside) the new picture starts near the old exposure and settles over a second,
+   * and when it is steady the factor is exactly 1, so no shot's resting look changes. Zero strength skips the metering altogether.
+   */
+  adaptStrength = 0.65;
+  private adaptRT: [THREE.WebGLRenderTarget, THREE.WebGLRenderTarget];
+  private adaptIdx = 0;
+  private adaptReset = true;
+  private meterMat: THREE.ShaderMaterial;
+  private meterQuad: FullScreenQuad;
+  /** First metering stage: 8 x 6 cells, each the weighted log luminance of a few taps in its own part of the frame (so the taps run in parallel). */
+  private cellRT: THREE.WebGLRenderTarget;
+  private cellMat: THREE.ShaderMaterial;
+  private cellQuad: FullScreenQuad;
 
   constructor(storm: StormUniforms) {
     super();
     this.needsSwap = true;
+    const mk = () => new THREE.WebGLRenderTarget(1, 1, {
+      type: THREE.HalfFloatType, format: THREE.RGBAFormat, minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter, depthBuffer: false, stencilBuffer: false,
+    });
+    this.adaptRT = [mk(), mk()];
+    this.cellRT = new THREE.WebGLRenderTarget(8, 6, {
+      type: THREE.HalfFloatType, format: THREE.RGBAFormat, minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter, depthBuffer: false, stencilBuffer: false,
+    });
+    // stage 1: one fragment per cell, 3 x 3 taps inside it; the middle of the frame counts more: the log-average luminance of what the lens sees
+    this.cellMat = new THREE.ShaderMaterial({
+      uniforms: { tScene: { value: null } },
+      vertexShader: FS_VERT,
+      fragmentShader: /* glsl */ `
+        precision highp float;
+        varying vec2 vUv;
+        uniform sampler2D tScene;
+        void main() {
+          float sum = 0.0;
+          for (int j = 0; j < 3; j++) {
+            for (int i = 0; i < 3; i++) {
+              vec2 uv = vec2((floor(vUv.x * 8.0) + (float(i) + 0.5) / 3.0) / 8.0, (floor(vUv.y * 6.0) + (float(j) + 0.5) / 3.0) / 6.0);
+              float l = dot(texture2D(tScene, uv).rgb, vec3(0.2126, 0.7152, 0.0722));
+              sum += log(clamp(l, 0.003, 40.0));
+            }
+          }
+          vec2 d = (vUv - 0.5) * vec2(1.0, 0.8);
+          float w = 0.35 + exp(-dot(d, d) * 8.0);
+          gl_FragColor = vec4(w * sum / 9.0, w, 0.0, 1.0);
+        }`,
+      depthTest: false, depthWrite: false,
+    });
+    this.cellQuad = new FullScreenQuad(this.cellMat);
+    // stage 2: the 48 cells to one number, and the adapted value one step toward it
+    this.meterMat = new THREE.ShaderMaterial({
+      uniforms: { tCells: { value: this.cellRT.texture }, tPrev: { value: null }, uKUp: { value: 0 }, uKDown: { value: 0 }, uReset: { value: 1 } },
+      vertexShader: FS_VERT,
+      fragmentShader: /* glsl */ `
+        precision highp float;
+        varying vec2 vUv;
+        uniform sampler2D tCells;
+        uniform sampler2D tPrev;
+        uniform float uKUp;
+        uniform float uKDown;
+        uniform float uReset;
+        void main() {
+          vec2 sw = vec2(0.0);
+          for (int j = 0; j < 6; j++) {
+            for (int i = 0; i < 8; i++) sw += texture2D(tCells, vec2((float(i) + 0.5) / 8.0, (float(j) + 0.5) / 6.0)).rg;
+          }
+          float m = sw.x / sw.y;
+          float a = uReset > 0.5 ? m : texture2D(tPrev, vec2(0.5)).r;
+          a += (m - a) * (m > a ? uKUp : uKDown);
+          gl_FragColor = vec4(a, m, 0.0, 1.0);
+        }`,
+      depthTest: false, depthWrite: false,
+    });
+    this.meterQuad = new FullScreenQuad(this.meterMat);
     this.material = new THREE.ShaderMaterial({
       uniforms: {
         tDiffuse: { value: null },
+        tAdapt: { value: this.adaptRT[0].texture },
+        uAdapt: { value: 0 },
         uFlash: storm.flash,
         uShadowTint: { value: new THREE.Color(1, 1, 1) },
         uHighTint: { value: new THREE.Color(1, 1, 1) },
@@ -583,6 +661,8 @@ class GradePass extends Pass {
         precision highp float;
         varying vec2 vUv;
         uniform sampler2D tDiffuse;
+        uniform sampler2D tAdapt;
+        uniform float uAdapt;
         uniform float uFlash;
         uniform vec3 uShadowTint;
         uniform vec3 uHighTint;
@@ -595,6 +675,14 @@ class GradePass extends Pass {
         void main() {
           vec4 c = texture2D(tDiffuse, vUv);
           vec3 col = c.rgb;
+          if (uAdapt > 0.0) {
+            // eye adaptation: the gap (log) between the exposure the eye has settled to and the picture now in front of it; a small dead
+            // band keeps the half-float rounding of the settled value out of the picture
+            vec2 ad = texture2D(tAdapt, vec2(0.5)).rg;
+            float gap = ad.x - ad.y;
+            gap = sign(gap) * max(abs(gap) - 0.03, 0.0);
+            col *= clamp(exp(uAdapt * gap), 0.5, 1.4);
+          }
           // lightning flash (R4): a few frames of exposure and cool light
           col = col * (1.0 + 0.9 * uFlash) + vec3(0.07, 0.085, 0.14) * uFlash;
           // lift the blacks softly (more where it is darkest) so shadows keep their color
@@ -622,13 +710,43 @@ class GradePass extends Pass {
     this.quad = new FullScreenQuad(this.material);
   }
 
-  override render(renderer: THREE.WebGLRenderer, writeBuffer: THREE.WebGLRenderTarget, readBuffer: THREE.WebGLRenderTarget): void {
-    this.material.uniforms.tDiffuse.value = readBuffer.texture;
+  override render(renderer: THREE.WebGLRenderer, writeBuffer: THREE.WebGLRenderTarget, readBuffer: THREE.WebGLRenderTarget, deltaTime?: number): void {
+    const u = this.material.uniforms;
+    if (this.adaptStrength > 0) {
+      // meter the frame into the other 1 x 1 target, reading the last one; then grade with the result
+      const dt = Math.min(0.1, Math.max(0, deltaTime ?? 0));
+      const prev = this.adaptRT[this.adaptIdx], next = this.adaptRT[1 - this.adaptIdx];
+      this.cellMat.uniforms.tScene.value = readBuffer.texture;
+      renderer.setRenderTarget(this.cellRT);
+      this.cellQuad.render(renderer);
+      const m = this.meterMat.uniforms;
+      m.tPrev.value = prev.texture;
+      m.uKUp.value = 1 - Math.exp(-dt / ADAPT_TAU_UP);
+      m.uKDown.value = 1 - Math.exp(-dt / ADAPT_TAU_DOWN);
+      m.uReset.value = this.adaptReset ? 1 : 0;
+      this.adaptReset = false;
+      renderer.setRenderTarget(next);
+      this.meterQuad.render(renderer);
+      this.adaptIdx = 1 - this.adaptIdx;
+      u.tAdapt.value = next.texture;
+      u.uAdapt.value = this.adaptStrength;
+    } else {
+      u.uAdapt.value = 0;
+      this.adaptReset = true; // (switched on again later: start from what the picture is then, not from what it was)
+    }
+    u.tDiffuse.value = readBuffer.texture;
     renderer.setRenderTarget(this.renderToScreen ? null : writeBuffer);
     this.quad.render(renderer);
   }
 
-  override dispose(): void { this.material.dispose(); this.quad.dispose(); }
+  /** Forget the settled exposure: the next frame is taken as the one the eye is used to (a stills tool, a new valley). */
+  resetAdapt(): void { this.adaptReset = true; }
+
+  override dispose(): void {
+    this.material.dispose(); this.quad.dispose();
+    this.meterMat.dispose(); this.meterQuad.dispose(); this.cellMat.dispose(); this.cellQuad.dispose(); this.cellRT.dispose();
+    this.adaptRT[0].dispose(); this.adaptRT[1].dispose();
+  }
 }
 
 /**
@@ -965,6 +1083,7 @@ class FinishPass extends Pass {
         uCA: { value: 0 },
         uSeed: { value: 0 },
         uRes: { value: new THREE.Vector2(1600, 900) },
+        uDip: { value: 0 },
       },
       vertexShader: FS_VERT,
       fragmentShader: /* glsl */ `
@@ -975,6 +1094,7 @@ class FinishPass extends Pass {
         uniform float uCA;      // fringe at the corners, in pixels each way
         uniform float uSeed;
         uniform vec2 uRes;
+        uniform float uDip;     // the dip at an edit (cutfx.ts): 0 plain picture, 1 soft dark
         float hash12(vec2 p) {
           vec3 p3 = fract(vec3(p.xyx) * 0.1031);
           p3 += dot(p3, p3.yzx + 33.33);
@@ -999,6 +1119,8 @@ class FinishPass extends Pass {
             float wgt = 0.3 + 2.8 * l * (1.0 - l);
             c.rgb += (vec3(n) + vec3(cn * 0.5, -cn * 0.3, cn * 0.4)) * uGrain * wgt;
           }
+          // (a soft dark, not black: a faint warm-grey so the edit reads as film, and the grain above rides on it)
+          if (uDip > 0.0) c.rgb = mix(c.rgb, vec3(0.022, 0.021, 0.024), uDip);
           float n = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
           c.rgb += (n - 0.5) / 255.0;
           gl_FragColor = c;
@@ -1128,6 +1250,12 @@ export class PostFX {
     // film re-rolls its grain 24 times a second
     u.uSeed.value = grain > 0 ? Math.floor(performance.now() / 41.667) % 4096 : 0;
   }
+
+  /** The dip at an edit (render/cutfx.ts): 0 is the plain picture, 1 a soft dark. Applied last, over grain and all. */
+  setDip(level: number): void { this.finish.material.uniforms.uDip.value = level; }
+
+  /** Eye adaptation strength (0 off and unmetered; about 0.65 is the default). */
+  setAdapt(strength: number): void { this.grade.adaptStrength = Math.max(0, strength); }
 
   /** Size in CSS pixels; the renderer's pixel ratio is applied by the composer. */
   setSize(w: number, h: number): void {

@@ -49,6 +49,17 @@ const BREATH = [
   [16, "document.dispatchEvent(new KeyboardEvent('keydown', { key: 'g', bubbles: true })); window.__cam('wide')"],
 ];
 if (arg('set', '') === 'breath') SEGMENTS.splice(0, SEGMENTS.length, ...BREATH);
+// --set motion (DAY-PLAN): 40 s of 1x close and mid shots of animals moving, for the Gemini critic at 8 fps sampling
+// (tools/gemini_video_review.py --fps 8). PRE runs before the recorded part (it is trimmed off): a short 10x warm-up so hunts start.
+const PRE = [];
+const MOTION = [
+  [8, "window.__speed(1); (() => { const c = window.__find(0, 3).concat(window.__find(0, 2)).concat(window.__find(0)); if (c.length) { window.__followId(c[0]); window.__engine.cam.setView({ distance: 18, pitchDeg: 12 }); } })()"],
+  [8, "(() => { const c = window.__find(3, 4).concat(window.__find(3, 3)).concat(window.__find(3)); if (c.length) { window.__followId(c[0]); window.__engine.cam.setView({ distance: 16, pitchDeg: 10 }); } })()"],
+  [10, "(() => { const c = window.__find(1, 5).concat(window.__find(1, 10)).concat(window.__find(1, 3)).concat(window.__find(1)); if (c.length) { window.__followId(c[0]); window.__engine.cam.setView({ distance: 16, pitchDeg: 12 }); } })()"],
+  [7, "(() => { const c = window.__find(1, 6).concat(window.__find(1, 5)); if (c.length) { window.__followId(c[0]); window.__engine.cam.setView({ distance: 14, pitchDeg: 16 }); } })()"],
+  [7, "(() => { const c = window.__find(1, 2).concat(window.__find(1)); if (c.length) { window.__followId(c[c.length - 1]); window.__engine.cam.setView({ distance: 12, pitchDeg: 10 }); } })()"],
+];
+if (arg('set', '') === 'motion') { SEGMENTS.splice(0, SEGMENTS.length, ...MOTION); PRE.push([12, 'window.__speed(10); window.__timeOfDay && window.__timeOfDay(0.62)']); }
 
 const kill = setTimeout(() => { console.error('video: hard timeout'); process.exit(2); }, 12 * 60 * 1000);
 const server = await createServer({ configFile: resolve('vite.config.ts'), cacheDir: resolve('scratch/_vitecache'), server: { port: 5300 + Math.floor(Math.random() * 600), strictPort: false, hmr: false }, logLevel: 'error' });
@@ -66,6 +77,10 @@ try {
   await page.goto(base + '/index.html?autoscale=0&autocam=0' + (query ? '&' + query : ''), { waitUntil: 'load', timeout: 180000 });
   await page.waitForFunction(() => window.__ready === true, null, { timeout: 180000 });
   await page.waitForTimeout(1000);
+  for (const [secs, js] of PRE) {
+    if (js) await page.evaluate(js);
+    await page.waitForTimeout(secs * 1000);
+  }
   const t0 = Date.now();
   // --camlog file.json: log the camera path every frame and, at the end, count the frames inside a tree crown and the jerk (tools/camlog.mjs)
   if (camlog) await page.evaluate('window.__engine.cam.debugLog = []');

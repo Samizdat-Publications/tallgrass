@@ -22,6 +22,33 @@ const ext = png ? 'png' : 'jpg';
 
 // St: 1 graze, 3 run, 4 flee, 5 chase, 6 eat, 9 fly, 10 stalk. Sp: 0 bison, 1 wolf, 2 raven, 3 pronghorn.
 const SETS = {
+  // DAY-PLAN look set: the same 10 frames before and after every look, ground and animal change. The sim is paused and stepped a
+  // fixed number of ticks (so animals stand in the same places whatever the load), the light and season are held, the UI is hidden.
+  // Use with --query "seed=tallgrass" (the default world). tools/look_stats.py compares lk_01 and lk_02 with the concept image.
+  look: [
+    { name: 'lk_00_setup', eval: `(() => {
+      const e = window.__engine;
+      window.__env = (o) => {
+        window.__envO = Object.assign({ season: 1.8, weather: 0, warmth: 0.7, rain: 0, dayFrac: 0.7 }, o);
+        if (!window.__envHook) window.__envHook = e.onFrame(() => e.setEnv(window.__envO));
+        e.setEnv(window.__envO); e.applyEnvNow();
+      };
+      window.__speed(0); window.__step(900); window.__followId(null); window.__env({});
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'h', bubbles: true }));
+      window.__lkPick = (sp, st) => { const c = (st !== undefined ? window.__find(sp, st) : []).concat(window.__find(sp)); return c.length ? c[0] : null; };
+      window.__lkFollow = (sp, st, dist, pitch) => { const id = window.__lkPick(sp, st); window.__followId(id); e.cam.setView({ distance: dist, pitchDeg: pitch }); };
+    })()`, wait: 6000 },
+    { name: 'lk_01_concept', eval: "window.__concept()", wait: 4000 },
+    { name: 'lk_02_golden_low', eval: "window.__cam('low')", wait: 3500 },
+    { name: 'lk_03_golden_wide', eval: "window.__cam('wide')", wait: 3500 },
+    { name: 'lk_04_herd_mid', eval: "window.__focusHerd(); window.__engine.cam.setView({ distance: 60, pitchDeg: 16 })", wait: 3500 },
+    { name: 'lk_05_bison_close', eval: "window.__lkFollow(0, 1, 11, 12)", wait: 4000 },
+    { name: 'lk_06_wolves_close', eval: "window.__lkFollow(1, undefined, 13, 14)", wait: 4000 },
+    { name: 'lk_07_pronghorn_close', eval: "window.__lkFollow(3, undefined, 12, 12)", wait: 4000 },
+    { name: 'lk_08_midday_mid', eval: "window.__followId(null); window.__env({ dayFrac: 0.45 }); window.__focusHerd(); window.__engine.cam.setView({ distance: 90, pitchDeg: 24 })", wait: 3500 },
+    { name: 'lk_09_night', eval: "window.__env({ dayFrac: 0.95 }); window.__focusHerd(); window.__engine.cam.setView({ distance: 70, pitchDeg: 22 })", wait: 3500 },
+    { name: 'lk_10_winter_mid', eval: "window.__env({ season: 3.4, dayFrac: 0.42, warmth: 0.1 }); window.__focusHerd(); window.__engine.cam.setView({ distance: 90, pitchDeg: 24 })", wait: 4000 },
+  ],
   review: [
     { name: '01_opening_herd', eval: 'window.__speed(1); window.__focusHerd()', wait: 3500 },
     { name: '02_wolves_hunting', eval: `(() => { const c = window.__find(1, 5).concat(window.__find(1, 10)).concat(window.__find(1)); const id = c[0]; window.__select(id); window.__followId(id); window.__engine.cam.setView({ distance: 40, pitchDeg: 20 }); })()`, wait: 4000 },

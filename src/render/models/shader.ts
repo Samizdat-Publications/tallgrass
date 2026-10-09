@@ -1761,11 +1761,13 @@ export function makeAnimalMaterials(sp: number, def: ModelDef, shared: AnimalSha
         '#include <emissivemap_fragment>',
         `#include <emissivemap_fragment>
         float tgRim = pow(1.0 - clamp(dot(normalize(vViewPosition), normal), 0.0, 1.0), 3.0);
-        totalEmissiveRadiance += vec3(1.0, 0.8, 0.35) * vTgSel * (0.015 + 0.45 * tgRim);
+        // (the selection tint is a thin warm edge, not a wash: at a low camera the whole back of the animal faces the grazing view, so a wide rim frosts it)
+        totalEmissiveRadiance += vec3(1.0, 0.8, 0.35) * vTgSel * (0.006 + 0.2 * tgRim * tgRim);
         float tgEdge = pow(1.0 - clamp(dot(normalize(vViewPosition), normal), 0.0, 1.0), 1.6);
         // R-readable edge lift: a faint sky-coloured light along the silhouette (scales with the scene's ambient, so it never glows)
         float tgRd = pow(1.0 - clamp(dot(normalize(vViewPosition), normal), 0.0, 1.0), 2.4);
-        totalEmissiveRadiance += uReadRim.rgb * uReadRim.a * uAmb * tgRd * (0.55 + 0.45 * vTgUp) * vTgMid * (1.0 - 0.7 * uLow);
+        // (it eases in with distance, about 15 percent at 20 m, half at 30 m, in full from 40 m: the default views keep the lift, a close follow does not frost the back)
+        totalEmissiveRadiance += uReadRim.rgb * uReadRim.a * uAmb * tgRd * (0.55 + 0.45 * vTgUp) * (vTgMid * vTgMid) * (1.0 - 0.7 * uLow);
         totalEmissiveRadiance += uRimCol * vTgFar * (uRimK + vTgHunt * uHuntK) * tgEdge * (1.0 - 0.9 * uLow);
         // ambient floor: a share of the scene's own ambient light reaches the coat unshadowed, so a herd in shade or at dusk
         // keeps its value above the shadows; it scales with the light, so it dims with the scene and never glows
@@ -1773,10 +1775,10 @@ export function makeAnimalMaterials(sp: number, def: ModelDef, shared: AnimalSha
         // Moonlight (night only, uLow near 1): a cool rim along every silhouette edge, strongest on the surfaces that face the sky,
         // plus a cool fill on the coat itself. Starker than the day lighting on purpose, so an animal reads against the dark ground
         // by its outline and by value, without the night looking like day.
-        float tgNR = pow(1.0 - clamp(dot(normalize(vViewPosition), normal), 0.0, 1.0), 2.8);
-        float tgNK = smoothstep(0.25, 0.85, uLow) * uNightK;
-        totalEmissiveRadiance += vec3(0.5, 0.64, 0.95) * 0.55 * tgNR * (0.3 + 0.7 * vTgUp) * tgNK * (0.6 + 0.4 * vTgFar) * tgNL;
-        totalEmissiveRadiance += diffuseColor.rgb * vec3(0.08, 0.105, 0.19) * tgNK * (0.5 + 0.5 * vTgUp) * tgNL;`,
+        float tgNR = pow(1.0 - clamp(dot(normalize(vViewPosition), normal), 0.0, 1.0), 3.2);
+        float tgNK = smoothstep(0.35, 0.88, uLow) * uNightK;
+        totalEmissiveRadiance += vec3(0.52, 0.64, 0.9) * 0.46 * tgNR * (0.3 + 0.7 * vTgUp) * tgNK * (0.6 + 0.4 * vTgFar) * (0.72 + 0.28 * vTgMid) * tgNL;
+        totalEmissiveRadiance += diffuseColor.rgb * vec3(0.085, 0.105, 0.17) * tgNK * (0.5 + 0.5 * vTgUp) * tgNL;`,
       );
   };
   material.customProgramCacheKey = () => `tg-animal-${sp}-${variant}-${R8_SHADER.on ? 1 : 0}${R8_SHADER.bison ? 1 : 0}${R8_SHADER.flare ? 1 : 0}`;

@@ -1,7 +1,10 @@
 # Tallgrass plan
 
+## Day run (2026-10-09 ~15:30 to 2026-10-10 ~15:30): DAY-PLAN.md
+Focus: close-range visuals (golden-hour look toward the concept, real ground, authored animals on our rig, animals that notice, snow, trees spike), a motion critic that can see motion (Gemini frame-rate sampling), and v11 (bison bands that move on and keep the herd) on the CPU overnight. Status: planned, not started.
+
 ## Tonight (2026-10-09, 03:30 to 13:00): NIGHT-PLAN.md
-Checkpoint v10 "The long breath": climate regimes, bounded evolution, bison on a slower clock, fewer and bigger wolf packs; plus a faster sim, the breathing-valley look, documentary camera v3 and bison herd bands. Stages, gates and fallbacks are in NIGHT-PLAN.md.
+Result: checkpoint v10 "The long breath" ADOPTED and live (climate regimes, bounded evolution, fewer and bigger wolf packs), plus a faster sim, the breathing-valley look, damped seasons and trails at speed, documentary camera v3, rare sightings, UI and close-up fixes. v10b (next candidate) acceptance running. Next steps: MORNING.md "Next 5".
 
 ## v2 (current, from 2026-10-04): the plan is V2-PLAN.md
 | Phase | Work packages | Status |

@@ -185,6 +185,8 @@ export class Terrain {
   /** R-marsh: the beaver pond field (n x n bytes, extra water depth in cm; Engine.setBeavers), so the ground under and round a pond reads as wet marsh, not bare orange soil. */
   private pondTex!: THREE.DataTexture;
   private readonly pondOn = { value: 0 };
+  /** 1 = the close-range worn-ground grain (soil grain, clods, straw flecks) is on, 0 = off (for A/B timing and debugging). */
+  readonly closeGrain = { value: 1 };
   /** Small tileable random texture (4 independent channels) the ground shader samples for fine grain instead of evaluating hash noise. */
   private detailTex!: THREE.DataTexture;
   private shadowQuad: FullScreenQuad;
@@ -781,6 +783,7 @@ export class Terrain {
       u.tVeg = sh.vegTex;
       u.tSmall = SMALL_TEX; // prairie dog towns (smallprey.ts)
       u.uTownOn = TOWN_ON;
+      u.uCloseGrain = this.closeGrain;
       u.tStatic = sh.staticTex;
       u.tTrail = sh.trailTex;
       u.uFarStats = sh.farStats;
@@ -915,6 +918,7 @@ uniform sampler2D tStatic;
 uniform sampler2D tTrail;
 uniform sampler2D tSmall;
 uniform float uTownOn;
+uniform float uCloseGrain;
 uniform sampler2D tMacro1;
 uniform sampler2D tMacro2;
 uniform sampler2D tMacro3;
@@ -928,6 +932,13 @@ float tgDet(vec2 xz, float cellM, int ch, vec2 off){
   // explicit LOD 0: the eased coordinate jumps at cell borders, so an implicit mip level would turn every border into a grey line
   vec4 v = textureLod(tDetail, (i + f + 0.5) * (1.0 / 256.0), 0.0);
   return ch == 0 ? v.r : ch == 1 ? v.g : ch == 2 ? v.b : v.a;
+}
+// all four channels at one lattice scale in one fetch (the worn-ground grain wants several independent noises at about the same scale)
+vec4 tgDet4(vec2 xz, float cellM, vec2 off){
+  vec2 q = (xz / (cellM * 256.0) + off) * 256.0;
+  vec2 i = floor(q), f = fract(q);
+  f = f * f * (3.0 - 2.0 * f);
+  return textureLod(tDetail, (i + f + 0.5) * (1.0 / 256.0), 0.0);
 }
 uniform vec2 uFarStats;
 uniform float uWorldSize;
@@ -1345,6 +1356,19 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
       col *= 1.0 - trodK * hoof * 0.35 * (1.0 - smoothstep(25.0, 150.0, dist));
     }
     gTgGrass *= 1.0 - 0.45 * trodK;
+  }
+  // close-range ground grain: where the sward is short or worn (grazed, trampled, burned, winter stubble) the ground keeps fine structure out to
+  // about 85 m (soil grain, small clods, pale straw flecks lying along the wind) instead of blurring into one smooth brown smear
+  float edgeKt = smoothstep(4.0, 62.0, -sd);   // (the blade layer thins out over the same margin of the field, see grass.ts)
+  float wornK = clamp(max(max(soilShow, trodK * 0.9), max(stubA * 0.55, 1.0 - edgeKt * edgeKt)), 0.0, 1.0) * (1.0 - smoothstep(30.0, 85.0, dist)) * (1.0 - 0.85 * snEff) * uCloseGrain;
+  if (wornK > 0.02) {
+    vec4 wd1 = tgDet4(xz, 0.12, vec2(0.29));
+    vec4 wd2 = tgDet4(xz, 0.5, vec2(0.58));
+    col *= 1.0 + ((wd1.g - 0.5) * 0.5 + (wd2.b - 0.5) * 0.45 + (wd2.a - 0.5) * 0.3) * wornK;
+    vec2 wqS = vec2(dot(xz, wv), dot(xz, vec2(-wv.y, wv.x)));
+    vec4 wd3 = tgDet4(vec2(wqS.x * 0.3, wqS.y * 1.5), 0.13, vec2(0.7));
+    float straw = smoothstep(0.72, 0.9, wd3.g * 0.6 + wd3.r * 0.4);
+    col = mix(col, col * vec3(1.32, 1.2, 0.92) + vec3(0.03, 0.024, 0.01), straw * 0.5 * wornK);
   }
   // trampled ground near water: the herds come down to drink along worn paths and churn the margin, so within a few tens of metres of
   // the creek and ponds thin winding trails (about a metre wide) and patches of churned mud darken and brown the sward

@@ -2,6 +2,7 @@
 // Run: npx tsx src/sim/evolution.test.ts
 import { applyOverrides, defaultParams } from './params';
 import { createSim } from './sim';
+import { createSim as createPinned, defaultParams as pinnedDefaults } from './testpins';
 import { COAT_RANGE } from './species';
 import { SPECIES_COUNT, Sp } from './types';
 import { simHash } from '../headless/hash';
@@ -16,13 +17,15 @@ function ok(cond: boolean, msg: string): void {
   }
 }
 
-// 1. everything is off by default
+// 1. everything is off in the pre-v10 world (testpins pins evolution2 0), and on in the v10 default world
 {
-  const p = defaultParams();
+  const v10 = applyOverrides(defaultParams(), {});
+  ok(v10.evolution2 === 1 && v10.species[Sp.Bison].maxLitter === 1 && v10.species[Sp.Wolf].sprintCost === 0.3, 'v10: evolution2 is on in the default world, even with no overrides');
+  const p = pinnedDefaults();
   ok(p.evolution2 === 0 && p.coatSearch === 0 && p.herdEyes === 0 && p.sprintCost === 0, 'evolution params are off by default');
   ok(p.species.every((s) => s.sprintCost === 0), 'per-species sprintCost is 0 by default');
   ok(p.species[Sp.Bison].maxLitter === 99, 'bison maxLitter is uncapped by default');
-  const q = applyOverrides(defaultParams(), {});
+  const q = applyOverrides(pinnedDefaults(), {});
   ok(q.coatSearch === 0 && q.herdEyes === 0, 'empty overrides change nothing');
 }
 
@@ -30,14 +33,14 @@ function ok(cond: boolean, msg: string): void {
 {
   const p = applyOverrides(defaultParams(), { evolution2: 1 });
   ok(p.species[Sp.Bison].sprintCost === 0.2 && p.species[Sp.Deer].sprintCost === 0.05, 'master: bison and pronghorn sprint costs');
-  ok(p.species[Sp.Wolf].sprintCost === 0.15 && p.species[Sp.Coyote].sprintCost === 0.1, 'master: wolf and coyote sprint costs');
+  ok(p.species[Sp.Wolf].sprintCost === 0.3 && p.species[Sp.Coyote].sprintCost === 0.1, 'master: wolf and coyote sprint costs (v10b: wolf 0.3)');
   ok(p.species[Sp.Cougar].sprintCost === 0 && p.species[Sp.Raven].sprintCost === 0, 'master: other species keep 0');
   ok(p.species[Sp.Bison].maxLitter === 1 && p.species[Sp.Deer].maxLitter === defaultParams().species[Sp.Deer].maxLitter, 'master: bison litter capped at 1, pronghorn unchanged');
   ok(p.herdEyes === 1.5 && p.coatSearch === 1 && p.leanLitter === 0.8, 'master: herdEyes 1.5, coat search on, leanLitter stays at its v6 value');
   ok(p.coatSearchBoost === 1.3 && p.coatSearchWindow === 0.1, 'coat search is x1.3 within 0.1');
   const q = applyOverrides(defaultParams(), { evolution2: 1, herdEyes: 0, 'bison.sprintCost': 0.5, coatSearch: 0, 'bison.maxLitter': 2 });
   ok(q.herdEyes === 0 && q.species[Sp.Bison].sprintCost === 0.5 && q.coatSearch === 0 && q.species[Sp.Bison].maxLitter === 2, 'explicit overrides beat the master, even zero');
-  ok(q.species[Sp.Wolf].sprintCost === 0.15, 'unset parts still take the master value');
+  ok(q.species[Sp.Wolf].sprintCost === 0.3, 'unset parts still take the master value');
   let threw = false;
   try { applyOverrides(defaultParams(), { 'bison.nope': 1 }); } catch { threw = true; }
   ok(threw, 'unknown species params still throw');
@@ -45,10 +48,10 @@ function ok(cond: boolean, msg: string): void {
 
 // 3. off reproduces the default run exactly, and the new columns exist either way
 {
-  const base = simHash(3, 1800);
-  ok(simHash(3, 1800, { evolution2: 0 }) === base, 'evolution2: 0 reproduces the default hash');
-  ok(simHash(3, 1800, { evolution2: 0, coatSearch: 0, herdEyes: 0 }) === base, 'explicit zeros reproduce the default hash');
-  const off = createSim({ seed: 3 });
+  const base = simHash(3, 1800, { evolution2: 0 });
+  ok(simHash(3, 1800, { evolution2: 0, coatSearch: 0, herdEyes: 0 }) === base, 'explicit zeros reproduce the evolution2-off hash');
+  ok(simHash(3, 1800) === simHash(3, 1800, { evolution2: 1 }), 'v10: the default hash is the evolution2-on hash');
+  const off = createPinned({ seed: 3 });
   off.step(1200);
   const row = off.sample();
   ok(['coatvar_bison', 'coatvar_pronghorn', 'coatvar_wolf', 'search_wolf'].every((k) => k in row), 'sample has the S9 columns with the feature off');

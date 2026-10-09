@@ -102,6 +102,7 @@ const director = new Director(engine.cam, (id, out) => animals.getPosition(id, o
   const cx = Math.floor(x / coverCell), cy = Math.floor(y / coverCell);
   return cx < 0 || cy < 0 || cx >= world.n || cy >= world.n ? 0 : world.cover[cy * world.n + cx];
 });
+director.cutFx = engine.cutFx; // a hard cut of the documentary camera goes through a soft dark (render/cutfx.ts)
 // sound starts itself on the first click or key press (browser autoplay rules)
 const audio = new AudioDirector();
 void audio.load();

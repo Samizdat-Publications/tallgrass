@@ -523,14 +523,14 @@ export function defaultParams(): Params {
   species[Sp.Raven] = base({
     maxAge: 7200, matureAge: 600, gestation: 120, birthCooldown: 1400, litter: 2,
     walkSpeed: 7, runSpeed: 11, stamina: 1e9, sight: 130, metabolism: 1 / 900, thirst: 0,
-    meat: 0, toughness: 0.2, initial: 30, herdRadius: 40,
+    meat: 0, toughness: 0.2, initial: 250, herdRadius: 40, // v10b: initial 250 (was 30)
   });
   // pronghorn: fast, wary, light, fecund; outruns a healthy wolf, so wolves take fawns, the sick and the tired
   species[Sp.Deer] = base({
     maxAge: 4500, matureAge: 420, gestation: 150, birthCooldown: 1000, litter: 1.4,
     walkSpeed: 1.7, runSpeed: 15.5, stamina: 90, sight: 55, metabolism: 1 / 1300, thirst: 1 / 2200,
     bite: 0.0052, foodValue: 0.55, meat: 2.2, toughness: 0.75, initial: 350, herdRadius: 12,
-    wariness: 0.85, defense: 0.08, camo: 0.6, diet: 1, hideAge: 170,
+    wariness: 0.85, defense: 0.08, camo: 0.6, diet: 1, hideAge: 170, maxLitter: 2, // v10b: twins at most (was 99)
   });
   // jackrabbit: a density field when smallPrey is on (hareK, hareR); these only matter for the old agent rabbit
   species[Sp.Rabbit] = base({ initial: 0 });
@@ -545,7 +545,7 @@ export function defaultParams(): Params {
   species[Sp.Coyote] = base({
     maxAge: 4800, matureAge: 900, gestation: 0, birthCooldown: 0, litter: 5,
     walkSpeed: 1.3, runSpeed: 11, stamina: 130, sight: 60, metabolism: 1 / 1800, thirst: 1 / 5000,
-    meat: 0.8, toughness: 0.8, initial: 12, herdRadius: 12, // v6b: six pairs (was 0)
+    meat: 0.8, toughness: 0.8, initial: 30, herdRadius: 12, // v6b: six pairs (was 0); v10b: 30 (was 12)
   });
   // prairie dog: a field species. Only initial (0 = the default colonies) and the smallPrey params apply; the rest keeps the
   // lookup safe for any code that indexes the species table by id
@@ -622,7 +622,7 @@ export function defaultParams(): Params {
     bandReach: 15,
     bandPull: 0.9,
     climateAmp: 0,
-    climate2: 0,
+    climate2: 0.3, // v10 (was 0)
     climatePeriod: 40,
     climateMegaP: 0.03,
     climateDrought: 0.8,
@@ -633,7 +633,7 @@ export function defaultParams(): Params {
     droughtRefuge: 0,
     sprintCost: 0,
     herdEyes: 0,
-    evolution2: 0,
+    evolution2: 1, // v10 (was 0)
     coatSearch: 0,
     coatSearchRate: 0.15,
     coatSearchBoost: 1.3,
@@ -797,8 +797,8 @@ export function defaultParams(): Params {
     wolfEatRate: 0.012,
     wolfPackStoreShare: 0.45,
     wolfPackMax: 7,
-    wolfDenMinDist: 200,
-    wolfTerritory: 100,
+    wolfDenMinDist: 280, // v10 (was 200)
+    wolfTerritory: 130, // v10 (was 100)
     wolfPupDenAge: 450,
     wolfInjuryChance: 0.01,
     wolfImmigration: 0,
@@ -844,7 +844,8 @@ export function defaultParams(): Params {
 
 /** Apply flat overrides like {"grassGrowth": 0.002, "bison.metabolism": 0.0008}. Unknown keys throw. */
 export function applyOverrides(p: Params, o: Record<string, number> | undefined): Params {
-  if (!o) return p;
+  // v10: evolution2 is on by default, so its values are applied even with no overrides (pin evolution2 0 for the older worlds)
+  if (!o) o = {};
   for (const [k, v] of Object.entries(o)) {
     const dot = k.indexOf('.');
     if (dot > 0) {
@@ -863,7 +864,7 @@ export function applyOverrides(p: Params, o: Record<string, number> | undefined)
 
 /** The Evolution v2 values (S9). Anything the caller set explicitly (even to 0) is left alone. */
 function applyEvolution2(p: Params, o: Record<string, number>): void {
-  const sprint: [number, number][] = [[Sp.Bison, 0.2], [Sp.Deer, 0.05], [Sp.Wolf, 0.15], [Sp.Coyote, 0.1]];
+  const sprint: [number, number][] = [[Sp.Bison, 0.2], [Sp.Deer, 0.05], [Sp.Wolf, 0.3], [Sp.Coyote, 0.1]]; // v10b: wolf 0.3 (was 0.15)
   for (const [si, v] of sprint) if (!(`${PARAM_PREFIX[si]}.sprintCost` in o)) p.species[si].sprintCost = v;
   if (!(`${PARAM_PREFIX[Sp.Bison]}.maxLitter` in o)) p.species[Sp.Bison].maxLitter = 1;
   if (!('herdEyes' in o)) p.herdEyes = 1.5;
