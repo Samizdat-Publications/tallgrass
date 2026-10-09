@@ -2,7 +2,12 @@
 
 **Updated:** 2026-10-04 afternoon, at the end of the v2 planning session. v1 is finished and live; v2 starts now. The plan is `V2-PLAN.md`.
 
-## State now (2026-10-08 ~23:15, design-call day)
+## State now (2026-10-09 ~01:40)
+- Default world is checkpoint v9 (v8b + ravenNestFood 1, muledeerCover 0.15, bison.initial 550). Golden 55737903, 465f73d6, 27e42109. Live and checked. Everything merged, pushed, deployed; nothing running.
+- Today (design calls): follow camera and readable animals, water, UI fixes, animation polish (gallop spine, splashes, snow easing), far-view readability and map glyphs, blizzard whiteout, calm UI (Tools drawer, idle fade, docked graph), v9 ecology. Reviews 19 and 20 in REVIEWS.md.
+- Left for the next phase (planner): (1) dynamics read as noise rather than multi-decade boom and crash cycles, and the wolf to bison ratio is high; this is the biggest remaining design question and needs a sim redesign, not tuning; (2) mule deer settle near 13 over centuries; (3) bison herd density and shape (spacing alone does not help); (4) video critics still score motion low; try closer documentary shots of running animals in the reel and review whether the 1 fps sampling is the issue; (5) first-years drift; (6) the idle rare-events feature (MAYBE-WANTS.md); (7) parked winter-tree branches.
+
+### 2026-10-08 ~23:15, design-call day)
 - Live: v8b world plus today's render and UI work (follow camera, readable animals, water, UI fixes, animation polish, far-view readability and map glyphs, blizzard whiteout, calm UI with a Tools drawer). All merged, pushed, deployed, checked.
 - v9 candidate (v8b + ravenNestFood 1, muledeerCover 0.15, bison.initial 550) PASSED its 20-seed acceptance (every species 20/20, raven CV 0.32). Shock suite running from scratch/frozen/e571d1a (log scratch/shocks_v9.log, out .../v9-e571d1a-shocks). If bison recover >= 80% after each shock, adopt like v8b: flip the three defaults, extend V7C_OFF in src/sim/testpins.ts and CHALLENGE_PIN (ravenNestFood 0, muledeerCover 0.25, bison.initial 800), re-record golden, challenge_suite, playtest --timeout 400000, deploy.
 - Honest limits: over 800-year runs mule deer still settle near 13 (the cover change only helps the first two centuries); resident ravens still spend about a quarter of their time near the food-scaled maximum; bison density and the 'noise not cycles' dynamics remain planner calls; the wolf to bison ratio is high (critic: about 1:7).

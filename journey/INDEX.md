@@ -113,3 +113,7 @@ Chronological. Use this to cut a progression video or landing page.
 | 2026-10-07 17:40 | still | [20261007-174000_still_v2-beaver-marsh.jpg](20261007-174000_still_v2-beaver-marsh.jpg) | A beaver pond from above, with a lodge, a dam and marshy shallows | review/wip/beaver-marsh |
 | 2026-10-07 18:50 | ui | [20261007-185000_ui_v2-graph-legend.jpg](20261007-185000_ui_v2-graph-legend.jpg) | The population graph at 100x: labelled legend, calm lines, honest scales | review/wip/ui-calm |
 | 2026-10-08 04:45 | ui | [20261008-044500_still_v2-v8b-blizzard.jpg](20261008-044500_still_v2-v8b-blizzard.jpg) | The live v8b world in a blizzard: deep drifts, bare windswept ground, bison and wolves in the snow | scratch/live.jpg |
+| 2026-10-08 16:00 | still | [20261008-160000_still_v2-follow-camera.jpg](20261008-160000_still_v2-follow-camera.jpg) | The follow camera before and after: the followed wolf, pronghorn and bison now fill the frame | review/wip/readable |
+| 2026-10-08 21:30 | still | [20261008-213000_still_v2-blizzard-whiteout.jpg](20261008-213000_still_v2-blizzard-whiteout.jpg) | A blizzard that reads as one: whiteout fog and wind-driven snow | review/wip/far-read |
+| 2026-10-08 21:30 | ui | [20261008-213000_ui_v2-calm-frame.jpg](20261008-213000_ui_v2-calm-frame.jpg) | The calmer default frame: one Tools button, the landscape first | review/wip/ui-calm2 |
+| 2026-10-09 01:30 | ui | [20261009-013000_ui_v2-v9-live.jpg](20261009-013000_ui_v2-v9-live.jpg) | The live v9 world | scratch/live.jpg |

@@ -2,6 +2,17 @@
 
 *(Updated 22:10 Tuesday 2026-10-06. This file is refreshed at every milestone.)*
 
+## 2026-10-08 and 09: the design calls (live)
+- **Ecology, checkpoint v9:** ravens now breed to the carrion supply instead of sitting at a fixed ceiling, mule deer have more woody-cover habitat, and new valleys start with 550 bison instead of 800 so the opening is not a brown carpet. Passed the 20-world acceptance (every species held in all 20) and the shock tests.
+- **Seeing the animals:** the follow camera frames the animal you follow; predators are darker and cooler, pronghorn and deer show bright rumps; far herds separate into bodies; from the top view each animal gets a small colour glyph so herds and packs are countable.
+- **Motion:** wolves, coyotes and cougars flex their spines at a gallop, splashes and wake rings when animals cross water, birds keep flapping in time-lapse, snow fades in instead of popping, no animals floating on ponds.
+- **World:** water reads as water (depth colour, reflections, flow, broken banks); a blizzard is now a whiteout.
+- **Interface:** one Tools button opens a drawer, panels fade when you stop moving the mouse, the big graph docks at the bottom with clean labels, the speed button shows the real rate, territories are outlines with a light hatch, the status line matches the weather.
+- **Still open for your planner:** population swings look like noise rather than long boom-and-crash cycles; this is a design question for the sim, not a tuning one. Also mule deer over centuries, herd density, and video reviewers still scoring motion low.
+
+![The calmer frame](journey/20261008-213000_ui_v2-calm-frame.jpg)
+![Blizzard whiteout](journey/20261008-213000_still_v2-blizzard-whiteout.jpg)
+
 ## 2026-10-08 overnight: v8b is the default world (live)
 Snow depth (drifts, bare windswept ground) and living trees (they seed, grow, burn to snags and fall) are now part of every valley, together with a fix for the one weakness every long run showed this week: prairie dog towns that died out stayed empty for decades. New colonies now arrive from the open prairie every 8 years instead of 20. The 20-world acceptance passed with every species present in all 20 worlds, and bison recovered from every shock test.
 
