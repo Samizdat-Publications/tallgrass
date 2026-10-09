@@ -75,6 +75,8 @@ export const CHALLENGE_PIN: Record<string, number> = {
   ravenNestFood: 0, muledeerCover: 0.25, 'bison.initial': 800,
   // checkpoint v10: bounded evolution, climate regimes, fewer and bigger wolf packs
   evolution2: 0, climate2: 0, wolfDenMinDist: 200, wolfTerritory: 100,
+  // checkpoint v10b: pronghorn twins cap and the raven start (the wolf sprint cost is inside evolution2; coyotes are already pinned to 0 above)
+  'deer.maxLitter': 99, 'raven.initial': 30,
 };
 /** The calendar the challenges were tuned on, with every v2 mechanism pinned off. */
 const CLASSIC = { calendarScale: 1, ...CHALLENGE_PIN };
