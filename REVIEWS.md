@@ -284,3 +284,16 @@ Scores: visual 5, readability 7, life and motion 2, believability 5, UI clarity 
 
 ## Round 20 (blind critic, after the design-call fixes, 2026-10-08 evening) -> `review/round-20/critique.md`
 Scores 7/4/6/5/6/6 (round 17: 6/4/5/5/6/5). Triage in the critique file: builders r-far-read and r-ui-calm2; ecology items in the v9 acceptance; early drift and wolf to bison ratio to the planner.
+
+## Round 21 (blind critic, charts only: v10 screen EA, 14 worlds x 400 years, 2026-10-09 06:20) -> `review/round-21-charts/critique.md`
+Scores: charts 7, readability 5, life (from charts) 6, ecosystem believability 6 (rounds 15 to 20: 5), chart UI 5, keep watching 5.
+| # | Issue | Triage | Reason / outcome |
+|---|---|---|---|
+| 1 | Mule deer fade to about 15 after year 150 | fix next cycle | Diagnosed: pronghorn (also browsers) rise 340 to 590 as their litter gene drifts to triplets while mule deer births fall 36 to 6 per sample; mature creek cottonwoods thin 198 to about 120. The v10b screen (running) caps pronghorn at twins. |
+| 2 | Drift at year 400 (pronghorn litters, bison size, prairie dogs) | fix next cycle | Pronghorn twins cap in v10b; bison size cap is a plain bound; prairie dogs to re-check under v10. |
+| 3 | Cougars blink out for a few years | defer | Five to ten cats in a 512 m valley; open-prairie arrivals bring them back (presence >= 90% in 14/14). Narrating the arrival is a cheap fix; more room needs a bigger valley (VALLEY-SIZE.md). |
+| 4 | Prairie dogs barely outnumber cougars | reject for now | Towns are a density field; the population counter shows a scaled number. A display question, not ecology. |
+| 5 | No clean predator-prey loops; wolves should breed on last season's food | partly addressed | The v10 candidate's fewer packs give 0.64 wolf tracking in its screen; wolfBreedStore (exists, off) is the lagged-breeding lever for a later screen. |
+| 6 | Bison sight and speed fall while wolf speed rises | fix next cycle | Bison sprintCost 0.2 (evolution2) is heavy; v10b raises the wolf sprint cost to 0.3; a lighter bison cost is the next screen. |
+| 7 | Weather barely shows in the populations | partly | 60% more grass and +40% bison in wet runs on average; a stronger climate2 (0.4) is a next-cycle screen; the r-breath graph band makes it visible in the game. |
+| 8 to 10 | Chart readability and polish | defer | tools/charts.py polish. |
