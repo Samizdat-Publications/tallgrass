@@ -3016,7 +3016,9 @@ export class Sim implements SimLike {
   private pronghornReturn(): void {
     const p = this.p, r = this.region!.rng;
     const pop = this.pop[Sp.Deer];
-    let n = Math.min(p.deerInMax, Math.max(0, Math.round(p.deerInK * (p.deerKb - pop))));
+    // with climate regimes the wider prairie dries and greens with the valley: fewer pronghorn come back in a dry run of years
+    const kb = this.env.regime !== null ? p.deerKb * Math.max(0.2, 1 + p.climatePrairie * this.env.climateNow) : p.deerKb;
+    let n = Math.min(p.deerInMax, Math.max(0, Math.round(p.deerInK * (kb - pop))));
     if (pop < 20) n = Math.max(n, p.deerRescue);
     if (n <= 0) return;
     const c = this.world.corridors, k = r.int(c.length / 4);

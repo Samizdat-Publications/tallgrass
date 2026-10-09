@@ -119,6 +119,8 @@ export interface Params {
   climateFire: number;
   /** Cottonwood seedlings take x (1 + climateTrees x index) as often. */
   climateTrees: number;
+  /** The pronghorn the wider prairie sends back each spring (deerKb) scale by x (1 + climatePrairie x index): the region dries with the valley. */
+  climatePrairie: number;
   /** Shortens the valley year k-fold (1 = 2,400-tick years). Biology per tick is unchanged, so animals live k times as
    *  many valley-years and booms and recoveries take k times as many years; only the seasons turn faster. Wolf litters
    *  are divided by k because wolves breed once a year. Timers that aren't seasons (carcass life, immunity, outbreak
@@ -598,6 +600,7 @@ export function defaultParams(): Params {
     climateDrought: 0.8,
     climateFire: 0.8,
     climateTrees: 0.8,
+    climatePrairie: 0.5,
     calendarScale: 2,
     droughtRefuge: 0,
     sprintCost: 0,
