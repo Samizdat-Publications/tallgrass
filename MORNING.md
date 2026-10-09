@@ -13,7 +13,7 @@
 - **The herd overshot and starved about every 8 years**, too fast to read as anything but noise.
 
 ### What changed
-1. **Climate regimes (new):** wet and dry runs of decades, with a megadrought of 3 to 6 years now and then. They move how much grass the land carries, summer dry spells, lightning fires, cottonwood seedlings and the pronghorn the prairie sends back. In wet runs the valley carries 60% more standing grass than in dry runs, and dry runs see twice the lightning fires.
+1. **Climate regimes (new):** wet and dry runs of decades, with a megadrought of 3 to 6 years now and then. They move how much grass the land carries, summer dry spells, lightning fires, cottonwood seedlings and the pronghorn the prairie sends back. In wet runs the valley carries about 60% more standing grass than in dry runs, and dry runs see twice the lightning fires (acceptance data: 63% and 2.2x).
 2. **Bounded evolution switched on**: bison keep single calves and their herding; traits stay believable for centuries.
 3. **Fewer, bigger wolf packs** (dens 280 m apart, 130 m territories).
 4. **You can see it:** dry runs bleach the valley to straw and haze, wet runs deepen the greens, a megadrought goes to pale bone; the big graph (G) has a climate band behind the populations; the header says Wet years, Dry years or Megadrought; the chronicle and the narrator mark the turns.
@@ -49,7 +49,7 @@
 
 ### Decisions you might want to overrule
 - **Adopted v10 tonight** (the four switches above), with the acceptance over 1,200 valley years instead of 1,000 bison generations (see Numbers).
-- **Fewer wolves on purpose:** 4 to 6 packs, about 37 wolves. If you liked seeing more wolves, set wolfDenMinDist back toward 200.
+- **Fewer wolves on purpose:** 4 or 5 packs (measured), about 37 wolves. If you liked seeing more wolves, set wolfDenMinDist back toward 200.
 - **The fast-forward look** (steady morning light and damped seasons from about 30x, long-exposure trails at 10x and 100x, species colours at speed) is my call for "breathing". `?lapse=0` and `?trails=0`, or Settings, Long exposure at speed, turn parts off.
 - **Rare sightings rules:** patience counts only real time at 1x with the tab visible and nobody touching it; tiers at 10 minutes, 1, 4 and 12 hours.
 - **Herd bands stay off** (they cost 12 to 15% of the bison); **the new snow look stays on its branch** (r-snow) until its frame cost is measured on an idle machine.
