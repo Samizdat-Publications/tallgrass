@@ -72,7 +72,7 @@ ElevenLabs: 5 narrator lines, 486 characters (about $0.10). Gemini: 1 video crit
 4. Close-up pass two: lying bison legs (dark slabs), pack wolves overlapping at rest, raven flocking at carcasses, exposure jumps between director cuts.
 5. Snow: re-bench r-snow on an idle machine and merge if it fits the frame budget; wet ground in rain.
 
-Last deploy: pending (see NEXT-SESSION.md).
+Last deploy: 10:36 Friday (main with v10 adopted, every merge from tonight); playtest clean, live check clean (no console or page errors).
 
 ## 2026-10-08 and 09: the design calls (live)
 - **Ecology, checkpoint v9:** ravens now breed to the carrion supply instead of sitting at a fixed ceiling, mule deer have more woody-cover habitat, and new valleys start with 550 bison instead of 800 so the opening is not a brown carpet. Passed the 20-world acceptance (every species held in all 20) and the shock tests.
