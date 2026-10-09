@@ -1,22 +1,78 @@
 # Good morning: Tallgrass overnight report
 
-*(Updated 22:10 Tuesday 2026-10-06. This file is refreshed at every milestone.)*
+*(Updated 10:40 Friday 2026-10-09. This file is refreshed at every milestone.)*
 
-## 2026-10-09 night: v10 "The long breath" (in progress; this section is updated as results land)
-**Plan:** `NIGHT-PLAN.md`. **Every call and number:** `DECISIONS.md` (2026-10-09 entries).
+## 2026-10-09 night: "The long breath" (v10)
+**Play it:** https://tallgrass.stewartgregerson.workers.dev (or `npm run dev`, then http://localhost:5199/). **v10 is now the default world** (adopted 10:30 after its acceptance and shocks passed; deployed, see the last line of this section).
 
-**What was wrong with wolves and bison (measured on the v9 runs):**
-- Evolution ran away. Over 1,400 years bison came to bear 2.4 calves a birth and lost their herding (0.92 to 0.24); wolves got 39% faster and 29% bigger and grew from 46 to 77. That drift made the 1:7 wolf ratio and the late mule deer collapse (63 to 12). A fix (bounded evolution: real costs for speed, single bison calves) was built on 10-06 and never switched on.
-- Wolves never followed the herd: the open prairie refilled the pronghorn to the same number every spring, so wolves always had food while bison crashed.
-- The herd swung every 8 years or so through overshoot and starvation: too fast to read as anything but noise.
+**What you asked for:** fix the wolves and bison (my call), an ecosystem that lasts without petering out, and a fast-forward that looks like a valley breathing. The plan I worked from is `NIGHT-PLAN.md`; every call and number is in `DECISIONS.md` (2026-10-09).
 
-**v10 candidate (four switches):** climate regimes (new: wet and dry runs of decades with occasional megadroughts, moving grass, dry spells, lightning fires, cottonwood seedlings and the pronghorn the prairie sends back), bounded evolution on, wolf dens 280 m apart with 130 m territories (4 to 6 bigger packs). In a 400-year screen with climate: every species present over 90% of the time in all 14 worlds, bison follow the climate (0.48), 60% more standing grass in wet runs than dry, twice the lightning fires in dry runs, and the share of the herd's swings slower than 20 years rose from 0.13 (v9) to 0.63. Fewer packs alone took the ratio from 1:14 to 1:22 in a 150-year screen.
+### What was wrong (measured on the v9 runs, not guessed)
+- **Evolution ran away.** Over 1,400 years bison came to bear 2.4 calves a birth and lost their herding instinct (0.92 to 0.24); wolves got 39% faster and 29% bigger and grew from 46 to 77. That drift is where the 1:7 wolf ratio and the late mule deer collapse came from. A fix (bounded evolution) had been built on 10-06 and never switched on.
+- **Wolves could not follow the herd**: the open prairie refilled the pronghorn to the same number every spring whatever happened, so wolves always had food while the bison crashed.
+- **The herd overshot and starved about every 8 years**, too fast to read as anything but noise.
 
-![400 years of the long breath: green wet runs, tan dry runs](journey/20261009-055009_chart_v10-breath-chart.png)
+### What changed
+1. **Climate regimes (new):** wet and dry runs of decades, with a megadrought of 3 to 6 years now and then. They move how much grass the land carries, summer dry spells, lightning fires, cottonwood seedlings and the pronghorn the prairie sends back. In wet runs the valley carries 60% more standing grass than in dry runs, and dry runs see twice the lightning fires.
+2. **Bounded evolution switched on**: bison keep single calves and their herding; traits stay believable for centuries.
+3. **Fewer, bigger wolf packs** (dens 280 m apart, 130 m territories).
+4. **You can see it:** dry runs bleach the valley to straw and haze, wet runs deepen the greens, a megadrought goes to pale bone; the big graph (G) has a climate band behind the populations; the header says Wet years, Dry years or Megadrought; the chronicle and the narrator mark the turns.
+5. **Fast-forward made for watching decades:** from about 30x the light holds a steady morning and the seasons are damped, so the decades breathe instead of the days and seasons strobing; moving herds and packs leave long-exposure trails on the land; each species shows in its own colour from the drone views. The sim itself is 1.4x faster with identical results, so 100x is closer to real 100x on an idle machine.
+6. **Documentary camera v3:** it films running animals alongside at rider height, keeps both hunter and prey in frame (or drops the shot), and only shows a card or a narrator line once the camera is on that event.
+7. **Rare sightings (your idle idea):** Menu, Rare sightings. Thirteen moments unlock with real time watched at 1x (10 minutes, 1, 4 and 12 hours): a great stampede, a cougar out on open ground, a pale bison, a comet over the valley, a great aurora. Each is kept with a photo, the valley year and a line of chronicle.
+8. **Smaller fixes from tonight's reviews:** migrating hawks and eagles read "away for the winter" instead of extinct, the population cards keep their places, one season vocabulary everywhere, a softer selection marker, ground detail and stubble under close follow shots, lying bison no longer stretched.
 
-**Running now:** the v10 acceptance (20 worlds x 1,200 valley years) and shocks (12 worlds x 500 years), finishing around 09:30. If they pass, v10 becomes the default (prepared on branch v10-adopt). Either way it is in the menu as Scenarios, The long breath.
+### The numbers
+- **v10 acceptance** (20 worlds x 1,200 valley years, `review/stability/v10-97eef97/RESULT.md`): every gate passes. Bison persist in 20/20; every species is present at least 90% of the time in at least 19 of 20 worlds; wolf CV 0.23; wolves follow the bison at 0.50 a year behind (gate 0.4); raven CV 0.38. Means: bison 484, wolves 37 (1:13; v9 drifted to 1:7), pronghorn 543, mule deer 19, coyotes 76.
+- **The breath:** the dominant swing of bison, wolves and ravens is now **45 years** (v9: 8 to 10), and bison follow the climate index at 0.52. In wet runs the valley carries 60% more standing grass than in dry runs.
+- **Shocks** (12 worlds x 500 years): bison and wolves recover in every world after a 70% cull, a drought and a wolf wipeout (bison in a median 14, 19 and 27 years).
+- **Generations:** with single calves the bison clock is slower, so 1,200 years is about 530 bison generations (pronghorn pass 1,000). I kept the same 1,200-year span rather than running 2,300 years for 1,000 bison generations.
+- **Next candidate, v10b** (Menu, Scenarios, The long breath): v10 plus pronghorn capped at twins, a dearer sprint for wolves, and ravens and coyotes starting near their long-run numbers. Against a matched control (same 8 valleys, 400 years) it lifts wolf tracking from 0.36 to 0.60, the ratio from 1:17 to 1:20, climate tracking from 0.49 to 0.61, and calms the pronghorn spikes (522 to 402). Its own acceptance and shocks started at 10:22 and finish after this session (`scratch/frozen/1f3f658/review/stability/v10b-1f3f658`).
 
-**Also tonight:** the sim is 1.4x faster with bit-identical results (merged); five narrator lines for the wet years, dry years and megadroughts; a feasibility study for a bigger valley (`VALLEY-SIZE.md`: possible, but large, because grass per square metre is fixed so a bigger valley holds more animals); bison herd bands built (branch s-bands, off: separate herds instead of a carpet, but 12% fewer bison so far). Builders still working: the breathing-valley look (climate tint, graph band, chronicle), documentary camera v3 (running animals up close, truthful cuts), rare sightings (your idle-events idea) and long-exposure trails at 100x.
+### What to look at first
+1. Set **100x**, press **G**, and leave it for two minutes: green and tan bands roll under the population lines as the valley greens and browns.
+2. Stay at 100x with the graph closed: the drone shots show each species in colour and the herds' trails across the land.
+3. Leave it alone at **1x** for a while (the documentary camera takes over after 25 s): running animals filmed alongside; then open **Menu, Rare sightings** to see what is still locked.
+4. Try **Menu, Scenarios, The long breath** for the next candidate world (v10b, below).
+
+![Four climates, same view](journey/20261009-092033_still_v10-climate-four-states.jpg)
+![Forty seconds at 100x](journey/20261009-092036_still_v10-100x-decades.jpg)
+![v9 and the new world in the same three valleys](journey/20261009-061350_chart_v9-vs-v10-candidate.png)
+![Each species in colour at speed](journey/20261009-092042_still_v10-glyphs-at-speed.jpg)
+![Long exposure at speed](journey/20261009-092041_still_v10-long-exposure.jpg)
+![Rare sightings](journey/20261009-092041_ui_v10-rare-sightings.jpg)
+
+### Reviews tonight
+- Round 21 (blind critic, charts only): ecosystem believability 6, up from 5 in every round since 15.
+- Round 22 (blind critic, game stills): 6/5/6/7/7/6; ecosystem 7, UI 7. Its top complaint was the close follow view (fixed in part tonight).
+- Round 23 (Gemini video): life and motion 4, up from 2 in rounds 18 and 19; ecosystem 7, UI 7. Its top complaint, species unreadable at 100x, is fixed.
+
+### Decisions you might want to overrule
+- **Adopted v10 tonight** (the four switches above), with the acceptance over 1,200 valley years instead of 1,000 bison generations (see Numbers).
+- **Fewer wolves on purpose:** 4 to 6 packs, about 37 wolves. If you liked seeing more wolves, set wolfDenMinDist back toward 200.
+- **The fast-forward look** (steady morning light and damped seasons from about 30x, long-exposure trails at 10x and 100x, species colours at speed) is my call for "breathing". `?lapse=0` and `?trails=0`, or Settings, Long exposure at speed, turn parts off.
+- **Rare sightings rules:** patience counts only real time at 1x with the tab visible and nobody touching it; tiers at 10 minutes, 1, 4 and 12 hours.
+- **Herd bands stay off** (they cost 12 to 15% of the bison); **the new snow look stays on its branch** (r-snow) until its frame cost is measured on an idle machine.
+
+### Bigger valley?
+You allowed it; I did not do it tonight. A read-only study is in `VALLEY-SIZE.md`: it is possible but large (dozens of places assume 512 m and 32 x 32 grids, and grass per square metre is fixed, so a bigger valley would hold 2.25x to 4x the animals unless productivity is rescaled). Herd bands (built tonight, off) may get most of the "less carpet" benefit sooner.
+
+### Blocked or cut
+- Bison herd bands work visually (separate groups with grass between them) but cost 12 to 15% of the bison in every variant tried, so they stay off.
+- Builder worktree isolation failed under the CPU load late in the night; I created worktrees by hand instead (no effect on the work).
+- Captures and playtests timed out for a while because the dev server was watching 37 builder worktrees; fixed (vite ignores .claude/).
+
+### API spend tonight
+ElevenLabs: 5 narrator lines, 486 characters (about $0.10). Gemini: 1 video critique (about $0.05). Everything is in `ASSETS.md`.
+
+### Next 5
+1. Read the v10b acceptance and shocks; if they pass, adopt v10b (pronghorn twins cap, wolf sprint cost, equilibrium starts): it fixes v10's weak spots (mule deer, pronghorn spikes, wolf tracking).
+2. Re-measure 100x on an idle machine (tonight three CPU batches held the browser to 10x to 40x) and consider a 300x or "skip a decade" control now that the sim is 1.4x faster.
+3. Herd bands without the bison cost (bigger bands, or more forage for banded bison), then a screen with v10b: the real fix for the "bison carpet".
+4. Close-up pass two: lying bison legs (dark slabs), pack wolves overlapping at rest, raven flocking at carcasses, exposure jumps between director cuts.
+5. Snow: re-bench r-snow on an idle machine and merge if it fits the frame budget; wet ground in rain.
+
+Last deploy: pending (see NEXT-SESSION.md).
 
 ## 2026-10-08 and 09: the design calls (live)
 - **Ecology, checkpoint v9:** ravens now breed to the carrion supply instead of sitting at a fixed ceiling, mule deer have more woody-cover habitat, and new valleys start with 550 bison instead of 800 so the opening is not a brown carpet. Passed the 20-world acceptance (every species held in all 20) and the shock tests.
