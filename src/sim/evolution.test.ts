@@ -2,6 +2,7 @@
 // Run: npx tsx src/sim/evolution.test.ts
 import { applyOverrides, defaultParams } from './params';
 import { createSim } from './sim';
+import { createSim as createPinned, defaultParams as pinnedDefaults } from './testpins';
 import { COAT_RANGE } from './species';
 import { SPECIES_COUNT, Sp } from './types';
 import { simHash } from '../headless/hash';
@@ -16,13 +17,15 @@ function ok(cond: boolean, msg: string): void {
   }
 }
 
-// 1. everything is off by default
+// 1. everything is off in the pre-v10 world (testpins pins evolution2 0), and on in the v10 default world
 {
-  const p = defaultParams();
+  const v10 = applyOverrides(defaultParams(), {});
+  ok(v10.evolution2 === 1 && v10.species[Sp.Bison].maxLitter === 1 && v10.species[Sp.Wolf].sprintCost === 0.15, 'v10: evolution2 is on in the default world, even with no overrides');
+  const p = pinnedDefaults();
   ok(p.evolution2 === 0 && p.coatSearch === 0 && p.herdEyes === 0 && p.sprintCost === 0, 'evolution params are off by default');
   ok(p.species.every((s) => s.sprintCost === 0), 'per-species sprintCost is 0 by default');
   ok(p.species[Sp.Bison].maxLitter === 99, 'bison maxLitter is uncapped by default');
-  const q = applyOverrides(defaultParams(), {});
+  const q = applyOverrides(pinnedDefaults(), {});
   ok(q.coatSearch === 0 && q.herdEyes === 0, 'empty overrides change nothing');
 }
 
@@ -45,10 +48,10 @@ function ok(cond: boolean, msg: string): void {
 
 // 3. off reproduces the default run exactly, and the new columns exist either way
 {
-  const base = simHash(3, 1800);
-  ok(simHash(3, 1800, { evolution2: 0 }) === base, 'evolution2: 0 reproduces the default hash');
-  ok(simHash(3, 1800, { evolution2: 0, coatSearch: 0, herdEyes: 0 }) === base, 'explicit zeros reproduce the default hash');
-  const off = createSim({ seed: 3 });
+  const base = simHash(3, 1800, { evolution2: 0 });
+  ok(simHash(3, 1800, { evolution2: 0, coatSearch: 0, herdEyes: 0 }) === base, 'explicit zeros reproduce the evolution2-off hash');
+  ok(simHash(3, 1800) === simHash(3, 1800, { evolution2: 1 }), 'v10: the default hash is the evolution2-on hash');
+  const off = createPinned({ seed: 3 });
   off.step(1200);
   const row = off.sample();
   ok(['coatvar_bison', 'coatvar_pronghorn', 'coatvar_wolf', 'search_wolf'].every((k) => k in row), 'sample has the S9 columns with the feature off');

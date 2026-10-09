@@ -73,6 +73,8 @@ export const CHALLENGE_PIN: Record<string, number> = {
   snowDepth: 0, dynamicTrees: 0, treeCwRecruit: 0.0015, dogRescueYears: 20,
   // checkpoint v9: food-linked raven nesting, mule deer cover, bison start
   ravenNestFood: 0, muledeerCover: 0.25, 'bison.initial': 800,
+  // checkpoint v10: bounded evolution, climate regimes, fewer and bigger wolf packs
+  evolution2: 0, climate2: 0, wolfDenMinDist: 200, wolfTerritory: 100,
 };
 /** The calendar the challenges were tuned on, with every v2 mechanism pinned off. */
 const CLASSIC = { calendarScale: 1, ...CHALLENGE_PIN };
