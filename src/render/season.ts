@@ -44,7 +44,7 @@ export const PACK_KEYS: Keys = [
  */
 export const LAPSE_SEASON = 1.2;
 /** The share of the seasonal colour swing kept while the lapse is fully on. */
-export const LAPSE_SWING = 1 / 3;
+export const LAPSE_SWING = 0.2; // round 24: a third still read as flicker at 100x
 /** The share of the snowpack kept while the lapse is fully on (a light dusting in deep winter). */
 export const LAPSE_SNOW = 0.2;
 

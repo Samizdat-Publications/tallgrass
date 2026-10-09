@@ -733,6 +733,9 @@ export class Storms {
     // a second flash right after another is softer, and fast-forward flashes are softer still
     const since = this.time - this.lastFlashAt;
     b.distAmp *= (since < 0.3 ? 0.4 : 1) * (this.simSpeed >= 30 ? 0.5 : this.simSpeed >= 10 ? 0.75 : 1);
+    // time-lapse (round 24: at 100x the storms' strikes became a continuous strobe): from 50x the scene flash is a tenth and at
+    // least 1.2 s apart; the bolt itself still draws
+    if (this.simSpeed >= 50) b.distAmp *= since < 1.2 ? 0 : 0.1;
     this.lastFlashAt = this.time;
     this.startFlare(sx, gy, sy, 1, b.distAmp);
     if (ignited) this.startFlare(sx, gy, sy, 0, 1);
