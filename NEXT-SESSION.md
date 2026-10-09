@@ -7,7 +7,7 @@
 - Start state: main 442a648 + the plan commit, v10b default and live (deploy 13:04), CPU idle, no builders, nothing running. Weekly quota 31% at 14:30.
 - First steps (Block 0): write "2026-10-10 15:30" to `.claude/hooks/run_until.local.txt`; idle-machine baselines (gpubench, 100x rate, r-snow A/B); the look-set capture and `tools/look_stats.py`; Gemini `videoMetadata.fps`; start v11 screen 1 on the CPU; brief builders B1 r-look, B2 r-ground, B3 a3-spike.
 - Owner plays tonight: deploy D1 about 19:30; CPU batches at 8 threads from 18:00 to 23:00 (4 if he says "playing").
-- THROTTLED since 16:00 (owner: mouse lag): scratch/day/throttle_loop.sh keeps project processes at Idle priority; v11 screen at 3 threads. Touch scratch/day/fullspeed only when the owner says full speed.
+- CPU CAP (owner, 18:00): about 85% of full. scratch/day/throttle_loop.sh keeps project processes at BelowNormal priority (scratchpad throttle.ps1); batch threads at most 8 in total. Keep this cap for the rest of the run unless he says otherwise.
 - OWNER RULING 15:05: any model or asset regardless of license (he handles licensing); still record sources in CREDITS.md.
 - State 15:20: deadline set. Idle bench of main (1440p): low_golden 18.78 ms (over the 16.7 gate), night 15.43, others 11.8 to 14.9 (review/wip/day/gpubench_main_baseline.json). Look-set baseline in review/wip/day/baseline (tools/stills.mjs --set look; tools/look_stats.py). Gemini now samples at 8 fps (tools/gemini_video_review.py --fps), video.mjs --set motion.
 - Builders running (hand-made worktrees with node_modules junctions): B1 r-look (scratch/wt-look), B2 r-ground (wt-ground), B3 a3-spike (wt-a3, 3-hour gate), B4 r-perf (wt-perf). Briefs in scratch/day/*.md.
