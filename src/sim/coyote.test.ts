@@ -51,7 +51,7 @@ ok(near(1 - Math.pow(1 - killHazard(0.3), KILL_EVERY), 0.3, 1e-9) && killHazard(
 
 // ---- coyote.initial 0: no coyotes, columns present, nothing changes
 {
-  ok(createSim({ seed: 3 }).populations()[Sp.Coyote] === 12, 'v6b default: 12 coyotes at the start');
+  ok(createSim({ seed: 3 }).populations()[Sp.Coyote] === 30, 'v10b default: 30 coyotes at the start (v6b to v10: 12)');
   const sim = createSim({ seed: 3, params: { 'coyote.initial': 0 } });
   ok(sim.populations()[Sp.Coyote] === 0, 'no coyotes with coyote.initial 0');
   sim.step(300);
