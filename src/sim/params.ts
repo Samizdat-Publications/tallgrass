@@ -123,6 +123,14 @@ export interface Params {
   bandReach: number;
   /** Strength of that pull back, as a multiple of bandPush. */
   bandPull: number;
+  /** v11 (herdBands only): if > 0, a band moves on when the grass under it runs low, as real herds rotate their grazing: at each band check a
+   *  band whose ground holds less than bandRoamGrass of its capacity picks the best-grassed open spot about bandRoamDist m away (not taken
+   *  by another band) and its members are drawn toward it with this strength (a multiple of bandPush) until the band arrives. 0 = off. */
+  bandRoam: number;
+  /** Grass under the band (fraction of the cell capacity) below which it moves on. */
+  bandRoamGrass: number;
+  /** How far (m) a band looks for fresh grass when it moves on. */
+  bandRoamDist: number;
   /** Amplitude of the slow climate cycle on grass growth (0 = off; 0.3 = +/-30%). */
   climateAmp: number;
   /** Climate regimes (v10, climate.ts; 0 = off): a seeded wet and dry index of the decades (-1..1) moves the grass the land can carry and how fast it
@@ -621,6 +629,9 @@ export function defaultParams(): Params {
     bandPush: 0.6,
     bandReach: 15,
     bandPull: 0.9,
+    bandRoam: 0,
+    bandRoamGrass: 0.4,
+    bandRoamDist: 110,
     climateAmp: 0,
     climate2: 0.3, // v10 (was 0)
     climatePeriod: 40,

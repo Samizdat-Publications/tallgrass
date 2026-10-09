@@ -7,6 +7,12 @@
 - Start state: main 442a648 + the plan commit, v10b default and live (deploy 13:04), CPU idle, no builders, nothing running. Weekly quota 31% at 14:30.
 - First steps (Block 0): write "2026-10-10 15:30" to `.claude/hooks/run_until.local.txt`; idle-machine baselines (gpubench, 100x rate, r-snow A/B); the look-set capture and `tools/look_stats.py`; Gemini `videoMetadata.fps`; start v11 screen 1 on the CPU; brief builders B1 r-look, B2 r-ground, B3 a3-spike.
 - Owner plays tonight: deploy D1 about 19:30; CPU batches at 8 threads from 18:00 to 23:00 (4 if he says "playing").
+- OWNER RULING 15:05: any model or asset regardless of license (he handles licensing); still record sources in CREDITS.md.
+- State 15:20: deadline set. Idle bench of main (1440p): low_golden 18.78 ms (over the 16.7 gate), night 15.43, others 11.8 to 14.9 (review/wip/day/gpubench_main_baseline.json). Look-set baseline in review/wip/day/baseline (tools/stills.mjs --set look; tools/look_stats.py). Gemini now samples at 8 fps (tools/gemini_video_review.py --fps), video.mjs --set motion.
+- Builders running (hand-made worktrees with node_modules junctions): B1 r-look (scratch/wt-look), B2 r-ground (wt-ground), B3 a3-spike (wt-a3, 3-hour gate), B4 r-perf (wt-perf). Briefs in scratch/day/*.md.
+- CPU: v11 screen 1a (bands with today's params, 5 variants x 32 x 200 years, 10 threads) from frozen scratch/frozen/b89bb30, log scratch/v11/screen1.log, out scratch/frozen/b89bb30/scratch/v11s1/<variant>.
+- In main (uncommitted until npm test passes): v11 params bandRoam, bandRoamGrass, bandRoamDist (src/sim/bands.ts roam(), sim.ts pull toward the band's goal). Screen 1b with bandRoam variants follows screen 1a.
+- r-snow: main merged into it in scratch/wt-snow (3f2a02c); GPU A/B against main running (review/wip/day/gpubench_snow_ab.json).
 
 ## Night of 2026-10-09 (03:30 to 13:05): v10, then v10b, ADOPTED and live (default world is v10b since 13:00; golden 77fd982c, 2fc8dc7c, 37517a14; deploy 13:04) (read NIGHT-PLAN.md and MORNING.md's top section first)
 State at 11:45:

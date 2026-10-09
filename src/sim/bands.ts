@@ -25,6 +25,19 @@ export interface BandStats {
   gap: number;
 }
 
+/** What the band rotation (bandRoam, v11) reads of the land: the grass at a point as a fraction of what the ground can carry, and whether a
+ *  band may head for a point (inside the valley, not open water). */
+export interface RoamLand {
+  grassFrac(x: number, y: number): number;
+  open(x: number, y: number): boolean;
+}
+
+/** A band heading for fresh grass gives up after this many band checks without arriving, and counts as arrived within this many metres. */
+const ROAM_PATIENCE = 4;
+const ROAM_ARRIVE = 18;
+/** Candidate spots a band weighs when it moves on. */
+const ROAM_TRIES = 10;
+
 export class Bands {
   private rng: Rng;
   private next = 0;
@@ -32,8 +45,12 @@ export class Bands {
   private cx: number[] = [];
   private cy: number[] = [];
   private cnt: number[] = [];
+  /** Per band id (bandRoam only): where the band is heading (NaN = settled) and how many checks it has been heading there. */
+  private gx: number[] = [];
+  private gy: number[] = [];
+  private gAge: number[] = [];
 
-  constructor(private a: Agents, private p: Params, seed: number) {
+  constructor(private a: Agents, private p: Params, seed: number, private land: RoamLand | null = null) {
     this.rng = new Rng(hashSeed(seed + ':bands'));
   }
 
@@ -87,7 +104,58 @@ export class Bands {
     if (t % check === 0) {
       if (this.split()) this.refresh();
       if (this.merge()) this.refresh();
+      if (this.p.bandRoam > 0 && this.land !== null) this.roam();
     }
+  }
+
+  /** v11 band rotation: settled bands on worn grass pick fresh ground nearby; heading bands that arrived (or gave up) settle. */
+  private roam(): void {
+    const land = this.land!, p = this.p, rng = this.rng;
+    const m = this.next;
+    while (this.gx.length < m) { this.gx.push(NaN); this.gy.push(NaN); this.gAge.push(0); }
+    const here = (x: number, y: number): number => {
+      // the ground under a band: its centre and four points 10 m out
+      let s = land.grassFrac(x, y);
+      s += land.grassFrac(x + 10, y) + land.grassFrac(x - 10, y) + land.grassFrac(x, y + 10) + land.grassFrac(x, y - 10);
+      return s / 5;
+    };
+    const gap2 = (2 * p.bandGap) * (2 * p.bandGap);
+    for (let b = 0; b < m; b++) {
+      if (this.cnt[b] === 0) { this.gx[b] = NaN; continue; }
+      if (!Number.isNaN(this.gx[b])) {
+        const dx = this.gx[b] - this.cx[b], dy = this.gy[b] - this.cy[b];
+        this.gAge[b]++;
+        if (dx * dx + dy * dy < ROAM_ARRIVE * ROAM_ARRIVE || this.gAge[b] > ROAM_PATIENCE) this.gx[b] = NaN;
+        continue;
+      }
+      const now = here(this.cx[b], this.cy[b]);
+      if (now >= p.bandRoamGrass) continue;
+      let best = now + 0.1, bx = NaN, by = NaN;
+      for (let k = 0; k < ROAM_TRIES; k++) {
+        const ang = rng.next() * Math.PI * 2, r = p.bandRoamDist * (0.6 + 0.6 * rng.next());
+        const x = this.cx[b] + Math.cos(ang) * r, y = this.cy[b] + Math.sin(ang) * r;
+        if (!land.open(x, y)) continue;
+        let taken = false;
+        for (let o = 0; o < m && !taken; o++) {
+          if (o === b || this.cnt[o] === 0) continue;
+          const tx = Number.isNaN(this.gx[o]) ? this.cx[o] : this.gx[o], ty = Number.isNaN(this.gx[o]) ? this.cy[o] : this.gy[o];
+          const dx = x - tx, dy = y - ty;
+          if (dx * dx + dy * dy < gap2) taken = true;
+        }
+        if (taken) continue;
+        const g = here(x, y);
+        if (g > best) { best = g; bx = x; by = y; }
+      }
+      if (!Number.isNaN(bx)) { this.gx[b] = bx; this.gy[b] = by; this.gAge[b] = 0; }
+    }
+  }
+
+  /** Where a band is heading (bandRoam), or false when it is settled. */
+  goal(b: number, out: Float64Array): boolean {
+    if (b < 0 || b >= this.gx.length || Number.isNaN(this.gx[b]) || this.cnt[b] === 0) return false;
+    out[0] = this.gx[b];
+    out[1] = this.gy[b];
+    return true;
   }
 
   /** Recompute centres and counts, and put every band-less bison (introduced or arrived) in a band. */
