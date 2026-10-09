@@ -11,6 +11,7 @@ import { buildHawk } from './hawk';
 import { buildMuleDeer } from './muledeer';
 import { buildBeaver } from './beaver';
 import type { ModelDef } from './types';
+import { getA3 } from './a3';
 
 export type { ModelDef, AnimParams } from './types';
 
@@ -39,6 +40,12 @@ export function getModel(sp: number): ModelDef | null {
     const build = key !== undefined ? BUILDERS[key] : undefined;
     if (!build) return null;
     m = build();
+    // a3 spike (?a3=1): the authored mesh replaces the procedural near LOD of the species that have one
+    const a3 = key !== undefined ? getA3(key) : null;
+    if (a3) {
+      m.nearGeometry = a3.geometry;
+      m.a3 = { map: a3.map, normalMap: a3.normalMap ?? undefined };
+    }
     cache.set(sp, m);
   }
   return m;

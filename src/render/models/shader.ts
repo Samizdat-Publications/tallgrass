@@ -95,6 +95,7 @@ function lodDefines(def: ModelDef | undefined, variant: Variant): string[] {
     `#define FUR_RIM ${f(fur?.rim ?? 0)}`,
     `#define FUR_DORSAL ${f(fur?.dorsal ?? 0)}`, `#define FUR_BELLY ${f(fur?.belly ?? 0)}`,
     `#define FUR_STREAK ${f(fur?.streak ?? 0)}`, `#define FUR_MOTTLE ${f(fur?.mottle ?? 0)}`, `#define FUR_MOTTLE_SCALE ${f(fur?.mottleScale ?? 7)}`, `#define FUR_INDIV ${f(fur?.indiv ?? 0)}`,
+    `#define A3SKIN ${variant === 'near' && def?.a3 ? 1 : 0}`,
     `#define SHELL ${variant === 'near' && sh ? 1 : 0}`,
     `#define SHELL_SCALE ${f(sh?.scale ?? 30)}`, `#define SHELL_ALONG ${f(sh?.along ?? 0.5)}`, `#define SHELL_SPARSE ${f(sh?.sparse ?? 0.4)}`,
     `#define SHELL_D0 ${f(sh?.d0 ?? 30)}`, `#define SHELL_D1 ${f(sh?.d1 ?? 50)}`,
@@ -701,6 +702,12 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
     p += n * (0.05 * flareW * smoothstep(-0.02, -0.3, p.x));
   }
 #endif
+#if A3SKIN
+  // the pose before any part moves it: an authored mesh is one continuous skin, so a vertex near a joint (aPart.w, 0 .. 1) follows its bone
+  // only as far as its weight says and the rest of the way the body, like a skinned mesh (the procedural tubes hide their ends inside the body)
+  vec3 a3p = p;
+  vec3 a3n = n;
+#endif
   if (part >= 1 && part <= 4) {
     bool front = part <= 2;
     float hip, knee;
@@ -1210,6 +1217,12 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
 #endif
   }
 
+#if A3SKIN
+  if (part >= 1 && part != 5 && aPart.w > 0.001) {
+    p = mix(p, a3p, aPart.w);
+    n = normalize(mix(n, a3n, aPart.w));
+  }
+#endif
 #if KIND == 0
   if (CURL > 0.0 && !dead && lie > 0.001) {
     // curled rest: bend the body behind its middle round to one side, a smooth yaw that grows with the distance behind the
@@ -1672,6 +1685,11 @@ export function makeAnimalMaterials(sp: number, def: ModelDef, shared: AnimalSha
   const lodDefs = lodDefines(def, variant).join('\n');
   const mangeFrag = (hasFur ? FUR_COLOR.replace(/aLookSeed/g, 'vTgSeed') : '') + (hasMange ? MANGE_FRAG : '');
   const material = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: def.roughness, metalness: 0 });
+  if (variant === 'near' && def.a3) {
+    // a3 spike: the authored near LOD is textured (the vertex colour is 1, so the coat tint, the fur pattern and the lighting all act on the albedo)
+    material.map = def.a3.map;
+    if (def.a3.normalMap) { material.normalMap = def.a3.normalMap; material.normalScale.set(1, 1); }
+  }
   material.onBeforeCompile = (shader) => {
     const defs = defsOf();
     shader.uniforms.uTime = shared.uTime;

@@ -1,0 +1,112 @@
+{
+ "species": "wolf",
+ "source": "scratch/a3/raw/wolfwm/wolfwm.glb",
+ "work": "scratch/a3/work/wolf",
+ "exclude_objects": [
+  "Icosphere"
+ ],
+ "pose": "REST",
+ "up": [
+  0,
+  1,
+  0
+ ],
+ "forward": [
+  0,
+  0,
+  1
+ ],
+ "height": 1.0,
+ "nose_x": 0.975,
+ "tris": 7000,
+ "tex": 1024,
+ "xscale": 1.11,
+ "xshift": -0.104,
+ "zshift": 0.0,
+ "xsplit": 0.1,
+ "leg_top": 0.8,
+ "leg_rx_max": 0.1,
+ "leg_rz_max": 0.07,
+ "leg_pad": 0.02,
+ "leg_fade": 0.2,
+ "knee_w": 0.07,
+ "hip_blend": 0.28,
+ "hip_blend_up": 0.08,
+ "hip_src_x": {
+  "front": 0.4,
+  "hind": -0.3
+ },
+ "rig": {
+  "front": {
+   "hip": [
+    0.34,
+    0.66
+   ],
+   "knee": [
+    0.37,
+    0.27
+   ],
+   "foot": [
+    0.405,
+    0.0
+   ]
+  },
+  "hind": {
+   "hip": [
+    -0.44,
+    0.66
+   ],
+   "knee": [
+    -0.5,
+    0.27
+   ],
+   "foot": [
+    -0.45,
+    0.0
+   ]
+  }
+ },
+ "neck": [
+  0.4,
+  0.74,
+  0.0
+ ],
+ "head_w": [
+  0.45,
+  0.72
+ ],
+ "head_x": [
+  0.68,
+  0.8
+ ],
+ "neck_low": [
+  0.5,
+  0.62,
+  0.6,
+  0.06
+ ],
+ "tail": {
+  "pivot": [
+   -0.55,
+   0.68,
+   0.0
+  ],
+  "x0": -0.55,
+  "z": 0.0,
+  "half": 0.075,
+  "ymin": 0.5,
+  "blend": 0.12,
+  "rot": 0.5
+ },
+ "ground": 0.64,
+ "ao_r": 0.05,
+ "ao_reach": 0.4,
+ "grade": {
+  "sat": 0.45,
+  "gain": [
+   0.97,
+   0.98,
+   1.0
+  ]
+ }
+}
