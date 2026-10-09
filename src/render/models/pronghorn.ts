@@ -199,7 +199,7 @@ export function buildPronghorn(): ModelDef {
       nodW: 0.05, nodG: 0.06,
       headDown: 1.15, lookYaw: 0.6,
       tailRest: 0, tailRun: -0.4, tailSway: 0.2,
-      lieDrop: 0.45, lieHipF: 1.25, lieKneeF: -2.3, lieHipH: -0.8, lieKneeH: 1.6,
+      lieDrop: 0.45, lieHipF: 1.25, lieKneeF: -2.3, lieHipH: 0.55, lieKneeH: 1.7,
       crouchDrop: 0.1,
       deadDrop: 0.38, deadHipF: 0.9, deadHipH: -0.6,
       length: 1.4, height: 1.2, ring: 1.0, minPx: 9, boostLen: 1.4,
