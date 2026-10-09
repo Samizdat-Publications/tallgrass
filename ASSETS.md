@@ -139,3 +139,8 @@ Music cues are in `public/audio/music/`, stereo mp3 96 kbps, levelled to -20 LUF
 | Bison - animal (uid 4b8f112f...) | Brian Trepanier | CC BY 4.0 | a3 bison near LOD |
 | WOLF - Realistic 3D Model (DEMO FREE) (uid 8840b859...) | WildMesh 3D | CC BY-NC 4.0 | a3 wolf near LOD |
 Also downloaded for comparison and not used: European Bison NHMW (e8166095..., CC BY-NC, Natural History Museum Vienna). Meshy: not used.
+| Pronghorn (a8cb6abf...) | FennecFyre | CC BY-NC 4.0 | a3 pronghorn |
+| DEER - Realistic (DEMO FREE) (3997d669...) | WildMesh 3D | CC BY-NC 4.0 | a3 mule deer |
+| coyote (e350e508...) | Raven-Woods | CC BY 4.0 | a3 coyote |
+| Puma Gray (90f0fd2c...) | 1225659838@qq.com | CC BY 4.0 | a3 cougar |
+Rollout: Sketchfab free downloads only, no Meshy credits spent.
