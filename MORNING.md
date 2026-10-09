@@ -2,6 +2,22 @@
 
 *(Updated 22:10 Tuesday 2026-10-06. This file is refreshed at every milestone.)*
 
+## 2026-10-09 night: v10 "The long breath" (in progress; this section is updated as results land)
+**Plan:** `NIGHT-PLAN.md`. **Every call and number:** `DECISIONS.md` (2026-10-09 entries).
+
+**What was wrong with wolves and bison (measured on the v9 runs):**
+- Evolution ran away. Over 1,400 years bison came to bear 2.4 calves a birth and lost their herding (0.92 to 0.24); wolves got 39% faster and 29% bigger and grew from 46 to 77. That drift made the 1:7 wolf ratio and the late mule deer collapse (63 to 12). A fix (bounded evolution: real costs for speed, single bison calves) was built on 10-06 and never switched on.
+- Wolves never followed the herd: the open prairie refilled the pronghorn to the same number every spring, so wolves always had food while bison crashed.
+- The herd swung every 8 years or so through overshoot and starvation: too fast to read as anything but noise.
+
+**v10 candidate (four switches):** climate regimes (new: wet and dry runs of decades with occasional megadroughts, moving grass, dry spells, lightning fires, cottonwood seedlings and the pronghorn the prairie sends back), bounded evolution on, wolf dens 280 m apart with 130 m territories (4 to 6 bigger packs). In a 400-year screen with climate: every species present over 90% of the time in all 14 worlds, bison follow the climate (0.48), 60% more standing grass in wet runs than dry, twice the lightning fires in dry runs, and the share of the herd's swings slower than 20 years rose from 0.13 (v9) to 0.63. Fewer packs alone took the ratio from 1:14 to 1:22 in a 150-year screen.
+
+![400 years of the long breath: green wet runs, tan dry runs](journey/20261009-055009_chart_v10-breath-chart.png)
+
+**Running now:** the v10 acceptance (20 worlds x 1,200 valley years) and shocks (12 worlds x 500 years), finishing around 09:30. If they pass, v10 becomes the default (prepared on branch v10-adopt). Either way it is in the menu as Scenarios, The long breath.
+
+**Also tonight:** the sim is 1.4x faster with bit-identical results (merged); five narrator lines for the wet years, dry years and megadroughts; a feasibility study for a bigger valley (`VALLEY-SIZE.md`: possible, but large, because grass per square metre is fixed so a bigger valley holds more animals); bison herd bands built (branch s-bands, off: separate herds instead of a carpet, but 12% fewer bison so far). Builders still working: the breathing-valley look (climate tint, graph band, chronicle), documentary camera v3 (running animals up close, truthful cuts), rare sightings (your idle-events idea) and long-exposure trails at 100x.
+
 ## 2026-10-08 and 09: the design calls (live)
 - **Ecology, checkpoint v9:** ravens now breed to the carrion supply instead of sitting at a fixed ceiling, mule deer have more woody-cover habitat, and new valleys start with 550 bison instead of 800 so the opening is not a brown carpet. Passed the 20-world acceptance (every species held in all 20) and the shock tests.
 - **Seeing the animals:** the follow camera frames the animal you follow; predators are darker and cooler, pronghorn and deer show bright rumps; far herds separate into bodies; from the top view each animal gets a small colour glyph so herds and packs are countable.
