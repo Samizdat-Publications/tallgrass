@@ -58,7 +58,7 @@ const CARD_HOLD_MS = 20000;
 /** A card held back because the documentary camera is not on its event waits this long for the camera to get there, then is dropped. */
 const GATE_HOLD_MS = 14000;
 /** Events the graph marks with a line (the rest would only add noise). */
-const MARK_KINDS = new Set(['drought', 'droughtEnd', 'outbreak', 'stampede', 'extinct', 'introduced', 'removed', 'culled', 'fire', 'plague']);
+const MARK_KINDS = new Set(['drought', 'droughtEnd', 'outbreak', 'stampede', 'extinct', 'introduced', 'removed', 'culled', 'fire', 'plague', 'megadrought']);
 /** A quiet hint about H and C appears once after this long with no input (a second monitor, a lazy afternoon). */
 const HINT_IDLE_MS = 60000;
 const HINT_KEY = 'tallgrass.hint.v1';

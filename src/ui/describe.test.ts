@@ -1,6 +1,6 @@
 // Event text checks: every event kind, including the v2 kinds, gives a clean sentence. Run: npx tsx src/ui/describe.test.ts
 import type { SimEvent, SimEventKind } from '../sim/sim';
-import { ChronicleVoice, describeEvent, describeFolded, eventWeight, foldKey, skyWord, type SkyView } from './describe';
+import { ChronicleVoice, climateWord, describeEvent, describeFolded, eventWeight, foldKey, skyWord, yearOfTick, type SkyView } from './describe';
 
 let failures = 0;
 let checks = 0;
@@ -19,6 +19,7 @@ const KINDS: SimEventKind[] = [
   'hareBoom', 'hareCrash', 'coyotePups', 'mesoRelease', 'storm', 'lightningFire', 'eaglesArrive', 'hawksReturn',
   'blizzard', 'hardWinter', 'flood', 'grovePlanted', 'dustStorm', 'grasshopperOutbreak', 'springFlood', 'encroachment',
   'damBuilt', 'pondFilled', 'damBreached', 'beaverMeadow', 'colonyLeft',
+  'climateWet', 'climateDry', 'climateMild', 'megadrought',
 ];
 const EM_DASH = String.fromCharCode(0x2014);
 
@@ -110,6 +111,25 @@ ok(describeEvent({ tick: 10, kind: 'nope' as SimEventKind, sp: 0, x: 0, y: 0, a:
   ok(skyWord({ weather: 0 }, { ...clear, dustStorm: 0.6 }) === 'dust storm', 'a dust storm reads dust storm');
   ok(skyWord({ weather: 0 }, { ...clear, flood: 0.8 }) === 'clear, flood', 'a flood adds flood');
   ok(skyWord({ weather: 4 }, undefined) === 'snow', 'without sky data the sim weather is used');
+}
+
+// the climate word: only when it matters, and it does not flicker on the threshold
+{
+  const sky = (climate: number, megadrought = false): SkyView => ({ snow: 0, blizzard: 0, rain: 0, drought: 0, dustStorm: 0, flood: 0, overcast: 0, climate, megadrought });
+  ok(climateWord(undefined) === '', 'no sky data, no climate word');
+  ok(climateWord(sky(0)) === '' && climateWord(sky(0.3)) === '' && climateWord(sky(-0.44)) === '', 'ordinary years have no word');
+  ok(climateWord({ snow: 0, blizzard: 0, rain: 0, drought: 0, dustStorm: 0, flood: 0, overcast: 0 }) === '', 'climate2 off (no value) has no word');
+  ok(climateWord(sky(0.5)) === 'Wet years' && climateWord(sky(-0.5)) === 'Dry years', 'past 0.45 either way names the run');
+  ok(climateWord(sky(-0.75, true)) === 'Megadrought', 'a megadrought is named');
+  ok(climateWord(sky(0.4), 'Wet years') === 'Wet years' && climateWord(sky(0.4)) === '', 'the wet word holds between 0.35 and 0.45');
+  ok(climateWord(sky(-0.4), 'Dry years') === 'Dry years' && climateWord(sky(-0.3), 'Dry years') === '', 'the dry word lets go below 0.35');
+  ok(climateWord(sky(-0.6), 'Megadrought') === 'Dry years', 'when a megadrought ends the dry word carries on');
+  // the climate events carry the year (megadrought) and weigh as the chronicle expects
+  const mega = describeEvent({ tick: 1200 * 14, kind: 'megadrought', sp: -1, x: 0, y: 0, a: -78, b: 4 });
+  ok(new RegExp('[Yy]ear ' + yearOfTick(1200 * 14)).test(mega.sentence) && /four years/.test(mega.sentence) && !!mega.card, `megadrought line names the year and length: "${mega.sentence}"`);
+  ok(eventWeight({ tick: 0, kind: 'megadrought', sp: -1, x: 0, y: 0, a: -78, b: 4 }) === 4, 'megadrought is heavy');
+  ok(eventWeight({ tick: 0, kind: 'climateWet', sp: -1, x: 0, y: 0, a: 60, b: 0 }) === 3 && eventWeight({ tick: 0, kind: 'climateDry', sp: -1, x: 0, y: 0, a: -60, b: 0 }) === 3, 'wet and dry runs are medium');
+  ok(eventWeight({ tick: 0, kind: 'climateMild', sp: -1, x: 0, y: 0, a: 5, b: 1 }) === 1, 'the return to ordinary years is light');
 }
 
 console.log(`${checks - failures}/${checks} checks passed`);

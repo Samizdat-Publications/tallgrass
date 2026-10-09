@@ -292,6 +292,8 @@ export interface Smoothed {
   overcast: number;
   snow: number;
   wet: number;
+  /** Dry-years look 0..1 (climate regimes, eased by the engine; absent or 0 otherwise): a hazier, warmer sky like a mild dry spell's. */
+  dry?: number;
 }
 
 /** Non-uniform outputs the engine applies to lights, exposure and post. */
@@ -368,7 +370,7 @@ export function computeAtmosphere(env: EnvLike, sm: Smoothed, u: SharedUniforms,
   const over = sm.overcast;
   const winter = smoothstep(2.35, 3.0, season) * (1 - smoothstep(3.6, 3.95, season)); // 0..1 at deep winter
   const autumn = smoothstep(1.7, 2.1, season) * (1 - smoothstep(2.6, 3.0, season));
-  const dust = env.weather === 2 ? 0.35 : 0;
+  const dust = Math.max(env.weather === 2 ? 0.35 : 0, 0.3 * (sm.dry ?? 0));
 
   // sky palette
   mixKey(u.skyZenith.value, (k) => k.zen, k0, k1, t);
