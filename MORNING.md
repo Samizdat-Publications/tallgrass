@@ -7,7 +7,8 @@
 - **Merged so far:** the snow look (snow by landform, ragged edges, no lavender dusk; +0.17 ms in winter), the v11 sim lever (bison bands move on to fresh grass; off until screened, golden unchanged), a field-note card that reads as a notebook entry ("Added to your field notes") instead of contradicting the shot.
 - **Measuring fixed:** the video critic now sees 8 frames a second (it saw 1, which hides every stride). Its first 8 fps read of today's build: motion 3, ecosystem 2; top complaint, animals walking on top of the river (builder on it now).
 - **Found on the idle machine:** the low golden view costs 18.8 ms at 1440p (the gate is 16.7), so a performance pass runs before the new visuals merge.
-- Not deployed yet; the first deploy of the day is planned for about 19:30.
+- **Deployed 19:45 (D1), live check clean:** the warm golden-hour look (low sun now golden and readable instead of purple and muddy; shadows warm olive), the new snow, the field-note wording. Try it at dusk or dawn, or press the concept bookmark view.
+- **Coming next:** real animal models (bison and wolf done and merged behind ?a3=1; you can try them now with https://tallgrass.stewartgregerson.workers.dev/?a3=1 ; the rollout makes them the default and adds pronghorn, mule deer, coyote, cougar), photo ground up close, animals that wade and notice predators, the performance pass, a trees trial.
 
 ## 2026-10-09 night: "The long breath" (v10)
 **Play it:** https://tallgrass.stewartgregerson.workers.dev (or `npm run dev`, then http://localhost:5199/). **v10b is now the default world** (v10 adopted at 10:30, then its refinement v10b at 13:00, each after its acceptance and shocks passed; live, see the last line of this section).
