@@ -1006,6 +1006,29 @@ vec3 tgAdapt(vec3 nrm, float ts){
   return mix(vec3(1.0), clamp(l / max(E, vec3(0.02)), 0.5, 1.7), dimK);
 }
 
+// The same adaptation for snow, aimed at a different target: the light on it should read as a clean pale blue in the shade and a soft
+// pearl where the low sun reaches it, never the lilac that a violet dusk sky gives pale ground (r-snow). The hue is a target colour
+// (luminance about 1) the lit result is pulled toward, mixed by how much of the light on this pixel is sky.
+vec3 tgAdaptSnow(vec3 nrm, float ts){
+  // (the key light is still bright while the sun is a few degrees up, but the sky over the shade is already a deep blue: so the sun's
+  // height counts as well as the key's brightness)
+  float dimK = max(1.0 - smoothstep(1.0, 2.6, dot(uLightColor, vec3(0.2126, 0.7152, 0.0722))), 1.0 - smoothstep(0.06, 0.34, uLightDir.y)) * (1.0 - uNight);
+  if (dimK < 0.01) return vec3(1.0);
+  vec3 K = uLightColor * max(dot(nrm, uLightDir), 0.0) * ts;
+#if NUM_HEMI_LIGHTS > 0
+  vec3 A = mix(hemisphereLights[0].groundColor, hemisphereLights[0].skyColor, 0.5 * nrm.y + 0.5);
+#else
+  vec3 A = vec3(0.5);
+#endif
+  float lk = dot(K, vec3(0.2126, 0.7152, 0.0722)), la = dot(A, vec3(0.2126, 0.7152, 0.0722));
+  float sh = la / max(lk + la, 1e-3);
+  vec3 hue = mix(vec3(1.02, 0.995, 0.96), vec3(0.85, 0.96, 1.11), sh);
+  vec3 E = K + A;
+  float l = dot(E, vec3(0.2126, 0.7152, 0.0722));
+  // (and a little lift: snow keeps its brightness at dusk, the sky light on it is not dimmer than the ground's)
+  return mix(vec3(1.0), clamp(l * hue / max(E, vec3(0.02)), 0.5, 1.7) * 1.14, dimK * 0.92);
+}
+
 vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
   vec2 xz = wp.xz;
   vec2 cuvR = xz / uWorldSize;
@@ -1436,26 +1459,36 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
     // lee: slopes that face downwind collect what the wind carries off the windward side and the crests
     float lee = clamp(dot(nrm.xz, wv) * 4.5, -1.0, 1.0) * slopeW;
     // the noise terms are kept small (they only break the pattern up); the landform field (st.b: hollows and sheltered hillsides against
-    // crests and exposed faces over 20 to 100 m, baked from the heights in snowland.ts) carries where the pack lies, so from the drone
-    // the snow follows the hills instead of drifting as big noise blobs
-    float patchy = ((nM1 - 0.5) * 0.4 + (nM2 - 0.5) * 0.3 + (nE - 0.5) * 0.2) * 0.4;
+    // crests and exposed faces at four scales from 5 to 100 m, baked from the heights in snowland.ts) carries where the pack lies, so
+    // from the drone the snow follows the hills instead of drifting as big noise blobs. The broad noise is a little stronger than it was
+    // (it varies how far a drift reaches from one hollow to the next, so no two patches are the same size) and steep faces shed what
+    // the flats and benches hold.
+    float patchy = ((nM1 - 0.5) * 0.4 + (nM2 - 0.5) * 0.3 + (nE - 0.5) * 0.2) * 0.55;
     float landF = (st.b - 0.5) * 2.0;
     float pot = 0.24 + flatK * 0.45 + drift * 0.1 + hollowK * 0.62 - ridgeK * 0.5 - rock * 0.5 - charAmt * 0.6 + 0.1 * gTgGrass
-              + 0.3 * aspect + 0.3 * lee + patchy + 0.85 * landF - trodK * 0.5;
+              + 0.3 * aspect + 0.3 * lee + patchy + 0.85 * landF - trodK * 0.5 - 0.25 * smoothstep(0.35, 0.9, slopeG);
     // The threshold starts above the highest possible potential (about 1.8), so a trace of leftover snow (the eased value never
     // reaches exactly zero) cannot show as isolated white patches on the flattest, wettest spots: nothing settles until there is real snow.
     float sn1 = clamp(snEff, 0.0, 1.0);
     float Tsn = 1.78 - 1.74 * pow(sn1, 0.66);
-    // The edge of a patch ramps over a wide band of the potential (tens of metres across), jittered by a 12 m term at any range and by
-    // two fine scales (about 1.5 m and 40 cm) only near the camera, so a patch fades out through grass-flecked snow instead of ending
-    // on a cut line; a thin pack is also never fully opaque.
+    // The edge of a patch ramps over a band of the potential, jittered at every scale from about 40 m down to 40 cm so no patch outline
+    // has one size: a 38 m and a 12 m term (at any range), a 5 m term (faded by about 600 m, where it would shimmer), the combed
+    // 5 x 37 m strokes the grass layer already uses (they run down the fall line on a slope and with the wind on the flat, so a patch
+    // edge pulls out into rills and tails instead of round lobes) and two fine scales (about 1.5 m and 40 cm) only near the camera.
     float fineK = 1.0 - smoothstep(25.0, 110.0, dist);
-    float edgeN = (tgDet(xz, 12.0, 0, vec2(0.45)) - 0.5) * 0.3;
-    // finer breakup that survives into the wide views (a 5 m octave, faded by about 600 m where it would shimmer): the edge of a drift is ragged, not a smooth contour
-    edgeN += (tgDet(xz, 5.0, 1, vec2(0.13)) - 0.5) * 0.24 * (1.0 - smoothstep(160.0, 600.0, dist));
+    float farE = 1.0 - smoothstep(160.0, 600.0, dist);
+    float edgeN = (tgDet(xz, 38.0, 2, vec2(0.71)) - 0.5) * 0.34 + (tgDet(xz, 12.0, 0, vec2(0.45)) - 0.5) * 0.3;
+    edgeN += (tgDet(xz, 5.0, 1, vec2(0.13)) - 0.5) * 0.24 * farE;
+    edgeN += (s2 - 0.5) * (0.3 + 0.3 * slopeW) * (1.0 - smoothstep(300.0, 1000.0, dist));
     if (fineK > 0.01) edgeN += ((tgDet(xz, 1.5, 2, vec2(0.7)) - 0.5) * 0.5 + (tgDet(xz, 0.4, 3, vec2(0.2)) - 0.5) * 0.36) * fineK;
     float edgeW2 = mix(0.3, 0.19, smoothstep(0.2, 0.8, snEff));
     float snowAmt = smoothstep(Tsn - 0.2 - edgeW2, Tsn + 0.06 + edgeW2, pot + edgeN) * smoothstep(0.05, 0.16, snEff);
+    // Where the pack thins (the fringe of a patch, the windward flank) it is not a decal: ground, grass tips and flecks of soil come
+    // through in a ragged speckle that is finest near the camera and a few metres wide from the drone.
+    float fringe = 4.0 * snowAmt * (1.0 - snowAmt);
+    float fleck = mix(nA, nC, fineK) + 0.4 * (s2 - 0.5);
+    float breakUp = smoothstep(0.4, 0.68, fleck) * fringe;
+    snowAmt *= 1.0 - 0.8 * breakUp;
     float tipsPoke = (0.3 * gTgGrass * smoothstep(0.45, 0.8, s2 + 0.2 * edgeN)) * (1.0 - smoothstep(0.4, 0.9, snEff));
     float packCap = mix(0.86, 0.96, smoothstep(0.1, 0.7, snEff));
     snowCover = clamp(snowAmt * (packCap - tipsPoke), 0.0, 1.0);
@@ -1466,16 +1499,25 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
     vec3 snowAlb = vec3(0.97, 0.955, 0.935) / mix(vec3(1.0), warmth, 0.1);
     snowAlb = min(snowAlb / max(snowAlb.r, max(snowAlb.g, snowAlb.b)), vec3(1.0)) * 0.97;
     float cool = clamp((1.0 - ts) * 0.7 + hollowK * 0.15 + (1.0 - nrm.y) * 0.25, 0.0, 1.0);
-    vec3 snowC = snowAlb * mix(vec3(1.0), vec3(0.95, 0.98, 1.03), cool);
+    vec3 snowC = snowAlb * mix(vec3(1.0), vec3(0.93, 0.975, 1.045), cool);
     // fine mottling and wind ripples so it is a surface, not a flat white fill
     snowC *= (0.94 + 0.08 * nC + 0.05 * (nA - 0.5) + streakTone * 0.12) * (1.0 - 0.45 * uNight);   // moonlit snow is grey-blue, not a floodlit white
-    snowC = mix(snowC, col * 2.0 + vec3(0.05), 0.07 * (1.0 - snowCover * 0.5));
-    // under a dusk or dawn sky the snow takes the sky's colour softly (pearl in the sun's rose, pale blue in the shade), not violet
-    snowC *= mix(vec3(1.0), tgAdapt(nrm, ts), 0.62);
+    // depth: snow sits a little deeper (a touch bluer and dimmer) in a crease, and where it thins toward the edge of a patch the
+    // ground shows through it, a soft contact shadow instead of a cut edge
+    float thin = 1.0 - smoothstep(0.3, 0.95, snowAmt);
+    snowC *= 1.0 - 0.07 * hollowK * (1.0 - 0.5 * ts);
+    snowC *= mix(vec3(1.0), vec3(0.9, 0.95, 1.02), 0.6 * fringe);
+    snowC = mix(snowC, col * 2.0 + vec3(0.05), 0.07 * (1.0 - snowCover * 0.5) + 0.38 * thin * (1.0 - snowCover * 0.4));
+    // under a dusk or dawn sky the snow takes the sky's light in its shade (a clean pale blue) and the sun's in its light (pearl), not violet
+    snowC *= tgAdaptSnow(nrm, ts);
     col = mix(col, snowC, snowCover);
     col = mix(col, col * vec3(0.76, 0.76, 0.78), trodK * snowCover * 0.55);
     // sastrugi-like relief: soft drifts and wind-combed ripples take the light, the grass relief underneath is buried
     gTgH = mix(gTgH, ((s2 - 0.5) * 0.1 * f2 + (s3 - 0.5) * 0.3 * f3 + (nA - 0.5) * 0.05 * lodFine) * mix(0.6, 1.0, graze), snowCover * 0.8);
+    // drifts: long soft dunes (about 16 m across and 60 m along the wind or the fall line) a fraction of a metre high, so a deep pack
+    // has a surface that takes the light in gentle bands and not a flat white fill; thin snow is level with the ground and gets none
+    float duneK = smoothstep(0.55, 0.95, snowCover) * smoothstep(0.25, 0.6, sn1) * (1.0 - smoothstep(350.0, 900.0, dist)) * (1.0 - 0.6 * topK);
+    if (duneK > 0.01) gTgH += (tgCombN(wq, ow, 0.065, 0.017, 7.0) - 0.5) * 0.45 * duneK;
     // glints: sparse ice crystals that flash when their facet lines up with the half vector, near the camera, sunlit snow only
     if (snowCover > 0.3 && dist < 80.0 && uLightDir.y > 0.02) {
       vec2 gc = xz * 34.0;
