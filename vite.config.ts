@@ -10,11 +10,11 @@ export default defineConfig({
   worker: { format: 'es' },
   build: { target: 'es2022', chunkSizeWarningLimit: 2000 },
   // don't scan or watch the big non-source folders: with them, a dev server (and every capture tool built on one) took
-  // minutes to start
+  // minutes to start (.claude/worktrees holds a full source tree per builder)
   server: {
     port: 5199,
     strictPort: true,
-    watch: { ignored: ['**/scratch/**', '**/.venv/**', '**/review/**', '**/dist/**', '**/journey/**', '**/art/**'] },
+    watch: { ignored: ['**/scratch/**', '**/.venv/**', '**/review/**', '**/dist/**', '**/journey/**', '**/art/**', '**/.claude/**'] },
     fs: { allow: [searchForWorkspaceRoot(process.cwd()), ...modules] },
   },
   optimizeDeps: { entries: ['index.html'] },
