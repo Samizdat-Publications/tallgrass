@@ -20,6 +20,7 @@ import { Water } from './water';
 import { Sky, computeAtmosphere, createLighting, Lighting, Smoothed } from './sky';
 import { Trees } from './trees';
 import { PostFX, Quality } from './post';
+import { CutFx } from './cutfx';
 import { Smoke } from './smoke';
 import { Fireflies, fireflyAmount } from './fireflies';
 import { Storms } from './storms';
@@ -211,6 +212,8 @@ export class Engine {
    */
   private lapseSm = 0;
   lapseEnabled = typeof location === 'undefined' || new URLSearchParams(location.search).get('lapse') !== '0';
+  /** The dip at the documentary camera's cuts (the director drives it). `?cuts=0` turns it and the eye adaptation off, `?dip=0` or `?adapt=0` one of them. */
+  readonly cutFx = new CutFx();
   private readonly lapseSnap = { cols: [] as THREE.Color[], nums: [] as number[] };
   private readonly envDisp: EnvState = { ...DEFAULT_ENV };
   private tickPool = 0;
@@ -302,6 +305,12 @@ export class Engine {
     this.scene.add(this.sky.mesh, this.terrain.mesh, this.water.mesh, this.flood.mesh, this.trees.group, this.beaverWorks.group, this.smoke.mesh, this.fireflies.mesh, this.dustStorm.mesh, this.hoppers.mesh, this.storms.group, this.sun, this.hemi);
 
     this.post = new PostFX(renderer, this.scene, this.camera, this.uniforms, this.storms.uniforms);
+    {
+      const qs = typeof location === 'undefined' ? new URLSearchParams() : new URLSearchParams(location.search);
+      const all = qs.get('cuts') !== '0';
+      this.cutFx.enabled = all && qs.get('dip') !== '0';
+      this.post.setAdapt(all && qs.get('adapt') !== '0' ? 0.65 : 0);
+    }
     this.post.aoExclude.push(this.sky.mesh, this.water.mesh, this.flood.mesh, this.smoke.mesh, this.fireflies.mesh, this.dustStorm.mesh, this.hoppers.mesh, ...this.storms.meshes);
     // GTAO renders its own normal/depth pass with an override material that ignores alpha cut-outs, so a sparse canopy would occlude
     // the sky behind its gaps and show as grey smoke. Keep alpha-cut foliage (crowns and shrubs) out of that pass.
@@ -524,6 +533,8 @@ export class Engine {
     this.uniforms.time.value = this.time;
     this.cam.update(dt);
     for (const cb of this.frameCbs) cb(dt, this.time);
+    this.cutFx.update(dt); // (after the director, which may have just started a dip)
+    this.post.setDip(this.cutFx.level);
     this.smoke.update(dt, this.camera);
     this.storms.update(dt, this.camera, this.env);
     this.updateEnvState(dt);
