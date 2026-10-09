@@ -67,6 +67,8 @@ export interface TopRightPages {
   onSetup(): void;
   onGuide(): void;
   onShare(): void;
+  /** Rare sightings: the journal of rare moments that unlock while the valley runs at 1x. */
+  onRare?(): void;
 }
 
 export class TopRight {
@@ -74,6 +76,7 @@ export class TopRight {
   private seedBtn: HTMLButtonElement;
   private shareBtn: HTMLButtonElement;
   private guideCount: HTMLElement;
+  private rareCount: HTMLElement;
   private shareTimer = 0;
   private seedText: HTMLElement;
   private ambientBtn: HTMLButtonElement;
@@ -210,6 +213,7 @@ export class TopRight {
         h('span', { class: 'tg-menurow-ic', html: icon(ic, 14) }),
       );
     this.guideCount = h('span', { class: 'tg-menurow-count' });
+    this.rareCount = h('span', { class: 'tg-menurow-count' });
 
     this.menu = h(
       'div',
@@ -219,6 +223,7 @@ export class TopRight {
       pageRow('Settings', 'Picture quality, sound, camera and interface size.', 'chevronRight', () => this.pages.onSettings()),
       this.narratorBtn,
       this.notesBtn,
+      pageRow('Rare sightings', 'Rare moments the valley gives to the patient, kept as photographs.', 'chevronRight', () => this.pages.onRare?.(), this.rareCount),
       h('h2', { class: 'tg-menu-h', text: 'Scenarios' }),
       scenarios,
       h('h2', { class: 'tg-menu-h', text: 'Challenges' }),
@@ -255,6 +260,11 @@ export class TopRight {
   /** The count on the Field notes entry: "7 of 18". */
   setNotesCount(n: number, total: number): void {
     setText(this.notesCount, `${n} of ${total}`);
+  }
+
+  /** The count on the Rare sightings entry: "3 of 13". */
+  setRareCount(n: number, total: number): void {
+    setText(this.rareCount, `${n} of ${total}`);
   }
 
   /** The count on the Field guide entry: "7 of 24 witnessed". */

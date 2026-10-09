@@ -22,6 +22,8 @@ import { JPEG_QUALITY, LensController, type PhotoFormat } from './ui/photomode';
 import { AudioDirector } from './audio/audio';
 import { Narrator } from './audio/narrator';
 import { countNearby, nearWater01, scanTension } from './audio/inputs';
+import { RARE_SKY, NIGHT } from './render/sky';
+import { RareSightings, TreeIndex, rareMode, type RareHooks } from './ui/rare';
 import type { TensionSample } from './audio/music';
 import type { Nearby } from './audio/mix';
 import { DAY_TICKS, SEASON_TICKS, setCalendarScale, Sp, YEAR_TICKS, type Intervention, type Snapshot } from './sim/types';
@@ -218,6 +220,7 @@ worker.onmessage = (e: MessageEvent<FromWorker>) => {
   pendingHistory = pendingHistory.concat(m.history);
   // dynamic trees (S13): before setVeg, so the renderer's own fire hook is already off when the first veg frame lands
   if (m.treesVersion !== undefined) {
+    if (m.trees) rare.setTrees(new TreeIndex(m.trees, 6, 5)); // (rare sightings: the lightning and the open-prairie cougar read the live tree list)
     engine.setDynamicTrees(m.trees, m.treesVersion, m.treeCover);
     if (m.treeCover) grass.setCover(m.treeCover);
   }
@@ -651,6 +654,66 @@ function groundHit(r: THREE.Raycaster): THREE.Vector3 | null {
   return null;
 }
 
+// ------------------------------------------------------------------ rare sightings
+// A journal of rare moments that unlock while the valley runs at 1x (src/ui/rare.ts). It reads the snapshot and the events, and stages
+// the comet and the aurora storm in the sky; it never touches the sim. ?rare=all opens every tier at any speed, ?rare=reset clears it.
+const rareProj = new THREE.Vector3();
+const rareFwd = new THREE.Vector3();
+/** A 480 px wide JPEG of the frame, taken the way photo mode grabs the canvas. With `aim`, the camera turns in place to face that direction first. */
+function rareGrab(aim: [number, number, number] | null): Promise<Blob | null> {
+  return new Promise((resolve) => {
+    // (a separate task: this runs from inside a frame, and the drawing buffer is only readable in the task that renders)
+    window.setTimeout(() => {
+      try {
+        const cam = engine.camera;
+        const q0 = cam.quaternion.clone();
+        const ringWas = selectionRing ? selectionRing.visible : false;
+        if (selectionRing) selectionRing.visible = false;
+        if (aim) {
+          cam.lookAt(cam.position.x + aim[0] * 100, cam.position.y + aim[1] * 100, cam.position.z + aim[2] * 100);
+          cam.updateMatrixWorld(true);
+          engine.post.render(0);
+        } else {
+          engine.renderOnce(0);
+        }
+        const src = engine.renderer.domElement;
+        const c = document.createElement('canvas');
+        c.width = 480;
+        c.height = Math.max(1, Math.round((480 * src.height) / Math.max(1, src.width)));
+        c.getContext('2d')?.drawImage(src, 0, 0, c.width, c.height);
+        if (aim) { cam.quaternion.copy(q0); cam.updateMatrixWorld(true); }
+        if (selectionRing) selectionRing.visible = ringWas;
+        c.toBlob((b) => resolve(b), 'image/jpeg', 0.8);
+      } catch {
+        resolve(null);
+      }
+    }, 0);
+  });
+}
+const rareHooks: RareHooks = {
+  toast: (title) => ui.notify(title, 'Rare sighting:', 5200),
+  frame: (moment, x, y, sp) => director.queueMoment(moment, { x, y, sp, a: 0, b: 0, at: 0 }, true, sp),
+  directorOn: () => autoCam || cinematicOn,
+  inView: (x, y) => {
+    const cam = engine.camera;
+    rareProj.set(x, engine.groundHeight(x, y) + 1.5, y); // (three z is sim y)
+    const d = Math.hypot(rareProj.x - cam.position.x, rareProj.z - cam.position.z);
+    cam.getWorldDirection(rareFwd);
+    if ((rareProj.x - cam.position.x) * rareFwd.x + (rareProj.z - cam.position.z) * rareFwd.z <= 0 || d > 450) return false;
+    rareProj.project(cam);
+    return Math.abs(rareProj.x) < 0.85 && Math.abs(rareProj.y) < 0.85;
+  },
+  grab: rareGrab,
+  skyRot: () => NIGHT.skyRot.value.elements,
+  setSky: (s) => {
+    RARE_SKY.comet.value.set(s.cometEq[0], s.cometEq[1], s.cometEq[2], s.comet);
+    RARE_SKY.cometTail.value.set(s.cometTail[0], s.cometTail[1], s.cometTail[2]);
+    RARE_SKY.storm.value = s.storm;
+  },
+};
+const rare = new RareSightings(ui.rareStore, rareHooks, seed, rareMode(location.search), performance.now());
+rare.setTrees(new TreeIndex(world.trees, 4));
+
 // ------------------------------------------------------------------ frame
 
 const sun = { dir: engine.uniforms.lightDir.value, color: engine.uniforms.lightColor.value };
@@ -744,6 +807,10 @@ engine.onFrame((dt, t) => {
       }
       if (heardDeaths.size > 400) for (const [key, t0] of heardDeaths) if (performance.now() - t0 > 60000) heardDeaths.delete(key);
     }
+    rare.update({
+      nowMs: performance.now(), dt, visible: !document.hidden, speed: pending.speed, filming: autoCam || cinematicOn, tick: pending.tick, env: pending.env,
+      events: pendingEvents, agents: pending.agents, count: pending.count, carcasses: pending.carcasses, carcassCount: pending.carcassCount, packs: pending.packs,
+    });
     pendingEvents = [];
     pendingHistory = [];
   }
@@ -820,6 +887,9 @@ w.__narrator = narrator;
 }
 // dev hook: window.__fieldnotes.debugEarn('fire') ticks a field note as if it had just happened
 w.__fieldnotes = ui.fieldNotes;
+// dev hooks: window.__rare.force('comet' | 'aurora' | null) stages the sky now; window.__rare.debugRecord('elder', env) records one
+w.__rare = rare;
+w.__night = NIGHT; // (its skyRot turns the comet's place in the stars into a direction, for captures)
 // dev hook: speak one line by id, bypassing the narrator's rules (the audio must be unlocked by a click)
 w.__narrate = (id: string) => narrator.speakNow(id);
 w.__followId = (id: number | null) => startFollow(id);

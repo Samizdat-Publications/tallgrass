@@ -103,6 +103,20 @@ export const NIGHT = {
   info: { cycle: 0, illum: 0, moonEl: 0, aurora: 0, shower: 0, bakeMs: 0 },
 };
 
+/**
+ * Rare sightings (src/ui/rare.ts): the staged comet and the great aurora storm. The game writes these from a pure function of the
+ * valley's tick (so a replay shows the same sky); the dome only reads them. All zero means nothing is drawn and the dome's
+ * shader takes its old path.
+ */
+export const RARE_SKY = {
+  /** xyz: the comet's head in the sky's own (equatorial) frame, so it turns with the stars; w: 0..1 strength. */
+  comet: { value: new THREE.Vector4(0, 0, 1, 0) },
+  /** The comet's tail direction in the same frame (unit, away from the sun). */
+  cometTail: { value: new THREE.Vector3(1, 0, 0) },
+  /** 0..1 how strong the great aurora storm is: wider, higher, redder curtains. */
+  storm: { value: 0 },
+};
+
 /** Phase name for a lunar cycle value (0 new, 0.5 full). */
 export function moonPhaseName(c: number): string {
   const i = Math.floor(((c % 1 + 1) % 1) * 8 + 0.5) % 8;
@@ -488,7 +502,7 @@ export function computeAtmosphere(env: EnvLike, sm: Smoothed, u: SharedUniforms,
   // the moon as a light on the water, the haze that dims the stars, and the aurora's strength tonight
   NIGHT.moonCol.value.copy(MOON_COLOR).multiplyScalar(moonI);
   NIGHT.haze.value = clamp(0.8 * u.drought.value + 0.3 * sm.wet, 0, 1);
-  NIGHT.aurora.value = NIGHT.info.aurora;
+  NIGHT.aurora.value = Math.max(NIGHT.info.aurora, RARE_SKY.storm.value * 0.95);
 
   // wind
   const wd = env.windDir;
@@ -524,6 +538,9 @@ uniform mat3 uSkyRot;
 uniform sampler2D tMW;
 uniform float uMoonK;
 uniform float uAurora;
+uniform float uAurStorm;
+uniform vec4 uComet;
+uniform vec3 uCometTail;
 uniform float uShower;
 uniform float uHaze;
 uniform float uMeteorT;
@@ -587,26 +604,59 @@ float tgMeteor(vec3 d, float t, float slotLen, float seed, float prob, float for
 }
 
 // Aurora: green curtains in the north, a pink fringe on the high edge, rays that shimmer and sway.
+// (uAurStorm is zero on an ordinary night and every storm term below is then a no-op. In a great storm the curtains run all round
+// the sky, climb toward the zenith, burn red in their upper reaches and shine brighter.)
 vec3 tgAurora(vec3 d, float t) {
   float az = atan(d.x, d.z);
   float nw = smoothstep(1.5, 0.3, abs(az));
+  float storm = uAurStorm;
+  if (storm > 0.002) nw = max(nw, storm * smoothstep(3.4, 0.9, abs(az)));
   if (nw <= 0.0) return vec3(0.0);
   vec3 acc = vec3(0.0);
   for (int i = 0; i < 3; i++) {
     float fi = float(i);
     float a = az * (1.0 + 0.25 * fi);
-    float base = 0.11 + 0.05 * fi + 0.055 * sin(a * 2.1 + t * 0.06 + fi * 1.7) + 0.05 * (tgNoise2(vec2(a * 2.6 + fi * 9.0, t * 0.035)) - 0.5);
+    float base = 0.11 + 0.05 * fi + 0.055 * sin(a * 2.1 + t * 0.06 + fi * 1.7) + 0.05 * (tgNoise2(vec2(a * 2.6 + fi * 9.0, t * 0.035)) - 0.5) + storm * (0.22 + 0.07 * fi);
     float h = d.y - base;
     if (h > 0.0) {
       float rays = pow(tgNoise2(vec2(a * 16.0 + fi * 5.0 + t * 0.18, t * 0.05 + fi)), 1.8) * (0.6 + 0.8 * tgNoise2(vec2(a * 5.0 - t * 0.07, fi * 3.0)));
-      float prof = smoothstep(0.0, 0.012, h) * exp(-h * (6.5 + 2.0 * fi));
-      float hue = smoothstep(0.02, 0.28, h);
+      float prof = smoothstep(0.0, 0.012, h) * exp(-h * (6.5 + 2.0 * fi) / (1.0 + 0.9 * storm));
+      float hue = smoothstep(0.02, 0.28 - 0.14 * storm, h);
       vec3 c = mix(vec3(0.06, 1.0, 0.36), vec3(0.8, 0.16, 0.6), hue * hue);
+      if (storm > 0.002) c = mix(c, vec3(1.0, 0.03, 0.05), storm * 0.94 * smoothstep(0.0, 0.1, h));
       c += vec3(0.5, 0.25, 0.2) * exp(-h * 80.0) * 0.5;
-      acc += c * rays * prof * (1.0 - 0.28 * fi);
+      acc += c * rays * prof * (1.0 - 0.28 * fi) * (1.0 + 0.9 * storm + 0.9 * storm * smoothstep(0.0, 0.12, h));
     }
   }
   return acc * nw * (1.0 + 0.12 * sin(t * 0.9)) + vec3(0.02, 0.07, 0.04) * nw * exp(-max(d.y, 0.0) * 5.0);
+}
+
+// A comet: a bright coma, a straight blue-white ion tail and a broader, curved, yellow-white dust tail, all pointing away from the
+// sun. e is the view direction in the sky's own frame, so the comet turns with the stars; H is its head there, T its tail.
+vec3 tgComet(vec3 e, vec3 H, vec3 T) {
+  float c = dot(e, H);
+  if (c < 0.92) return vec3(0.0);
+  vec3 v = e - H * c;
+  float r = length(v);
+  float along = dot(v, T);
+  vec3 N = cross(H, T);
+  float head = exp(-r * r / (0.0032 * 0.0032)) * 3.2 + 0.55 * exp(-r / 0.011) + 0.09 * exp(-r / 0.045);
+  vec3 col = vec3(0.86, 0.95, 1.0) * head;
+  if (along > 0.0) {
+    float L = 0.34;
+    float t = along / L;
+    if (t < 1.0) {
+      float perp = dot(v, N);
+      float w1 = 0.006 + 0.016 * t;
+      float ion = exp(-perp * perp / (w1 * w1)) * pow(1.0 - t, 1.5);
+      float pd = perp - 0.16 * L * t * t;
+      float w2 = 0.014 + 0.05 * t;
+      float dust = exp(-pd * pd / (w2 * w2)) * pow(1.0 - t, 1.1);
+      float grain = 0.8 + 0.4 * tgNoise2(vec2(along * 70.0, perp * 45.0));
+      col += (vec3(0.4, 0.7, 1.0) * ion * 0.95 + vec3(1.0, 0.88, 0.62) * dust * 0.75) * grain;
+    }
+  }
+  return col;
 }
 
 void main() {
@@ -693,7 +743,8 @@ void main() {
     col += vec3(0.2, 0.46, 0.3) * 0.022 * ag * aw * uNight * (1.0 - 0.8 * uMoonK) * clearK * smoothstep(0.0, 0.02, up);
 
     // aurora
-    if (uAurora > 0.002) col += tgAurora(d, uTime) * uAurora * 0.26 * uNight * (1.0 - 0.55 * uMoonK) * pow(clamp(1.0 - uOvercast, 0.0, 1.0), 2.0) * smoothstep(0.0, 0.02, up);
+    if (uComet.w > 0.002) col += tgComet(e, uComet.xyz, uCometTail) * uComet.w * uNight * clearK * (1.0 - 0.6 * uMoonK) * smoothstep(-0.01, 0.03, up);
+    if (uAurora > 0.002) col += tgAurora(d, uTime) * uAurora * (0.26 + 0.18 * uAurStorm) * uNight * (1.0 - 0.55 * uMoonK) * pow(clamp(1.0 - uOvercast, 0.0, 1.0), 2.0) * smoothstep(0.0, 0.02, up);
 
     // meteors
     if (up > 0.0) {
@@ -832,6 +883,9 @@ export class Sky {
         tMW: { value: milkyWayTexture() },
         uMoonK: NIGHT.moonK,
         uAurora: NIGHT.aurora,
+        uAurStorm: RARE_SKY.storm,
+        uComet: RARE_SKY.comet,
+        uCometTail: RARE_SKY.cometTail,
         uShower: NIGHT.shower,
         uHaze: NIGHT.haze,
         uMeteorT: NIGHT.meteorT,

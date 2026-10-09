@@ -31,6 +31,7 @@ import { DEFAULT_SETTINGS, SettingsPanel, loadSettings, type Settings } from './
 import { SetupPanel } from './setup';
 import { FirstRunTips, TitleCard } from './title';
 import { Toast } from './toast';
+import { RarePanel, RareStore, SIGHTING_COUNT, rareMode } from './rare';
 import { cardRank, ChronicleVoice, describeEvent, describeFolded, eventWeight, foldKey, foldWindow, seasonName, seasonOfTick, yearOfTick, type DescribeContext } from './describe';
 import { FeedFilter } from './feed';
 import { DecadeLines, SeasonLines } from './seasonlines';
@@ -134,6 +135,9 @@ export class GameUI {
   private settingsPanel: SettingsPanel;
   private setupPanel: SetupPanel;
   private guidePanel: GuidePanel;
+  /** Rare sightings: the journal page (Menu > Rare sightings) and the store main.ts's RareSightings records into. */
+  readonly rareStore = new RareStore({ reset: rareMode(location.search) === 'reset' });
+  private rarePanel: RarePanel;
   /** Family tree (R12): a docked page the inspector opens (T). Not a modal: the world stays clickable around it. */
   private family: FamilyPanel;
   /** Photo mode (R15): the P key opens it. The game wires its callbacks (lens, freeze, save). */
@@ -193,6 +197,7 @@ export class GameUI {
       onSetup: () => this.openPane(this.setupPanel),
       onGuide: () => this.openPane(this.guidePanel),
       onShare: () => this.actions.share?.(),
+      onRare: () => this.openPane(this.rarePanel),
     });
     this.settingsPanel = new SettingsPanel(
       loadSettings(),
@@ -208,6 +213,12 @@ export class GameUI {
       () => this.setupPanel.hide(),
     );
     this.guidePanel = new GuidePanel(this.guide, this.photos, () => void this.takePhoto(), () => this.guidePanel.hide());
+    this.rarePanel = new RarePanel(this.rareStore, () => rareMode(location.search) === 'all', () => this.rarePanel.hide());
+    this.top.setRareCount(this.rareStore.count, SIGHTING_COUNT);
+    this.rareStore.onChange = () => {
+      this.top.setRareCount(this.rareStore.count, SIGHTING_COUNT);
+      this.rarePanel.refresh();
+    };
     this.guide.onChange = () => {
       this.guidePanel.refresh();
       const t = this.guide.total();
@@ -294,6 +305,7 @@ export class GameUI {
       this.settingsPanel.el,
       this.setupPanel.el,
       this.guidePanel.el,
+      this.rarePanel.el,
       this.family.el,
       this.photo.el,
       this.toast.el,
@@ -492,7 +504,7 @@ export class GameUI {
   openPane(p: ModalPanel | null, which: 'notes' | null = null): void {
     this.leaveTitle();
     this.family.hide();
-    for (const q of [this.settingsPanel, this.setupPanel, this.guidePanel]) if (q !== p) q.hide();
+    for (const q of [this.settingsPanel, this.setupPanel, this.guidePanel, this.rarePanel]) if (q !== p) q.hide();
     if (which === 'notes') {
       this.notesPanel.show();
     } else {
@@ -502,13 +514,14 @@ export class GameUI {
   }
 
   private get paneOpen(): boolean {
-    return this.settingsPanel.isOpen || this.setupPanel.isOpen || this.guidePanel.isOpen;
+    return this.settingsPanel.isOpen || this.setupPanel.isOpen || this.guidePanel.isOpen || this.rarePanel.isOpen;
   }
 
   private closePanes(): void {
     this.settingsPanel.hide();
     this.setupPanel.hide();
     this.guidePanel.hide();
+    this.rarePanel.hide();
   }
 
   private onSettingsChange(s: Settings, changed: keyof Settings): void {
