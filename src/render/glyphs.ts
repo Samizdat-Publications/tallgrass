@@ -8,6 +8,10 @@ import { SPECIES } from '../sim/species';
 /** Camera height above the ground (m) over which the glyphs fade in: nothing below FADE0, full from FADE1. */
 export const GLYPH_FADE0 = 210;
 export const GLYPH_FADE1 = 300;
+/** In time-lapse (`lapse` 1, from about 30x) the glyphs fade in from this much lower, so the drone vistas at 100x (150 to 300 m up)
+ *  show which species is which (round 23: at 100x every animal read as the same dark speck). */
+export const GLYPH_LAPSE_DROP0 = 120;
+export const GLYPH_LAPSE_DROP1 = 160;
 
 /** Size of the glyph in pixels on a 900 px tall viewport, per species key (a predator's mark is a little larger, a bird's smaller). */
 const SIZE_PX: Record<string, number> = {
@@ -125,8 +129,9 @@ export class MapGlyphs {
   }
 
   /** Start a frame: `fade` from the camera's height. Returns whether the layer should stage glyphs at all. */
-  begin(camAboveGround: number): boolean {
-    const t = Math.min(1, Math.max(0, (camAboveGround - GLYPH_FADE0) / (GLYPH_FADE1 - GLYPH_FADE0)));
+  begin(camAboveGround: number, lapse = 0): boolean {
+    const f0 = GLYPH_FADE0 - GLYPH_LAPSE_DROP0 * lapse, f1 = GLYPH_FADE1 - GLYPH_LAPSE_DROP1 * lapse;
+    const t = Math.min(1, Math.max(0, (camAboveGround - f0) / (f1 - f0)));
     this.fade = t * t * (3 - 2 * t);
     this.uFade.value = this.fade;
     this.n = 0;

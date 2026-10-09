@@ -209,6 +209,13 @@ const SETS = {
   ],
 };
 
+// v10: species glyphs at time-lapse speed (glyphs.ts GLYPH_LAPSE_*): the same drone view at 1x (no glyphs below 210 m) and at 100x
+SETS.lapse = [
+  { name: 'lapse_01_drone_1x', eval: "window.__speed(1); window.__focusHerd(); window.__engine.cam.setView({ distance: 300, pitchDeg: 40 })", wait: 4000 },
+  { name: 'lapse_02_drone_100x', eval: "window.__speed(100)", wait: 5000 },
+  { name: 'lapse_03_drone_100x_lower', eval: "window.__engine.cam.setView({ distance: 220, pitchDeg: 35 })", wait: 4000 },
+];
+
 const steps = SETS[set];
 if (!steps) { console.error('unknown set', set); process.exit(1); }
 const kill = setTimeout(() => { console.error('stills: hard timeout'); process.exit(2); }, 10 * 60 * 1000 + 2 * loadTimeout);

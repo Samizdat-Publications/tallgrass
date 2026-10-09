@@ -724,6 +724,9 @@ export class AnimalLayer {
   readonly object3D = new THREE.Group();
   /** Sim speed multiplier (1 = real time, 0 = paused). Scales gait frequency so legs match visible speed. */
   timeScale = 1;
+  /** The sim speed itself (timeScale is capped for the gait); from about 30x the map glyphs come in lower (glyphs.ts). */
+  simSpeed = 1;
+  private glyphLapse = 0;
   /** Water surface (m) at a point, NaN on dry land: lets swimmers ride the water (set by main.ts from the engine; null = none). */
   swimLevelAt: ((x: number, z: number) => number) | null = null;
   /** Per species visual size multiplier by species id (readability boost for small animals: wolf 1.35 (the concept art wolves read at ~0.65 of a bison), raven 1.7 (circling ravens are the "kill here" tell), rabbit 1.2, cougar 1.05). */
@@ -1806,7 +1809,9 @@ export class AnimalLayer {
     if (++this.shoreAge > 600) { this.shoreAge = 0; this.shoreCache.clear(); this.wadeCache.clear(); }
     this.markers.begin();
     // map glyphs: only staged from a high camera
-    const glyphsOn = this.glyphs.begin(this.shared.uCamPos.value.y - sampleHeight(H, hn, cell, this.shared.uCamPos.value.x, this.shared.uCamPos.value.z));
+    const lapseTarget = Math.min(1, Math.max(0, (this.simSpeed - 20) / 40));
+    this.glyphLapse += (lapseTarget - this.glyphLapse) * (1 - Math.exp(-dt / 0.8));
+    const glyphsOn = this.glyphs.begin(this.shared.uCamPos.value.y - sampleHeight(H, hn, cell, this.shared.uCamPos.value.x, this.shared.uCamPos.value.z), this.glyphLapse);
     const dustRate = Math.min(this.timeScale, 3);
     // time-lapse (see timelapseK in models/legmath.ts): 0 up to 3x, 1 from 8x. Drives the bound pose, the cadence and the landing dust.
     const tl = timelapseK(this.timeScale);
