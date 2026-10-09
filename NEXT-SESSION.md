@@ -3,18 +3,15 @@
 **Updated:** 2026-10-04 afternoon, at the end of the v2 planning session. v1 is finished and live; v2 starts now. The plan is `V2-PLAN.md`.
 
 ## Night of 2026-10-09 (03:30 to 13:00): v10 "The long breath" (read NIGHT-PLAN.md first)
-State at 06:00:
-- v10 CANDIDATE = evolution2 1, climate2 0.3, wolfDenMinDist 280, wolfTerritory 130 (climate regimes a48bf72 + climatePrairie 97eef97; evolution2 is S9 from 2026-10-06). Also a menu scenario, The long breath (src/scenarios.ts LONG_BREATH).
-- RUNNING from frozen 97eef97 (scratch/v10/accept.sh): acceptance 20 x 1,200 valley years (log scratch/v10/accept_v10.log, out scratch/frozen/97eef97/review/stability/v10-97eef97, ETA about 09:10) and shocks 12 x 500 years x cull70, drought, wolfwipe (log scratch/v10/shocks_v10.log, out .../v10-97eef97-shocks, ETA about 09:40).
-- Adoption is prepared on branch v10-adopt (worktree scratch/wt-adopt): defaults flipped, V7C_OFF and CHALLENGE_PIN extended, applyOverrides applies evolution2 even with no overrides. Still to do there: tools/golden.json (new hashes in scratch/v10/adopt_hashes.log), npm test, challenge_suite, playtest, then merge, deploy.
-- Merged on main: s-perf (bit-identical 1.39x sim speedup; 7467e9e). Candidate hash on main = acceptance build (29b70982, seed 3, 24,000 ticks).
-- Merged on main since: r-director3 (b51b8e4), r-breath (eef5deb), climate narrator lines. Tests running on main (scratch/v10/tests_main2.log); then playtest and deploy.
-- Builders still running: s-bands (vigilance fix; branch s-bands 51161a2 pushed), r-rare (rare sightings journal, MAYBE-WANTS item 1), r-trails (long-exposure trails at speed), r-lapse (damped seasons at 30x and up; manual worktree scratch/wt-lapse).
-- Screens on spare threads: v10b and v10ctl (scratch/v10/screen3.sh, 8 worlds x 400 yr, seeds 101-108); then v10c8 and v10c16 (screen4.sh: + wolfBreedStore 0.8 and 1.6). Out: scratch/frozen/97eef97/scratch/v10s3.
-- RISK: the acceptance's wolf-tracking gate (corr >= 0.4 at 1 to 3 years) looked marginal (EA 0.39, acceptance seed 2 0.30). If it is the only miss, my plan is to adopt anyway under the owner's ruling (stability over cycles) and log it as an overridable call; wolfBreedStore is the next lever.
-- Round 21 (blind critic, charts only): ecosystem 6 (was 5). Triage in REVIEWS.md.
-- Next cycle items found tonight: pronghorn.maxLitter 2 (litter gene drifts to 2.3; spikes to 1,400 in wet years under evolution2); wolf speed still evolves to about 1.3 under evolution2 (wolf sprintCost 0.15 may be light); bands screen after the vigilance fix.
-- Screens: scratch/frozen/44415b1/scratch/v10s1 (150 yr: c0 b1 b2 w1) and scratch/frozen/97eef97/scratch/v10s2 (400 yr: E EA). Compare: .venv/Scripts/python scratch/v10/compare.py <dir> [burn] [maxyear]. Breath chart: scratch/v10/breath_chart.py.
+State at 08:20:
+- Default world on main and live is still v9. Live deploy 07:45 (main at that time). Everything below is on main unless marked.
+- Merged tonight: climate regimes (climate2, off), climatePrairie, s-perf (bit-identical 1.39x), r-director3, r-breath, r-lapse, r-rare (rare sightings), r-trails (long exposure), s-bands (herdBands, off), climate narrator lines, The long breath scenario (now v10b params), vite watch fix (.claude ignored), charts seeds-grid log axis.
+- RUNNING v10 acceptance and shocks from frozen 97eef97 (scratch/v10/accept.sh; logs scratch/v10/accept_v10.log, shocks_v10.log; out scratch/frozen/97eef97/review/stability/v10-97eef97[-shocks]; ETA about 10:10 and 11:10). Candidate v10 = evolution2 1, climate2 0.3, wolfDenMinDist 280, wolfTerritory 130.
+- QUEUED after them: v10b acceptance and shocks from frozen 1f3f658 (scratch/v10/accept_v10b.sh; v10b adds deer.maxLitter 2, wolf.sprintCost 0.3, raven.initial 250, coyote.initial 30). They run past 13:00; the next session reads review/stability/v10b-1f3f658[-shocks] under scratch/frozen/1f3f658.
+- RUNNING: v10ctl screen (matched control for v10b on seeds 101-108, ETA about 08:55); round 23 video (Gemini, review/round-23-video) after the verification run (scratch/v10/tests_main3.log).
+- Builders: r-uifix (scratch/wt-uifix: migrant away state, fixed card order, one season vocabulary) and r-closeup (scratch/wt-closeup: selection glow, close ground detail, rim, poses). Merge when they report; both branched from main before the rare/trails/bands merges.
+- Adoption prep: branch v10-adopt (scratch/wt-adopt), all tests pass there except it needs a re-merge of main. Plan: if v10 passes persistence, presence and shocks, adopt it even if wolf tracking is just under 0.4 (owner ruling: stability over cycles), and say so in MORNING; v10b becomes the next adoption once its runs finish.
+- Reviews tonight: round 21 (charts), round 22 (game stills: 6/5/6/7/7/6). Triage in REVIEWS.md.
 
 ## State now (2026-10-09 ~01:40)
 - Default world is checkpoint v9 (v8b + ravenNestFood 1, muledeerCover 0.15, bison.initial 550). Golden 55737903, 465f73d6, 27e42109. Live and checked. Everything merged, pushed, deployed; nothing running.
