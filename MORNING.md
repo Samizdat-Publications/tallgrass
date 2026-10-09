@@ -67,7 +67,7 @@ You allowed it; I did not do it tonight. A read-only study is in `VALLEY-SIZE.md
 ElevenLabs: 5 narrator lines, 486 characters (about $0.10). Gemini: 1 video critique (about $0.05). Everything is in `ASSETS.md`.
 
 ### Next 5
-1. Read the v10b acceptance and shocks; if they pass, adopt v10b (pronghorn twins cap, wolf sprint cost, equilibrium starts): it fixes v10's weak spots (mule deer, pronghorn spikes, wolf tracking).
+1. Read the v10b acceptance and shocks (they finish around 12:30 and 13:00); if they pass, merge branch `v10b-adopt`, which is ready and tested (new golden hashes, pins, challenge suite passing): it fixes v10's weak spots (mule deer, pronghorn spikes, wolf tracking).
 2. Re-measure 100x on an idle machine (tonight three CPU batches held the browser to 10x to 40x) and consider a 300x or "skip a decade" control now that the sim is 1.4x faster.
 3. Herd bands without the bison cost (bigger bands, or more forage for banded bison), then a screen with v10b: the real fix for the "bison carpet".
 4. Close-up pass two: lying bison legs (dark slabs), pack wolves overlapping at rest, raven flocking at carcasses, exposure jumps between director cuts.
