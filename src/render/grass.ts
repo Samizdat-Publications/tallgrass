@@ -302,6 +302,7 @@ uniform float uDrought;
 uniform float uWetYr;
 uniform float uWinterK;
 uniform float uSeedFrac;
+uniform float uStubFloor;   // 1 = the short-grass stubble floor is on, 0 = off (for A/B timing)
 uniform float uMoistK;
 uniform float uWindGain;
 uniform float uCopper;
@@ -448,7 +449,10 @@ void main() {
   // ridges and upper slopes: short, drier, russet, but still a continuous sward rather than sand
   float slopeM = length(st0.rg * 2.0 - 1.0);
   float ridge = max(1.0 - smoothstep(0.40, 0.66, moist), 0.8 * smoothstep(0.22, 0.5, slopeM));
-  float pres = smoothstep(0.015, 0.14, bioEff) * (1.0 - 0.72 * cover) * (1.0 - smoothstep(0.3, 0.7, water)) * (1.0 - 0.5 * burn);
+  // stubble floor: grass that is grazed, trampled or drought-cut is short, not gone. Within about 25 m a fifth of the blades stay on (they
+  // stand a few centimetres high, see hfrac below), fading out by about 85 m where the ground shader's own stubble carries the field.
+  float stubNear = (1.0 - smoothstep(24.0, 85.0, dist)) * uStubFloor;
+  float pres = max(smoothstep(0.015, 0.14, bioEff), 0.2 * stubNear) * (1.0 - 0.72 * cover) * (1.0 - smoothstep(0.3, 0.7, water)) * (1.0 - 0.5 * burn);
   pres *= mix(0.62, 1.0, smoothstep(0.28, 0.62, tusC)) * (1.0 - 0.18 * ridge);
   // the bare apron on the shaded side of a pond (common.ts): almost no blades, only a few sedge stalks
   if (st1.g > 0.5) pres *= 1.0 - 0.94 * tgPondApron(p, -16.0 * log(max(st1.g, 1e-3)));
@@ -458,7 +462,7 @@ void main() {
   // a wide, ragged margin (about 20 to 70 m) instead of a straight 25 m line, so the field never ends along a ruler edge
   edgeD += (texture(uBig, pn * 0.9 + 0.2).a - 0.5) * 36.0;
   float edgeK = smoothstep(4.0, 62.0, edgeD);
-  pres *= edgeK * edgeK;
+  pres *= max(edgeK * edgeK, 0.25 * stubNear);   // (the ragged margin of the field never leaves bare ground within reach of the camera)
   if (rThin >= keepD * pres) { cullBlade(); return; }
 
   float gy = terrainH(p);
@@ -1194,6 +1198,7 @@ export class GrassField {
       uDrought: { value: 0 },
       uWetYr: { value: 0 },
       uSeedFrac: { value: 0.1 },
+      uStubFloor: { value: 1 },
       uMoistK: { value: 1.1 },
       uWindGain: { value: 1 },
       uStorm: stormGustUniform,

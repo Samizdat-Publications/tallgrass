@@ -273,7 +273,7 @@ export function buildMuleDeer(): ModelDef {
       nodW: 0.05, nodG: 0.06,
       headDown: 1.15, lookYaw: 0.6,
       tailRest: 0.05, tailRun: 0.1, tailSway: 0.12,
-      lieDrop: 0.46, lieHipF: 1.25, lieKneeF: -2.3, lieHipH: -0.8, lieKneeH: 1.6,
+      lieDrop: 0.46, lieHipF: 1.25, lieKneeF: -2.3, lieHipH: 0.55, lieKneeH: 1.7,
       crouchDrop: 0.1,
       deadDrop: 0.4, deadHipF: 0.9, deadHipH: -0.6,
       // R6 stotting: four feet down together for a fifth of the cycle, then a bound with the body rising 0.26 m and the feet tucked up under it

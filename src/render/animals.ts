@@ -947,8 +947,9 @@ export class AnimalLayer {
     this.glyphs = new MapGlyphs(this.shared.uLow);
     this.object3D.add(this.glyphs.mesh);
 
-    // Selection ring: a crisp thin cream ring with a dark edge on both sides (so it reads on gold grass, snow and dusk alike),
-    // hugging the terrain under the selected animal. Its line stays about 2.5 px wide at any camera distance.
+    // Selection marker: light on the ground, not an object on it. A soft warm pool that is clear in the middle (the animal's own shading stays
+    // true), brightest just inside a thin ring that is broken into tapering arcs which turn slowly, with a gentle breathing pulse. A faint dark
+    // edge on the outside keeps the arcs readable on snow and gold grass. Depth tested up close, over everything from a distance (see updateRing).
     const N = 24;
     this.ringGeo = new THREE.PlaneGeometry(2, 2, N, N);
     this.ringGeo.rotateX(-Math.PI / 2);
@@ -956,7 +957,7 @@ export class AnimalLayer {
     this.ringBase = new Float32Array(pos.array as Float32Array);
     this.ringMat = new THREE.ShaderMaterial({
       transparent: true, depthWrite: false, depthTest: false, fog: false,
-      uniforms: { uOpacity: { value: 1 } },
+      uniforms: { uOpacity: { value: 1 }, uT: { value: 0 }, uLow: { value: 0 } },
       vertexShader: /* glsl */ `
         varying vec2 vUv;
         void main() {
@@ -965,19 +966,39 @@ export class AnimalLayer {
         }`,
       fragmentShader: /* glsl */ `
         precision highp float;
-        uniform float uOpacity;
+        uniform float uOpacity, uT, uLow;
         varying vec2 vUv;
         void main() {
           float r = length(vUv);
+          if (r > 1.0) discard;
           float fw = max(fwidth(r), 1e-4);
-          float hw = max(0.028, 1.25 * fw);                // half width of the bright line (uv units, at least ~2.5 px wide)
-          float edge = hw + max(0.02, 1.1 * fw);           // outer edge of the dark outline
-          float d = abs(r - 0.86);
-          float line = 1.0 - smoothstep(hw - fw, hw + fw, d);
-          float dark = 1.0 - smoothstep(edge - fw, edge + fw, d);
-          float a = max(dark * 0.62, line);
-          if (a < 0.01) discard;
-          vec3 col = mix(vec3(0.04, 0.025, 0.012), vec3(1.5, 1.32, 0.95), line);
+          float ang = atan(vUv.y, vUv.x);
+          float pulse = 0.5 + 0.5 * sin(uT * 2.1);
+          // the arcs: seven of them, each a bit different in length, turning slowly; the width tapers to a point at both ends
+          float cellF = ang * (7.0 / 6.2831853) + uT * 0.045;
+          float cellI = floor(cellF);
+          float u = fract(cellF);
+          float jit = fract(sin(cellI * 12.9898 + 4.1) * 43758.5453);
+          float a0 = 0.06 + 0.06 * jit, a1 = 0.68 + 0.14 * jit;
+          float inArc = smoothstep(a0, a0 + 0.04, u) * (1.0 - smoothstep(a1 - 0.04, a1, u));
+          float prof = sin(3.14159265 * clamp((u - a0) / max(a1 - a0, 1e-3), 0.0, 1.0));
+          prof = pow(prof, 0.6);
+          float R0 = 0.86 + 0.012 * pulse;
+          float d = abs(r - R0);
+          float hw = max(0.034 * prof, 0.9 * fw);                 // half width of the bright line (at least about 2 px across)
+          float line = (1.0 - smoothstep(hw - fw, hw + fw, d)) * inArc * (0.55 + 0.45 * prof);
+          float edgeW = hw + max(0.016, 1.0 * fw);
+          float dark = (1.0 - smoothstep(edgeW - fw, edgeW + fw, d)) * inArc * step(R0, r + 0.02);
+          // the pool: a warm wash that is clear at the centre, rising toward the ring and gone just outside it, a little uneven
+          float uneven = 0.82 + 0.18 * sin(ang * 3.0 + uT * 0.4 + r * 4.0);
+          float pool = smoothstep(0.5, 0.86, r) * (1.0 - smoothstep(0.87, 0.99, r)) * uneven;
+          float poolA = pool * mix(0.05, 0.11, uLow) * (0.75 + 0.25 * pulse);
+          float lineA = line * (0.72 + 0.28 * pulse);
+          float darkA = dark * mix(0.34, 0.16, uLow);
+          float a = max(poolA, max(lineA, darkA * (1.0 - line)));
+          if (a < 0.006) discard;
+          vec3 col = mix(vec3(0.05, 0.03, 0.015), vec3(1.35, 1.2, 0.9), clamp(max(line, pool * 0.9), 0.0, 1.0));
+          col = mix(col, vec3(1.15, 1.0, 0.7), (1.0 - line) * pool);
           gl_FragColor = vec4(col, a * uOpacity);
         }`,
     });
@@ -2918,9 +2939,11 @@ export class AnimalLayer {
     this.ringGeo.computeBoundingSphere();
     // up close the ring is depth tested (it passes behind the legs and under the belly), with only a faint ghost drawn over everything so it
     // is never lost in the grass; from a distance, where a boosted body would swallow it, the whole ring is drawn over everything
-    const op = (0.88 + 0.12 * Math.sin(this.timeSec * 4)) * quiet;
+    const op = quiet;
     const ghost = 0.16 + 0.84 * smoothstep(45, 130, cd);
     this.ringMat.uniforms.uOpacity.value = op * ghost;
+    this.ringMat.uniforms.uT.value = this.ringSolidMat.uniforms.uT.value = this.timeSec;
+    this.ringMat.uniforms.uLow.value = this.ringSolidMat.uniforms.uLow.value = this.shared.uLow.value;
     this.ringSolidMat.uniforms.uOpacity.value = op;
     this.ring.visible = true;
     this.ringSolid.visible = true;
