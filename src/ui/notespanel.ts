@@ -157,7 +157,8 @@ export class NotesPanel {
   }
 }
 
-/** The quiet toast in the lower left: "Field note: The first kill". */
+/** The quiet toast in the lower left: "Added to your field notes: The first kill". Worded as a notebook entry, not a caption,
+ *  because it can outlive a camera cut (a video critic read "Snow on the prairie" over a rain shot as the game contradicting itself). */
 export class NoteToast {
   readonly el: HTMLElement;
   private text: HTMLElement;
@@ -170,7 +171,7 @@ export class NoteToast {
       'div',
       { class: 'tg-fn-toast tg-glass tg-leaf', role: 'status', 'aria-live': 'polite' },
       h('span', { class: 'tg-fn-mark', html: TICK }),
-      h('span', { class: 'tg-fn-label', text: 'Field note' }),
+      h('span', { class: 'tg-fn-label', text: 'Added to your field notes' }),
       this.text,
     );
   }
