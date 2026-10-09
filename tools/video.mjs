@@ -38,6 +38,17 @@ const V2 = [
   [14, "document.dispatchEvent(new KeyboardEvent('keydown', { key: 'c', bubbles: true })); window.__speed(10)"],
 ];
 if (arg('set', '') === 'v2') SEGMENTS.splice(0, SEGMENTS.length, ...V2);
+// --set breath (v10): the documentary camera at 1x and 10x, then a long 100x stretch with the graph open, so the wet and dry
+// decades (climate band, grass colour, herd swells) are on screen; then the wide view at 100x without the graph
+const BREATH = [
+  [4, 'window.__speed(1); window.__focusHerd()'],
+  [30, "document.dispatchEvent(new KeyboardEvent('keydown', { key: 'c', bubbles: true }))"],
+  [20, 'window.__speed(10)'],
+  [2, "document.dispatchEvent(new KeyboardEvent('keydown', { key: 'c', bubbles: true })); window.__cam('wide')"],
+  [45, "window.__speed(100); document.dispatchEvent(new KeyboardEvent('keydown', { key: 'g', bubbles: true }))"],
+  [16, "document.dispatchEvent(new KeyboardEvent('keydown', { key: 'g', bubbles: true })); window.__cam('wide')"],
+];
+if (arg('set', '') === 'breath') SEGMENTS.splice(0, SEGMENTS.length, ...BREATH);
 
 const kill = setTimeout(() => { console.error('video: hard timeout'); process.exit(2); }, 12 * 60 * 1000);
 const server = await createServer({ configFile: resolve('vite.config.ts'), cacheDir: resolve('scratch/_vitecache'), server: { port: 5300 + Math.floor(Math.random() * 600), strictPort: false, hmr: false }, logLevel: 'error' });
