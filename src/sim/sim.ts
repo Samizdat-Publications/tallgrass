@@ -18,13 +18,15 @@ import { MuleDeer } from './sp/muledeer';
 import { Beavers, emptyBeaverRow } from './sp/beaver';
 import { flightStep, Raptors } from './sp/raptor';
 import { AGENT_STRIDE, CARCASS_STRIDE, F_ALPHA, F_INFECTED, F_JUVENILE, F_MALE, F_MANGE, F_MIGRANT, F_PREGNANT, F_STOT, Intervention, SimLike, Snapshot, SPECIES_COUNT, SPECIES_KEYS, Sp, St, YEAR_TICKS, SEASON_TICKS, BASE_YEAR_TICKS, setCalendarScale } from './types';
-import { COAT_BASE, COAT_RANGE, DIET, IS_PREY, isGrazer, REACT, SPECIES, THREAT } from './species';
+import { COAT_BASE, COAT_RANGE, DIET, FLIES, IS_PREY, isGrazer, REACT, SPECIES, THREAT } from './species';
 import { STRIDE, Vegetation } from './vegetation';
 import { Winter, WINTER_STEP } from './winter';
 import { distanceTransform, generateWorld, World } from './world';
 
 const DT = 0.15; // seconds of motion per tick (1x is a gentle 1.5x time-lapse)
 const BUCKET = 16;
+/** Bin size (m) of the carcass lookup grid. */
+const CARCASS_BIN = 32;
 const MAX_PACKS = 64;
 /** Energy drain multiplier while a blizzard god tool is blowing (S17). */
 const BLIZZARD_COLD = 1.6;
@@ -64,6 +66,24 @@ export interface SimOptions {
   seed: number;
   params?: Record<string, number>;
   world?: World;
+}
+
+/** Math.hypot(dx, dy) < t, exactly (t >= 0): the squared length decides unless it is within 1e-6 (relative) of t * t, where the exact Math.hypot is called. */
+function hypotLt(dx: number, dy: number, t: number): boolean {
+  const q = dx * dx + dy * dy, t2 = t * t;
+  if (!(t >= 0)) return Math.hypot(dx, dy) < t;
+  if (q < t2 * 0.999999) return true;
+  if (q > t2 * 1.000001) return false;
+  return Math.hypot(dx, dy) < t;
+}
+
+/** Math.hypot(dx, dy) > t, exactly (t >= 0); see hypotLt. */
+function hypotGt(dx: number, dy: number, t: number): boolean {
+  const q = dx * dx + dy * dy, t2 = t * t;
+  if (!(t >= 0)) return Math.hypot(dx, dy) > t;
+  if (q > t2 * 1.000001) return true;
+  if (q < t2 * 0.999999) return false;
+  return Math.hypot(dx, dy) > t;
 }
 
 /** Ground brightness of a season's ripe grass, for coat camouflage. */
@@ -150,6 +170,28 @@ export class Sim implements SimLike {
   private nextPackSerial = 1;
   /** Coarse 16 m map of grass and browse (bucket means) for herd migration; refreshed every 50 ticks. */
   coarseGrass = new Float32Array(32 * 32);
+  /** Prey-grid bucket under each coarse cell centre (a constant table, filled on first use). */
+  private coarseBkt: Int32Array | null = null;
+  /** Size-gene power cache per agent slot: the gene it was computed for (NaN: none), then size^-0.25, size^0.25, size^0.75. */
+  private pcKey = new Float64Array(0);
+  private pcM25 = new Float64Array(0);
+  private pcP25 = new Float64Array(0);
+  private pcP75 = new Float64Array(0);
+  /** Scratch list of the living pack slots for findDenSite. */
+  private denLive = new Int32Array(MAX_PACKS);
+  /** moveGround memo, 6 doubles per slot: last desired velocity x, y, its atan2, last heading, its cos, its sin (NaN: nothing yet). */
+  private mg = new Float64Array(0);
+  private mgCap = 0;
+  /** Carcass bins for nearestCarcass: start offsets per bin, slots sorted by bin, scratch ids and cursor. Rebuilt when a carcass is removed. */
+  private cgDirty = true;
+  private cgN = 0;
+  private cgNb = 1;
+  /** A carcass or a query lies outside [0, size): the ring search is not valid, so scan plainly. */
+  private cgOutside = false;
+  private cgStart = new Int32Array(0);
+  private cgItems = new Int32Array(0);
+  private cgIds = new Int32Array(0);
+  private cgCursor = new Int32Array(0);
   coarseBrowse = new Float32Array(32 * 32);
 
   events: SimEvent[] = [];
@@ -620,14 +662,29 @@ export class Sim implements SimLike {
   private findDenSite(nearX?: number, nearY?: number, relax = 1): [number, number] | null {
     const w = this.world;
     const minD = (this.p.wolfDenMinDist / Math.sqrt(this.preyScale())) * relax;
+    // squared-distance bands around minD: only a den inside the thin band needs the exact (slow) Math.hypot
+    const fast = minD > 0 && minD < 1e150;
+    const m2lo = minD * minD * (1 - 1e-9), m2hi = minD * minD * (1 + 1e-9);
+    const packAlive = this.packAlive, denX = this.packDenX, denY = this.packDenY;
+    // the living packs, in slot order (none is founded or lost during this call)
+    const live = this.denLive;
+    let nLive = 0;
+    for (let pk = 0; pk < MAX_PACKS; pk++) if (packAlive[pk]) live[nLive++] = pk;
     for (let k = 0; k < 200; k++) {
       const x = nearX !== undefined ? nearX + this.rng.range(-30, 30) : this.rng.range(50, w.size - 50);
       const y = nearY !== undefined ? nearY + this.rng.range(-30, 30) : this.rng.range(50, w.size - 50);
       if (x < 30 || y < 30 || x > w.size - 30 || y > w.size - 30) continue;
       if (w.water[this.veg.cellAt(x, y)]) continue;
       let ok = true;
-      for (let pk = 0; pk < MAX_PACKS; pk++) {
-        if (this.packAlive[pk] && Math.hypot(this.packDenX[pk] - x, this.packDenY[pk] - y) < minD) { ok = false; break; }
+      for (let q = 0; q < nLive; q++) {
+        const pk = live[q];
+        const ddx = denX[pk] - x, ddy = denY[pk] - y;
+        if (fast) {
+          const dq = ddx * ddx + ddy * ddy;
+          if (dq > m2hi) continue;
+          if (dq < m2lo) { ok = false; break; }
+        }
+        if (Math.hypot(ddx, ddy) < minD) { ok = false; break; }
       }
       if (ok) return [x, y];
       if (nearX !== undefined && k > 20) return null;
@@ -702,31 +759,42 @@ export class Sim implements SimLike {
     this.packCx.fill(0);
     this.packCy.fill(0);
     this.packEnergy.fill(0);
+    if (this.pcKey.length < a.cap) this.growPowCache(a.cap);
     if (this.preyList.length < a.cap) this.preyList = new Int32Array(a.cap);
     if (this.predList.length < a.cap) this.predList = new Int32Array(a.cap);
     const P = this.p.species;
-    for (let i = 0; i < a.hi; i++) {
-      if (!a.alive[i]) continue;
-      const s = a.sp[i];
-      this.pop[s]++;
-      if (a.origin[i] === 2 && s === Sp.Raven) this.vagrants++;
-      if (s === Sp.MuleDeer) this.muleSeen = true;
-      else if (s === Sp.Cougar) this.cougarSeen = true;
-      if (IS_PREY[s]) this.preyList[this.preyN++] = i;
-      else if (THREAT[s] > 0) {
-        this.predList[this.predN++] = i;
-        const pk = a.pack[i];
-        if (pk >= 0) {
-          this.packSize[pk]++;
-          this.packCx[pk] += a.x[i];
-          this.packCy[pk] += a.y[i];
-          this.packEnergy[pk] += a.energy[i];
-          if (a.age[i] >= P[s].matureAge) {
-            if (a.male[i]) { if (this.packCandM[pk] < 0 || a.age[i] > a.age[this.packCandM[pk]]) this.packCandM[pk] = i; }
-            else if (this.packCandF[pk] < 0 || a.age[i] > a.age[this.packCandF[pk]]) this.packCandF[pk] = i;
+    {
+      // nothing in this pass spawns or kills, so the agent arrays and the list counters can live in locals
+      const alive = a.alive, spA = a.sp, origin = a.origin, packA = a.pack, ageA = a.age, maleA = a.male, xA = a.x, yA = a.y, enA = a.energy;
+      const pop = this.pop, preyList = this.preyList, predList = this.predList;
+      const packSize = this.packSize, packCx = this.packCx, packCy = this.packCy, packEnergy = this.packEnergy, packCandM = this.packCandM, packCandF = this.packCandF;
+      let preyN = 0, predN = 0, vagrants = 0;
+      for (let i = 0, hi = a.hi; i < hi; i++) {
+        if (alive[i] === 0) continue;
+        const s = spA[i];
+        pop[s]++;
+        if (origin[i] === 2 && s === Sp.Raven) vagrants++;
+        if (s === Sp.MuleDeer) this.muleSeen = true;
+        else if (s === Sp.Cougar) this.cougarSeen = true;
+        if (IS_PREY[s]) preyList[preyN++] = i;
+        else if (THREAT[s] > 0) {
+          predList[predN++] = i;
+          const pk = packA[i];
+          if (pk >= 0) {
+            packSize[pk]++;
+            packCx[pk] += xA[i];
+            packCy[pk] += yA[i];
+            packEnergy[pk] += enA[i];
+            if (ageA[i] >= P[s].matureAge) {
+              if (maleA[i]) { if (packCandM[pk] < 0 || ageA[i] > ageA[packCandM[pk]]) packCandM[pk] = i; }
+              else if (packCandF[pk] < 0 || ageA[i] > ageA[packCandF[pk]]) packCandF[pk] = i;
+            }
           }
         }
       }
+      this.preyN = preyN;
+      this.predN = predN;
+      this.vagrants = vagrants;
     }
     if (t % 50 === 0) {
       this.refreshCoarse();
@@ -1021,7 +1089,7 @@ export class Sim implements SimLike {
         const cnt = g.counts[yy * nb + xx];
         if (cnt === 0) continue;
         const wx = (xx + 0.5) * bs, wy = (yy + 0.5) * bs;
-        if (Math.hypot(wx - dx0, wy - dy0) > range) continue;
+        if (hypotGt(wx - dx0, wy - dy0, range)) continue;
         // big herds are easy to scent; a few scattered animals mostly go unnoticed (a refuge for sparse prey)
         if (this.rng.next() > 1 - Math.exp(-Math.pow(cnt / this.p.wolfScentHerd, this.p.wolfScentPow))) continue;
         const v = cnt / (Math.hypot(wx - cx, wy - cy) + 50);
@@ -1129,18 +1197,99 @@ export class Sim implements SimLike {
         const last = --this.cN;
         this.cX[k] = this.cX[last]; this.cY[k] = this.cY[last]; this.cMeat[k] = this.cMeat[last];
         this.cMeat0[k] = this.cMeat0[last]; this.cSp[k] = this.cSp[last]; this.cAge[k] = this.cAge[last]; this.cKill[k] = this.cKill[last];
+        this.cgDirty = true;
         k--;
       }
     }
   }
 
+  /** Bin the carcass positions (a counting sort, ascending slot order inside each bin). Positions never change except by the swap-removal above. */
+  private buildCarcassGrid(): void {
+    const n = this.cN, nb = Math.max(1, Math.ceil(this.world.size / CARCASS_BIN));
+    const cx = this.cX, cy = this.cY;
+    if (this.cgStart.length !== nb * nb + 1) this.cgStart = new Int32Array(nb * nb + 1);
+    if (this.cgItems.length < n) this.cgItems = new Int32Array(Math.max(n, this.cgItems.length * 2, 64));
+    if (this.cgIds.length < n) this.cgIds = new Int32Array(Math.max(n, this.cgIds.length * 2, 64));
+    const start = this.cgStart, items = this.cgItems, ids = this.cgIds;
+    start.fill(0);
+    for (let k = 0; k < n; k++) {
+      let bx = (cx[k] / CARCASS_BIN) | 0, by = (cy[k] / CARCASS_BIN) | 0;
+      if (bx < 0) bx = 0; else if (bx >= nb) bx = nb - 1;
+      if (by < 0) by = 0; else if (by >= nb) by = nb - 1;
+      const b = by * nb + bx;
+      ids[k] = b;
+      start[b + 1]++;
+    }
+    for (let b = 0; b < nb * nb; b++) start[b + 1] += start[b];
+    const cur = this.cgCursor.length === nb * nb ? this.cgCursor : (this.cgCursor = new Int32Array(nb * nb));
+    cur.set(start.subarray(0, nb * nb));
+    for (let k = 0; k < n; k++) items[cur[ids[k]]++] = k;
+    let outside = false;
+    const wsz = this.world.size;
+    for (let k = 0; k < n; k++) if (!(cx[k] >= 0 && cx[k] < wsz && cy[k] >= 0 && cy[k] < wsz)) { outside = true; break; }
+    this.cgOutside = outside;
+    this.cgN = n;
+    this.cgNb = nb;
+    this.cgDirty = false;
+  }
+
   private nearestCarcass(x: number, y: number, maxD: number, maxAge = 1e9, killOnly = false): number {
     let best = -1, bd = maxD * maxD;
-    for (let k = 0; k < this.cN; k++) {
-      if (this.cMeat[k] < 0.05 || this.cAge[k] > maxAge || (killOnly && !this.cKill[k])) continue;
-      const dx = this.cX[k] - x, dy = this.cY[k] - y;
+    const cMeat = this.cMeat, cAge = this.cAge, cKill = this.cKill, cX = this.cX, cY = this.cY;
+    if (!(maxD >= 0 && maxD < 1e6)) {
+      // unbounded or odd radius: plain scan
+      for (let k = 0; k < this.cN; k++) {
+        if (cMeat[k] < 0.05 || cAge[k] > maxAge || (killOnly && !cKill[k])) continue;
+        const dx = cX[k] - x, dy = cY[k] - y;
+        const d2 = dx * dx + dy * dy;
+        if (d2 < bd) { bd = d2; best = k; }
+      }
+      return best;
+    }
+    // search the bins outward from the query point in square rings and stop when the next ring is farther than the best so far;
+    // plus the carcasses added since the bins were built. Ties go to the lowest slot, exactly as the plain ascending scan would.
+    const wsz = this.world.size;
+    if (this.cgDirty || this.cN < this.cgN || this.cN - this.cgN > 48) this.buildCarcassGrid();
+    if (this.cgOutside || !(x >= 0 && x < wsz && y >= 0 && y < wsz)) {
+      for (let k = 0; k < this.cN; k++) {
+        if (cMeat[k] < 0.05 || cAge[k] > maxAge || (killOnly && !cKill[k])) continue;
+        const dx = cX[k] - x, dy = cY[k] - y;
+        const d2 = dx * dx + dy * dy;
+        if (d2 < bd) { bd = d2; best = k; }
+      }
+      return best;
+    }
+    const nb = this.cgNb, start = this.cgStart, items = this.cgItems;
+    const cbx = (x / CARCASS_BIN) | 0, cby = (y / CARCASS_BIN) | 0;
+    for (let r = 0; r <= nb; r++) {
+      if (r > 1) { const lb = (r - 1) * CARCASS_BIN; if (lb * lb > bd) break; }
+      const ya = cby - r, yb = cby + r, xa = cbx - r, xb = cbx + r;
+      const xlo = xa < 0 ? 0 : xa, xhi = xb >= nb ? nb - 1 : xb;
+      const ylo = ya < 0 ? 0 : ya, yhi = yb >= nb ? nb - 1 : yb;
+      for (let by = ylo; by <= yhi; by++) {
+        const row = by * nb;
+        const full = by === ya || by === yb;
+        // a full row is one contiguous run of bins; a middle row contributes only its two end bins
+        for (let pass = 0; pass < (full ? 1 : 2); pass++) {
+          let q: number, e: number;
+          if (full) { q = start[row + xlo]; e = start[row + xhi + 1]; }
+          else if (pass === 0) { if (xa < 0) continue; q = start[row + xa]; e = start[row + xa + 1]; }
+          else { if (xb >= nb || r === 0) continue; q = start[row + xb]; e = start[row + xb + 1]; }
+          for (; q < e; q++) {
+            const k = items[q];
+            if (cMeat[k] < 0.05 || cAge[k] > maxAge || (killOnly && !cKill[k])) continue;
+            const dx = cX[k] - x, dy = cY[k] - y;
+            const d2 = dx * dx + dy * dy;
+            if (d2 < bd || (d2 === bd && best >= 0 && k < best)) { bd = d2; best = k; }
+          }
+        }
+      }
+    }
+    for (let k = this.cgN; k < this.cN; k++) {
+      if (cMeat[k] < 0.05 || cAge[k] > maxAge || (killOnly && !cKill[k])) continue;
+      const dx = cX[k] - x, dy = cY[k] - y;
       const d2 = dx * dx + dy * dy;
-      if (d2 < bd) { bd = d2; best = k; }
+      if (d2 < bd || (d2 === bd && best >= 0 && k < best)) { bd = d2; best = k; }
     }
     return best;
   }
@@ -1158,8 +1307,16 @@ export class Sim implements SimLike {
     const dsp = Math.sqrt(dvx * dvx + dvy * dvy);
     let sp = Math.sqrt(a.vx[i] * a.vx[i] + a.vy[i] * a.vy[i]);
     sp += (dsp - sp) * accel;
+    // per-slot memo of the last atan2 (desired direction) and the last cos/sin (heading): pure functions of their inputs, and the
+    // inputs repeat for several ticks between thinks, so a hit returns exactly what the call would. Zero inputs are never matched
+    // (their sign could differ under ===).
+    if (i >= this.mgCap) this.growMg(Math.max(a.cap, i + 1));
+    const mg = this.mg, q = i * 6;
     if (dsp > 0.04) {
-      let dh = Math.atan2(dvy, dvx) - a.heading[i];
+      let da: number;
+      if (dvx !== 0 && dvy !== 0 && dvx === mg[q] && dvy === mg[q + 1]) da = mg[q + 2];
+      else { da = Math.atan2(dvy, dvx); mg[q] = dvx; mg[q + 1] = dvy; mg[q + 2] = da; }
+      let dh = da - a.heading[i];
       if (dh > Math.PI) dh -= Math.PI * 2; else if (dh < -Math.PI) dh += Math.PI * 2;
       // agile when it matters: a chasing wolf or a fleeing pronghorn can wheel hard
       // turn rate scales with speed so the turning circle stays a couple of body lengths (no orbiting a target)
@@ -1168,12 +1325,19 @@ export class Sim implements SimLike {
       // you can't sprint around a hairpin
       if (dh > 1.3 || dh < -1.3) sp *= 0.9;
     }
-    let vx = Math.cos(a.heading[i]) * sp;
-    let vy = Math.sin(a.heading[i]) * sp;
+    const hd = a.heading[i];
+    let cs: number, sn: number;
+    if (hd !== 0 && hd === mg[q + 3]) { cs = mg[q + 4]; sn = mg[q + 5]; }
+    else { cs = Math.cos(hd); sn = Math.sin(hd); mg[q + 3] = hd; mg[q + 4] = cs; mg[q + 5] = sn; }
+    let vx = cs * sp;
+    let vy = sn * sp;
+    // true while vx, vy are still exactly (cos heading, sin heading) x sp, so the heading read back from them is the heading itself
+    let straight = true;
     if (this.p.steerFree > 0 || (urgent && this.p.steerFreeUrgent > 0)) {
       // free steering (velocity eases straight toward the desired velocity)
       vx = a.vx[i] + (dvx - a.vx[i]) * accel;
       vy = a.vy[i] + (dvy - a.vy[i]) * accel;
+      straight = false;
     }
     // stamina: sprinting drains, everything else recovers
     const sprinting = sp > P.walkSpeed * 2.2;
@@ -1191,44 +1355,73 @@ export class Sim implements SimLike {
       vx *= 0.85; vy *= 0.85;
       x = a.x[i] + vx * DT * 0.5;
       y = a.y[i] + vy * DT * 0.5;
+      straight = false;
     }
-    if (x < 2) { x = 2; vx = Math.abs(vx); } else if (x > w.size - 2) { x = w.size - 2; vx = -Math.abs(vx); }
-    if (y < 2) { y = 2; vy = Math.abs(vy); } else if (y > w.size - 2) { y = w.size - 2; vy = -Math.abs(vy); }
+    if (x < 2) { x = 2; vx = Math.abs(vx); straight = false; } else if (x > w.size - 2) { x = w.size - 2; vx = -Math.abs(vx); straight = false; }
+    if (y < 2) { y = 2; vy = Math.abs(vy); straight = false; } else if (y > w.size - 2) { y = w.size - 2; vy = -Math.abs(vy); straight = false; }
     a.x[i] = x; a.y[i] = y; a.vx[i] = vx; a.vy[i] = vy;
     sp = Math.sqrt(vx * vx + vy * vy);
-    if (sp > 0.08 && (vx !== 0 || vy !== 0)) a.heading[i] = Math.atan2(vy, vx);
+    if (sp > 0.08 && (vx !== 0 || vy !== 0)) {
+      // atan2(sin h * s, cos h * s) read back into the (float32) heading is h again whenever h is a non-zero value well inside
+      // (-pi, pi) and the velocity was left as it came from h; only then is the call skipped (the heading already holds h)
+      if (!straight || hd === 0 || !(hd < 3.1415 && hd > -3.1415)) a.heading[i] = Math.atan2(vy, vx);
+    }
     // trampling wears the grass: stampede paths stay visible
     if (sp > 4) this.veg.grass[c] = Math.max(0, this.veg.grass[c] - this.p.trampleRun);
     else if (sp > 0.8) this.veg.grass[c] = Math.max(0, this.veg.grass[c] - this.p.trampleWalk);
   }
 
-  private metabolism(i: number, P: SpeciesParams): number {
-    const a = this.a;
-    const o = i * NG;
-    const size = a.genes[o + G_SIZE], spd = a.genes[o + G_SPEED], sight = a.genes[o + G_SIGHT];
-    const v = Math.sqrt(a.vx[i] * a.vx[i] + a.vy[i] * a.vy[i]);
-    // reserves scale with mass and burn with mass^0.75, so in normalized energy a big animal drains slower;
-    // a fast build costs most while actually sprinting; keen sight costs a little all the time
-    const running = v > P.walkSpeed * 2.2;
-    const activity = a.state[i] === St.Rest ? 0.7 : running ? 1.8 : v > 0.3 ? 1.05 : 0.9;
-    let m = P.metabolism * Math.pow(size, -0.25) * (0.98 + 0.02 * spd * spd) * activity;
-    const sprintCost = P.sprintCost > 0 ? P.sprintCost : this.p.sprintCost;
-    if (running && sprintCost > 0) m *= Math.max(0.3, 1 + sprintCost * (spd * spd - 1));
-    // deep snow makes every step cost more (ground animals that are moving)
-    if (this.winter !== null && v > 0.3 && !SPECIES[a.sp[i]].flies) m *= 1 + this.p.snowMove * this.winter.at(a.x[i], a.y[i]);
-    if (a.infected[i] > 0) m *= this.p.diseaseMetab;
-    if (this.blizzardLeft > 0) m *= BLIZZARD_COLD;
-    if (this.dis.on && IS_CANID[a.sp[i]]) m *= this.dis.metabMult(i, this.env.state.warmth);
-    if (a.age[i] < P.matureAge) m *= 0.75;
-    // cold costs extra, much more for a small bird
-    m *= 1 + (SPECIES[a.sp[i]].flies ? 0.5 : 0.25) * (1 - this.env.state.warmth);
-    return m;
+  private growMg(cap: number): void {
+    const mg = new Float64Array(cap * 6).fill(NaN);
+    mg.set(this.mg);
+    this.mg = mg;
+    this.mgCap = cap;
+  }
+
+  private growPowCache(cap: number): void {
+    const key = new Float64Array(cap).fill(NaN);
+    key.set(this.pcKey);
+    this.pcKey = key;
+    const m25 = new Float64Array(cap); m25.set(this.pcM25); this.pcM25 = m25;
+    const p25 = new Float64Array(cap); p25.set(this.pcP25); this.pcP25 = p25;
+    const p75 = new Float64Array(cap); p75.set(this.pcP75); this.pcP75 = p75;
+  }
+
+  /** Fill the per-slot powers of the size gene (a pure function of it, so a hit returns exactly what Math.pow would). */
+  private fillSizePow(i: number, size: number): void {
+    if (i >= this.pcKey.length) this.growPowCache(Math.max(this.a.cap, i + 1));
+    this.pcKey[i] = size;
+    this.pcM25[i] = Math.pow(size, -0.25);
+    this.pcP25[i] = Math.pow(size, 0.25);
+    this.pcP75[i] = Math.pow(size, 0.75);
   }
 
   /** Shared aging, hydration, death checks. Returns false if the animal died. */
   private vitals(i: number, P: SpeciesParams): boolean {
     const a = this.a;
-    a.energy[i] -= this.metabolism(i, P);
+    // metabolism (inlined here: a separate call would box its double result on every agent every tick)
+    {
+      const o = i * NG;
+      const size = a.genes[o + G_SIZE], spd = a.genes[o + G_SPEED];
+      const v = Math.sqrt(a.vx[i] * a.vx[i] + a.vy[i] * a.vy[i]);
+      // reserves scale with mass and burn with mass^0.75, so in normalized energy a big animal drains slower;
+      // a fast build costs most while actually sprinting; keen sight costs a little all the time
+      const running = v > P.walkSpeed * 2.2;
+      const activity = a.state[i] === St.Rest ? 0.7 : running ? 1.8 : v > 0.3 ? 1.05 : 0.9;
+      if (this.pcKey[i] !== size) this.fillSizePow(i, size);
+      let m = P.metabolism * this.pcM25[i] * (0.98 + 0.02 * spd * spd) * activity;
+      const sprintCost = P.sprintCost > 0 ? P.sprintCost : this.p.sprintCost;
+      if (running && sprintCost > 0) m *= Math.max(0.3, 1 + sprintCost * (spd * spd - 1));
+      // deep snow makes every step cost more (ground animals that are moving)
+      if (this.winter !== null && v > 0.3 && FLIES[a.sp[i]] === 0) m *= 1 + this.p.snowMove * this.winter.at(a.x[i], a.y[i]);
+      if (a.infected[i] > 0) m *= this.p.diseaseMetab;
+      if (this.blizzardLeft > 0) m *= BLIZZARD_COLD;
+      if (this.dis.on && IS_CANID[a.sp[i]]) m *= this.dis.metabMult(i, this.env.state.warmth);
+      if (a.age[i] < P.matureAge) m *= 0.75;
+      // cold costs extra, much more for a small bird
+      m *= 1 + (FLIES[a.sp[i]] === 1 ? 0.5 : 0.25) * (1 - this.env.state.warmth);
+      a.energy[i] -= m;
+    }
     if (P.thirst > 0) a.hydration[i] -= P.thirst * (0.7 + 0.6 * this.env.state.warmth);
     a.age[i]++;
     if (a.energy[i] <= 0) { this.die(i, 'starve'); return false; }
@@ -1274,38 +1467,39 @@ export class Sim implements SimLike {
     let mate = -1, mateD = 1e9;
     let nnx = 0, nny = 0, nnd2 = 1e9;
     const wantMate = !a.male[i] && !juvenile && a.pregnant[i] === 0 && a.cooldown[i] === 0 && a.energy[i] > p.conceiveEnergy;
+    const gStart = g.start, gItems = g.items, aAlive = a.alive, aSp = a.sp, aX = a.x, aY = a.y, aVx = a.vx, aVy = a.vy;
+    // the buckets of one row are adjacent in the grid, so a row's candidates are one contiguous run (same visiting order)
+    const hxa = bx - 1 < 0 ? 0 : bx - 1, hxb = bx + 1 >= nb ? nb - 1 : bx + 1;
     for (let yy = by - 1; yy <= by + 1; yy++) {
       if (yy < 0 || yy >= nb) continue;
-      for (let xx = bx - 1; xx <= bx + 1; xx++) {
-        if (xx < 0 || xx >= nb) continue;
-        const b = yy * nb + xx;
-        for (let k = g.start[b], e = g.start[b + 1]; k < e; k++) {
-          const j = g.items[k];
-          if (j === i || !a.alive[j] || a.sp[j] !== s) continue;
-          const dx = a.x[j] - x, dy = a.y[j] - y;
-          const d2 = dx * dx + dy * dy;
-          if (d2 > hr2) continue;
-          // a herd animal tracks its nearest few dozen neighbors, not the whole crowd
-          if (n >= 40 && d2 > 9) continue;
-          n++;
-          if (d2 < nnd2) { nnd2 = d2; nnx = dx; nny = dy; }
-          cx += a.x[j]; cy += a.y[j];
-          avx += a.vx[j]; avy += a.vy[j];
-          if (d2 < spacing2) {
-            // keep some personal space from the nearest herd-mates
-            const d = Math.sqrt(d2) + 0.01;
-            sepx -= dx / d * (spacing - d);
-            sepy -= dy / d * (spacing - d);
-          }
-          if (gm > 0 && d2 < gSpacing2) {
-            const d = Math.sqrt(d2) + 0.01;
-            gsepx -= dx / d * (gSpacing - d);
-            gsepy -= dy / d * (gSpacing - d);
-          }
-          if (a.flee[j] > 18) { alarm++; alx += a.fleeX[j]; aly += a.fleeY[j]; if (a.flee[j] > maxFlee) maxFlee = a.flee[j]; }
-          if (a.infected[j] > 0 && d2 < 16) infNear++;
-          if (wantMate && a.male[j] && a.age[j] >= P.matureAge && d2 < mateD) { mate = j; mateD = d2; }
+      const row = yy * nb;
+      for (let k = gStart[row + hxa], e = gStart[row + hxb + 1]; k < e; k++) {
+        const j = gItems[k];
+        if (j === i || aAlive[j] === 0 || aSp[j] !== s) continue;
+        const jx = aX[j], jy = aY[j];
+        const dx = jx - x, dy = jy - y;
+        const d2 = dx * dx + dy * dy;
+        if (d2 > hr2) continue;
+        // a herd animal tracks its nearest few dozen neighbors, not the whole crowd
+        if (n >= 40 && d2 > 9) continue;
+        n++;
+        if (d2 < nnd2) { nnd2 = d2; nnx = dx; nny = dy; }
+        cx += jx; cy += jy;
+        avx += aVx[j]; avy += aVy[j];
+        if (d2 < spacing2) {
+          // keep some personal space from the nearest herd-mates
+          const d = Math.sqrt(d2) + 0.01;
+          sepx -= dx / d * (spacing - d);
+          sepy -= dy / d * (spacing - d);
         }
+        if (gm > 0 && d2 < gSpacing2) {
+          const d = Math.sqrt(d2) + 0.01;
+          gsepx -= dx / d * (gSpacing - d);
+          gsepy -= dy / d * (gSpacing - d);
+        }
+        if (a.flee[j] > 18) { alarm++; alx += a.fleeX[j]; aly += a.fleeY[j]; if (a.flee[j] > maxFlee) maxFlee = a.flee[j]; }
+        if (a.infected[j] > 0 && d2 < 16) infNear++;
+        if (wantMate && a.male[j] && a.age[j] >= P.matureAge && d2 < mateD) { mate = j; mateD = d2; }
       }
     }
 
@@ -1313,7 +1507,8 @@ export class Sim implements SimLike {
 
     // --- disease: density-dependent transmission plus rare sparks in crowded herds
     if (a.infected[i] === 0 && a.immune[i] === 0) {
-      let pInf = 1 - Math.pow(1 - p.diseaseBeta, infNear);
+      // Math.pow(x, 0) is exactly 1 for every x, so with no infected neighbour the term is 0 without the call
+      let pInf = infNear === 0 ? 0 : 1 - Math.pow(1 - p.diseaseBeta, infNear);
       if (n > p.diseaseSparkDensity) pInf += p.diseaseSpark * (n - p.diseaseSparkDensity);
       if (pInf > 0 && rng.next() < pInf) {
         a.infected[i] = p.diseaseTicks;
@@ -1340,43 +1535,42 @@ export class Sim implements SimLike {
     const pg = this.pred;
     const rr = Math.ceil(sight / bs);
     let threat = -1, threatD = 1e9;
+    const pStart = pg.start, pItems = pg.items, reactRow = REACT[s];
+    const pxa = bx - rr < 0 ? 0 : bx - rr, pxb = bx + rr >= nb ? nb - 1 : bx + rr;
     for (let yy = by - rr; yy <= by + rr; yy++) {
       if (yy < 0 || yy >= nb) continue;
-      for (let xx = bx - rr; xx <= bx + rr; xx++) {
-        if (xx < 0 || xx >= nb) continue;
-        const b = yy * nb + xx;
-        for (let k = pg.start[b], e = pg.start[b + 1]; k < e; k++) {
-          const j = pg.items[k];
-          if (!a.alive[j]) continue;
-          // how much this species reacts to that predator: wolves and cougars fully, coyotes weakly (bison not at all)
-          const rx = REACT[s][a.sp[j]];
-          if (rx === 0) continue;
-          const dx = a.x[j] - x, dy = a.y[j] - y;
-          const d = Math.sqrt(dx * dx + dy * dy);
-          if (rx < 1) {
-            // a minor threat (the coyote): only the young, and a doe with a fawn at heel (calved within the hiding age), pay it any mind
-            if (!juvenile && !(P.hideAge > 0 && a.cooldown[i] > P.birthCooldown - P.hideAge)) continue;
-            // a hidden fawn lies still and does not break cover for a coyote until it is almost on top of it
-            if (P.hideAge > 0 && a.age[i] < P.hideAge && a.state[i] === St.Rest && d > 4) continue;
-          }
-          // a predator's coat against the grass changes how far away it is noticed
-          const contrast = Math.abs((1 - a.genes[j * NG + G_COAT]) * 0.75 + 0.1 - this.groundB);
-          let eff = sight * (0.6 + 0.8 * contrast);
-          // a cougar lying in cover is nearly invisible until it moves
-          if (a.sp[j] === Sp.Cougar && a.state[j] !== St.Chase) eff *= 1 - 0.8 * this.world.cover[this.veg.cellAt(a.x[j], a.y[j])];
-          const hunting = a.state[j] === St.Chase;
-          const stalking = a.state[j] === St.Stalk;
-          if (d > (hunting ? sight * 0.75 : eff)) continue;
-          const bold = a.genes[o + G_BOLD];
-          // big grazers stand their ground against wolves that aren't hunting unless they come very close
-          if (!hunting && !stalking && d > eff * (P.wariness - 0.15 * bold)) continue;
-          if (stalking && d > eff * 0.6) continue;
-          // in risky ground (high fear) the herd is on edge and notices more
-          let pd = hunting ? 0.95 : Math.min(0.95, p.detectBase * (1 - d / (eff + 1)) * (stalking ? 0.8 * (1 + p.fearVigilance * fearHere) : 1));
-          if (rx < 1) pd *= rx;
-          const vig = 1 - Math.pow(1 - pd, 1 + p.vigilancePerNeighbor * n * (p.herdEyes > 0 ? Math.max(0, 1 + p.herdEyes * (a.genes[o + G_HERD] - 1)) : 1));
-          if (rng.next() < vig && d < threatD) { threat = j; threatD = d; }
+      const row = yy * nb;
+      for (let k = pStart[row + pxa], e = pStart[row + pxb + 1]; k < e; k++) {
+        const j = pItems[k];
+        if (aAlive[j] === 0) continue;
+        // how much this species reacts to that predator: wolves and cougars fully, coyotes weakly (bison not at all)
+        const rx = reactRow[aSp[j]];
+        if (rx === 0) continue;
+        const dx = aX[j] - x, dy = aY[j] - y;
+        const d = Math.sqrt(dx * dx + dy * dy);
+        if (rx < 1) {
+          // a minor threat (the coyote): only the young, and a doe with a fawn at heel (calved within the hiding age), pay it any mind
+          if (!juvenile && !(P.hideAge > 0 && a.cooldown[i] > P.birthCooldown - P.hideAge)) continue;
+          // a hidden fawn lies still and does not break cover for a coyote until it is almost on top of it
+          if (P.hideAge > 0 && a.age[i] < P.hideAge && a.state[i] === St.Rest && d > 4) continue;
         }
+        // a predator's coat against the grass changes how far away it is noticed
+        const contrast = Math.abs((1 - a.genes[j * NG + G_COAT]) * 0.75 + 0.1 - this.groundB);
+        let eff = sight * (0.6 + 0.8 * contrast);
+        // a cougar lying in cover is nearly invisible until it moves
+        if (aSp[j] === Sp.Cougar && a.state[j] !== St.Chase) eff *= 1 - 0.8 * this.world.cover[this.veg.cellAt(aX[j], aY[j])];
+        const hunting = a.state[j] === St.Chase;
+        const stalking = a.state[j] === St.Stalk;
+        if (d > (hunting ? sight * 0.75 : eff)) continue;
+        const bold = a.genes[o + G_BOLD];
+        // big grazers stand their ground against wolves that aren't hunting unless they come very close
+        if (!hunting && !stalking && d > eff * (P.wariness - 0.15 * bold)) continue;
+        if (stalking && d > eff * 0.6) continue;
+        // in risky ground (high fear) the herd is on edge and notices more
+        let pd = hunting ? 0.95 : Math.min(0.95, p.detectBase * (1 - d / (eff + 1)) * (stalking ? 0.8 * (1 + p.fearVigilance * fearHere) : 1));
+        if (rx < 1) pd *= rx;
+        const vig = 1 - Math.pow(1 - pd, 1 + p.vigilancePerNeighbor * n * (p.herdEyes > 0 ? Math.max(0, 1 + p.herdEyes * (a.genes[o + G_HERD] - 1)) : 1));
+        if (rng.next() < vig && d < threatD) { threat = j; threatD = d; }
       }
     }
     if (threat >= 0 && a.hydration[i] < 0.2 && !(a.state[threat] === St.Chase && threatD < 12)) threat = -1;
@@ -1406,7 +1600,9 @@ export class Sim implements SimLike {
     }
 
     // --- choose desired velocity
-    const spdGene = a.genes[o + G_SPEED] / Math.pow(a.genes[o + G_SIZE], 0.25);
+    const sizeG = a.genes[o + G_SIZE];
+    if (this.pcKey[i] !== sizeG) this.fillSizePow(i, sizeG);
+    const spdGene = a.genes[o + G_SPEED] / this.pcP25[i];
     const walk = P.walkSpeed;
     let dvx = 0, dvy = 0;
     let state: number = St.Idle;
@@ -1433,7 +1629,7 @@ export class Sim implements SimLike {
     } else {
       const mother = a.mother[i];
       const followMom = juvenile && a.same(mother, a.motherId[i]);
-      const hiding = P.hideAge > 0 && a.age[i] < P.hideAge && followMom && Math.hypot(a.x[mother] - x, a.y[mother] - y) < 35;
+      const hiding = P.hideAge > 0 && a.age[i] < P.hideAge && followMom && hypotLt(a.x[mother] - x, a.y[mother] - y, 35);
       const browser = P.diet > 0;
       // dogGrazeBonus (S4): grazers favour the edges of prairie dog towns, where the grass regrows short and sweet
       const gb = !browser && this.small !== null && this.p.dogGrazeBonus > 0 ? this.small.grazeBonus : null;
@@ -1445,7 +1641,7 @@ export class Sim implements SimLike {
         // a young fawn lies still in the grass while its mother grazes nearby
         state = St.Rest;
         dvx = 0; dvy = 0;
-      } else if (followMom && Math.hypot(a.x[mother] - x, a.y[mother] - y) > 4) {
+      } else if (followMom && hypotGt(a.x[mother] - x, a.y[mother] - y, 4)) {
         const dx = a.x[mother] - x, dy = a.y[mother] - y;
         const d = Math.sqrt(dx * dx + dy * dy);
         const sp = Math.min(walk * 2.5, d * 0.4);
@@ -1472,17 +1668,19 @@ export class Sim implements SimLike {
         const base = a.heading[i];
         const grazing = gHere > p.grazeMin && fearHere < 0.8;
         const r0 = grazing ? 4 : 8, r1 = grazing ? 4 : 20;
+        const wSize3 = this.world.size - 3, wWater = this.world.water, vBrowse = this.veg.browse, vGrass = this.veg.grass, vFear = this.veg.fear;
+        const fearW = p.fearWeight, preyCounts = this.prey.counts;
         for (let k = 0; k < 8; k++) {
           const ang = base + (k / 8) * Math.PI * 2;
           const ux = Math.cos(ang), uy = Math.sin(ang);
           for (let r = r0; r <= r1; r += 12) {
             const sx = x + ux * r, sy = y + uy * r;
-            if (sx < 3 || sy < 3 || sx > this.world.size - 3 || sy > this.world.size - 3) continue;
+            if (sx < 3 || sy < 3 || sx > wSize3 || sy > wSize3) continue;
             const sc = this.veg.cellAt(sx, sy);
-            if (this.world.water[sc]) continue;
-            let food = (browser ? this.veg.browse[sc] * 1.6 + this.veg.grass[sc] * 0.35 : this.veg.grass[sc]) * (mh !== null ? mh[sc] : 1);
+            if (wWater[sc]) continue;
+            let food = (browser ? vBrowse[sc] * 1.6 + vGrass[sc] * 0.35 : vGrass[sc]) * (mh !== null ? mh[sc] : 1);
             if (sk > 0) food *= 1 - sk * win!.at(sx, sy);
-            let score = food - p.fearWeight * this.veg.fear[sc] - 0.004 * this.prey.counts[this.prey.bucketOf(sx, sy)] + (k === 0 ? 0.03 : 0) + rng.next() * 0.02;
+            let score = food - fearW * vFear[sc] - 0.004 * preyCounts[this.prey.bucketOf(sx, sy)] + (k === 0 ? 0.03 : 0) + rng.next() * 0.02;
             if (gb !== null) score += gb[this.small!.cellOf(sx, sy)];
             if (score > bestS) { bestS = score; bdx = ux; bdy = uy; }
           }
@@ -1511,13 +1709,27 @@ export class Sim implements SimLike {
             const bx0 = Math.min(B - 1, (x / cs) | 0), by0 = Math.min(B - 1, (y / cs) | 0);
             const R = 8;
             let bv = -1e9, tx = x, ty = y;
+            let cbk = this.coarseBkt;
+            if (cbk === null) {
+              cbk = new Int32Array(B * B);
+              for (let q = 0; q < B * B; q++) cbk[q] = this.prey.bucketOf(((q % B) + 0.5) * cs, (((q / B) | 0) + 0.5) * cs);
+              this.coarseBkt = cbk;
+            }
+            const preyCounts = this.prey.counts, cBrowse = this.coarseBrowse, cGrass = this.coarseGrass;
+            const muleCoarse = mh !== null ? this.mule.coarse : null;
             for (let yy = Math.max(0, by0 - R); yy <= Math.min(B - 1, by0 + R); yy++) {
               for (let xx = Math.max(0, bx0 - R); xx <= Math.min(B - 1, bx0 + R); xx++) {
                 const k = yy * B + xx;
                 const cx2 = (xx + 0.5) * cs, cy2 = (yy + 0.5) * cs;
-                let food = mh !== null ? this.mule.coarse[k] : browser ? this.coarseBrowse[k] * 1.6 + this.coarseGrass[k] * 0.35 : this.coarseGrass[k];
+                let food = muleCoarse !== null ? muleCoarse[k] : browser ? cBrowse[k] * 1.6 + cGrass[k] * 0.35 : cGrass[k];
                 if (sk > 0) food *= 1 - sk * win!.depth[k];
-                let v = food - 0.0012 * Math.hypot(cx2 - x, cy2 - y) - 0.004 * this.prey.counts[this.prey.bucketOf(cx2, cy2)];
+                const cdx = cx2 - x, cdy = cy2 - y;
+                const cnt004 = 0.004 * preyCounts[cbk[k]];
+                // cheap bound first: skip the exact (slow) Math.hypot when the cell cannot beat the best so far
+                let va = food - 0.0012 * Math.sqrt(cdx * cdx + cdy * cdy) - cnt004;
+                if (gb !== null) va += gb[k];
+                if (va < bv - 1e-6) continue;
+                let v = food - 0.0012 * Math.hypot(cdx, cdy) - cnt004;
                 if (gb !== null) v += gb[k];
                 if (v > bv) { bv = v; tx = cx2; ty = cy2; }
               }
@@ -1559,7 +1771,8 @@ export class Sim implements SimLike {
       const c = this.veg.cellAt(a.x[i], a.y[i]);
       const juvenile = a.age[i] < P.matureAge;
       const sz = a.genes[i * NG + G_SIZE];
-      let want = P.bite * Math.pow(sz, 0.75) * (juvenile ? 0.55 : 1);
+      if (this.pcKey[i] !== sz) this.fillSizePow(i, sz);
+      let want = P.bite * this.pcP75[i] * (juvenile ? 0.55 : 1);
       if (this.winter !== null) {
         const sk = this.snowGrazeK(a.sp[i]);
         if (sk > 0) want *= 1 - sk * this.winter.at(a.x[i], a.y[i]);
