@@ -61,7 +61,7 @@ const MOTION = [
 ];
 if (arg('set', '') === 'motion') { SEGMENTS.splice(0, SEGMENTS.length, ...MOTION); PRE.push([12, 'window.__speed(10); window.__timeOfDay && window.__timeOfDay(0.62)']); }
 
-const kill = setTimeout(() => { console.error('video: hard timeout'); process.exit(2); }, 12 * 60 * 1000);
+const kill = setTimeout(() => { console.error('video: hard timeout'); process.exit(2); }, 40 * 60 * 1000);
 const server = await createServer({ configFile: resolve('vite.config.ts'), cacheDir: resolve('scratch/_vitecache'), server: { port: 5300 + Math.floor(Math.random() * 600), strictPort: false, hmr: false }, logLevel: 'error' });
 await server.listen();
 const base = server.resolvedUrls.local[0].replace(/\/$/, '');
@@ -74,8 +74,8 @@ try {
   const ctx = await browser.newContext({ viewport: { width: W, height: H }, recordVideo: { dir: tmpDir, size: { width: W, height: H } } });
   const page = await ctx.newPage();
   page.on('pageerror', (e) => console.log('[page exception]', e.message.slice(0, 300)));
-  await page.goto(base + '/index.html?autoscale=0&autocam=0' + (query ? '&' + query : ''), { waitUntil: 'load', timeout: 180000 });
-  await page.waitForFunction(() => window.__ready === true, null, { timeout: 180000 });
+  await page.goto(base + '/index.html?autoscale=0&autocam=0' + (query ? '&' + query : ''), { waitUntil: 'load', timeout: 900000 });
+  await page.waitForFunction(() => window.__ready === true, null, { timeout: 900000 });
   await page.waitForTimeout(1000);
   for (const [secs, js] of PRE) {
     if (js) await page.evaluate(js);
