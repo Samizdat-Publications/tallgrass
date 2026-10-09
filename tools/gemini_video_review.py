@@ -70,6 +70,9 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("video")
     ap.add_argument("--model")
+    # Gemini samples video at 1 frame per second unless told otherwise, which hides every gait cycle (DAY-PLAN.md): default 8 fps.
+    # Keep reels at about 40 s or less at 8 fps (token cost grows with frames); 0 sends no setting (the API default).
+    ap.add_argument("--fps", type=float, default=8.0)
     a = ap.parse_args()
     key = env()["GEMINI_API_KEY"]
     model = a.model or pick_model(key)
@@ -88,10 +91,11 @@ def main():
         time.sleep(3)
         _, info = req("GET", f"{GEM}/v1beta/{info['name']}", {"x-goog-api-key": key})
     _, r = req("POST", f"{GEM}/v1beta/models/{model}:generateContent", {"x-goog-api-key": key, "Content-Type": "application/json"}, {
-        "contents": [{"parts": [{"file_data": {"mime_type": "video/mp4", "file_uri": info["uri"]}}, {"text": PROMPT}]}]}, timeout=600)
+        "contents": [{"parts": [dict({"file_data": {"mime_type": "video/mp4", "file_uri": info["uri"]}},
+                                     **({"video_metadata": {"fps": a.fps}} if a.fps > 0 else {})), {"text": PROMPT}]}]}, timeout=600)
     text = "".join(p.get("text", "") for p in r["candidates"][0]["content"]["parts"])
     outp = vid.with_suffix(".gemini.md")
-    outp.write_text(f"# Gemini video critique ({model}, {datetime.datetime.now():%Y-%m-%d %H:%M})\n\nVideo: {vid.name}\n\n{text}\n", encoding="utf-8")
+    outp.write_text(f"# Gemini video critique ({model}, {a.fps:g} fps sampling, {datetime.datetime.now():%Y-%m-%d %H:%M})\n\nVideo: {vid.name}\n\n{text}\n", encoding="utf-8")
     try:
         req("DELETE", f"{GEM}/v1beta/{info['name']}", {"x-goog-api-key": key})
     except Exception:
