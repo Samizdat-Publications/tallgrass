@@ -324,3 +324,15 @@ Scores: visual 5, readability 4, life and motion 4 (rounds 18 and 19: 2), ecosys
 | 5 | Floating, sliding animals in close-up runs | defer | Grounding work continues; r-closeup is on poses and ground detail. |
 | 6 | Ravens circle like a looping particle effect | defer | Flocking variety for ravens at carcasses; next cycle. |
 | 7 | Rain does not wet the ground | defer | Wet-ground darkening in storms; next cycle. |
+
+## Round 24 (Gemini video, the deployed v10 build with r-cuts and species glyphs at speed, default world; 2026-10-09 11:50) -> `review/round-24-video/reel.gemini.md`
+Scores: visual 6, readability 8 (round 23: 4), life and motion 3 (4), ecosystem 5 (7), UI 8, keep watching 4. Single Gemini rounds swing 2 to 3 points (rounds 10 and 11); three CPU batches were running.
+| # | Issue | Triage | Reason / outcome |
+|---|---|---|---|
+| 1 | A predator runs through a bison herd that does not react | defer | Vigilance and flight exist in the sim; a wolf that is not hunting does not scare the herd by design (wariness by state). Check the clip moment next cycle. |
+| 2 | Wolves and pronghorn slide like wind-up toys | defer | The long-running motion item; foot planting and gait timing at mid distance. |
+| 3 | A kill reads as a bump and a flop; the wolf then stands still | defer | Takedown animation exists (1.2 s); feeding posture and dust next cycle. |
+| 4 | Strobe-light fast-forward: seasons flicker, continuous lightning from 1:49 | fixed | From 50x the scene flash is a tenth and 1.2 s apart; the season swing kept at speed is a fifth (was a third). |
+| 5 | Wolves run on the river surface | defer | Wading and swimming states (render) next cycle. |
+| 6 | Rain as white dashes; no wet ground | defer | Same as round 23 item 7. |
+| 7 | Bird shadows disconnected from altitude | defer | Flier shadow height next cycle. |
