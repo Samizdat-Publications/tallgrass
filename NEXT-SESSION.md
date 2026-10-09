@@ -2,7 +2,14 @@
 
 **Updated:** 2026-10-04 afternoon, at the end of the v2 planning session. v1 is finished and live; v2 starts now. The plan is `V2-PLAN.md`.
 
-## State now (2026-10-08 ~06:30, end of the extended session; weekly about 92%)
+## State now (2026-10-08 ~23:15, design-call day)
+- Live: v8b world plus today's render and UI work (follow camera, readable animals, water, UI fixes, animation polish, far-view readability and map glyphs, blizzard whiteout, calm UI with a Tools drawer). All merged, pushed, deployed, checked.
+- v9 candidate (v8b + ravenNestFood 1, muledeerCover 0.15, bison.initial 550) PASSED its 20-seed acceptance (every species 20/20, raven CV 0.32). Shock suite running from scratch/frozen/e571d1a (log scratch/shocks_v9.log, out .../v9-e571d1a-shocks). If bison recover >= 80% after each shock, adopt like v8b: flip the three defaults, extend V7C_OFF in src/sim/testpins.ts and CHALLENGE_PIN (ravenNestFood 0, muledeerCover 0.25, bison.initial 800), re-record golden, challenge_suite, playtest --timeout 400000, deploy.
+- Honest limits: over 800-year runs mule deer still settle near 13 (the cover change only helps the first two centuries); resident ravens still spend about a quarter of their time near the food-scaled maximum; bison density and the 'noise not cycles' dynamics remain planner calls; the wolf to bison ratio is high (critic: about 1:7).
+- Reviews: rounds 19 (Gemini video) and 20 (blind stills, 7/4/6/5/6/6) in REVIEWS.md; video critics still score motion low (2/10) even after the gallop and readability fixes, which suggests a different capture approach (closer documentary shots of running animals) for the next video round.
+- Parked: winter-tree branches (r-winter-trees, r-winter-trees2); GPU A/B for r-far-read on an idle machine.
+
+### 2026-10-08 ~06:30, end of the extended session; weekly about 92%)
 - Default world is checkpoint v8b (v7c + snowDepth 1, dynamicTrees 1, treeCwRecruit 0.003, dogRescueYears 8). Golden 2b8abd08, 810eb241, b162b93a. Live and checked.
 - Everything is merged, pushed and deployed; nothing is running. No builder worktrees left (frozen worktrees under scratch/frozen are kept for reruns).
 - Latest reviews: review/round-17 (blind stills, scores 6/4/5/5/6/5) and review/round-18-video (Gemini). Their top items are planner calls: bison density and herd shape (spacing alone does not help, see DECISIONS), small animals and the followed animal not readable at default/follow cameras, mule deer near 10 and ravens at a flat ceiling in long runs, dynamics that read as jitter, water that reads as asphalt, UI footprint. Quick fixes still open: follow camera framing, title card overlapping the hint pill, weather status line during a blizzard, Cottonwood pack tint.
