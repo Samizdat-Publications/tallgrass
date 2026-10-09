@@ -2,7 +2,7 @@
 
 **Updated:** 2026-10-04 afternoon, at the end of the v2 planning session. v1 is finished and live; v2 starts now. The plan is `V2-PLAN.md`.
 
-## Night of 2026-10-09 (03:30 to 13:00): v10 "The long breath" ADOPTED (read NIGHT-PLAN.md and MORNING.md's top section first)
+## Night of 2026-10-09 (03:30 to 13:05): v10, then v10b, ADOPTED and live (default world is v10b since 13:00; golden 77fd982c, 2fc8dc7c, 37517a14; deploy 13:04) (read NIGHT-PLAN.md and MORNING.md's top section first)
 State at 11:45:
 - Last deploy 11:41 (main with v10 and r-cuts), live check clean.
 - Default world is checkpoint v10: v9 + evolution2 1, climate2 0.3, wolfDenMinDist 280, wolfTerritory 130. Golden 29b70982, 00c0d105, b5760934. Live (deploy 10:36, live check clean). Data and RESULT.md: review/stability/v10-97eef97 and -shocks.
