@@ -572,18 +572,18 @@ export class Coyotes {
     const bx = Math.min(nb - 1, Math.max(0, (x / bs) | 0)), by = Math.min(nb - 1, Math.max(0, (y / bs) | 0));
     let best = -1, bd = maxD * maxD;
     const calm2 = calm * calm * maxD * maxD;
+    // one row of buckets is a contiguous run of the grid's item list (same visiting order as bucket by bucket)
+    const xa = Math.max(0, bx - rr), xb = Math.min(nb - 1, bx + rr);
     for (let yy = Math.max(0, by - rr); yy <= Math.min(nb - 1, by + rr); yy++) {
-      for (let xx = Math.max(0, bx - rr); xx <= Math.min(nb - 1, bx + rr); xx++) {
-        const b = yy * nb + xx;
-        for (let k = g.start[b], e = g.start[b + 1]; k < e; k++) {
-          const j = g.items[k];
-          if (!a.alive[j] || a.sp[j] !== Sp.Wolf) continue;
-          const dx = a.x[j] - x, dy = a.y[j] - y, d2 = dx * dx + dy * dy;
-          if (d2 >= bd) continue;
-          const sj = a.state[j];
-          if ((sj === St.Rest || sj === St.Eat || sj === St.Drink || sj === St.Idle) && d2 > calm2) continue;
-          bd = d2; best = j;
-        }
+      const row = yy * nb;
+      for (let k = g.start[row + xa], e = g.start[row + xb + 1]; k < e; k++) {
+        const j = g.items[k];
+        if (!a.alive[j] || a.sp[j] !== Sp.Wolf) continue;
+        const dx = a.x[j] - x, dy = a.y[j] - y, d2 = dx * dx + dy * dy;
+        if (d2 >= bd) continue;
+        const sj = a.state[j];
+        if ((sj === St.Rest || sj === St.Eat || sj === St.Drink || sj === St.Idle) && d2 > calm2) continue;
+        bd = d2; best = j;
       }
     }
     return best;
@@ -598,22 +598,26 @@ export class Coyotes {
   wolfKillCheck(w: number, denX: number, denY: number): boolean {
     const a = this.a, g = this.h.pred, nb = g.nb, bs = g.bs;
     const x = a.x[w], y = a.y[w];
-    const inCore = Number.isFinite(denX) && Math.hypot(x - denX, y - denY) <= 0.5 * this.p.wolfTerritory;
+    // whether the wolf is in its core is only needed once a coyote is in reach, so it is worked out then (it is a pure function)
+    let coreKnown = false, inCore = false;
     const bx = Math.min(nb - 1, Math.max(0, (x / bs) | 0)), by = Math.min(nb - 1, Math.max(0, (y / bs) | 0));
+    const xa = Math.max(0, bx - 1), xb = Math.min(nb - 1, bx + 1);
     for (let yy = Math.max(0, by - 1); yy <= Math.min(nb - 1, by + 1); yy++) {
-      for (let xx = Math.max(0, bx - 1); xx <= Math.min(nb - 1, bx + 1); xx++) {
-        const b = yy * nb + xx;
-        for (let k = g.start[b], e = g.start[b + 1]; k < e; k++) {
-          const j = g.items[k];
-          if (!a.alive[j] || a.sp[j] !== this.sp) continue;
-          const dx = a.x[j] - x, dy = a.y[j] - y;
-          if (dx * dx + dy * dy > KILL_RANGE * KILL_RANGE) continue;
-          if (!inCore && a.state[j] !== St.Eat) continue;
-          if (this.rng.next() < this.killP) {
-            this.cWolfKills++;
-            this.h.killedByWolf(j);
-            return true;
-          }
+      const row = yy * nb;
+      for (let k = g.start[row + xa], e = g.start[row + xb + 1]; k < e; k++) {
+        const j = g.items[k];
+        if (!a.alive[j] || a.sp[j] !== this.sp) continue;
+        const dx = a.x[j] - x, dy = a.y[j] - y;
+        if (dx * dx + dy * dy > KILL_RANGE * KILL_RANGE) continue;
+        if (!coreKnown) {
+          coreKnown = true;
+          inCore = Number.isFinite(denX) && Math.hypot(x - denX, y - denY) <= 0.5 * this.p.wolfTerritory;
+        }
+        if (!inCore && a.state[j] !== St.Eat) continue;
+        if (this.rng.next() < this.killP) {
+          this.cWolfKills++;
+          this.h.killedByWolf(j);
+          return true;
         }
       }
     }

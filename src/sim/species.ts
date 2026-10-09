@@ -94,9 +94,12 @@ export const SPECIES_BY_KEY: Record<string, SpeciesDef> = Object.fromEntries(SPE
 export const IS_PREY: Uint8Array = Uint8Array.from(SPECIES, (s) => (s.prey ? 1 : 0));
 export const THREAT: Float32Array = Float32Array.from(SPECIES, (s) => s.threat);
 
+const IS_GRAZER: Uint8Array = Uint8Array.from(SPECIES, (s) => (s.guild === 'grazer' || s.guild === 'browser' ? 1 : 0));
+/** 1 for a species that flies. */
+export const FLIES: Uint8Array = Uint8Array.from(SPECIES, (s) => (s.flies ? 1 : 0));
+
 export function isGrazer(sp: number): boolean {
-  const g = SPECIES[sp]?.guild;
-  return g === 'grazer' || g === 'browser';
+  return IS_GRAZER[sp] === 1;
 }
 export function isPredator(sp: number): boolean {
   const g = SPECIES[sp]?.guild;

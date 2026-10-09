@@ -26,6 +26,8 @@ export class Vegetation {
   constructor(private w: World, private p: Params, private env: Environment, private rng: Rng) {
     this.n = w.n;
     this.cell = w.cell;
+    const fr = Math.log2(w.cell);
+    this.cellInv = w.cell > 0 && Number.isFinite(fr) && fr === Math.floor(fr) && fr > -1000 && fr < 1000 ? 1 / w.cell : 0;
     const N2 = w.n * w.n;
     this.grass = new Float32Array(N2);
     this.browse = new Float32Array(N2);
@@ -52,9 +54,13 @@ export class Vegetation {
     this.landCells = land;
   }
 
+  /** 1 / cell when the cell size is a power of two (then x * inv is bit-identical to x / cell, and cheaper), else 0. */
+  private readonly cellInv: number;
+
   cellAt(x: number, y: number): number {
     const n = this.n;
-    let i = (x / this.cell) | 0, j = (y / this.cell) | 0;
+    const inv = this.cellInv;
+    let i = (inv !== 0 ? x * inv : x / this.cell) | 0, j = (inv !== 0 ? y * inv : y / this.cell) | 0;
     if (i < 0) i = 0; else if (i >= n) i = n - 1;
     if (j < 0) j = 0; else if (j >= n) j = n - 1;
     return j * n + i;
@@ -91,13 +97,25 @@ export class Vegetation {
     // heavy rain stops fire spreading (only with storm cells on, so the default sim is unchanged)
     const rainStop = p.stormCells > 0 && this.env.state.rain > 0.5;
     let burning = 0;
+    // hoisted loads and products (same operands, same rounding as the inline forms)
+    const water = w.water, moisture = w.moisture, soilBase = w.soilBase, capacity = w.capacity;
+    const browseArr = this.browse, browseK = this.browseK;
+    const wDie = dt * p.winterDieback;
+    const wDie5 = wDie * 0.5;
+    const soilDeg = p.soilDegrade * dt, soilRecover = p.soilRecover;
+    const burnDecay = dt / 2400;
+    const capMul = this.env.capMul; // climate regimes (1 when off; x 1 is exact)
     for (let j = tick % STRIDE; j < n; j += STRIDE) {
       const row = j * n;
       for (let i = 0; i < n; i++) {
         const c = row + i;
-        if (w.water[c]) continue;
+        if (water[c]) continue;
         let g = grass[c];
-        const K = this.capacityOf(c);
+        // capacityOf(c), inlined
+        const sb = soilBase[c];
+        let sf = soil[c] / (sb > 0.15 ? sb : 0.15);
+        sf = sf < 0.35 ? 0.35 : sf > 1.5 ? 1.5 : sf;
+        const K = capacity[c] * sf * capMul;
         const b = burn[c];
         if (b > 1) {
           // burning: consume grass, spread, then turn to ash
@@ -109,34 +127,34 @@ export class Vegetation {
           burn[c] = nb <= 1 ? 1 : nb;
           if (b > 1.15 && !rainStop) this.spreadFire(i, j, seasonDry, wx, wy, windS);
         } else if (b > 0) {
-          burn[c] = Math.max(0, b - dt / 2400);
+          burn[c] = Math.max(0, b - burnDecay);
         }
-        const moist = 0.55 + 0.9 * w.moisture[c];
+        const moist = 0.55 + 0.9 * moisture[c];
         let rg = rGrow, dieF = 0.7;
         if (free) {
           // 0 on the uplands, up to the refuge share on the wettest ground by the water; a beaver pond's bank (S14) escapes by its own shield
-          const m = w.moisture[c];
+          const m = moisture[c];
           let wet = refuge > 0 ? refuge * (m <= 0.55 ? 0 : m >= 0.85 ? 1 : ((m - 0.55) / 0.3) * ((m - 0.55) / 0.3) * (3 - 2 * ((m - 0.55) / 0.3))) : 0;
           if (shield !== null && shield[c] > wet) wet = shield[c];
           rg = rGrow + (rFree - rGrow) * wet;
           dieF = 0.7 * (1 - wet);
         }
         g += dt * (rg * moist * g * (1 - g / (K + 1e-6)) + seed * K);
-        if (dormant) g -= dt * p.winterDieback * g;
-        if (drought) g -= dt * p.winterDieback * dieF * g;
+        if (dormant) g -= wDie * g;
+        if (drought) g -= wDie * dieF * g;
         if (g > K) g -= (g - K) * 0.004 * dt;
         if (g < 0) g = 0;
         grass[c] = g;
         // forbs and browse regrow more slowly and burn with the grass
-        let bw = this.browse[c];
-        const BK = this.browseK[c];
+        let bw = browseArr[c];
+        const BK = browseK[c];
         if (b > 1) bw *= 0.5;
         bw += dt * (rg * 0.85 * moist * bw * (1 - bw / (BK + 1e-6)) + seed * BK);
-        if (dormant) bw -= dt * p.winterDieback * 0.5 * bw;
-        this.browse[c] = bw < 0 ? 0 : bw;
+        if (dormant) bw -= wDie5 * bw;
+        browseArr[c] = bw < 0 ? 0 : bw;
         // overgrazing wears soil down; healthy grass slowly restores it
-        if (g < 0.08 * K + 0.01) soil[c] = Math.max(0.12, soil[c] - p.soilDegrade * dt);
-        else soil[c] += (w.soilBase[c] - soil[c]) * p.soilRecover * dt;
+        if (g < 0.08 * K + 0.01) soil[c] = Math.max(0.12, soil[c] - soilDeg);
+        else soil[c] += (soilBase[c] - soil[c]) * soilRecover * dt;
         fear[c] *= fearKeep;
       }
     }
