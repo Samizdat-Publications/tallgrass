@@ -1,8 +1,9 @@
 // The expanded population view as small multiples: one row per species on a shared time axis, each scaled to its own
 // range with its real numbers on the axis, so every species shows its swings. Grass gets a slim row of its own.
 import { SPECIES_NAMES, YEAR_TICKS } from '../sim/types';
-import { yearOfTick, yearStartTick, fmtInt } from './describe';
-import { niceStep, niceStepInt, hexA } from './chartutil';
+import { yearOfTick, yearStartTick, fmtInt, seasonOfTick } from './describe';
+import { niceStep, niceStepInt, hexA, strokeWithGaps, fillSolidRuns } from './chartutil';
+import { awayRows, holdAway, isMigrant } from './away';
 import { GOLD, GRASS_COLOR, PAPER_DIM, SANS, SERIF, SPECIES_COLORS } from './palette';
 
 export interface RowsData {
@@ -18,6 +19,47 @@ export interface RowsData {
   log: boolean;
   /** Draw the slim grass row under the species rows (default true). A two-column chart gives it to the second column only. */
   grassRow?: boolean;
+  /**
+   * The climate index per history row (-1 driest .. 1 wettest) and 1 where a megadrought holds. When given, a soft band runs behind the
+   * rows along the time axis: green for wet runs, tan for dry, rust for a megadrought, clear in ordinary years. Leave it out (as the
+   * caller does while every value is 0) and nothing is drawn.
+   */
+  climate?: number[];
+  mega?: number[];
+}
+
+/** Band colours (rgb) and the strongest alpha each reaches behind the rows. */
+export const CLIMATE_BAND = { wet: [124, 184, 84], dry: [214, 170, 122], mega: [190, 84, 40], wetA: 0.32, dryA: 0.38, megaA: 0.42 } as const;
+/** Index at which a run of years starts to tint the band, and where the tint is full. */
+const BAND_FROM = 0.2;
+const BAND_TO = 0.9;
+
+/** The climate band behind the rows: one column of pixels per x, the colour of whatever the index was at that moment. */
+function drawClimateBand(g: CanvasRenderingContext2D, d: RowsData, P: { l: number; r: number; t: number; b: number }, t0: number, t1: number): void {
+  const clim = d.climate;
+  if (!clim) return;
+  const n = d.ticks.length;
+  const x0 = Math.ceil(P.l), x1 = Math.floor(P.r);
+  let j = 0;
+  for (let px = x0; px <= x1; px++) {
+    const tick = t0 + ((px - P.l) / (P.r - P.l)) * (t1 - t0);
+    while (j + 1 < n && d.ticks[j + 1] <= tick) j++;
+    const c = clim[j] ?? 0;
+    let rgb: readonly number[] | null = null;
+    let a = 0;
+    if (d.mega?.[j]) {
+      rgb = CLIMATE_BAND.mega;
+      a = CLIMATE_BAND.megaA;
+    } else if (Math.abs(c) > BAND_FROM) {
+      const k = Math.min(1, (Math.abs(c) - BAND_FROM) / (BAND_TO - BAND_FROM));
+      const e = k * k * (3 - 2 * k);
+      rgb = c > 0 ? CLIMATE_BAND.wet : CLIMATE_BAND.dry;
+      a = (c > 0 ? CLIMATE_BAND.wetA : CLIMATE_BAND.dryA) * e;
+    }
+    if (!rgb || a < 0.01) continue;
+    g.fillStyle = `rgba(${rgb[0]},${rgb[1]},${rgb[2]},${a.toFixed(3)})`;
+    g.fillRect(px, P.t, 1, P.b - P.t);
+  }
 }
 
 /** Room left of the plot for the row's name (in its colour) and its axis numbers, and right of it for the current value. */
@@ -88,6 +130,9 @@ export function drawRows(g: CanvasRenderingContext2D, w: number, h: number, u: n
     yearX.push(x);
   }
 
+  // the wet and dry decades, softly, behind everything else
+  if (d.climate) drawClimateBand(g, d, P, t0, t1);
+
   // event hairlines behind the data
   for (const m of d.markers) {
     if (m.tick < t0 || m.tick > t1) continue;
@@ -118,16 +163,23 @@ export function drawRows(g: CanvasRenderingContext2D, w: number, h: number, u: n
     const bottom = top + rowHs[i];
     const py0 = top + 6 * u, py1 = bottom - 4 * u;
     const isGrass = row.kind === 'grass';
-    const vals = isGrass ? d.grass : d.pops[row.sp];
     const color = isGrass ? GRASS_COLOR : SPECIES_COLORS[row.sp];
+    // A visitor (eagle, hawk) at zero in its off season is away, not gone: that stretch is held level (drawn faint and dashed) so it never
+    // reads as a crash, and it does not set the row's range.
+    const rawVals = isGrass ? d.grass : d.pops[row.sp];
+    const away = !isGrass && isMigrant(row.sp) ? awayRows(row.sp, rawVals, (k) => seasonOfTick(d.ticks[k])) : null;
+    const vals = away ? holdAway(rawVals, away) : rawVals;
+    const isAway = (k: number): boolean => (away ? away[k] : false);
 
     // this row's own range
     let lo = Infinity, hi = -Infinity;
     for (let k = 0; k < n; k++) {
+      if (isAway(k)) continue;
       const v = vals[k];
       if (v < lo) lo = v;
       if (v > hi) hi = v;
     }
+    if (lo > hi) { lo = 0; hi = 0; }
     let aLo: number, aHi: number;
     if (isGrass) {
       // grass is a fraction of full cover; its band is scaled to its own range so the seasonal wave shows
@@ -178,31 +230,26 @@ export function drawRows(g: CanvasRenderingContext2D, w: number, h: number, u: n
       g.stroke();
     }
 
-    // area under the line and the line itself
-    g.beginPath();
-    g.moveTo(X(d.ticks[0]), py1);
-    for (let k = 0; k < n; k += step) g.lineTo(X(d.ticks[k]), Y(vals[k]));
-    g.lineTo(X(d.ticks[n - 1]), Y(vals[n - 1]));
-    g.lineTo(X(d.ticks[n - 1]), py1);
-    g.closePath();
+    // area under the line and the line itself (a visitor's away stretch is a faint dashed level, with nothing under it)
+    const xs: number[] = [], ys: number[] = [], aw: boolean[] = [];
+    for (let k = 0; k < n; k += step) { xs.push(X(d.ticks[k])); ys.push(Y(vals[k])); aw.push(isAway(k)); }
+    if ((n - 1) % step !== 0) { xs.push(X(d.ticks[n - 1])); ys.push(Y(vals[n - 1])); aw.push(isAway(n - 1)); }
     const grad = g.createLinearGradient(0, py0, 0, py1);
     grad.addColorStop(0, hexA(color, isGrass ? 0.2 : 0.22));
     grad.addColorStop(1, hexA(color, 0));
-    g.fillStyle = grad;
-    g.fill();
-    g.beginPath();
-    for (let k = 0; k < n; k += step) {
-      const x = X(d.ticks[k]), y = Y(vals[k]);
-      if (k === 0) g.moveTo(x, y); else g.lineTo(x, y);
-    }
-    g.lineTo(X(d.ticks[n - 1]), Y(vals[n - 1]));
-    g.lineWidth = (isGrass ? 1.3 : 1.7) * u;
-    g.strokeStyle = isGrass ? hexA(color, 0.75) : color;
-    g.stroke();
+    fillSolidRuns(g, xs, ys, aw, py1, grad);
+    strokeWithGaps(g, xs, ys, aw, isGrass ? hexA(color, 0.75) : color, (isGrass ? 1.3 : 1.7) * u, [3 * u, 3.5 * u], 0.5);
     g.beginPath();
     g.arc(X(d.ticks[n - 1]), Y(vals[n - 1]), 2.6 * u, 0, Math.PI * 2);
-    g.fillStyle = color;
-    g.fill();
+    if (isAway(n - 1)) {
+      g.lineWidth = 1.2 * u;
+      g.strokeStyle = hexA(color, 0.55);
+      g.setLineDash([]);
+      g.stroke();
+    } else {
+      g.fillStyle = color;
+      g.fill();
+    }
 
     // the row's name sits in the left gutter and its current value in the right one, so no line ever runs through a word
     const nameSize = (small ? 11.5 : 12.5) * u;
@@ -223,10 +270,15 @@ export function drawRows(g: CanvasRenderingContext2D, w: number, h: number, u: n
     const endY = Math.max(top + 8 * u, Math.min(bottom - 8 * u, Y(lastV)));
     g.font = `700 ${nameSize}px ${SANS}`;
     g.fillStyle = '#EFE6D0';
-    g.fillText(isGrass ? `${Math.round((lastV / (d.grassMax > 1.0001 ? d.grassMax : 1)) * 100)}%` : fmtInt(lastV), P.r + 7 * u, endY);
+    if (isAway(n - 1)) {
+      // away, not zero: a quiet italic note in the value's place
+      g.font = `italic 400 ${nameSize}px ${SERIF}`;
+      g.fillStyle = PAPER_DIM;
+      g.fillText('away', P.r + 7 * u, endY);
+    } else g.fillText(isGrass ? `${Math.round((lastV / (d.grassMax > 1.0001 ? d.grassMax : 1)) * 100)}%` : fmtInt(lastV), P.r + 7 * u, endY);
     g.restore();
 
-    if (hoverIdx >= 0) hoverDots.push({ x: X(d.ticks[hoverIdx]), y: Y(vals[hoverIdx]), color });
+    if (hoverIdx >= 0 && !isAway(hoverIdx)) hoverDots.push({ x: X(d.ticks[hoverIdx]), y: Y(vals[hoverIdx]), color });
   });
 
   // x axis under the last row

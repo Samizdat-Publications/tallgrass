@@ -39,6 +39,12 @@ export const NARRATION_TEXT: Record<string, string> = {
   mesoRelease_1: 'With the wolves so few, the coyotes have taken their place. The valley has a new hunter.',
   lightningFire_1: 'Lightning strikes the dry grass, and the prairie catches fire.',
   storm_1: 'A thunderstorm crosses the valley. The air goes still, and then the sky breaks open.',
+  // v10: the climate regimes (wet and dry runs of decades)
+  climateWet_1: 'The rains have come back. For the next few years the grass will stand tall, and the herds will grow into it.',
+  climateWet_2: 'A run of wet years. The valley is as green as it has been in a generation.',
+  climateDry_1: 'The wet years are over. Summer after summer the grass will cure early, and the herds will thin.',
+  megadrought_1: 'This is no ordinary dry spell. The drought will hold for years, and the valley will not look the same when it ends.',
+  climateMild_1: 'The weather settles back into ordinary years, and the valley begins to find its balance again.',
 };
 
 export const NARRATION_IDS = Object.keys(NARRATION_TEXT);
@@ -95,6 +101,10 @@ export function lineVariants(e: SimEvent, ctx: NarrationContext = {}): string[] 
     case 'mesoRelease': return ['mesoRelease_1'];
     case 'lightningFire': return ['lightningFire_1'];
     case 'storm': return ['storm_1'];
+    case 'climateWet': return ['climateWet_1', 'climateWet_2'];
+    case 'climateDry': return ['climateDry_1'];
+    case 'megadrought': return ['megadrought_1'];
+    case 'climateMild': return ['climateMild_1'];
     default: return null;
   }
 }
@@ -103,6 +113,7 @@ export function lineVariants(e: SimEvent, ctx: NarrationContext = {}): string[] 
 export function priority(kind: string): number {
   switch (kind) {
     case 'extinct': return 9;
+    case 'megadrought': return 7.5;
     case 'recolonized': return 8.5;
     case 'introduced': return 8;
     case 'mesoRelease': return 7.8;
@@ -120,6 +131,9 @@ export function priority(kind: string): number {
     case 'hareCrash': return 3.2;
     case 'packLost': return 3;
     case 'coyotePups': return 2.5;
+    case 'climateWet': return 6.6;
+    case 'climateDry': return 6.6;
+    case 'climateMild': return 3.4;
     case 'storm': return 2.2;
     case 'townFounded': return 2;
     case 'packFounded': return 2;

@@ -179,6 +179,27 @@
   color: #e6dcc5;
   font-weight: 500;
 }
+/* the slow climate, only while it matters: a wet or dry run of years, or a megadrought */
+.tg-slate-clim {
+  margin-left: calc(8 * var(--u));
+  padding-left: calc(9 * var(--u));
+  border-left: 1px solid rgba(239, 230, 208, 0.3);
+  font-style: italic;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+.tg-slate-clim[hidden] {
+  display: none;
+}
+.tg-slate-clim.is-wet {
+  color: #b5d98c;
+}
+.tg-slate-clim.is-dry {
+  color: #e2c27e;
+}
+.tg-slate-clim.is-mega {
+  color: #f0a074;
+}
 
 /* ---- right column: menu chips, chronicle, inspector ---------------------------------------------------------- */
 .tg-right {
@@ -995,6 +1016,36 @@ button.tg-ent-b:hover {
 .tg-pop.is-open .tg-pop-sub {
   display: none;
 }
+/* the key to the wet and dry band behind the graph (climate regimes), only in the expanded population view and only for the kinds shown */
+.tg-pop-clim {
+  display: none;
+  gap: calc(12 * var(--u));
+  font-size: calc(12 * var(--u));
+  color: var(--paper-dim);
+}
+.tg-pop.is-open[data-view='pop'] .tg-pop-clim:not([hidden]) {
+  display: flex;
+}
+.tg-clim-k {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(5 * var(--u));
+}
+.tg-clim-sw {
+  width: calc(14 * var(--u));
+  height: calc(9 * var(--u));
+  border-radius: calc(2 * var(--u));
+  background: var(--k);
+}
+.tg-clim-k.is-wet {
+  --k: rgba(124, 184, 84, 0.75);
+}
+.tg-clim-k.is-dry {
+  --k: rgba(214, 170, 122, 0.8);
+}
+.tg-clim-k.is-mega {
+  --k: rgba(190, 84, 40, 0.85);
+}
 .tg-grow {
   flex: 1;
 }
@@ -1149,6 +1200,22 @@ button.tg-ent-b:hover {
 .tg-cell.is-gone {
   opacity: 0.55;
 }
+/* a visitor (eagle, hawk) out of the valley for its season: not greyed like a species that is gone, and its count reads as a quiet note */
+.tg-cell.is-away .tg-cell-top {
+  flex-wrap: wrap;
+  row-gap: 0;
+}
+.tg-cell.is-away .tg-cell-n {
+  /* its own line under the name, in the space the sparkline gives up: "away for the winter" does not fit beside "Red-tailed hawk" */
+  flex: 1 0 100%;
+  padding-left: calc(12 * var(--u));
+  font: italic 400 calc(12.5 * var(--u)) / 1.1 var(--serif);
+  color: var(--paper-dim);
+  white-space: nowrap;
+}
+.tg-cell.is-away .tg-spark {
+  height: calc(17 * var(--u));
+}
 /* 10x and 100x: the panel eases (see PopGraph.update). The numbers change a few times a second, so they sit a little quieter
    than at 1x, and at 100x the whole strip reads as a time-lapse. */
 .tg-pop.is-fast .tg-cell-n {
@@ -1252,6 +1319,10 @@ button.tg-ent-b:hover {
 .tg-tip-r b {
   font-weight: 700;
   font-variant-numeric: lining-nums tabular-nums;
+}
+.tg-tip-r b.is-away {
+  font: italic 400 calc(13 * var(--u)) / 1 var(--serif);
+  color: var(--paper-dim);
 }
 .tg-tip-r.is-grass .tg-dot {
   background: var(--sage);
@@ -3403,4 +3474,124 @@ button.tg-ent-b:hover {
 .tg-photo-save:disabled {
   opacity: 0.55;
   cursor: progress;
+}
+
+/* ---- rare sightings: the journal page (Menu > Rare sightings) --------------------------------------------------------- */
+.tg-rare-watched {
+  margin: calc(2 * var(--u)) 0 calc(4 * var(--u));
+  font: italic 400 calc(17 * var(--u)) / 1.2 var(--serif);
+  color: var(--gold);
+}
+.tg-rare-tier {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: calc(12 * var(--u));
+}
+.tg-rare-tierwhen {
+  font: 400 calc(12.5 * var(--u)) / 1 var(--sans);
+  color: var(--paper-dim);
+  opacity: 0.85;
+}
+.tg-rare-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: calc(10 * var(--u));
+  margin-top: calc(6 * var(--u));
+}
+.tg-rare-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: calc(4 * var(--u));
+  min-width: 0;
+  padding: calc(8 * var(--u)) calc(8 * var(--u)) calc(10 * var(--u));
+  border: 1px solid var(--edge);
+  border-radius: calc(8 * var(--u));
+  background: rgba(10, 8, 4, 0.28);
+}
+.tg-rare-card.is-seen {
+  border-color: var(--edge-hi);
+}
+.tg-rare-card.is-locked {
+  border-style: dashed;
+}
+.tg-rare-photo {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border-radius: calc(5 * var(--u));
+  background: linear-gradient(180deg, rgba(36, 31, 22, 0.9), rgba(18, 15, 9, 0.95));
+  color: var(--paper-dim);
+}
+.tg-rare-img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.tg-rare-sil {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.tg-rare-card.is-locked.is-open .tg-rare-photo {
+  color: var(--gold);
+}
+.tg-rare-nophoto {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font: italic 400 calc(13 * var(--u)) / 1 var(--serif);
+  color: var(--paper-dim);
+}
+.tg-rare-title {
+  margin: calc(4 * var(--u)) 0 0;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: calc(8 * var(--u));
+  font: 500 calc(16.5 * var(--u)) / 1.2 var(--serif);
+  color: var(--paper);
+}
+.tg-rare-title.is-hidden {
+  font-style: italic;
+  font-weight: 400;
+  color: var(--paper-dim);
+}
+.tg-rare-times {
+  flex: none;
+  font: 400 calc(12 * var(--u)) / 1 var(--sans);
+  color: var(--gold);
+}
+.tg-rare-line {
+  margin: 0;
+  font: italic 400 calc(14 * var(--u)) / 1.3 var(--serif);
+  color: var(--paper);
+}
+.tg-rare-card.is-locked .tg-rare-line {
+  color: var(--paper-dim);
+}
+.tg-rare-when {
+  margin: 0;
+  font: 400 calc(12.5 * var(--u)) / 1.3 var(--sans);
+  color: var(--paper-dim);
+}
+.tg-rare-bar {
+  display: block;
+  height: calc(3 * var(--u));
+  margin-top: calc(4 * var(--u));
+  border-radius: 2px;
+  background: linear-gradient(90deg, var(--gold) calc(var(--p, 0) * 100%), rgba(239, 230, 208, 0.14) calc(var(--p, 0) * 100%));
+}
+@media (max-width: 900px) {
+  .tg-rare-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 560px) {
+  .tg-rare-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }

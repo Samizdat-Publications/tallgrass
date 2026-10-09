@@ -35,6 +35,15 @@ export class SnowDepth {
     this.tex.needsUpdate = true;
   }
 
+  /** Draw scale 0..1 on the displayed depth (1 normally; the engine lowers it in a time-lapse so the pack is a light dusting). */
+  get gain(): number { return this._gain; }
+  set gain(g: number) {
+    if (Math.abs(g - this._gain) < 1e-4) return;
+    this._gain = g;
+    this.dirty = true;
+  }
+  private _gain = 1;
+
   /** A new sim frame (32 x 32 bytes). The first one is taken at once, later ones are eased toward. */
   setTarget(b: Uint8Array): void {
     if (b.length < SNOW_N * SNOW_N) return;
@@ -64,8 +73,8 @@ export class SnowDepth {
       this.dirty = true;
     }
     if (this.dirty) {
-      const f = this.field, by = this.bytes;
-      for (let i = 0; i < f.length; i++) by[i] = Math.max(0, Math.min(255, Math.round(f[i] * 255)));
+      const f = this.field, by = this.bytes, g = this._gain * 255;
+      for (let i = 0; i < f.length; i++) by[i] = Math.max(0, Math.min(255, Math.round(f[i] * g)));
       this.tex.needsUpdate = true;
       this.dirty = false;
     }
@@ -83,7 +92,7 @@ export class SnowDepth {
     const f = this.field, i = z0 * n + x0;
     const a = f[i] + (f[i + 1] - f[i]) * tx;
     const b = f[i + n] + (f[i + n + 1] - f[i + n]) * tx;
-    return a + (b - a) * tz;
+    return (a + (b - a) * tz) * this._gain;
   }
 
   dispose(): void {

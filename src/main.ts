@@ -4,12 +4,14 @@ import { Engine } from './render/engine';
 import { GrassField } from './render/grass';
 import { AnimalLayer } from './render/animals';
 import { OverlayLayer } from './render/overlay';
+import { Trails, type TrailFrame } from './render/trails';
 import { Cranes } from './render/cranes';
 import { SmallPreyLayer } from './render/smallprey';
 import { SmallPreyOverlay } from './render/smalloverlay';
 import { GameUI, type OverlayId, type ToolId } from './ui/ui';
 import { loadSettings, type QualityPreset, type Settings } from './ui/settings';
 import { titleWanted } from './ui/title';
+import { expectedSpecies } from './ui/slots';
 import { decodeShare, shareUrl, type DecodedShare, type LoggedIntervention } from './sim/sharecode';
 import { packName, type SkyView } from './ui/describe';
 import { generateWorld } from './sim/world';
@@ -22,6 +24,8 @@ import { JPEG_QUALITY, LensController, type PhotoFormat } from './ui/photomode';
 import { AudioDirector } from './audio/audio';
 import { Narrator } from './audio/narrator';
 import { countNearby, nearWater01, scanTension } from './audio/inputs';
+import { RARE_SKY, NIGHT } from './render/sky';
+import { RareSightings, TreeIndex, rareMode, type RareHooks } from './ui/rare';
 import type { TensionSample } from './audio/music';
 import type { Nearby } from './audio/mix';
 import { DAY_TICKS, SEASON_TICKS, setCalendarScale, Sp, YEAR_TICKS, type Intervention, type Snapshot } from './sim/types';
@@ -160,6 +164,15 @@ const worker = new Worker(new URL('./sim/worker.ts', import.meta.url), { type: '
 const send = (m: ToWorker) => worker.postMessage(m);
 
 const skyView: SkyView = { snow: 0, blizzard: 0, rain: 0, drought: 0, dustStorm: 0, flood: 0, overcast: 0 };
+// dev: ?clim=<-1..1> (or ?clim=mega) forces the climate index the renderer and the UI see (look, header word, graph band), to inspect the
+// wet and dry extremes without waiting decades. It is applied to the snapshots on this side only and never reaches the sim.
+const climOverride: { c: number; mega: boolean } | null = (() => {
+  const v = q.get('clim');
+  if (v === null) return null;
+  if (v === 'mega') return { c: -0.8, mega: true };
+  const n = Number(v);
+  return v !== '' && Number.isFinite(n) ? { c: Math.max(-1, Math.min(1, n)), mega: false } : null;
+})();
 let speed = Number(q.get('speed') ?? 1);
 let following: number | null = null;
 let armed: ToolId | null = null;
@@ -194,11 +207,22 @@ worker.onmessage = (e: MessageEvent<FromWorker>) => {
     const ev = evs[evs.length - 1];
     if (ev) { takeCamera(); engine.cam.follow(null); following = null; engine.cam.flyTo(ev.x, ev.y, 150, 28); }
   }
+  if (climOverride) {
+    m.env.climate = climOverride.c;
+    m.mega = climOverride.mega;
+    for (const r of m.history) {
+      r.climate = climOverride.c;
+      if (climOverride.mega) r.mega = 1;
+      else delete r.mega;
+    }
+  }
+  engine.megadrought = !!m.mega;
   // keep events and history from every message even if frames skip some
   pendingEvents = pendingEvents.concat(m.events);
   pendingHistory = pendingHistory.concat(m.history);
   // dynamic trees (S13): before setVeg, so the renderer's own fire hook is already off when the first veg frame lands
   if (m.treesVersion !== undefined) {
+    if (m.trees) rare.setTrees(new TreeIndex(m.trees, 6, 5)); // (rare sightings: the lightning and the open-prairie cougar read the live tree list)
     engine.setDynamicTrees(m.trees, m.treesVersion, m.treeCover);
     if (m.treeCover) grass.setCover(m.treeCover);
   }
@@ -250,9 +274,12 @@ const simParams: Record<string, number> = shared ? { ...shared.state.params } : 
 try { setCalendarScale(applyOverrides(defaultParams(), simParams).calendarScale); } catch { /* unknown dev param: the worker reports it */ }
 // small-prey web (R3): prairie dog towns and jackrabbits, drawn only when the sim sends the small-prey fields (smallPrey param on)
 let smallCaps = { hareK: 3, dogK: 4 };
+// the species this valley can show, so the population panel gives each a fixed card from the first frame (undefined: cards appear as species do)
+let popSlots: number[] | undefined;
 try {
   const rp = applyOverrides(defaultParams(), simParams);
   smallCaps = { hareK: rp.hareK, dogK: rp.dogK };
+  popSlots = expectedSpecies(rp);
 } catch { /* unknown dev param: the worker reports it */ }
 const smallprey = new SmallPreyLayer(renderWorld, { ...smallCaps, shared: engine.uniforms });
 // where a dog yips or an alarm wave starts: the audio places it in the world
@@ -477,6 +504,9 @@ function applySetting(s: Settings, changed: keyof Settings): void {
     case 'narration':
       busAudio.setBusVolume?.('voice', s.narration);
       break;
+    case 'longExposure':
+      trails.enabled = s.longExposure;
+      break;
     case 'autoCamera':
       autoCamEnabled = s.autoCamera;
       if (!autoCamEnabled && autoCam) takeCamera();
@@ -494,6 +524,13 @@ const overlay = new OverlayLayer(world.size, (x, z) => engine.groundHeight(x, z)
 });
 engine.scene.add(overlay.object3D);
 engine.excludeFromAO(overlay.object3D);
+// long exposure at speed (render/trails.ts): ?trails=0 never draws it, ?trails=1 draws it at any speed (captures)
+const trails = new Trails(world.size, (x, z) => engine.groundHeight(x, z), engine.uniforms);
+trails.enabled = savedSettings.longExposure;
+trails.mode = q.get('trails') === '0' ? 'off' : q.get('trails') === '1' ? 'on' : 'auto';
+const trailFrame: TrailFrame = { speed: 1, tick: 0, count: 0, ids: new Uint32Array(0), agents: new Float32Array(0) };
+engine.scene.add(trails.object3D);
+engine.excludeFromAO(trails.object3D);
 // the Small prey overlay is its own mesh (render/smalloverlay.ts): choosing it hides the other overlay and the reverse
 const smallOverlay = new SmallPreyOverlay(world.size, (x, z) => engine.groundHeight(x, z), engine.uniforms, document.querySelector<HTMLElement>('.tg-overlay') ?? document.body);
 engine.scene.add(smallOverlay.object3D);
@@ -510,6 +547,28 @@ function takeCamera(): void {
   if (autoCam) { autoCam = false; if (!cinematicOn) director.setEnabled(false); }
 }
 engine.cam.onUserInput = takeCamera;
+// A chapter card tied to a place waits until the documentary camera is on that place (and goes if it never gets there); a player who has
+// the camera sees the cards as plain news. The narrator's lines (and so the captions) follow the same rule, below.
+const filmingNow = (): boolean => autoCam || cinematicOn;
+ui.cardGate = (x, y) => !filmingNow() || director.eventInView(x, y);
+type SimEv = typeof pendingEvents[number];
+const heldNarration: Array<{ ev: SimEv; at: number }> = [];
+/** Events for the narrator: a located event is held while the director films something else, and said once the camera is on it (12 s at most). */
+function narrationEvents(evs: SimEv[]): SimEv[] {
+  const out: SimEv[] = [];
+  const now = performance.now();
+  const filming = filmingNow();
+  for (const ev of evs) {
+    if (filming && (ev.x !== 0 || ev.y !== 0) && !director.eventInView(ev.x, ev.y)) heldNarration.push({ ev, at: now });
+    else out.push(ev);
+  }
+  for (let i = heldNarration.length - 1; i >= 0; i--) {
+    const h = heldNarration[i];
+    if (!filming || director.eventInView(h.ev.x, h.ev.y)) { out.push(h.ev); heldNarration.splice(i, 1); }
+    else if (now - h.at > 12000) heldNarration.splice(i, 1);
+  }
+  return out;
+}
 
 // the saved settings take effect (the picture quality already did, at the engine); then the title card, on a plain visit only
 {
@@ -610,6 +669,66 @@ function groundHit(r: THREE.Raycaster): THREE.Vector3 | null {
   return null;
 }
 
+// ------------------------------------------------------------------ rare sightings
+// A journal of rare moments that unlock while the valley runs at 1x (src/ui/rare.ts). It reads the snapshot and the events, and stages
+// the comet and the aurora storm in the sky; it never touches the sim. ?rare=all opens every tier at any speed, ?rare=reset clears it.
+const rareProj = new THREE.Vector3();
+const rareFwd = new THREE.Vector3();
+/** A 480 px wide JPEG of the frame, taken the way photo mode grabs the canvas. With `aim`, the camera turns in place to face that direction first. */
+function rareGrab(aim: [number, number, number] | null): Promise<Blob | null> {
+  return new Promise((resolve) => {
+    // (a separate task: this runs from inside a frame, and the drawing buffer is only readable in the task that renders)
+    window.setTimeout(() => {
+      try {
+        const cam = engine.camera;
+        const q0 = cam.quaternion.clone();
+        const ringWas = selectionRing ? selectionRing.visible : false;
+        if (selectionRing) selectionRing.visible = false;
+        if (aim) {
+          cam.lookAt(cam.position.x + aim[0] * 100, cam.position.y + aim[1] * 100, cam.position.z + aim[2] * 100);
+          cam.updateMatrixWorld(true);
+          engine.post.render(0);
+        } else {
+          engine.renderOnce(0);
+        }
+        const src = engine.renderer.domElement;
+        const c = document.createElement('canvas');
+        c.width = 480;
+        c.height = Math.max(1, Math.round((480 * src.height) / Math.max(1, src.width)));
+        c.getContext('2d')?.drawImage(src, 0, 0, c.width, c.height);
+        if (aim) { cam.quaternion.copy(q0); cam.updateMatrixWorld(true); }
+        if (selectionRing) selectionRing.visible = ringWas;
+        c.toBlob((b) => resolve(b), 'image/jpeg', 0.8);
+      } catch {
+        resolve(null);
+      }
+    }, 0);
+  });
+}
+const rareHooks: RareHooks = {
+  toast: (title) => ui.notify(title, 'Rare sighting:', 5200),
+  frame: (moment, x, y, sp) => director.queueMoment(moment, { x, y, sp, a: 0, b: 0, at: 0 }, true, sp),
+  directorOn: () => autoCam || cinematicOn,
+  inView: (x, y) => {
+    const cam = engine.camera;
+    rareProj.set(x, engine.groundHeight(x, y) + 1.5, y); // (three z is sim y)
+    const d = Math.hypot(rareProj.x - cam.position.x, rareProj.z - cam.position.z);
+    cam.getWorldDirection(rareFwd);
+    if ((rareProj.x - cam.position.x) * rareFwd.x + (rareProj.z - cam.position.z) * rareFwd.z <= 0 || d > 450) return false;
+    rareProj.project(cam);
+    return Math.abs(rareProj.x) < 0.85 && Math.abs(rareProj.y) < 0.85;
+  },
+  grab: rareGrab,
+  skyRot: () => NIGHT.skyRot.value.elements,
+  setSky: (s) => {
+    RARE_SKY.comet.value.set(s.cometEq[0], s.cometEq[1], s.cometEq[2], s.comet);
+    RARE_SKY.cometTail.value.set(s.cometTail[0], s.cometTail[1], s.cometTail[2]);
+    RARE_SKY.storm.value = s.storm;
+  },
+};
+const rare = new RareSightings(ui.rareStore, rareHooks, seed, rareMode(location.search), performance.now());
+rare.setTrees(new TreeIndex(world.trees, 4));
+
 // ------------------------------------------------------------------ frame
 
 const sun = { dir: engine.uniforms.lightDir.value, color: engine.uniforms.lightColor.value };
@@ -635,6 +754,7 @@ function predatorWithin(x: number, y: number, r: number): boolean {
 }
 const w = window as unknown as Record<string, unknown>;
 w.__overlay = overlay;
+w.__trails = trails;
 engine.onFrame((dt, t) => {
   const alpha = Math.min(1, (performance.now() - lastTickChange) / Math.max(16, tickInterval));
   // legs keep pace with how fast the sim actually moves animals (capped where gaits would alias)
@@ -653,9 +773,13 @@ engine.onFrame((dt, t) => {
     director.setEnabled(true);
   }
   // (photo mode holds the camera where the photographer put it, so the director stands down while the panel is open)
-  if (!ui.photo.isOpen) director.update(dt, pending ? { count: pending.count, ids: pending.ids, agents: pending.agents, carcassCount: pending.carcassCount, carcasses: pending.carcasses, dayFrac: pending.env.dayFrac, small: lastSmall, events: pendingEvents } : null);
+  if (!ui.photo.isOpen) director.update(dt, pending ? { count: pending.count, ids: pending.ids, agents: pending.agents, carcassCount: pending.carcassCount, carcasses: pending.carcasses, dayFrac: pending.env.dayFrac, small: lastSmall, events: pendingEvents, speed: pending.speed, weather: pending.env.weather } : null);
   grass.viewportHeight = engine.renderer.domElement.height;
   overlay.update(dt, engine.camera, engine.renderer.domElement);
+  if (pending) {
+    trailFrame.speed = pending.speed; trailFrame.tick = pending.tick; trailFrame.count = pending.count; trailFrame.ids = pending.ids; trailFrame.agents = pending.agents;
+  }
+  trails.update(dt, engine.renderer, pending ? trailFrame : null);
   grass.update(engine.camera, t, engine.env, sun);
   lens.update(dt);
   if (ui.photo.isOpen && selectionRing) selectionRing.visible = false; // a photograph never carries the selection ring
@@ -667,7 +791,7 @@ engine.onFrame((dt, t) => {
       selected: pending.selected && pending.selected.id === selectedAnimal ? pending.selected : null,
       selecting: selectedAnimal !== null && pending.selected?.id !== selectedAnimal && !pending.selectedGone ? animals.getSpecies(selectedAnimal) : null,
       speed: pending.speed, ticksPerSec: pending.ticksPerSec, seed: seedStr,
-      scenario: scenario.id, following, story: pending.story, storyId: pending.storyId,
+      scenario: scenario.id, slots: popSlots, following, story: pending.story, storyId: pending.storyId,
       packs: pending.packs.length / 4, autoCamera: autoCam, narrator: narrator.enabled, caption: narrator.caption, sky: (engine.skyNow(skyView), skyView),
     });
     if (pending.selectedGone && following !== null) { following = null; engine.cam.follow(null); }
@@ -684,7 +808,7 @@ engine.onFrame((dt, t) => {
     engine.camera.getWorldDirection(camFwdV);
     audio.update(dt, { env: pending.env, camX: cp.x, camY: cp.z, camHeight, speed: pending.speed, nearby: nearbyCache, nearWater: nearWater01(world, cp.x, cp.z), tension: tensionCache, camFwd: [camFwdV.x, camFwdV.y, camFwdV.z], coyotes: nearbyCache.coyote ?? 0 });
     if (!skipping) for (const ev of pendingEvents) if (ev.x !== 0 || ev.y !== 0) audio.onEvent(ev, Math.hypot(ev.x - cp.x, ev.y - cp.z, camHeight));
-    if (!skipping) narrator.onEvents(pendingEvents, pending.tick);
+    if (!skipping) narrator.onEvents(narrationEvents(pendingEvents), pending.tick);
     narrator.update({ filming: autoCam || cinematicOn, speed: pending.speed });
     // a fresh carcass near the camera: someone just died here
     if (!skipping && pending.speed > 0 && pending.speed <= 10) {
@@ -703,6 +827,10 @@ engine.onFrame((dt, t) => {
       }
       if (heardDeaths.size > 400) for (const [key, t0] of heardDeaths) if (performance.now() - t0 > 60000) heardDeaths.delete(key);
     }
+    rare.update({
+      nowMs: performance.now(), dt, visible: !document.hidden, speed: pending.speed, filming: autoCam || cinematicOn, tick: pending.tick, env: pending.env,
+      events: pendingEvents, agents: pending.agents, count: pending.count, carcasses: pending.carcasses, carcassCount: pending.carcassCount, packs: pending.packs,
+    });
     pendingEvents = [];
     pendingHistory = [];
   }
@@ -779,6 +907,9 @@ w.__narrator = narrator;
 }
 // dev hook: window.__fieldnotes.debugEarn('fire') ticks a field note as if it had just happened
 w.__fieldnotes = ui.fieldNotes;
+// dev hooks: window.__rare.force('comet' | 'aurora' | null) stages the sky now; window.__rare.debugRecord('elder', env) records one
+w.__rare = rare;
+w.__night = NIGHT; // (its skyRot turns the comet's place in the stars into a direction, for captures)
 // dev hook: speak one line by id, bypassing the narrator's rules (the audio must be unlocked by a click)
 w.__narrate = (id: string) => narrator.speakNow(id);
 w.__followId = (id: number | null) => startFollow(id);

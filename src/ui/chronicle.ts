@@ -2,7 +2,7 @@
 // top. A busy year keeps only its significant events and folds the rest into "and 3 smaller events" (click to open).
 import { button, h, setText } from './dom';
 import { SPECIES_COUNT } from '../sim/types';
-import { seasonName, seasonOfTick } from './describe';
+import { seasonNameAt } from './describe';
 import { icon } from './icons';
 
 export interface ChronicleEntry {
@@ -284,7 +284,7 @@ export class Chronicle {
         h('span', { class: 'tg-sr', text: `Year ${it.year}: ` }),
         it.sentence,
         // the season each entry happened in, so the order down the list can be read at a glance
-        h('span', { class: 'tg-ent-when', text: ` ${seasonName(seasonOfTick(it.tick))}` }),
+        h('span', { class: 'tg-ent-when', text: ` ${seasonNameAt(it.tick)}` }),
       ),
     ];
     const cls = `tg-ent${flyable ? ' is-flyable' : ''}${it.major ? ' is-major' : ''}${this.fresh.has(it) ? ' is-new' : ''}${first ? ' is-first' : ''}${last ? ' is-last' : ''}`;

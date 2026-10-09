@@ -61,6 +61,10 @@ export interface HistoryRow {
   grass: number;
   /** Mean heritable traits, see TRAIT_SERIES for the order (NaN when the species is absent). */
   traits?: number[];
+  /** Climate regime index at this row (-1 driest .. 1 wettest; 0 with climate2 off), for the graph's wet and dry band. */
+  climate?: number;
+  /** 1 while a megadrought holds at this row (absent otherwise). */
+  mega?: number;
 }
 
 /** Trait series recorded in history rows: [species, gene index, label]. */
@@ -116,6 +120,8 @@ export type FromWorker =
       lodges?: Float32Array;
       drownedTrees?: Uint32Array;
       pondVersion?: number;
+      /** True while a climate-regime megadrought holds (always false with climate2 off); the header word and the dry-years look read it. */
+      mega?: boolean;
       /** Trait heatmap, TRAIT_GRID^2 RGBA bytes: R speed relative to the species mean (128 = average), G animal density. Sent with veg. */
       traitGrid?: Uint8Array;
       pop: number[];
@@ -255,7 +261,9 @@ function record(): void {
       }
     }
     const traits = Array.from(sums, (s, k) => (counts[k] ? s / counts[k] : NaN));
-    history.push({ tick: sim.tick, pop, grass: sim.veg.meanGrass(), traits });
+    const row: HistoryRow = { tick: sim.tick, pop, grass: sim.veg.meanGrass(), traits, climate: sim.env.climateNow };
+    if (sim.env.regime !== null && sim.env.regime.inMegadrought(sim.tick)) row.mega = 1;
+    history.push(row);
   }
 }
 
@@ -272,7 +280,7 @@ function post(forceVeg: boolean): void {
   const sel = selectedId !== null ? detail(selectedId) : null;
   const msg: FromWorker = {
     type: 'snap', tick: s.tick, env: s.env, count: s.count, ids: s.ids, agents: s.agents, carcassCount: s.carcassCount,
-    carcasses: s.carcasses, veg: s.veg, small: s.small, snow: s.snow, storms: s.storms, strikes: s.strikes, flood: s.flood, dust: s.dust, hoppers: s.hoppers, groves: s.groves, trees: s.trees, treesVersion: s.treesVersion, treeCover: s.treeCover, ponds: s.ponds, dams: s.dams, lodges: s.lodges, drownedTrees: s.drownedTrees, pondVersion: s.pondVersion, traitGrid: withVeg ? traitGrid() : undefined, pop: Array.from(s.pop), events, history, selected: sel,
+    carcasses: s.carcasses, veg: s.veg, small: s.small, snow: s.snow, storms: s.storms, strikes: s.strikes, flood: s.flood, dust: s.dust, hoppers: s.hoppers, groves: s.groves, trees: s.trees, treesVersion: s.treesVersion, treeCover: s.treeCover, ponds: s.ponds, dams: s.dams, lodges: s.lodges, drownedTrees: s.drownedTrees, pondVersion: s.pondVersion, traitGrid: withVeg ? traitGrid() : undefined, mega: sim.env.regime !== null && sim.env.regime.inMegadrought(sim.tick), pop: Array.from(s.pop), events, history, selected: sel,
     selectedGone: selectedId !== null && sel === null, story: sim.story.slice(), storyId: sim.trackedId, ...packInfo(), speed: skipping ? -1 : speed, ticksPerSec, stepMs: stepMsAvg,
   };
   history = [];

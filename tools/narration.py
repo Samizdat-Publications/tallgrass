@@ -50,6 +50,12 @@ LINES = {
     "mesoRelease_1": "With the wolves so few, the coyotes have taken their place. The valley has a new hunter.",
     "lightningFire_1": "Lightning strikes the dry grass, and the prairie catches fire.",
     "storm_1": "A thunderstorm crosses the valley. The air goes still, and then the sky breaks open.",
+    # v10: the climate regimes (wet and dry runs of decades)
+    "climateWet_1": "The rains have come back. For the next few years the grass will stand tall, and the herds will grow into it.",
+    "climateWet_2": "A run of wet years. The valley is as green as it has been in a generation.",
+    "climateDry_1": "The wet years are over. Summer after summer the grass will cure early, and the herds will thin.",
+    "megadrought_1": "This is no ordinary dry spell. The drought will hold for years, and the valley will not look the same when it ends.",
+    "climateMild_1": "The weather settles back into ordinary years, and the valley begins to find its balance again.",
 }
 
 # What is actually sent to the voice when it differs from the caption text (pauses as ElevenLabs break tags).

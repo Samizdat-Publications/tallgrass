@@ -49,6 +49,8 @@ export interface UIFrame {
   tick: number;
   env: EnvState;
   pop: number[];
+  /** The species ids this valley can show (registry order), so the population panel keeps a fixed card for each from the first frame. Omitted: cards appear as species do. */
+  slots?: number[];
   /** New history rows since the last frame. */
   history: HistoryRow[];
   /** New events since the last frame. */

@@ -43,8 +43,12 @@ const stormSchedule = (): { tick: number; iv: Intervention }[] => {
   return out;
 };
 
-/** Checkpoint v10 candidate (2026-10-09): climate regimes, bounded evolution, fewer and bigger wolf packs. */
-export const LONG_BREATH: Record<string, number> = { evolution2: 1, climate2: 0.3, wolfDenMinDist: 280, wolfTerritory: 130 };
+/** The next checkpoint candidate, v10b (2026-10-09): climate regimes, bounded evolution, fewer and bigger wolf packs, pronghorn
+ *  that bear at most twins, a dearer sprint for wolves, and ravens and coyotes that start near their long-run numbers. */
+export const LONG_BREATH: Record<string, number> = {
+  evolution2: 1, climate2: 0.3, wolfDenMinDist: 280, wolfTerritory: 130,
+  'deer.maxLitter': 2, 'wolf.sprintCost': 0.3, 'raven.initial': 250, 'coyote.initial': 30,
+};
 
 export const SCENARIOS: Scenario[] = [
   {

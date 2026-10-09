@@ -36,6 +36,18 @@ export const PACK_KEYS: Keys = [
   [0, 0], [3.1, 0], [3.35, 0.3], [3.5, 0.36], [3.7, 0.3], [3.9, 0.06], [4.0, 0],
 ];
 
+/**
+ * Time-lapse damping of the seasonal look (r-lapse). At true fast-forward the valley's year laps every second or so and the seasonal
+ * swing (green, cured gold, winter dun, snow) drowns the decades-long wet and dry breath. While the lapse is on, every seasonal output is
+ * blended toward the look of LAPSE_SEASON (a steady early-summer growing season), keeping LAPSE_SWING of the swing around it. The climate
+ * (wet and dry) looks are separate and stay at full strength.
+ */
+export const LAPSE_SEASON = 1.2;
+/** The share of the seasonal colour swing kept while the lapse is fully on. */
+export const LAPSE_SWING = 1 / 3;
+/** The share of the snowpack kept while the lapse is fully on (a light dusting in deep winter). */
+export const LAPSE_SNOW = 0.2;
+
 /** Hermite smoothstep on a unit-clamped input. */
 export function smooth01(t: number): number {
   t = Math.max(0, Math.min(1, t));
@@ -92,6 +104,12 @@ export const ASPECT = { sun: [1.14, 1.08, 0.82], shade: [0.86, 0.76, 0.5], base:
 export const DROUGHT = { dry: 0.92, rip: 0.5, ripKeep: 0.6, straw: [1.28, 1.0, 0.52], lift: 1.1, amount: 0.62, dust: [0.5, 0.4, 0.26], soil: 0.7 } as const;
 
 /**
+ * Wet years (climate regimes): the share of the dryness of the growing season that a fully wet run takes away (upland ridges and thin
+ * spots stay green longer). It fades to nothing as the prairie cures, so the cured gold still arrives on time.
+ */
+export const WET = { dry: 0.5 } as const;
+
+/**
  * Snow settling, shared by the blade layer (and free for the ground shader to call): the same threshold and edge ramp terrain.ts uses
  * for its snow cover, so grass and ground agree on where the pack is and where it ends. Each caller supplies its own "potential" (how
  * readily snow settles at a point: flat ground, hollows, north slopes and broad drifts high; ridges, steep faces, trails and rock low)
@@ -128,6 +146,7 @@ function glf(x: number): string {
  *   tgCuredFloor(dry, cure, rip)          late-summer pull of non-riparian ground toward fully dry
  *   tgDroughtRip(rip, drought)            the belt shrinks in a drought
  *   tgDroughtDry(dry, drought, rip)       drought forces dry grass (less so inside the belt)
+ *   tgWetDry(dry, wet, cure)              wet years: green lasts longer through the growing season (wet 0..1, off as the cure arrives)
  *   tgDroughtTint(color, drought, rip)    bleach to pale straw at constant luminance
  *   tgDroughtSoil(soil, drought)          dusty tan ground
  *   tgAspectBand(nrm, L)                 pale gold on sun-facing slopes, deeper ochre on shaded ones (vertex stage: rgb multiplier, a strength)
@@ -152,6 +171,9 @@ float tgDroughtRip(float rip, float drought) {
 }
 float tgDroughtDry(float dry, float drought, float rip) {
   return max(dry, drought * ${glf(DROUGHT.dry)} * (1.0 - ${glf(DROUGHT.ripKeep)} * rip));
+}
+float tgWetDry(float dry, float wet, float cure) {
+  return dry * (1.0 - ${glf(WET.dry)} * wet * (1.0 - cure));
 }
 vec3 tgDroughtTint(vec3 c, float drought, float rip) {
   float lum = dot(c, vec3(0.2126, 0.7152, 0.0722));

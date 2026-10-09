@@ -2,10 +2,11 @@
 import { SPECIES_COUNT, SPECIES_KEYS, SPECIES_NAMES, YEAR_TICKS } from '../sim/types';
 import type { HistoryRow } from '../sim/worker';
 import { button, h, setText, unitPx } from './dom';
-import { fmtInt, seasonPhrase, seasonOfTick, yearOfTick } from './describe';
+import { fmtInt, seasonOfTick, seasonPhraseAt, yearOfTick } from './describe';
+import { awayRows, awayState, awayText, holdAway, isMigrant, type AwayState } from './away';
 import { icon } from './icons';
 import { PAPER_DIM, SANS, SPECIES_COLORS } from './palette';
-import { hexA } from './chartutil';
+import { fillSolidRuns, hexA, strokeWithGaps } from './chartutil';
 import { drawRows, rowsPlot } from './rows';
 import { HERO, drawEvolution, evoTipRows, fmtPct, latest, type EvoData } from './evo';
 import { TRAIT_COUNT } from './traits';
@@ -23,6 +24,8 @@ interface Cell {
   count: HTMLElement;
   canvas: HTMLCanvasElement;
   lastText: string;
+  /** Set while a visiting species is out of the valley for its season: the card reads "away for the summer" instead of a zero. */
+  away: AwayState;
   /** The count as shown: eases toward the real count while the sim runs fast. */
   shown: number;
   /** The sparkline's vertical range, eased between redraws while the sim runs fast. */
@@ -62,7 +65,18 @@ export class PopGraph {
   private pops: number[][] = Array.from({ length: SPECIES_COUNT }, () => []);
   private grass: number[] = [];
   private grassMax = 1;
+  /** Climate regime index per history row, 1 where a megadrought holds, and whether any row was non-zero (the graph shows its band only then). */
+  private climate: number[] = [];
+  private mega: number[] = [];
+  private climateAny = false;
+  /** Which kinds of year the band has shown so far, for its key in the expanded header. */
+  private keySeen = { wet: false, dry: false, mega: false };
+  /** Which species have a card (the founders, this valley's slots, and anything that has been alive). Cards keep registry order for good. */
   private seen: boolean[] = Array.from({ length: SPECIES_COUNT }, (_, i) => alwaysShown(i));
+  /** Which species have ever had a nonzero count here (a visitor not yet arrived reads "arriving", one that has left reads "away"). */
+  private alive: boolean[] = Array.from({ length: SPECIES_COUNT }, () => false);
+  /** The species this valley can show (UIFrame.slots), each given its card from the first frame. */
+  private slots: number[] = [];
   private markers: Marker[] = [];
   /** Mean heritable traits per history row, one array per trait (see traits.ts). NaN when absent. */
   private traitSeries: number[][] = Array.from({ length: TRAIT_COUNT }, () => []);
@@ -92,6 +106,7 @@ export class PopGraph {
   private logBtn: HTMLButtonElement;
   private expandBtn: HTMLButtonElement;
   private sub: HTMLElement;
+  private climKey: HTMLElement;
   private tabBtns: Record<'pop' | 'evo', HTMLButtonElement>;
   private evoLegend: HTMLElement;
   private evoLegendText: HTMLElement[] = [];
@@ -100,6 +115,7 @@ export class PopGraph {
   constructor() {
     this.cellsEl = h('div', { class: 'tg-cells' });
     this.sub = h('span', { class: 'tg-pop-sub', text: 'since the start' });
+    this.climKey = h('span', { class: 'tg-pop-clim', hidden: '', 'aria-label': 'Key to the shaded bands behind the graph: the wet and dry years' });
     this.chipsEl = h('div', { class: 'tg-pop-chips', role: 'group', 'aria-label': 'Species shown on the graph, by name and colour' });
     this.logBtn = button({
       class: 'tg-btn tg-pop-log',
@@ -148,6 +164,7 @@ export class PopGraph {
       h('span', { class: 'tg-pop-title', text: 'Population' }),
       tabs,
       this.sub,
+      this.climKey,
       this.evoLegend,
       h('span', { class: 'tg-grow' }),
       this.logBtn,
@@ -183,11 +200,25 @@ export class PopGraph {
     this.pops.forEach((p) => (p.length = 0));
     this.grass = [];
     this.grassMax = 1;
+    this.climate = [];
+    this.mega = [];
+    this.climateAny = false;
+    this.keySeen = { wet: false, dry: false, mega: false };
+    this.setClimKey();
     this.markers = [];
     this.traitSeries.forEach((t) => (t.length = 0));
-    this.seen = this.seen.map((_, i) => alwaysShown(i));
+    this.alive = this.alive.map(() => false);
+    this.seen = this.seen.map((_, i) => alwaysShown(i) || this.slots.includes(i));
     this.rebuildCells();
     this.dirty = true;
+  }
+
+  /** Give every species this valley can show its card now, in registry order, so no card moves when a species turns up later. */
+  setSlots(slots: number[]): void {
+    if (slots.length === this.slots.length && slots.every((s, i) => s === this.slots[i])) return;
+    this.slots = slots.slice();
+    for (const s of slots) if (s >= 0 && s < SPECIES_COUNT) this.seen[s] = true;
+    this.rebuildCells();
   }
 
   addHistory(rows: HistoryRow[]): void {
@@ -200,17 +231,42 @@ export class PopGraph {
       for (let s = 0; s < SPECIES_COUNT; s++) {
         const v = r.pop[s] ?? 0;
         this.pops[s].push(v);
-        if (v > 0 && !this.seen[s]) {
-          this.seen[s] = true;
-          seenChanged = true;
+        if (v > 0) {
+          this.alive[s] = true;
+          if (!this.seen[s]) {
+            this.seen[s] = true;
+            seenChanged = true;
+          }
         }
       }
       this.grass.push(r.grass);
+      const cl = r.climate ?? 0;
+      this.climate.push(cl);
+      this.mega.push(r.mega ?? 0);
+      if (cl !== 0) this.climateAny = true;
+      if (r.mega) this.keySeen.mega = true;
+      else if (cl > 0.3) this.keySeen.wet = true;
+      else if (cl < -0.3) this.keySeen.dry = true;
       if (r.grass > this.grassMax) this.grassMax = r.grass;
       for (let k = 0; k < TRAIT_COUNT; k++) this.traitSeries[k].push(r.traits?.[k] ?? NaN);
     }
     if (seenChanged) this.rebuildCells();
+    this.setClimKey();
     this.dirty = true;
+  }
+
+  /** The key to the climate band (expanded graph, header): only the kinds of year it has shown. */
+  private setClimKey(): void {
+    const k = this.keySeen;
+    const sig = `${+k.wet}${+k.dry}${+k.mega}`;
+    if (this.climKey.dataset.sig === sig) return;
+    this.climKey.dataset.sig = sig;
+    this.climKey.hidden = !(k.wet || k.dry || k.mega);
+    this.climKey.replaceChildren(
+      ...([[k.wet, 'wet', 'wet years'], [k.dry, 'dry', 'dry years'], [k.mega, 'mega', 'megadrought']] as const)
+        .filter(([on]) => on)
+        .map(([, cls, label]) => h('span', { class: `tg-clim-k is-${cls}` }, h('i', { class: 'tg-clim-sw' }), label)),
+    );
   }
 
   addMarkers(ms: Marker[]): void {
@@ -307,7 +363,7 @@ export class PopGraph {
         h('div', { class: 'tg-cell-top' }, h('span', { class: 'tg-cell-name' }, h('i', { class: 'tg-dot' }), SPECIES_NAMES[sp]), count),
         canvas,
       );
-      const cell: Cell = { sp, el, count, canvas, lastText: '', shown: this.pops[sp][this.pops[sp].length - 1] ?? 0, yMin: 0, yMax: 0, hover: false, tip: '' };
+      const cell: Cell = { sp, el, count, canvas, lastText: '', away: null, shown: this.pops[sp][this.pops[sp].length - 1] ?? 0, yMin: 0, yMax: 0, hover: false, tip: '' };
       el.addEventListener('pointerenter', () => { cell.hover = true; this.dirty = true; this.lastDraw = 0; });
       el.addEventListener('pointerleave', () => { cell.hover = false; this.dirty = true; this.lastDraw = 0; });
       this.cells.push(cell);
@@ -361,6 +417,7 @@ export class PopGraph {
     const cfg = PACE[pace];
     if (cfg.num === 0 || now - this.numAt >= cfg.num) {
       this.numAt = now;
+      const season = this.ticks.length ? seasonOfTick(this.ticks[this.ticks.length - 1]) : NaN;
       for (const c of this.cells) {
         const target = pop[c.sp] ?? 0;
         if (cfg.ease >= 1) c.shown = target;
@@ -369,11 +426,16 @@ export class PopGraph {
           c.shown = Math.abs(d) < 0.6 ? target : c.shown + d * cfg.ease;
         }
         const v = Math.round(c.shown);
-        const t = fmtInt(v);
+        // a visitor at zero in its away season is not gone: the card says where it is
+        const away = Number.isFinite(season) ? awayState(c.sp, season, v, this.alive[c.sp]) : null;
+        const t = away ? awayText(c.sp, away) : fmtInt(v);
         if (t !== c.lastText) {
           c.lastText = t;
+          c.away = away;
           c.count.textContent = t;
-          c.el.classList.toggle('is-gone', v === 0);
+          c.el.classList.toggle('is-gone', v === 0 && !away);
+          c.el.classList.toggle('is-away', !!away);
+          if (!this.expanded) this.dirty = true;
         }
       }
     }
@@ -438,16 +500,25 @@ export class PopGraph {
     const i0 = this.lowerBound(t1 - SPARK_YEARS * YEAR_TICKS);
     const ts = this.ticks[i0];
     if (t1 <= ts) return;
-    const series = this.pops[cell.sp];
+    // a visitor's away stretch (zero in its off season) is held at the last level it had, so the line is a quiet dashed gap and the scale
+    // is set by the months it was here, not by a drop to nothing
+    const raw = this.pops[cell.sp];
+    const away = isMigrant(cell.sp) ? awayRows(cell.sp, raw, (i) => seasonOfTick(this.ticks[i]), i0, n) : null;
+    const series = away ? holdAway(raw, away, i0) : raw;
+    const at = (i: number): number => (away ? series[i - i0] : series[i]);
+    const awayAt = (i: number): boolean => (away ? away[i - i0] : false);
     const calm = this.pace !== 'live';
-    let lo = Infinity, hi = -Infinity, sum = 0;
+    let lo = Infinity, hi = -Infinity, sum = 0, cnt = 0;
     for (let i = i0; i < n; i++) {
-      const v = series[i];
+      if (awayAt(i)) continue;
+      const v = at(i);
       if (v > hi) hi = v;
       if (v < lo) lo = v;
       sum += v;
+      cnt++;
     }
-    const mean = sum / (n - i0);
+    if (!cnt) { lo = 0; hi = 0; }
+    const mean = cnt ? sum / cnt : 0;
     // A scale that cannot exaggerate: the range is at least +/-25% of the window's mean (and a few animals wide), centred on the
     // data, and never reaches below zero. A wolf count of 18 to 17 is a flat line; a real crash still fills the height.
     const half = Math.max((hi - lo) / 2, mean * SPARK_MIN_HALF, 1.5);
@@ -471,7 +542,8 @@ export class PopGraph {
 
     // the visible window's low and high, for the hover tip and the tiny labels
     const winText = toYears(t1 - this.ticks[0]) >= SPARK_YEARS ? `last ${SPARK_YEARS} years` : 'since the start';
-    const tip = `${SPECIES_NAMES[cell.sp]}, ${winText}: low ${fmtInt(lo)}, high ${fmtInt(hi)}`;
+    const here = cell.away ? `${SPECIES_NAMES[cell.sp]}, ${awayText(cell.sp, cell.away)}` : SPECIES_NAMES[cell.sp];
+    const tip = cnt ? `${here}, ${winText}: low ${fmtInt(lo)}, high ${fmtInt(hi)}` : `${here}`;
     if (tip !== cell.tip) {
       cell.tip = tip;
       cell.el.title = tip;
@@ -496,45 +568,40 @@ export class PopGraph {
     // the points: at 1x every few rows; when fast, the mean of fixed bins of rows. The bins are aligned to the row index, not to
     // the window, so as the window slides the points stay put and the line scrolls smoothly instead of shimmering.
     const bin = PACE[this.pace].bin;
-    const xs: number[] = [], ys: number[] = [];
+    const xs: number[] = [], ys: number[] = [], aw: boolean[] = [];
     if (bin <= 1) {
       const step = Math.max(1, Math.floor((n - i0) / (pw * 1.5)));
-      for (let i = i0; i < n; i += step) { xs.push(X(this.ticks[i])); ys.push(Y(series[i])); }
+      for (let i = i0; i < n; i += step) { xs.push(X(this.ticks[i])); ys.push(Y(at(i))); aw.push(awayAt(i)); }
     } else {
       for (let k = Math.ceil(i0 / bin) * bin; k + bin <= n; k += bin) {
-        let sv = 0, st = 0;
-        for (let i = k; i < k + bin; i++) { sv += series[i]; st += this.ticks[i]; }
-        xs.push(X(st / bin)); ys.push(Y(sv / bin));
+        let sv = 0, st = 0, gone = true;
+        for (let i = k; i < k + bin; i++) { sv += at(i); st += this.ticks[i]; if (!awayAt(i)) gone = false; }
+        xs.push(X(st / bin)); ys.push(Y(sv / bin)); aw.push(gone);
       }
-      if (!xs.length) { xs.push(X(ts)); ys.push(Y(series[i0])); }
+      if (!xs.length) { xs.push(X(ts)); ys.push(Y(at(i0))); aw.push(awayAt(i0)); }
     }
-    const xe = X(this.ticks[n - 1]), ye = Y(series[n - 1]);
-    xs.push(xe); ys.push(ye);
-    g.beginPath();
-    for (let i = 0; i < xs.length; i++) {
-      if (i === 0) g.moveTo(xs[i], ys[i]);
-      else g.lineTo(xs[i], ys[i]);
-    }
+    const xe = X(this.ticks[n - 1]), ye = Y(at(n - 1));
+    xs.push(xe); ys.push(ye); aw.push(awayAt(n - 1));
     const lastX = xe, lastY = ye;
     g.lineJoin = 'round';
     g.lineCap = 'round';
-    g.lineWidth = 1.6 * this.unit;
-    g.strokeStyle = color;
-    g.stroke();
-    // soft area under the line
-    g.lineTo(lastX, padT + ph);
-    g.lineTo(xs[0], padT + ph);
-    g.closePath();
+    // soft area under the line (none under an away stretch), then the line itself: solid, with a faint dashed gap where a visitor is away
     const grad = g.createLinearGradient(0, padT, 0, padT + ph);
     grad.addColorStop(0, hexA(color, 0.2));
     grad.addColorStop(1, hexA(color, 0));
-    g.fillStyle = grad;
-    g.fill();
-    // the present moment
+    fillSolidRuns(g, xs, ys, aw, padT + ph, grad);
+    strokeWithGaps(g, xs, ys, aw, color, 1.6 * this.unit, [2.5 * this.unit, 3 * this.unit], 0.5);
+    // the present moment (a ring, not a dot, while the visitor is away)
     g.beginPath();
     g.arc(lastX, lastY, 2.4 * this.unit, 0, Math.PI * 2);
-    g.fillStyle = color;
-    g.fill();
+    if (aw[aw.length - 1]) {
+      g.lineWidth = 1.1 * this.unit;
+      g.strokeStyle = hexA(color, 0.55);
+      g.stroke();
+    } else {
+      g.fillStyle = color;
+      g.fill();
+    }
     // tiny labels for the window's high and low while the pointer is over the sparkline
     if (cell.hover) {
       g.font = `600 ${9 * this.unit}px ${SANS}`;
@@ -569,7 +636,7 @@ export class PopGraph {
     });
     if (idx >= 0) {
       const t = this.ticks[idx];
-      const rows: HTMLElement[] = [h('div', { class: 'tg-tip-h', text: `Year ${yearOfTick(t)}, ${seasonPhrase(seasonOfTick(t))}` })];
+      const rows: HTMLElement[] = [h('div', { class: 'tg-tip-h', text: `Year ${yearOfTick(t)}, ${seasonPhraseAt(t)}` })];
       for (const r of evoTipRows(d, idx)) {
         rows.push(h('div', { class: 'tg-tip-r', style: `--c:${r.color}` }, h('i', { class: 'tg-dot' }), h('span', { text: r.label }), h('b', { text: r.value })));
       }
@@ -635,7 +702,7 @@ export class PopGraph {
       const lx = c === hc ? localX : frac >= 0 ? P.l + frac * (P.r - P.l) : -1;
       const got = drawRows(
         g, cw, ht, u,
-        { ticks: this.ticks, pops: this.pops, species: group, grass: this.grass, grassMax: this.grassMax, markers: this.markers, log: this.log, grassRow: twoCols ? c === 1 : true },
+        { ticks: this.ticks, pops: this.pops, species: group, grass: this.grass, grassMax: this.grassMax, markers: this.markers, log: this.log, grassRow: twoCols ? c === 1 : true, climate: this.climateAny ? this.climate : undefined, mega: this.climateAny ? this.mega : undefined },
         lx,
         c === hc ? hit : -1,
       );
@@ -652,18 +719,28 @@ export class PopGraph {
 
   private showTip(idx: number, x: number, w: number, event: Marker | null = null): void {
     const t = this.ticks[idx];
-    const rows: HTMLElement[] = [h('div', { class: 'tg-tip-h', text: `Year ${yearOfTick(t)}, ${seasonPhrase(seasonOfTick(t))}` })];
+    const rows: HTMLElement[] = [h('div', { class: 'tg-tip-h', text: `Year ${yearOfTick(t)}, ${seasonPhraseAt(t)}` })];
     for (const sp of this.visible) {
       if (!this.on[sp]) continue;
+      // a visitor at zero in its off season is away, not extinct: the tip says so
+      const v = this.pops[sp][idx];
+      const gone = v === 0 && awayState(sp, seasonOfTick(t), 0, true) !== null;
       rows.push(
-        h('div', { class: 'tg-tip-r', style: `--c:var(--sp-${sp})` }, h('i', { class: 'tg-dot' }), h('span', { text: SPECIES_NAMES[sp] }), h('b', { text: fmtInt(this.pops[sp][idx]) })),
+        h('div', { class: 'tg-tip-r', style: `--c:var(--sp-${sp})` }, h('i', { class: 'tg-dot' }), h('span', { text: SPECIES_NAMES[sp] }), gone ? h('b', { class: 'is-away', text: 'away' }) : h('b', { text: fmtInt(v) })),
       );
     }
     rows.push(h('div', { class: 'tg-tip-r is-grass' }, h('i', { class: 'tg-dot' }), h('span', { text: 'Grass' }), h('b', { text: `${Math.round((this.grass[idx] / (this.grassMax > 1.0001 ? this.grassMax : 1)) * 100)}%` })));
+    // the wet and dry decades, when the row sits in one
+    if (this.climateAny) {
+      const cl = this.climate[idx] ?? 0;
+      const mega = !!this.mega[idx];
+      const cw = mega ? 'Megadrought' : cl > 0.45 ? 'Wet years' : cl < -0.45 ? 'Dry years' : cl > 0.2 ? 'Wetter than usual' : cl < -0.2 ? 'Drier than usual' : '';
+      if (cw) rows.push(h('div', { class: 'tg-tip-r', style: `--c:${mega ? '#B2502A' : cl > 0 ? '#7CB054' : '#D6A85C'}` }, h('i', { class: 'tg-dot' }), h('span', { text: 'Climate' }), h('b', { text: cw })));
+    }
     // an event the pointer is on: its sentence, in the chronicle's own words, with the year it happened
     if (event) {
       rows.length = 0;
-      rows.push(h('div', { class: 'tg-tip-h', text: `Year ${yearOfTick(event.tick)}, ${seasonPhrase(seasonOfTick(event.tick))}` }), h('div', { class: 'tg-tip-ev is-solo', text: event.sentence }));
+      rows.push(h('div', { class: 'tg-tip-h', text: `Year ${yearOfTick(event.tick)}, ${seasonPhraseAt(event.tick)}` }), h('div', { class: 'tg-tip-ev is-solo', text: event.sentence }));
     }
     // a long list (many species) runs in two columns under the date, so it fits the low dock
     const cols = !event && rows.length > 8;

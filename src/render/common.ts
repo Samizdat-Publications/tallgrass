@@ -49,6 +49,8 @@ export interface SharedUniforms {
   leafColorB: U<THREE.Color>;
   frost: U<number>;
   snow: U<number>;
+  /** 1 normally; falls toward LAPSE_SWING while the time-lapse damping is on (r-lapse). Scales the shaders' winter and autumn amounts. */
+  seasonKeep: U<number>;
   /** S11 snow depth field: a 32 x 32 single-channel texture (world square, linear filtered), 1 while the sim sends it (snowDepth param on), else 0. */
   snowDepthTex: U<THREE.Texture | null>;
   snowDepthOn: U<number>;
@@ -65,6 +67,8 @@ export interface SharedUniforms {
   cure: U<number>;
   /** 0..1 drought severity, the engine's eased weather === 2 value (the same one that feeds the aerial haze's dust). Ground and blade shaders bleach to straw with it. */
   drought: U<number>;
+  /** 0..1 how wet the run of years is (climate regimes, eased by the engine; 0 in ordinary years and with the param off). Ground and blades stay green longer. */
+  wetYears: U<number>;
   /** Canopy occlusion fade: camera position, the focus point being watched, and (inner radius, outer radius, strength). */
   occCam: U<THREE.Vector3>;
   occFocus: U<THREE.Vector3>;
@@ -113,13 +117,14 @@ export function createSharedUniforms(worldSize: number): SharedUniforms {
     leafColorA: c(), leafColorB: c(),
     frost: { value: 0 },
     snow: { value: 0 },
+    seasonKeep: { value: 1 },
     snowDepthTex: { value: null },
     snowDepthOn: { value: 0 },
     snowDepthFall: { value: 0 },
     wet: { value: 0 },
     rain: { value: 0 },
     fearOverlay: { value: 0 },
-    grassGreen: c(), grassDry: c(), cure: { value: 0 }, drought: { value: 0 },
+    grassGreen: c(), grassDry: c(), cure: { value: 0 }, drought: { value: 0 }, wetYears: { value: 0 },
     occCam: { value: new THREE.Vector3() },
     occFocus: { value: new THREE.Vector3() },
     occParams: { value: new THREE.Vector3(2, 6, 0) },

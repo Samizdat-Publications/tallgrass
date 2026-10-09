@@ -798,7 +798,9 @@ export class Terrain {
       u.uGrassDry = sh.grassDry;
       u.uCure = sh.cure;
       u.uDrought = sh.drought;
+      u.uWetYr = sh.wetYears;
       u.uSeason = sh.season;
+      u.uSeasonKeep = sh.seasonKeep;
       u.uFrost = sh.frost;
       u.uSnow = sh.snow;
       u.uSnowTex = sh.snowDepthTex;
@@ -937,7 +939,9 @@ uniform vec3 uGrassGreen;
 uniform vec3 uGrassDry;
 uniform float uCure;
 uniform float uDrought;
+uniform float uWetYr;
 uniform float uSeason;
+uniform float uSeasonKeep;
 uniform vec3 uStubble;
 uniform vec3 uSoil;
 uniform vec3 uRock;
@@ -1052,8 +1056,8 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
   float wdR = mix(90.0, st.a * 64.0, 1.0 - smoothstep(-95.0, 6.0, sd));
 
   float slopeG = sqrt(max(1.0 - nrm.y * nrm.y, 0.0)) / max(nrm.y, 0.05);
-  float winterK = tgWinterK(uSeason);
-  float autumnK = smoothstep(1.8, 2.2, uSeason) * (1.0 - smoothstep(2.6, 3.0, uSeason));
+  float winterK = tgWinterK(uSeason) * uSeasonKeep;
+  float autumnK = smoothstep(1.8, 2.2, uSeason) * (1.0 - smoothstep(2.6, 3.0, uSeason)) * uSeasonKeep;
   float curv = vTgCurv;
   float ridgeK = smoothstep(0.04, 0.7, curv);
   float hollowK = smoothstep(0.04, 0.7, -curv);
@@ -1122,6 +1126,7 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
   }
   float dry = clamp(uCure + (0.55 - moist) * 1.1 + stubA * 0.55 + 0.3 * up + ((nB - 0.5) * 0.24 + (nM2 - 0.5) * 0.26 - 0.2 * (nM1 - 0.5)) * mot - mix(0.5, 0.3, edgeW) * draw * (0.4 + 0.6 * (1.0 - uCure)), 0.0, 1.0);
   dry = tgCuredFloor(dry, uCure, riparian);     // late summer: the uplands cure to gold, green is left to the belt and the swales
+  dry = tgWetDry(dry, uWetYr, uCure);            // wet years: the growing season stays greener
   dry = tgDroughtDry(dry, uDrought, riparian);  // drought: dry grass everywhere but a thinned belt
   dry = tgRiparianDry(dry, uCure, stubA, riparian);
   vec3 grassCol = mix(uGrassGreen, uGrassDry, dry) * vec3(1.0 + 0.08 * up * dry, 1.0 - 0.07 * up * dry, 1.0 - 0.16 * up * dry);

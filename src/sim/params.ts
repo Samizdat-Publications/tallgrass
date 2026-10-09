@@ -104,6 +104,25 @@ export interface Params {
   /** If > 0, personal space while grazing: a grazing herbivore keeps this multiple of the usual separation (spacing and range) from herd-mates,
    *  and its cohesion pull is divided by the same factor, so the herd spreads out over the patch (1.6 is the screened value). 0 = off (1 would match the old spacing). */
   herdSpacingGraze: number;
+  /** If > 0, bison live in bands (herd bands): cohesion and alignment use only band-mates, and other bands within bandGap push away softly,
+   *  so the herd is a scatter of countable groups with grass between them. 0 = off (one fused herd, hash unchanged). */
+  herdBands: number;
+  /** Founding band size (bison per band). */
+  bandSize: number;
+  /** Bison of another band closer than this (m) push away. */
+  bandGap: number;
+  /** Ticks between split and merge checks. */
+  bandCheck: number;
+  /** A band larger than this splits in two. */
+  bandMax: number;
+  /** A band smaller than this merges into the nearest band. */
+  bandMin: number;
+  /** Strength of the push away from other bands (and of the pull home for a bison with no band-mate in reach). */
+  bandPush: number;
+  /** Distance (m) from its band's centre beyond which a bison is drawn back toward it (10 m, or less, when no band-mate is in reach). */
+  bandReach: number;
+  /** Strength of that pull back, as a multiple of bandPush. */
+  bandPull: number;
   /** Amplitude of the slow climate cycle on grass growth (0 = off; 0.3 = +/-30%). */
   climateAmp: number;
   /** Climate regimes (v10, climate.ts; 0 = off): a seeded wet and dry index of the decades (-1..1) moves the grass the land can carry and how fast it
@@ -593,6 +612,15 @@ export function defaultParams(): Params {
     herdNearest: 0,
     drinkSpots: 0,
     herdSpacingGraze: 1.6, // v7c (was 0)
+    herdBands: 0,
+    bandSize: 30,
+    bandGap: 22,
+    bandCheck: 300,
+    bandMax: 60,
+    bandMin: 6,
+    bandPush: 0.6,
+    bandReach: 15,
+    bandPull: 0.9,
     climateAmp: 0,
     climate2: 0.3, // v10 (was 0)
     climatePeriod: 40,

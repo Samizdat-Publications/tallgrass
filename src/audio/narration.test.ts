@@ -40,7 +40,7 @@ ok(lineVariants(ev('outbreak'))?.length === 2 && lineVariants(ev('packLost'))?.l
 for (const k of ['drought', 'outbreak', 'stampede', 'packFounded', 'packLost', 'fire', 'firstKill'] as SimEventKind[]) {
   for (const v of lineVariants(ev(k, { a: 4800 + 3 * 100, tick: 9000 })) ?? []) ok(!!NARRATION_TEXT[v], `text for ${v}`);
 }
-ok(NARRATION_IDS.length === 32 && NARRATION_IDS.every((i) => NARRATION_TEXT[i].length > 10), '32 lines, each with text');
+ok(NARRATION_IDS.length === 37 && NARRATION_IDS.every((i) => NARRATION_TEXT[i].length > 10), '37 lines, each with text');
 ok(NARRATION_IDS.every((i) => !/[—–]/.test(NARRATION_TEXT[i])), 'no dashes in the spoken text');
 
 // ---- R3 lines: the events Track S emits

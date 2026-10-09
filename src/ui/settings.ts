@@ -22,6 +22,8 @@ export interface Settings {
   idleDim: boolean;
   /** Interface scale, 1 = normal. */
   uiScale: number;
+  /** At 10x and 100x, moving animals leave soft fading trails on the land (render/trails.ts). */
+  longExposure: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -33,6 +35,7 @@ export const DEFAULT_SETTINGS: Settings = {
   autoCamera: true,
   idleDim: true,
   uiScale: 1,
+  longExposure: true,
 };
 
 export const UI_SCALE_MIN = 0.8;
@@ -59,6 +62,7 @@ export function normalizeSettings(raw: unknown): Settings {
     autoCamera: bool('autoCamera'),
     idleDim: bool('idleDim'),
     uiScale: num('uiScale', UI_SCALE_MIN, UI_SCALE_MAX),
+    longExposure: bool('longExposure'),
   };
 }
 
@@ -86,6 +90,7 @@ export class SettingsPanel extends ModalPanel {
   private narrator: SwitchRow;
   private autoCam: SwitchRow;
   private idleDim: SwitchRow;
+  private longExposure: SwitchRow;
   private scale: Slider;
 
   constructor(
@@ -112,6 +117,11 @@ export class SettingsPanel extends ModalPanel {
         this.commit('quality');
       },
     );
+
+    this.longExposure = switchRow('Long exposure at speed', 'At 10x and 100x, moving herds, packs and fires leave soft fading trails on the land, like a long photograph.', s.longExposure, (on) => {
+      this.s.longExposure = on;
+      this.commit('longExposure');
+    });
 
     const vol = (key: 'master' | 'ambience' | 'music' | 'narration', label: string, blurb?: string): Slider =>
       slider(label, 0, 1, 0.05, s[key], pct, (v) => {
@@ -156,6 +166,7 @@ export class SettingsPanel extends ModalPanel {
       h('h3', { class: 'tg-pane-h', text: 'Picture' }),
       this.quality.el,
       this.qualityNote,
+      this.longExposure.el,
       h('h3', { class: 'tg-pane-h', text: 'Sound' }),
       this.sliders.master.el,
       this.sliders.ambience.el,
@@ -197,6 +208,7 @@ export class SettingsPanel extends ModalPanel {
     this.sliders.narration.set(this.s.narration);
     this.autoCam.set(this.s.autoCamera);
     this.idleDim.set(this.s.idleDim);
+    this.longExposure.set(this.s.longExposure);
     this.scale.set(this.s.uiScale);
   }
 

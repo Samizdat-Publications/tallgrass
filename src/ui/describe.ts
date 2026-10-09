@@ -79,6 +79,30 @@ export interface SkyView {
   flood: number;
   overcast: number;
   blizzardPending?: boolean;
+  /** Climate regimes: the eased wet and dry index as drawn (-1 driest .. 1 wettest; absent or 0 with climate2 off) and whether a megadrought holds. */
+  climate?: number;
+  megadrought?: boolean;
+  /** The light is held on one steady time of day while time flies (about 30x and up), so the slate leaves the time of day out. */
+  lapse?: boolean;
+}
+
+/** The index past which a run of years earns a word in the header, and the (looser) line it must fall back across before the word goes. */
+const CLIMATE_ON = 0.45;
+const CLIMATE_OFF = 0.35;
+
+/**
+ * The climate word for the header, or '' in ordinary years: "Megadrought" while one holds, "Wet years" past +0.45, "Dry years" past -0.45.
+ * `shown` is the word returned last time: it keeps its word until the index falls back past 0.35, so the header never flickers on the line.
+ */
+export function climateWord(sky: SkyView | undefined, shown = ''): string {
+  if (!sky) return '';
+  if (sky.megadrought) return 'Megadrought';
+  const c = sky.climate ?? 0;
+  const wet = shown === 'Wet years' ? CLIMATE_OFF : CLIMATE_ON;
+  const dry = shown === 'Dry years' || shown === 'Megadrought' ? CLIMATE_OFF : CLIMATE_ON;
+  if (c > wet) return 'Wet years';
+  if (c < -dry) return 'Dry years';
+  return '';
 }
 
 /** An eased amount must pass this before the word is used: below it nothing readable is on screen yet. */
@@ -117,6 +141,30 @@ export function yearStartTick(year: number): number {
 /** Continuous season value (0..4) for a tick. */
 export function seasonOfTick(tick: number): number {
   return (((tick + calendarOffset()) % YEAR_TICKS) + YEAR_TICKS) % YEAR_TICKS / SEASON_TICKS;
+}
+
+/**
+ * The one place a tick becomes a season in words. The header (seasonPhrase of env.season), the chapter cards, the graph tips and the
+ * chronicle tags all read the calendar through these, so one moment never carries two names. They agree with the header by
+ * construction: env.season at a tick is exactly seasonOfTick(tick), and the coarse name is the phrase without its early / mid / late.
+ */
+export function seasonPhraseAt(tick: number): string {
+  return seasonPhrase(seasonOfTick(tick));
+}
+
+/** Coarse season name ("summer") at a tick: the chronicle's tag. */
+export function seasonNameAt(tick: number): string {
+  return seasonName(seasonOfTick(tick));
+}
+
+/** True when two ticks fall in the same year and read the same in the header ("midwinter" and "late winter" do not). */
+export function sameSeasonPhrase(a: number, b: number): boolean {
+  return yearOfTick(a) === yearOfTick(b) && seasonPhraseAt(a) === seasonPhraseAt(b);
+}
+
+/** True when two ticks are in the same year and the same season (the coarse name). */
+export function sameSeasonName(a: number, b: number): boolean {
+  return yearOfTick(a) === yearOfTick(b) && seasonNameAt(a) === seasonNameAt(b);
 }
 
 /** "Year 12, late summer" */
@@ -273,6 +321,9 @@ export function cardRank(kind: string): number {
     case 'extinct': return 5;
     case 'introduced': return 4;
     case 'drought': return 4;
+    case 'megadrought': return 4;
+    case 'climateWet':
+    case 'climateDry': return 1;
     case 'fire': return 3;
     case 'outbreak': return 3;
     case 'stampede': return 2;
@@ -317,6 +368,7 @@ export function eventWeight(e: SimEvent): number {
     case 'extinct':
     case 'introduced':
       return 5;
+    case 'megadrought':
     case 'drought':
     case 'fire':
     case 'firstKill':
@@ -341,6 +393,11 @@ export function eventWeight(e: SimEvent): number {
     case 'damBreached':
     case 'beaverMeadow':
       return 3;
+    case 'climateWet':
+    case 'climateDry':
+      return 3;
+    case 'climateMild':
+      return 1;
     case 'immigrated':
       return e.sp === 1 ? 3 : 2;
     case 'emigrated':
@@ -426,6 +483,44 @@ function describeCore(e: SimEvent, ctx?: DescribeContext): EventText {
     }
     case 'droughtEnd':
       return { sentence: pick(e, ['The drought breaks.', 'The dry spell ends at last.', 'The drought lets go of the valley.', 'The rains come back, and the drought is over.']) };
+    case 'climateWet': {
+      const afterDry = e.b < 0;
+      return {
+        sentence: afterDry
+          ? pick(e, ['After the dry years the rains return, and the valley begins to green.', 'The long dry spell breaks into a run of wet years, and the grass comes back thick.', 'Rain follows rain, and the dry years are behind the valley at last.'])
+          : pick(e, ['The rains settle in, and a run of wet years begins.', 'A string of wet years opens, and the grass stands thick and green.', 'The valley turns green and heavy as a wet decade takes hold.', 'Year after year the rain comes, and the prairie swells with it.']),
+      };
+    }
+    case 'climateDry': {
+      const afterWet = e.b > 0;
+      return {
+        sentence: afterWet
+          ? pick(e, ['The wet years end, and the valley begins to dry.', 'The green decade is over: the rains slacken, and the grass starts to thin.', 'The good rains stop coming, and a run of dry years begins.'])
+          : pick(e, ['The rains thin out, and a run of dry years begins.', 'A dry decade settles in; the grass grows short and pale.', 'The creek runs low, and the valley slips into a stretch of dry years.', 'Year after year the rain falls short, and the prairie begins to thin.']),
+      };
+    }
+    case 'climateMild': {
+      return {
+        sentence: e.b > 0
+          ? pick(e, ['The wet years ease, and the valley settles back to ordinary rains.', 'The green decade fades into ordinary years.', 'The rains settle back to their usual measure.'])
+          : e.b < 0
+            ? pick(e, ['The dry years loosen their hold, and ordinary rains return.', 'The long dry stretch ends, and the seasons turn ordinary again.', 'Rain returns to its usual measure, and the grass begins to recover.'])
+            : pick(e, ['The seasons settle back into ordinary years.', 'The wet and dry years level out, and the valley breathes evenly again.']),
+      };
+    }
+    case 'megadrought': {
+      const n = Math.round(e.b);
+      const yrs = n >= 2 ? `${countWord(n)} years` : 'years';
+      return {
+        sentence: pick(e, [
+          `A megadrought grips the valley in year ${year}, and the rain holds off for ${yrs}.`,
+          `Year ${year}: the rains fail, and a megadrought bleaches the valley for ${yrs}.`,
+          `The grass pales and the ground cracks as a megadrought settles in, year ${year}, and ${yrs} of drought lie ahead.`,
+          `A megadrought begins in year ${year}: ${yrs} with scarcely a drop.`,
+        ]),
+        card: { title: 'The megadrought', subtitle: when },
+      };
+    }
     case 'outbreak': {
       const noun = groupNoun(e.sp);
       const where = `the ${region && region !== 'central' ? `${region} ` : ''}${noun}`;

@@ -1,9 +1,16 @@
 // Documentary auto-director: in cinematic mode it picks what to film from what is actually happening
 // (a hunt, a stampede, ravens over a kill, a herd at golden hour, pronghorn, a vista) and frames it.
+//
+// R-director3 rules: (1) motion wins: whenever a land animal is running (a chase, a stampede, pronghorn bounding, a mule deer stotting) the
+// camera tracks the lead animal from alongside, low and a little ahead, until it stops; (2) a shot shows what it says: a hunt keeps the
+// predator and its target in frame (and is dropped when the target is lost), a kill or a raven feeding shot keeps its carcass in frame, and
+// a chapter card or caption tied to an event waits until the camera is on that event (eventInView); (3) at 100x, and while skipping,
+// animals are a blur, so the camera flies slow, high drone moves over the valley instead and nothing close is filmed.
 import * as THREE from 'three';
-import type { DroneCamera } from './render/camera';
-import { AGENT_STRIDE, CARCASS_STRIDE, F_INFECTED, F_MANGE, F_MIGRANT, Sp, St } from './sim/types';
-import { SPECIES, isPredator } from './sim/species';
+import type { DroneCamera, FollowFrame } from './render/camera';
+import { followFrameFor } from './render/followframes';
+import { AGENT_STRIDE, CARCASS_STRIDE, F_INFECTED, F_MANGE, F_MIGRANT, F_STOT, Sp, St } from './sim/types';
+import { SPECIES, canHunt, isPredator } from './sim/species';
 
 /** A land hunter by the registry (wolf, cougar, later coyote): worth a hunt shot when it is in a chase. Fliers hunt too high and fast to film. */
 const isLandHunter = (sp: number): boolean => isPredator(sp) && SPECIES[sp]?.flies === false;
@@ -19,9 +26,21 @@ export interface DirectorFrame {
   small?: Uint8Array | null;
   /** Sim events since the last frame (the director cuts to immigrants, plague in a town and coyotes taking over). */
   events?: Array<{ tick: number; kind: string; sp: number; x: number; y: number; /** Free-form numbers of the sim event (count, pack age, animal id). */ a?: number; b?: number }>;
+  /** The sim speed asked for (0 paused, 1, 10, 100; -1 while skipping to the next event). Absent: 1. */
+  speed?: number;
+  /** The weather now (Weather enum: 0 clear, 1 rain, 2 drought, 3 storm, 4 snow), so a drone move over a storm lifts its eye to the sky. */
+  weather?: number;
 }
 
-type ShotKind = 'hunt' | 'stampede' | 'ravens' | 'herd' | 'pronghorn' | 'vista' | 'wolves' | 'town' | 'mousing' | 'migration' | 'coyotes' | 'stoop' | 'raptor' | 'kill' | 'moment';
+type ShotKind = 'hunt' | 'run' | 'stampede' | 'ravens' | 'herd' | 'pronghorn' | 'vista' | 'wolves' | 'town' | 'mousing' | 'migration' | 'coyotes' | 'stoop' | 'raptor' | 'kill' | 'moment' | 'drone';
+
+/** How fast the sim runs, as the camera cares: real time, 10x (animals still read), and 100x or a skip (animals are a blur). */
+export type SpeedClass = 'real' | 'fast' | 'lapse';
+export function speedClass(speed: number | undefined): SpeedClass {
+  if (speed === undefined) return 'real';
+  if (speed < 0 || speed >= 50) return 'lapse';
+  return speed >= 5 ? 'fast' : 'real';
+}
 
 /** A raptor in a stoop (St.Chase) this high (m) is worth cutting to: it is a dive of one to six seconds, so the cut has to be quick. */
 const STOOP_MIN_ALT = 7;
@@ -52,6 +71,36 @@ const MOMENT_MIN_EVENT = 8;
 const EVENT_KIND_GAP = 45;
 const EVENT_ANY_GAP = 14;
 
+/** A land animal is running (worth a tracking shot) in a run state at this speed (m/s) or more. */
+const RUN_MIN_SPEED = 4.5;
+/** A tracked animal that has dropped under this speed (m/s), or left the run states, for STOP_AFTER seconds has stopped: the shot is over. */
+const STOP_SPEED = 2.5;
+const STOP_AFTER = 1.3;
+/** A tracking shot is not ended for a stop before it has run this long (s). */
+const TRACK_MIN_RUN = 2.5;
+/** A hunt whose target is gone, or farther than this from the predator (m), for this long (s) is dropped. */
+const PREY_LOST_AFTER = 0.4;
+const PREY_FAR = 60;
+/** A hunt shot widens (m of orbit distance) at most this far past its base to keep both animals in frame, and is dropped if they are still out of frame after OUT_ABANDON seconds. */
+const HUNT_MAX_DIST = 56;
+const HUNT_MAX_EXTRA = 26;
+const OUT_ABANDON = 2.6;
+/** A kill or raven shot whose carcass has gone, or is out of frame, for this long (s) is dropped (after a grace second for the camera to arrive). */
+const CARCASS_MISS_AFTER = 1.4;
+/** Time-lapse drone moves fly this high (m) at 100x and a skip; at 10x they are lower, a mix with the animals. */
+const DRONE_ALT_LAPSE: [number, number] = [150, 300];
+const DRONE_ALT_FAST: [number, number] = [85, 195];
+
+const DEG = Math.PI / 180;
+
+/** The record at agent offset `o` is a land animal running: in a run state, fast enough that its gait is worth a close look. */
+function isRunningRec(a: Float32Array, o: number): boolean {
+  const st = a[o + 7];
+  if (st !== St.Chase && st !== St.Run && st !== St.Flee) return false;
+  if (a[o + 4] < RUN_MIN_SPEED) return false;
+  return SPECIES[a[o]]?.flies !== true;
+}
+
 /** Orbit distance (m) of a close shot of one animal, by species: small species get 8 to 20 m so they fill the frame. Bison are medium. */
 function closeDist(sp: number, r: number): number {
   switch (sp) {
@@ -64,6 +113,20 @@ function closeDist(sp: number, r: number): number {
     case Sp.Hawk: return 16 + r * 8;
     case Sp.Bison: return 30 + r * 14;
     default: return 11 + r * 6; // pronghorn, mule deer, wolf, cougar
+  }
+}
+
+/** Distance (m) of a tracking shot that runs alongside an animal, by species: 18 to 40 m, so the gait, the spine flex and the dust read. */
+export function trackDist(sp: number): number {
+  switch (sp) {
+    case Sp.Bison: return 30;
+    case Sp.Wolf: return 20;
+    case Sp.Cougar: return 18;
+    case Sp.Coyote: return 18;
+    case Sp.Deer: return 22;
+    case Sp.MuleDeer: return 22;
+    case Sp.Beaver: return 18;
+    default: return 24;
   }
 }
 
@@ -80,6 +143,25 @@ interface Cut {
   /** A field note earned: cuts sooner, waits longer, may cut over a young hunt. */
   urgent: boolean;
 }
+
+/** A tracking shot: the framed follow that runs alongside the lead animal (see FollowFrame.side). */
+interface Track {
+  frame: FollowFrame;
+  /** The distance (m) from the camera to the animal at the start; a hunt widens the frame from here. The orbit distance is this times `ratio` (the focus lies beyond the animal). */
+  baseDist: number;
+  ratio: number;
+  /** Seconds the lead animal has been still (not running), the prey out of the frame, and the target gone, and metres added to keep both in frame. */
+  stillT: number;
+  /** The last separation of the pair (m) and how fast it is changing (m/s, smoothed): the frame is widened for where the pair will be in a moment. */
+  sep0: number;
+  sepV: number;
+  outT: number;
+  preyGoneT: number;
+  extra: number;
+}
+
+/** A drone move (time-lapse): the camera flies from one place to another over the shot, its heading and pitch easing as it goes. */
+interface Drone { x0: number; y0: number; x1: number; y1: number; yaw0: number; yaw1: number; pitch0: number; pitch1: number; dist0: number; dist1: number }
 
 interface Shot {
   kind: ShotKind;
@@ -98,17 +180,47 @@ interface Shot {
   lift?: number;
   /** A moment (a field note or a headline event): nothing but another moment cuts away from it before its time. */
   moment?: boolean;
+  /** A tracking shot of a running animal (`id` is the lead). */
+  track?: Track;
+  /** A hunt: the animal the predator `id` is after, kept in frame with it. */
+  prey?: number;
+  /** A fixed shot of a carcass at (x, y): it must stay in frame, or the shot is dropped. */
+  carcass?: boolean;
+  /** A time-lapse drone move. */
+  drone?: Drone;
+  /** How good a motion shot is (hunts 100, a stampede or pronghorn about 50): a better one may cut over a worse one. */
+  score?: number;
+}
+
+const isMotionKind = (k: ShotKind): boolean => k === 'hunt' || k === 'run' || k === 'stampede';
+
+/** What the director measured about itself, for the evidence runs (tools never read it in the game). Off until `stats.on` is set. */
+export interface DirectorStats {
+  on: boolean;
+  /** Seconds filmed, by speed class, and of them the seconds with a running animal on screen within 45 m of the camera. */
+  secs: Record<SpeedClass, number>;
+  runnerNear: Record<SpeedClass, number>;
+  /** Seconds a hunt shot was up, and of them the seconds with both the predator and its target in frame. */
+  huntSecs: number;
+  huntBoth: number;
+  /** Seconds by shot kind, and the shots begun (newest last): when, kind, speed class, orbit distance, lead species. */
+  kindSecs: Record<string, number>;
+  log: Array<{ at: number; kind: string; cls: SpeedClass; dist: number; sp: number }>;
 }
 
 export class Director {
   enabled = false;
   current: Shot | null = null;
+  readonly stats: DirectorStats = { on: false, secs: { real: 0, fast: 0, lapse: 0 }, runnerNear: { real: 0, fast: 0, lapse: 0 }, huntSecs: 0, huntBoth: 0, kindSecs: {}, log: [] };
   private t = 0;
   private scan = 0;
   private stoopScan = 0;
   private last: ShotKind[] = [];
   private rngState = 12345;
   private tmp = new THREE.Vector3();
+  private pa = new THREE.Vector3();
+  private pb = new THREE.Vector3();
+  private pv = new THREE.Vector3();
   /** Cuts that events asked for (R3): immigrants, plague in a town, coyotes taking over. Newest last, with the clock they were asked at. */
   private cuts: Cut[] = [];
   private clock = 0;
@@ -119,6 +231,17 @@ export class Director {
   private where = new Map<string, Where>();
   private eventCutAt = new Map<string, number>();
   private anyEventCutAt = -1e9;
+  private cls: SpeedClass = 'real';
+  /** The shot that follows when the current one is ended early (a kill after a hunt). */
+  private chain: Shot | null = null;
+  /** The lead animal of the last motion shot and when it ended, so the same animal is not re-cut at once. */
+  private lastMotion = { id: -1, at: -1e9 };
+  /** Where the last drone move ended, so the next one carries on from there (one long flight, not a string of jumps). */
+  private droneTail: { x: number; y: number; yaw: number; pitch: number; dist: number; at: number } | null = null;
+  /** The camera's view matrices are fresh (a real camera is attached): shots can be checked against the frame. */
+  private viewOk = false;
+  private statAcc = 0;
+  private statRunner = false;
 
   constructor(
     private cam: DroneCamera,
@@ -128,21 +251,27 @@ export class Director {
     private coverAt: (x: number, y: number) => number = () => 0,
   ) {}
 
+  /** How badly the camera ray from the subject at `yaw` is blocked by canopy (lower is clearer). */
+  private yawScore(sx: number, sy: number, pitchDeg: number, yaw: number, dist: number, lift: number): number {
+    const reach = Math.min(70, 12 / Math.max(0.05, Math.tan((pitchDeg * Math.PI) / 180)));
+    const r = (yaw * Math.PI) / 180, dx = Math.sin(r), dy = Math.cos(r);
+    let score = 0;
+    for (let d = 5; d <= reach; d += 3) score += this.coverAt(sx + dx * d, sy + dy * d) * (1 - d / (reach + 1));
+    // and the camera's own collision test: a heading whose whole boom is free of crowns and trunks wins, so a shot begins clear
+    // instead of swinging round a tree after it starts (1 when the camera has no tree list)
+    score += (1 - this.cam.headingReach(sx, sy, lift, yaw, pitchDeg, dist)) * 6;
+    return score;
+  }
+
   /**
    * Of eight headings around the subject, the one with the least canopy between camera and subject. Only the stretch
    * where the camera ray is still below crown height (about 12 m) can be blocked.
    */
   private clearYaw(sx: number, sy: number, pitchDeg: number, baseYaw: number, dist: number, lift: number): number {
-    const reach = Math.min(70, 12 / Math.max(0.05, Math.tan((pitchDeg * Math.PI) / 180)));
     let best = baseYaw, bestScore = Infinity;
     for (let k = 0; k < 8; k++) {
       const yaw = baseYaw + k * 45;
-      const r = (yaw * Math.PI) / 180, dx = Math.sin(r), dy = Math.cos(r);
-      let score = 0;
-      for (let d = 5; d <= reach; d += 3) score += this.coverAt(sx + dx * d, sy + dy * d) * (1 - d / (reach + 1));
-      // and the camera's own collision test: a heading whose whole boom is free of crowns and trunks wins, so a shot begins clear
-      // instead of swinging round a tree after it starts (1 when the camera has no tree list)
-      score += (1 - this.cam.headingReach(sx, sy, lift, yaw, pitchDeg, dist)) * 6;
+      const score = this.yawScore(sx, sy, pitchDeg, yaw, dist, lift);
       if (score < bestScore - 1e-6) { bestScore = score; best = yaw; }
     }
     return best % 360;
@@ -154,15 +283,19 @@ export class Director {
    */
   closeShot(maxDist = 72): { id: number | null; x: number; y: number; dist: number } | null {
     const s = this.current;
-    if (!this.enabled || !s || s.dist > maxDist) return null;
-    return { id: s.id, x: s.x, y: s.y, dist: s.dist };
+    // (a tracking shot's orbit distance reaches past the animal to the focus: the distance that counts is to the animal)
+    const d = s?.track ? s.track.frame.dist / s.track.ratio : s?.dist ?? 0;
+    if (!this.enabled || !s || d > maxDist || s.drone) return null;
+    return { id: s.id, x: s.x, y: s.y, dist: d };
   }
 
   setEnabled(on: boolean): void {
     this.enabled = on;
     this.t = 0;
     this.current = null;
+    this.chain = null;
     this.cuts = []; // a player who takes the camera is never pulled away by a cut that was queued before
+    this.cam.cinematicAuto = true;
     if (!on) {
       this.cam.follow(null);
       this.cam.setCinematic(false);
@@ -177,6 +310,52 @@ export class Director {
     return this.rngState / 4294967296;
   }
 
+  // ------------------------------------------------------------ what the camera shows
+
+  /** Refresh the view matrices of the camera (when it has them), so a world point can be tested against the frame. */
+  private beginView(): void {
+    const c = (this.cam as unknown as { camera?: THREE.PerspectiveCamera }).camera;
+    if (!c || !c.matrixWorldInverse) { this.viewOk = false; return; }
+    c.updateMatrixWorld();
+    c.matrixWorldInverse.copy(c.matrixWorld).invert();
+    this.viewOk = true;
+  }
+
+  /**
+   * Is the world point (three coordinates: x, height, z = sim y) in front of the camera and inside the frame, `mx` and `my` being the
+   * share of the half width and half height that counts? True when the director has no camera to ask (a unit test).
+   */
+  private inFrame(x: number, y: number, z: number, mx = 0.9, my = 0.86): boolean {
+    if (!this.viewOk) return true;
+    const c = (this.cam as unknown as { camera: THREE.PerspectiveCamera }).camera;
+    const v = this.pv.set(x, y, z).applyMatrix4(c.matrixWorldInverse);
+    if (v.z > -c.near) return false;
+    v.applyMatrix4(c.projectionMatrix);
+    return Math.abs(v.x) <= mx && Math.abs(v.y) <= my;
+  }
+
+  /**
+   * Is the camera on this event right now? For the chapter cards and the narrator's captions: a title tied to a place should only show
+   * while the picture shows that place. True when the director is off (the player has the camera and the cards are plain news). A close
+   * shot must be near the event as well as framing it (a long lens on a far hill does not count); a drone or a vista only has to frame it.
+   */
+  eventInView(x: number, y: number): boolean {
+    if (!this.enabled) return true;
+    const s = this.current;
+    if (!s) return false;
+    if (this.viewOk && !this.inFrame(x, this.cam.groundAt(x, y) + 1, y, 0.96, 0.92)) return false;
+    if (s.kind === 'drone' || s.kind === 'vista') return true;
+    const f = this.cam.getFocus(this.tmp);
+    return Math.hypot(f.x - x, f.z - y) <= Math.max(60, s.dist * 1.5 + 25);
+  }
+
+  private findIdx(f: DirectorFrame, id: number): number {
+    for (let k = 0; k < f.count; k++) if (f.ids[k] === id) return k;
+    return -1;
+  }
+
+  // ------------------------------------------------------------ the loop
+
   update(dt: number, f: DirectorFrame | null): void {
     if (!this.enabled || !f) return;
     this.t -= dt;
@@ -184,17 +363,32 @@ export class Director {
     this.stoopScan -= dt;
     this.clock += dt;
     this.frame = f;
+    this.beginView();
+    const cls = speedClass(f.speed);
+    if (cls !== this.cls) {
+      this.cls = cls;
+      // years flying by: animals are a blur, the camera goes up; back at a watchable pace a drone move is ended and the animals are filmed again
+      if ((cls === 'lapse' && this.current && !this.current.drone) || (cls === 'real' && this.current?.drone)) this.t = Math.min(this.t, 0);
+    }
+    if (cls === 'lapse') this.cuts.length = 0; // nothing close is filmed at 100x, not even a moment
     if (f.events && f.events.length) this.takeEvents(f);
+    this.monitor(f, dt);
     // a moment (a field note, a headline event) holds the camera: no hunt or stoop scan cuts away from it
     const inMoment = this.current?.moment === true;
-    // a hunt in progress is worth cutting to early (checked twice a second, after 5 s of the current shot)
+    // an animal running is worth cutting to early (checked twice a second, after 3 s of a static shot), and a better chase over a poorer one
     let huntNow: Shot | null = null;
-    if (!inMoment && this.current && this.current.kind !== 'hunt' && this.current.kind !== 'stoop' && this.current.hold - this.t > 5 && this.scan <= 0) {
+    const cur0 = this.current;
+    if (cls !== 'lapse' && !inMoment && cur0 && cur0.kind !== 'stoop' && cur0.hold - this.t > 3 && this.scan <= 0) {
       this.scan = 0.5;
-      huntNow = this.findHunt(f);
+      const m = this.findMotion(f);
+      if (m) {
+        const run = cur0.hold - this.t;
+        if (!isMotionKind(cur0.kind)) huntNow = m;
+        else if (run > 5 && m.id !== cur0.id && (m.score ?? 0) >= (cur0.score ?? 0) + 30) huntNow = m;
+      }
     }
     // a raptor beginning a stoop is over in a few seconds (R5): cut to it as soon as the current shot has run 3 s, never over a hunt or another stoop
-    if (!huntNow && !inMoment && this.current && this.current.kind !== 'hunt' && this.current.kind !== 'stoop' && this.current.hold - this.t > 3 && this.stoopScan <= 0) {
+    if (!huntNow && cls !== 'lapse' && !inMoment && this.current && !isMotionKind(this.current.kind) && this.current.kind !== 'stoop' && this.current.hold - this.t > 3 && this.stoopScan <= 0) {
       this.stoopScan = 0.25;
       huntNow = this.findStoop(f);
     }
@@ -206,7 +400,7 @@ export class Director {
     if (due && !huntNow && this.clock >= due.due) {
       const run = this.current ? this.current.hold - this.t : Infinity;
       const minRun = inMoment ? (due.urgent ? MOMENT_MIN_NOTE : MOMENT_MIN_EVENT) : due.urgent ? NOTE_AFTER : CUT_AFTER;
-      const huntOk = due.urgent || this.current?.kind !== 'hunt' || run > 10;
+      const huntOk = due.urgent || !isMotionKind(this.current?.kind ?? 'vista') || run > 10;
       if (!this.current || (run > minRun && huntOk)) {
         this.cuts.shift();
         evNow = due.resolve(f); // null: the subject is gone, the cut is dropped
@@ -220,22 +414,38 @@ export class Director {
         }
       }
     }
+    if (this.current?.drone && this.t > 0) this.driveDrone(dt);
     if (this.t > 0 && !huntNow && !evNow) {
       // if the followed animal died, end the shot
       if (this.current?.id != null && !this.getPos(this.current.id, this.tmp)) this.t = 0;
-      else return;
+      else { this.tally(dt, f); return; }
     }
-    const shot = huntNow ?? evNow ?? this.pick(f);
+    const chained = this.chain;
+    this.chain = null;
+    const shot = huntNow ?? evNow ?? chained ?? this.pick(f);
+    this.beginShot(shot, f);
+    this.tally(dt, f);
+  }
+
+  /** Begin a shot: the camera is told where to stand, what to follow and how fast to move. */
+  private beginShot(shot: Shot, f: DirectorFrame): void {
+    if (this.current && isMotionKind(this.current.kind) && this.current.id !== null) this.lastMotion = { id: this.current.id, at: this.clock };
     this.current = shot;
     this.t = shot.hold;
     this.last.push(shot.kind);
     if (this.last.length > 3) this.last.shift();
+    if (this.stats.on) {
+      const k = shot.id !== null ? this.findIdx(f, shot.id) : -1;
+      this.stats.log.push({ at: Math.round(this.clock * 10) / 10, kind: shot.kind, cls: this.cls, dist: Math.round(shot.dist), sp: k >= 0 ? f.agents[k * AGENT_STRIDE] : -1 });
+    }
+    // a tracking shot and a drone move steer themselves; the rest ride cinematic mode's slow orbit and sway
+    this.cam.cinematicAuto = !(shot.track || shot.drone);
     // film from the side with a clear line of sight
     const v = new THREE.Vector3();
     const ok = shot.id !== null ? this.getPos(shot.id, v) : false;
     const sx = shot.id !== null ? (ok ? v.x : NaN) : shot.x, sy = shot.id !== null ? (ok ? v.z : NaN) : shot.y;
     const known = Number.isFinite(sx) && Number.isFinite(sy);
-    if (known) shot.yaw = this.clearYaw(sx, sy, shot.pitch, shot.yaw, shot.dist, shot.air && ok ? Math.max(0, v.y - this.cam.groundAt(sx, sy)) : 0);
+    if (known && !shot.track && !shot.drone) shot.yaw = this.clearYaw(sx, sy, shot.pitch, shot.yaw, shot.dist, shot.air && ok ? Math.max(0, v.y - this.cam.groundAt(sx, sy)) : 0);
     // an editor cuts to a subject across the valley rather than flying the camera through the trees to reach it;
     // near subjects get a glide that eases in and out
     const focus = this.cam.getFocus(this.tmp);
@@ -249,7 +459,18 @@ export class Director {
     const diving = shot.kind === 'stoop';
     this.cam.followSmoothTime = shot.id !== null ? (diving ? 0.4 : 1.1) : 0.4;
     this.cam.followDeadzone = shot.id !== null ? (diving ? 0.05 : 0.13) : 0.055;
-    if (shot.id !== null) {
+    if (shot.track && shot.id !== null) {
+      // alongside the lead animal: the framed follow holds the heading (see FollowFrame.side) and leads the animal, so the gait reads
+      const id = shot.id, prey = shot.prey ?? null;
+      const a = new THREE.Vector3(), b = new THREE.Vector3();
+      this.cam.setView({ yawDeg: shot.yaw, pitchDeg: shot.pitch, distance: shot.dist }, false);
+      this.cam.follow(() => {
+        if (!this.getPos(id, a)) return null;
+        // (a hunt is filmed on the pair: the point between the predator and its target, so neither is the edge of the frame)
+        if (prey !== null && this.getPos(prey, b)) return { x: (a.x + b.x) / 2, y: (a.z + b.z) / 2 };
+        return { x: a.x, y: a.z };
+      }, shot.track.frame, true); // (a tracking shot always begins with a cut: the animal is framed from the first frame, not chased into it)
+    } else if (shot.id !== null) {
       const id = shot.id;
       const p = new THREE.Vector3();
       const air = shot.air === true;
@@ -260,12 +481,133 @@ export class Director {
       this.cam.setView({ x: shot.x, y: shot.y, ...(shot.lift ? { h: this.cam.groundAt(shot.x, shot.y) + shot.lift } : {}), distance: shot.dist, pitchDeg: shot.pitch, yawDeg: shot.yaw }, cut);
     }
     this.cam.setCinematic(true);
-    if (!cut) this.cam.easeIn();
+    if (!cut || shot.track) this.cam.easeIn();
   }
 
   private recent(k: ShotKind): boolean {
     return this.last.includes(k);
   }
+
+  // ------------------------------------------------------------ checking the shot against the picture
+
+  /**
+   * Once a frame: does the shot still show what it says? A tracking shot ends when its animal stops; a hunt keeps the predator and its
+   * target in frame (widening, and giving up when the target is lost or will not fit); a carcass shot is dropped when the carcass is
+   * gone or out of frame. A shot that ends early may chain a follow-up (the kill after a hunt). Also keeps the evidence stats.
+   */
+  private monitor(f: DirectorFrame, dt: number): void {
+    const s = this.current;
+    if (!s || this.t <= 0) return;
+    const run = s.hold - this.t;
+    if (s.track && s.id !== null) {
+      const tr = s.track;
+      const k = this.findIdx(f, s.id);
+      if (k < 0) { this.t = 0; return; } // the lead animal is gone (it died, or left)
+      const o = k * AGENT_STRIDE;
+      const st = f.agents[o + 7];
+      const moving = f.agents[o + 4] >= STOP_SPEED && (st === St.Chase || st === St.Run || st === St.Flee);
+      tr.stillT = moving ? 0 : tr.stillT + dt;
+      tr.frame.timeScale = Math.max(1, Math.min(12, f.speed ?? 1));
+      if (s.prey !== undefined) this.monitorHunt(s, f, dt, run);
+      else if (run > TRACK_MIN_RUN && tr.stillT > STOP_AFTER) this.t = 0; // it has stopped: the chase is over
+      if (this.t <= 0 && s.prey !== undefined) {
+        // the chase is over: if it ended in a kill, stay for the carcass and the feeding
+        const after = this.getPos(s.id, this.pa) ? this.aftermath(f, this.pa.x, this.pa.z) : null;
+        if (after) this.chain = after;
+      }
+    } else if (s.carcass) {
+      const c = this.carcassAt(f, s.x, s.y);
+      const out = c < 0 || !this.inFrame(s.x, this.cam.groundAt(s.x, s.y) + (s.lift ?? 1), s.y, 0.95, 0.9);
+      if (run > 1.5) this.missT = out ? this.missT + dt : 0;
+      else this.missT = 0;
+      if (this.missT > CARCASS_MISS_AFTER) { this.t = 0; this.missT = 0; }
+    }
+  }
+  private missT = 0;
+
+  /** The index of the carcass within 2 m of (x, y) that is not yet eaten away (a carcass shot needs it), or -1. */
+  private carcassAt(f: DirectorFrame, x: number, y: number): number {
+    for (let k = 0; k < f.carcassCount; k++) {
+      const c = k * CARCASS_STRIDE;
+      if (f.carcasses[c + 2] > 0.04 && Math.hypot(f.carcasses[c] - x, f.carcasses[c + 1] - y) < 2.5) return k;
+    }
+    return -1;
+  }
+
+  private monitorHunt(s: Shot, f: DirectorFrame, dt: number, run: number): void {
+    const tr = s.track!;
+    const prey = s.prey!;
+    const ok = this.getPos(s.id!, this.pa);
+    const pk = this.findIdx(f, prey);
+    const okPrey = pk >= 0 && this.getPos(prey, this.pb);
+    // (the target is gone when it is not there, or has got away from the predator: farther than PREY_FAR)
+    const away = okPrey && ok && Math.hypot(this.pa.x - this.pb.x, this.pa.z - this.pb.z) > PREY_FAR;
+    tr.preyGoneT = okPrey && !away ? 0 : tr.preyGoneT + dt;
+    let both = false;
+    if (ok && okPrey) {
+      const sep = Math.hypot(this.pa.x - this.pb.x, this.pa.z - this.pb.z);
+      // wide enough for both across the frame, with a margin, from the camera's own field of view
+      const cam = (this.cam as unknown as { camera?: THREE.PerspectiveCamera }).camera;
+      const th = cam ? Math.tan((cam.fov * DEG) / 2) * cam.aspect : 0.9;
+      if (tr.sep0 >= 0 && dt > 1e-4) tr.sepV += ((sep - tr.sep0) / dt - tr.sepV) * (1 - Math.exp(-dt / 0.5));
+      tr.sep0 = sep;
+      const sepP = sep + Math.max(0, Math.min(30, tr.sepV)) * 1.3;
+      const need = (sepP * 0.5 + 5) / (0.85 * Math.max(0.3, th));
+      both = this.inFrame(this.pa.x, this.pa.y + 0.6, this.pa.z, 0.96, 0.94) && this.inFrame(this.pb.x, this.pb.y + 0.6, this.pb.z, 0.96, 0.94);
+      if (run > 1.2) {
+        if (!both) { tr.extra = Math.min(HUNT_MAX_EXTRA, tr.extra + 7 * dt); tr.outT += dt; } else { tr.outT = Math.max(0, tr.outT - dt); if (this.inFrame(this.pa.x, this.pa.y + 0.6, this.pa.z, 0.75, 0.75) && this.inFrame(this.pb.x, this.pb.y + 0.6, this.pb.z, 0.75, 0.75)) tr.extra = Math.max(0, tr.extra - 1.5 * dt); }
+      }
+      tr.frame.dist = (Math.min(HUNT_MAX_DIST, Math.max(tr.baseDist, need)) + tr.extra) * tr.ratio;
+      if (tr.outT > OUT_ABANDON) { this.t = 0; return; } // they will not fit: give the shot up rather than film one of them
+    }
+    if (this.stats.on) {
+      this.stats.huntSecs += dt;
+      if (both && ok && okPrey) this.stats.huntBoth += dt;
+    }
+    if (tr.preyGoneT > PREY_LOST_AFTER) this.t = 0; // the target is gone (taken, or away): no hunt to film
+    else if (run > TRACK_MIN_RUN && tr.stillT > STOP_AFTER) this.t = 0; // the predator has given up or made the kill
+  }
+
+  /** After a hunt: a fresh carcass within 45 m of where it ended, with a land predator on it, framed to be read (a short follow-up shot). */
+  private aftermath(f: DirectorFrame, x: number, y: number): Shot | null {
+    const s = this.carcassShot(f, x, y, false, 'kill', 0.55, 45);
+    if (!s) return null;
+    let predator = false;
+    for (let k = 0; k < f.count && !predator; k++) {
+      const o = k * AGENT_STRIDE;
+      if (isLandHunter(f.agents[o]) && Math.hypot(f.agents[o + 1] - s.x, f.agents[o + 2] - s.y) < 18) predator = true;
+    }
+    if (!predator) return null;
+    s.hold = this.cls === 'real' ? 7 : 3.5; // (at 10x seven seconds is over a minute of feeding)
+    return s;
+  }
+
+  /** Statistics of the evidence runs: seconds by speed class, with a running animal within 45 m of the camera and in frame. */
+  private tally(dt: number, f: DirectorFrame): void {
+    const st = this.stats;
+    if (!st.on) return;
+    dt = Math.min(dt, 0.25);
+    st.secs[this.cls] += dt;
+    const k = this.current?.kind ?? 'none';
+    st.kindSecs[k] = (st.kindSecs[k] ?? 0) + dt;
+    this.statAcc -= dt;
+    if (this.statAcc <= 0) {
+      this.statAcc = 0.2;
+      const cam = (this.cam as unknown as { camera?: THREE.PerspectiveCamera }).camera;
+      const px = cam ? cam.position.x : this.cam.getFocus(this.tmp).x, pz = cam ? cam.position.z : this.tmp.z;
+      let near = false;
+      for (let i = 0; i < f.count && !near; i++) {
+        const o = i * AGENT_STRIDE;
+        if (!isRunningRec(f.agents, o)) continue;
+        if (Math.hypot(f.agents[o + 1] - px, f.agents[o + 2] - pz) > 45) continue;
+        near = this.inFrame(f.agents[o + 1], this.cam.groundAt(f.agents[o + 1], f.agents[o + 2]) + 0.8, f.agents[o + 2], 0.95, 0.9);
+      }
+      this.statRunner = near;
+    }
+    if (this.statRunner) st.runnerNear[this.cls] += dt;
+  }
+
+  // ------------------------------------------------------------ choosing a shot
 
   /** A raptor that has just begun a stoop (St.Chase, still high): follow it from the side, low, to the strike and a few seconds beyond it. */
   private findStoop(f: DirectorFrame): Shot | null {
@@ -292,30 +634,153 @@ export class Director {
     return { kind: 'raptor', id: f.ids[pick], x: 0, y: 0, dist: 15 + this.rand() * 12, pitch: 6 + this.rand() * 14, yaw: this.rand() * 360, hold: 13, air: true };
   }
 
-  private findHunt(f: DirectorFrame): Shot | null {
-    for (let k = 0; k < f.count; k++) {
-      const o = k * AGENT_STRIDE;
-      if (isLandHunter(f.agents[o]) && f.agents[o + 7] === St.Chase) {
-        return { kind: 'hunt', id: f.ids[k], x: 0, y: 0, dist: 38 + this.rand() * 18, pitch: 14 + this.rand() * 8, yaw: this.rand() * 360, hold: 14 };
+  /**
+   * What a land hunter in a chase is after: the nearest animal it can take (the diet table) within 75 m, ahead of it, and running (or
+   * already close). -1 when there is none: a coyote after a hare has no body to film, so it is not a hunt shot.
+   */
+  private findPrey(f: DirectorFrame, kp: number): number {
+    const A = f.agents, op = kp * AGENT_STRIDE;
+    const sp = A[op], px = A[op + 1], py = A[op + 2], hx = Math.cos(A[op + 3]), hy = Math.sin(A[op + 3]);
+    let best = -1, bd = Infinity;
+    for (let j = 0; j < f.count; j++) {
+      if (j === kp) continue;
+      const o = j * AGENT_STRIDE;
+      if (SPECIES[A[o]]?.flies || !canHunt(sp, A[o])) continue;
+      const dx = A[o + 1] - px, dy = A[o + 2] - py, d = Math.hypot(dx, dy);
+      if (d > PREY_FAR - 5 || d < 0.01) continue;
+      if ((dx * hx + dy * hy) / d < 0.3) continue; // behind it or to the side: not what it is running at
+      const st = A[o + 7];
+      const running = st === St.Flee || st === St.Run || st === St.Chase;
+      const dd = d + (running ? 0 : 25);
+      if (dd < bd) { bd = dd; best = j; }
+    }
+    return best;
+  }
+
+  /**
+   * The best running animal to film now, as a tracking shot: a hunt (a land hunter in a chase and the animal it is after, 100), then a
+   * stampede, pronghorn bounding, a stotting mule deer, any fleeing group. The lead of the group is the one filmed (the farthest along the
+   * group's heading). null when nothing is running, or the sim is paused. `opt` limits the search to a species or to animals near a place.
+   */
+  private findMotion(f: DirectorFrame, opt: { sp?: number; x?: number; y?: number; r?: number } = {}): Shot | null {
+    if (f.speed === 0 || f.count === 0) return null;
+    const A = f.agents, S = AGENT_STRIDE;
+    const R: number[] = [];
+    for (let k = 0; k < f.count && R.length < 500; k++) {
+      const o = k * S;
+      if (!isRunningRec(A, o)) continue;
+      if (opt.sp !== undefined && A[o] !== opt.sp) continue;
+      if (opt.x !== undefined && Math.hypot(A[o + 1] - opt.x, A[o + 2] - (opt.y ?? 0)) > (opt.r ?? 120)) continue;
+      if (f.ids[k] === this.lastMotion.id && this.clock - this.lastMotion.at < 6) continue;
+      R.push(k);
+    }
+    if (!R.length) return null;
+    const cands: Array<{ k: number; kind: ShotKind; prey: number; score: number }> = [];
+    for (const k of R) {
+      const o = k * S, sp = A[o];
+      let score: number, kind: ShotKind = 'run', prey = -1;
+      if (isLandHunter(sp) && A[o + 7] === St.Chase) {
+        prey = this.findPrey(f, k);
+        // (a chase with no body to show is a run shot of the predator, not a hunt. At 10x a chase is over in a second or two and the pair
+        // flies apart faster than any frame can hold, so there it is the predator that is tracked, not a hunt with two animals promised)
+        if (prey >= 0 && (f.speed ?? 1) < 5) { score = 100; kind = 'hunt'; } else { score = prey >= 0 ? 70 : 38; prey = -1; }
+      } else if (isPredator(sp)) {
+        score = 26;
+      } else {
+        // a group of runners of one species within 40 m: only its lead (the farthest along the group's mean heading) is evaluated
+        let n = 0, cx = 0, cy = 0, hx = 0, hy = 0;
+        for (const j of R) {
+          const q = j * S;
+          if (A[q] !== sp || Math.hypot(A[q + 1] - A[o + 1], A[q + 2] - A[o + 2]) > 40) continue;
+          n++; cx += A[q + 1]; cy += A[q + 2]; hx += Math.cos(A[q + 3]); hy += Math.sin(A[q + 3]);
+        }
+        cx /= n; cy /= n;
+        const hl = Math.hypot(hx, hy) || 1;
+        hx /= hl; hy /= hl;
+        const proj = (A[o + 1] - cx) * hx + (A[o + 2] - cy) * hy;
+        let isLead = true;
+        for (const j of R) {
+          const q = j * S;
+          if (A[q] !== sp || Math.hypot(A[q + 1] - A[o + 1], A[q + 2] - A[o + 2]) > 40) continue;
+          if ((A[q + 1] - cx) * hx + (A[q + 2] - cy) * hy > proj + 1e-6) { isLead = false; break; }
+        }
+        if (!isLead) continue;
+        const stot = (((A[o + 8] | 0) & F_STOT) !== 0);
+        const base = sp === Sp.Deer ? 46 : sp === Sp.MuleDeer ? (stot ? 56 : 44) : sp === Sp.Bison ? 30 : sp === Sp.Beaver ? 12 : 30;
+        score = base + Math.min(n, 40) * 0.7;
+        if (n < 2 && !stot) score -= 14; // one frightened animal on its own is not much to follow
+        if (sp === Sp.Bison && n >= 8) kind = 'stampede';
       }
+      score += this.rand() * 4;
+      if (score >= 20) cands.push({ k, kind, prey, score });
+    }
+    // the best that can be filmed from the open side (a chase against the edge of the world has no room for the camera)
+    cands.sort((a, b) => b.score - a.score);
+    for (let i = 0; i < Math.min(5, cands.length); i++) {
+      const c = cands[i];
+      const shot = this.trackShot(f, c.k, c.kind, c.prey, c.score);
+      if (shot) return shot;
     }
     return null;
   }
 
+  /** The tracking shot of the animal at index k: alongside, low (a rider's eye height) and a little ahead, on the side with the clearer line. */
+  private trackShot(f: DirectorFrame, k: number, kind: ShotKind, prey: number, score: number): Shot | null {
+    const A = f.agents, o = k * AGENT_STRIDE, sp = A[o];
+    const ff = followFrameFor(sp);
+    // (at 10x the animal swerves and surges ten times as fast as the camera can read it: the shot stands farther back and turns more lazily, so it stays in the frame)
+    const fastRun = (f.speed ?? 1) >= 5;
+    let base = trackDist(sp) * (0.92 + this.rand() * 0.16) * (fastRun ? 1.4 : 1);
+    if (prey >= 0) {
+      base = Math.max(base, trackDist(A[prey * AGENT_STRIDE]) * 0.82);
+      // wide enough for the pair as it stands (the camera's field of view is about 79 degrees across)
+      const sep = Math.hypot(A[o + 1] - A[prey * AGENT_STRIDE + 1], A[o + 2] - A[prey * AGENT_STRIDE + 2]);
+      base = Math.min(HUNT_MAX_DIST, Math.max(base, (sep * 0.5 + 5) / (0.85 * 0.83)));
+    }
+    const side = 1.7 + this.rand() * 0.2;
+    const pitch = 3 + this.rand() * 1.5;
+    const ndcY = -0.12;
+    const cam = (this.cam as unknown as { camera?: THREE.PerspectiveCamera }).camera;
+    const phi = Math.atan(-ndcY * Math.tan(((cam?.fov ?? 50) * DEG) / 2));
+    const ratio = Math.tan(pitch * DEG + phi) / Math.sin(pitch * DEG);
+    const frame: FollowFrame = { dist: base * ratio, pull: 0, pitchDeg: pitch, lift: ff.lift, side, ndcY, distRate: 4, yawBand: fastRun ? 1.1 : 0.5, yawRate: fastRun ? 0.8 : 1.4, timeScale: Math.max(1, Math.min(12, f.speed ?? 1)) };
+    // behind the heading is yaw atan2(-hx, -hz) (sim y is three z); the camera takes whichever side is clearer of canopy
+    const h = A[o + 3];
+    const behind = Math.atan2(-Math.cos(h), -Math.sin(h));
+    const gx = A[o + 1], gy = A[o + 2];
+    const yawA = ((behind + side) / DEG + 360) % 360, yawB = ((behind - side) / DEG + 360) % 360;
+    const lift = 0;
+    // a side whose camera spot is off the edge of the world (the camera is held inside it) is no side at all
+    const W = this.worldSize, inside = (yawDeg: number): boolean => {
+      const cx = gx + Math.sin(yawDeg * DEG) * base, cy = gy + Math.cos(yawDeg * DEG) * base;
+      return cx > 14 && cy > 14 && cx < W - 14 && cy < W - 14;
+    };
+    const inA = inside(yawA), inB = inside(yawB);
+    if (!inA && !inB) return null;
+    const sa = this.yawScore(gx, gy, pitch, yawA, base, lift) + (inA ? 0 : 100), sb = this.yawScore(gx, gy, pitch, yawB, base, lift) + (inB ? 0 : 100);
+    // (a tie keeps the side the camera is already on, so a cut does not flip the picture)
+    const cur = this.cam.yawDeg;
+    const da = Math.abs(((yawA - cur) % 360 + 540) % 360 - 180), db = Math.abs(((yawB - cur) % 360 + 540) % 360 - 180);
+    const yaw = sa < sb - 0.25 ? yawA : sb < sa - 0.25 ? yawB : da <= db ? yawA : yawB;
+    const shot: Shot = {
+      kind, id: f.ids[k], x: 0, y: 0, dist: base * ratio, pitch, yaw,
+      hold: kind === 'hunt' ? 18 : kind === 'stampede' ? 16 : 14,
+      track: { frame, baseDist: base, ratio, sep0: -1, sepV: 0, stillT: 0, outT: 0, preyGoneT: 0, extra: 0 },
+      score,
+    };
+    if (prey >= 0) shot.prey = f.ids[prey];
+    return shot;
+  }
+
   private pick(f: DirectorFrame): Shot {
     const r = () => this.rand();
+    const cls = speedClass(f.speed);
+    // years flying by: nothing close, a slow high drone move over the valley
+    if (cls === 'lapse') return this.droneShot(f, true);
     const cands: Shot[] = [];
-    const hunt = this.findHunt(f);
-    if (hunt) cands.push(hunt, hunt);
-    // stampede: many fleeing bison
-    let fleeing = -1, nFlee = 0;
-    for (let k = 0; k < f.count; k++) {
-      const o = k * AGENT_STRIDE;
-      if (f.agents[o] === Sp.Bison && f.agents[o + 7] === St.Flee) { nFlee++; if (fleeing < 0 || r() < 0.05) fleeing = k; }
-    }
-    if (nFlee > 25 && !this.recent('stampede')) {
-      cands.push({ kind: 'stampede', id: f.ids[fleeing], x: 0, y: 0, dist: 70 + r() * 40, pitch: 20 + r() * 8, yaw: r() * 360, hold: 16 });
-    }
+    // an animal running beats everything static: a chase, a stampede, pronghorn bounding, a stotting mule deer
+    const motion = this.findMotion(f);
+    if (motion && r() < 0.92) return motion;
     // ravens over a kill
     // (the carcass with the most birds on it, framed close from the side: not a random one seen from 70 m up)
     if (f.carcassCount > 0 && !this.recent('ravens')) {
@@ -325,13 +790,18 @@ export class Director {
     // the biggest herd
     if (!this.recent('herd')) {
       const herd = this.herdOf(f, Sp.Bison);
-      if (herd) cands.push({ kind: 'herd', id: null, x: herd.x, y: herd.y, dist: 52 + r() * 28, pitch: 16 + r() * 10, yaw: r() * 360, hold: 20 });
+      if (herd) cands.push({ kind: 'herd', id: null, x: herd.x, y: herd.y, dist: 52 + r() * 28, pitch: 16 + r() * 10, yaw: r() * 360, hold: 14 });
     }
-    // a wolf pack on the move
+    // a wolf pack on the move (the wolf that is moving fastest, not one asleep)
     if (!this.recent('wolves')) {
-      const ids: number[] = [];
-      for (let k = 0; k < f.count; k++) if (f.agents[k * AGENT_STRIDE] === Sp.Wolf) ids.push(f.ids[k]);
-      if (ids.length) cands.push({ kind: 'wolves', id: ids[Math.floor(r() * ids.length)], x: 0, y: 0, dist: 24 + r() * 14, pitch: 12 + r() * 8, yaw: r() * 360, hold: 16 });
+      let wk = -1, ws = -1;
+      for (let k = 0; k < f.count; k++) {
+        const o = k * AGENT_STRIDE;
+        if (f.agents[o] !== Sp.Wolf) continue;
+        const sc = f.agents[o + 4] + r() * 0.8;
+        if (sc > ws) { ws = sc; wk = k; }
+      }
+      if (wk >= 0) cands.push({ kind: 'wolves', id: f.ids[wk], x: 0, y: 0, dist: 24 + r() * 14, pitch: 12 + r() * 8, yaw: r() * 360, hold: 16 });
     }
     // pronghorn, low and close
     if (!this.recent('pronghorn')) {
@@ -361,13 +831,77 @@ export class Director {
       const g = this.findMigrants(f, -1);
       if (g) cands.push(g);
     }
+    // at 10x the animals still read but a year is quick, so the valley from the air is part of the mix
+    if (cls === 'fast' && !this.recent('drone')) {
+      const d = this.droneShot(f, false);
+      cands.push(d, d, d);
+    }
     // a vista every so often
-    if (!this.recent('vista')) {
+    if (!this.recent('vista') && cls === 'real') {
       // a vista still has life in it: the valley seen from behind a herd
       const h = this.biggestHerd(f, Sp.Bison) ?? [this.worldSize / 2, this.worldSize / 2];
       cands.push({ kind: 'vista', id: null, x: h[0], y: h[1], dist: 230 + r() * 90, pitch: 14 + r() * 8, yaw: r() * 360, hold: 18 });
     }
-    return cands[Math.floor(r() * cands.length)] ?? { kind: 'vista', id: null, x: this.worldSize / 2, y: this.worldSize / 2, dist: 380, pitch: 20, yaw: 0, hold: 20 };
+    if (motion) cands.push(motion);
+    return cands[Math.floor(r() * cands.length)] ?? (cls === 'real' ? { kind: 'vista', id: null, x: this.worldSize / 2, y: this.worldSize / 2, dist: 380, pitch: 20, yaw: 0, hold: 20 } : this.droneShot(f, false));
+  }
+
+  // ------------------------------------------------------------ drone moves (time-lapse)
+
+  /**
+   * A slow, high move over the valley, for years flying by: a pan across it or an orbit round a place, 150 to 300 m up at 100x (85 to 195
+   * m at 10x), looking out across the land so the weather, the cloud shadows and the colour of the grass over the seasons show. It carries
+   * on from where the last drone move ended, so a run of them reads as one long flight.
+   */
+  private droneShot(f: DirectorFrame, lapse: boolean): Shot {
+    const S = this.worldSize, r = () => this.rand();
+    const lo = lapse ? DRONE_ALT_LAPSE : DRONE_ALT_FAST;
+    const prev = this.droneTail && this.clock - this.droneTail.at < 4 ? this.droneTail : null;
+    const stormy = (f.weather ?? 0) === 1 || (f.weather ?? 0) === 3;
+    const alt = lo[0] + r() * (lo[1] - lo[0]);
+    const pitch0 = prev ? Math.max(22, Math.min(46, prev.pitch)) : (stormy ? 22 : 27) + r() * 15;
+    const pitch1 = Math.max(20, Math.min(48, pitch0 + (r() - 0.5) * 12));
+    const dist0 = Math.max(180, Math.min(900, alt / Math.sin(pitch0 * DEG)));
+    const dist1 = Math.max(180, Math.min(900, (alt + (r() - 0.5) * 60) / Math.sin(pitch1 * DEG)));
+    const lim = (v: number) => Math.max(S * 0.08, Math.min(S * 0.92, v));
+    const orbit = r() < 0.45;
+    const hold = (lapse ? 26 : 20) + r() * 12;
+    // where: the valley's middle third, or over the biggest herd (the place with life in it)
+    let cx = S * (0.34 + r() * 0.32), cy = S * (0.34 + r() * 0.32);
+    if (r() < 0.35) { const h = this.biggestHerd(f, Sp.Bison); if (h) { cx = lim(h[0]); cy = lim(h[1]); } }
+    let x0: number, y0: number, x1: number, y1: number, yaw0: number, yaw1: number;
+    if (orbit) {
+      // a slow circle: the heading sweeps 45 to 80 degrees round a place that drifts a little
+      const drift = (r() - 0.5) * 70, da = r() * Math.PI * 2;
+      x0 = prev ? prev.x : cx; y0 = prev ? prev.y : cy;
+      x1 = lim(x0 + Math.cos(da) * drift); y1 = lim(y0 + Math.sin(da) * drift);
+      yaw0 = prev ? prev.yaw : r() * 360;
+      yaw1 = yaw0 + (r() < 0.5 ? -1 : 1) * (45 + r() * 35);
+    } else {
+      // a pan: 170 to 290 m across the land, the camera looking broadside to the move, the heading easing round a few degrees
+      const a = r() * Math.PI * 2, L = 170 + r() * 120;
+      x0 = prev ? prev.x : lim(cx - Math.cos(a) * L / 2); y0 = prev ? prev.y : lim(cy - Math.sin(a) * L / 2);
+      x1 = lim(x0 + Math.cos(a) * L); y1 = lim(y0 + Math.sin(a) * L);
+      const broad = Math.atan2(-(y1 - y0), x1 - x0) / DEG + (r() < 0.5 ? 0 : 180);
+      yaw0 = prev ? prev.yaw : broad;
+      yaw1 = yaw0 + (r() < 0.5 ? -1 : 1) * (8 + r() * 22);
+    }
+    return { kind: 'drone', id: null, x: x0, y: y0, dist: dist0, pitch: pitch0, yaw: yaw0, hold, drone: { x0, y0, x1, y1, yaw0, yaw1, pitch0, pitch1, dist0, dist1 } };
+  }
+
+  /** Fly the drone move: the goal of the camera is set each frame along the path, and the camera's own springs smooth it. */
+  private driveDrone(dt: number): void {
+    const s = this.current;
+    if (!s || !s.drone) return;
+    const d = s.drone;
+    const u = Math.max(0, Math.min(1, (s.hold - this.t) / s.hold));
+    // (a gentle ease at both ends, so the move starts and finishes at rest)
+    const e = u * u * (3 - 2 * u), m = 0.5 * u + 0.5 * e;
+    const x = d.x0 + (d.x1 - d.x0) * m, y = d.y0 + (d.y1 - d.y0) * m;
+    const yaw = d.yaw0 + (d.yaw1 - d.yaw0) * u, pitch = d.pitch0 + (d.pitch1 - d.pitch0) * e, dist = d.dist0 + (d.dist1 - d.dist0) * e;
+    this.cam.setView({ x, y, yawDeg: yaw, pitchDeg: pitch, distance: dist });
+    this.droneTail = { x, y, yaw, pitch, dist, at: this.clock };
+    void dt;
   }
 
   /** The densest prairie dog town with a land predator within TOWN_THREAT_R of it: a fixed shot between the two, nearer the town. */
@@ -516,7 +1050,7 @@ export class Director {
 
   /** Cut to a named moment (see momentResolver). `urgent` is for a field note; `sp` names the species when `w` has none. */
   queueMoment(name: string, w: Where | undefined, urgent: boolean, sp = -1): void {
-    if (!this.enabled) return;
+    if (!this.enabled || this.cls === 'lapse') return; // (years flying by: no close shots, so no moment to cut to)
     const res = this.momentResolver(name, w, sp);
     if (!res) return;
     const ex = this.cuts.find((c) => c.key === name);
@@ -551,7 +1085,8 @@ export class Director {
     const species = (fallback: number): number => (sp >= 0 ? sp : w && w.sp >= 0 ? w.sp : fallback);
     switch (name) {
       case 'kill': return (f) => this.carcassShot(f, wx, wy, false, 'kill');
-      case 'stampede': return (f) => this.subjectShot(f, Sp.Bison, wx, wy, 'stampede', St.Flee) ?? this.subjectShot(f, Sp.Bison, wx, wy, 'stampede');
+      // (a stampede is filmed running, from alongside, when the herd is still running; a herd that has stopped is the framed group)
+      case 'stampede': return (f) => this.stampedeShot(f, wx, wy) ?? this.subjectShot(f, Sp.Bison, wx, wy, 'stampede', St.Flee) ?? this.subjectShot(f, Sp.Bison, wx, wy, 'stampede');
       case 'wolves': return (f) => this.subjectShot(f, Sp.Wolf, wx, wy, 'wolves');
       case 'coyotes': return (f) => this.subjectShot(f, Sp.Coyote, wx, wy, 'coyotes');
       case 'mousing': return (f) => this.findMousing(f) ?? this.subjectShot(f, Sp.Coyote, NaN, NaN, 'mousing');
@@ -569,6 +1104,12 @@ export class Director {
       case 'hares': return (f) => this.hareShot(f, wx, wy);
       default: return null;
     }
+  }
+
+  /** A stampede running now, near a place: the lead bison of the herd, tracked from alongside. */
+  private stampedeShot(f: DirectorFrame, x: number, y: number): Shot | null {
+    const m = this.findMotion(f, { sp: Sp.Bison, x: Number.isFinite(x) ? x : undefined, y: Number.isFinite(y) ? y : undefined, r: 140 });
+    return m && m.track ? m : null;
   }
 
   /** The first animal with a flag bit (infected, mange), framed close. */
@@ -645,20 +1186,21 @@ export class Director {
   }
 
   /**
-   * A carcass with the animals on it. With a place, the freshest carcass within 70 m of it; without, the freshest on the map. Scored by
+   * A carcass with the animals on it. With a place, the freshest carcass within `reach` (70) m of it; without, the freshest on the map. Scored by
    * the ravens and feeders within 16 m (`needBirds`: no ravens or raptors there, no shot). Framed from the side at 20 to 44 m with the
-   * dirt a little below centre, so the birds on and over it are in frame, not the empty sky above.
+   * dirt a little below centre, so the birds on and over it are in frame, not the empty sky above. `minFresh` is the least remaining
+   * fraction of the carcass that counts (a kill just made is whole). The shot keeps the carcass in frame or is dropped (see monitor).
    */
-  private carcassShot(f: DirectorFrame, nx: number, ny: number, needBirds: boolean, kind: ShotKind): Shot | null {
+  private carcassShot(f: DirectorFrame, nx: number, ny: number, needBirds: boolean, kind: ShotKind, minFresh = 0.1, reach = 70): Shot | null {
     let best = -1, bestScore = -Infinity, bestBirds = 0;
     const near = Number.isFinite(nx) && Number.isFinite(ny);
     for (let k = 0; k < f.carcassCount; k++) {
       const c = k * CARCASS_STRIDE;
       const fresh = f.carcasses[c + 2];
-      if (fresh <= 0.1) continue;
+      if (fresh <= minFresh) continue;
       const cx = f.carcasses[c], cy = f.carcasses[c + 1];
       const d = near ? Math.hypot(cx - nx, cy - ny) : 0;
-      if (near && d > 70) continue;
+      if (near && d > reach) continue;
       let birds = 0, feeders = 0, crowd = 0;
       for (let j = 0; j < f.count; j++) {
         const o = j * AGENT_STRIDE;
@@ -680,7 +1222,7 @@ export class Director {
     const r = this.rand();
     // a flock over it needs room; a lone bird or none, closer
     const dist = (bigPrey ? 32 + r * 10 : 20 + r * 8) * (bestBirds >= 3 ? 1.15 : 1);
-    return { kind, id: null, x: f.carcasses[c], y: f.carcasses[c + 1], dist, pitch: 15 + this.rand() * 7, yaw: this.rand() * 360, hold: kind === 'kill' ? MOMENT_HOLD : 14, lift: 1.2 };
+    return { kind, id: null, x: f.carcasses[c], y: f.carcasses[c + 1], dist, pitch: 15 + this.rand() * 7, yaw: this.rand() * 360, hold: kind === 'kill' ? MOMENT_HOLD : 14, lift: 1.2, carcass: true };
   }
 
   /**

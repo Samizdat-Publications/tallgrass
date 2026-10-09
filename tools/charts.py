@@ -361,7 +361,9 @@ def chart_seeds_grid(sc: Scenario, log: bool, saved: list[Path]):
             # faint raw samples (the seasonal birth pulse and winter losses) under a bold 1-year mean (the real cycle)
             ax.plot(t, raw, color=COLOR[k], lw=0.6, alpha=0.28, zorder=2)
             ax.plot(t, smooth_year(raw, spy, 3), color=COLOR[k], lw=1.3, zorder=3)
-        pop_scale(ax, log)
+        # always a symmetric-log axis here: nine species from 5 cougars to 1,000 pronghorn share one panel (round 21: on a linear
+        # axis the predators and small species lay flat on the floor and the big grazers were cut off)
+        pop_scale(ax, True)
         ax.set_xlim(0, xmax)
         gcol = sc.cols[s].get("grass_mean")
         if gcol is not None:
@@ -387,7 +389,7 @@ def chart_seeds_grid(sc: Scenario, log: bool, saved: list[Path]):
     top = header(
         fig,
         f"{sc.name}: population of every species over time, one panel per seed",
-        f"{sc.summary.get('description', '')}  ({sc.title_extra})  Bold = running mean over max(1 year, 3 samples), faint = raw samples.{'  [log scale]' if log else ''}",
+        f"{sc.summary.get('description', '')}  ({sc.title_extra})  Bold = running mean over max(1 year, 3 samples), faint = raw samples. Log scale.",
         legend_handles(sc, grass=True, shock=True),
     )
     fig.tight_layout(rect=(0, 0, 1, top))

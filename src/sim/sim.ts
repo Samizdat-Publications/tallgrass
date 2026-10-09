@@ -22,6 +22,7 @@ import { AGENT_STRIDE, CARCASS_STRIDE, F_ALPHA, F_INFECTED, F_JUVENILE, F_MALE, 
 import { COAT_BASE, COAT_RANGE, DIET, FLIES, IS_PREY, isGrazer, REACT, SPECIES, THREAT } from './species';
 import { STRIDE, Vegetation } from './vegetation';
 import { Winter, WINTER_STEP } from './winter';
+import { Bands } from './bands';
 import { distanceTransform, generateWorld, World } from './world';
 
 const DT = 0.15; // seconds of motion per tick (1x is a gentle 1.5x time-lapse)
@@ -252,6 +253,9 @@ export class Sim implements SimLike {
   private cLightning = 0;
   /** Snow depth, drift and melt (params.snowDepth; null when off). */
   winter: Winter | null = null;
+  /** Bison herd bands (params.herdBands; null when off). */
+  bands: Bands | null = null;
+  private bandCentre = new Float64Array(2);
   /** God tools v2 (S17). A running flood (null when none): ticks left, severity, flooded band width (m) and the cell mask. */
   flood: { left: number; sev: number; radius: number; mask: Uint8Array; silt: number } | null = null;
   /** Dust storms (S12; params.dustStorms, null when off), grasshoppers (params.grasshoppers) and natural spring floods (params.springFloods). */
@@ -406,6 +410,7 @@ export class Sim implements SimLike {
     }
     if (this.p.beavers > 0 || this.p.species[Sp.Beaver].initial > 0) this.startBeavers();
     this.populate();
+    if (this.p.herdBands > 0) { this.bands = new Bands(this.a, this.p, this.seed); this.bands.seedFounders(); }
     this.coyotes.seedFounders();
     this.beavers?.seedFounders();
     if (this.p.openPrairie > 0 || this.p.ravenVagrants > 0) {
@@ -816,6 +821,7 @@ export class Sim implements SimLike {
     this.prey.build(this.preyList, this.preyN, a.x, a.y);
     this.pred.build(this.predList, this.predN, a.x, a.y);
     this.updatePacks();
+    if (this.bands !== null) this.bands.step(t);
     if (this.pop[Sp.Coyote] > 0) this.coyotes.step(t);
     if (this.beavers !== null) this.beavers.step(t);
     if (this.p.raptors > 0 || this.pop[Sp.Eagle] + this.pop[Sp.Hawk] > 0) this.raptors.step(t);
@@ -1143,6 +1149,7 @@ export class Sim implements SimLike {
     a.hydration[c] = 0.9;
     a.mother[c] = mother;
     a.motherId[c] = a.id[mother];
+    a.band[c] = a.band[mother]; // a calf joins its mother's herd band (-1 when bands are off)
     const useMate = fatherSlot < 0;
     const fatherGen = useMate ? a.gen[mother] : a.gen[fatherSlot];
     a.gen[c] = Math.max(a.gen[mother], fatherGen) + 1;
@@ -1476,11 +1483,17 @@ export class Sim implements SimLike {
     let n = 0, cx = 0, cy = 0, avx = 0, avy = 0, sepx = 0, sepy = 0, alarm = 0, alx = 0, aly = 0, infNear = 0, maxFlee = 0;
     let mate = -1, mateD = 1e9;
     let nnx = 0, nny = 0, nnd2 = 1e9;
+    // herdBands (guarded; bison with a band only): nc counts the band-mates that feed cohesion and alignment (equals n with bands off),
+    // br is the soft push away from other bands, and the scan reaches two buckets out when bandGap is wider than one
+    const bandsOn = this.bands !== null && s === Sp.Bison && a.band[i] >= 0;
+    const myBand = a.band[i], bandGap = p.bandGap, bandGap2 = bandGap * bandGap;
+    let nc = 0, brx = 0, bry = 0;
+    const sr = bandsOn && bandGap > bs ? 2 : 1;
     const wantMate = !a.male[i] && !juvenile && a.pregnant[i] === 0 && a.cooldown[i] === 0 && a.energy[i] > p.conceiveEnergy;
     const gStart = g.start, gItems = g.items, aAlive = a.alive, aSp = a.sp, aX = a.x, aY = a.y, aVx = a.vx, aVy = a.vy;
     // the buckets of one row are adjacent in the grid, so a row's candidates are one contiguous run (same visiting order)
-    const hxa = bx - 1 < 0 ? 0 : bx - 1, hxb = bx + 1 >= nb ? nb - 1 : bx + 1;
-    for (let yy = by - 1; yy <= by + 1; yy++) {
+    const hxa = bx - sr < 0 ? 0 : bx - sr, hxb = bx + sr >= nb ? nb - 1 : bx + sr;
+    for (let yy = by - sr; yy <= by + sr; yy++) {
       if (yy < 0 || yy >= nb) continue;
       const row = yy * nb;
       for (let k = gStart[row + hxa], e = gStart[row + hxb + 1]; k < e; k++) {
@@ -1489,13 +1502,24 @@ export class Sim implements SimLike {
         const jx = aX[j], jy = aY[j];
         const dx = jx - x, dy = jy - y;
         const d2 = dx * dx + dy * dy;
+        let same = true;
+        if (bandsOn) {
+          const bj = a.band[j];
+          if (bj >= 0 && bj !== myBand) {
+            same = false;
+            if (d2 < bandGap2) { const d = Math.sqrt(d2) + 0.01, w = 1 - d / bandGap; brx -= dx / d * w; bry -= dy / d * w; }
+          }
+        }
         if (d2 > hr2) continue;
         // a herd animal tracks its nearest few dozen neighbors, not the whole crowd
         if (n >= 40 && d2 > 9) continue;
         n++;
-        if (d2 < nnd2) { nnd2 = d2; nnx = dx; nny = dy; }
-        cx += jx; cy += jy;
-        avx += aVx[j]; avy += aVy[j];
+        if (same) {
+          nc++;
+          if (d2 < nnd2) { nnd2 = d2; nnx = dx; nny = dy; }
+          cx += jx; cy += jy;
+          avx += aVx[j]; avy += aVy[j];
+        }
         if (d2 < spacing2) {
           // keep some personal space from the nearest herd-mates
           const d = Math.sqrt(d2) + 0.01;
@@ -1618,7 +1642,7 @@ export class Sim implements SimLike {
     let state: number = St.Idle;
     // a mule deer group that has grown past muledeerGroupMax stops cohering and drifts apart, so the groups stay 3 to 10
     const herd = a.genes[o + G_HERD] * (mh !== null && n >= p.muledeerGroupMax ? -0.6 : 1);
-    if (n > 0) { cx /= n; cy /= n; avx /= n; avy /= n; }
+    if (nc > 0) { cx /= nc; cy /= nc; avx /= nc; avy /= nc; }
     const c = this.veg.cellAt(x, y);
     if (a.flee[i] > 0 && a.hydration[i] < 0.2 && threat < 0) a.flee[i] = 0;
     if (a.flee[i] > 0) {
@@ -1662,7 +1686,7 @@ export class Sim implements SimLike {
         state = St.Rest;
         dvx = sepx * 0.5;
         dvy = sepy * 0.5;
-        if (n > 0) {
+        if (nc > 0) {
           if (p.herdNearest > 0) {
             const d = Math.sqrt(nnd2);
             if (d > p.herdNearest + 1) { dvx += (nnx / d) * 0.6 * herd; dvy += (nny / d) * 0.6 * herd; state = St.Walk; }
@@ -1702,7 +1726,7 @@ export class Sim implements SimLike {
           dvx = bdx * v + (gm > 0 ? gsepx : sepx) * 0.5;
           dvy = bdy * v + (gm > 0 ? gsepy : sepy) * 0.5;
           const gcoh = gm > 0 ? 0.3 / gm : 0.3;
-          if (n > 0) {
+          if (nc > 0) {
             if (p.herdNearest > 0) {
               // stay within reach of the nearest herd-mate rather than the herd's centre: grazing fronts and strands, not rings
               const d = Math.sqrt(nnd2);
@@ -1749,7 +1773,7 @@ export class Sim implements SimLike {
           }
           dvx = bdx * walk + sepx;
           dvy = bdy * walk + sepy;
-          if (n > 0) {
+          if (nc > 0) {
             const dx = cx - x, dy = cy - y, d = Math.sqrt(dx * dx + dy * dy);
             if (d > coh - 1) { dvx += (dx / d) * 0.7 * herd; dvy += (dy / d) * 0.7 * herd; }
             dvx += avx * 0.3 * herd;
@@ -1763,6 +1787,17 @@ export class Sim implements SimLike {
     if (p.drinkSpots > 0 && state !== St.Drink && state !== St.Flee && a.hydration[i] > 0.85 && this.drinkD[c] < 12) {
       dvx -= this.waterGX[c] * 0.5;
       dvy -= this.waterGY[c] * 0.5;
+    }
+    // herdBands (guarded): drift away from other bands, and head back to the band when none of it is in reach; flight and drinking ignore bands
+    if (bandsOn && state !== St.Flee && state !== St.Drink) {
+      const push = p.bandPush, bl = Math.sqrt(brx * brx + bry * bry);
+      if (bl > 0.02) { const k = push * Math.min(1, bl) / bl; dvx += brx * k; dvy += bry * k; }
+      if (this.bands!.centre(myBand, this.bandCentre)) {
+        // a straggler is drawn back to its band's centre: from 10 m when no band-mate is in reach, else only when well outside the band
+        const dx = this.bandCentre[0] - x, dy = this.bandCentre[1] - y, d = Math.sqrt(dx * dx + dy * dy);
+        const reach = nc === 0 ? Math.min(10, p.bandReach) : p.bandReach;
+        if (d > reach) { const k = push * p.bandPull * herd * Math.min(3, d / reach) / d; dvx += dx * k; dvy += dy * k; }
+      }
     }
     a.dvx[i] = dvx;
     a.dvy[i] = dvy;
@@ -3337,6 +3372,13 @@ export class Sim implements SimLike {
       cnt++;
     }
     row.nn_graze_bison = cnt >= 2 ? sum / cnt : NaN;
+    // herd bands (only with herdBands on): bands alive, their mean size, and the median distance from a band's centre to the nearest other band's centre
+    if (this.bands !== null) {
+      const bs = this.bands.stats();
+      row.bands_bison = bs.bands;
+      row.band_mean_bison = bs.mean;
+      row.band_gap_bison = bs.gap;
+    }
   }
 
   sample(): Record<string, number> {
