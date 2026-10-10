@@ -403,3 +403,16 @@ Scores: visual 5, readability 7, life and motion 3, ecosystem 6, UI 8, keep watc
 6. Camera drags through bushes into the carcass shot: DEFER (the reel's own cut).
 7. Static sick bison during the time-lapse: REJECT for now (bedded animals at 10x; the sickness reads in the panel).
 
+## Round 32 (fresh blind critic, stills of D11 plus the v10b overview chart; 2026-10-10 16:05) -> `review/round-32/critique.md`
+Scores: visual 6, readability 4, life 6, ecosystem 6, UI 7, keep watching 6 (round 28: 7, 5, 6, 6, 7, 6).
+1. Species unreadable at the overview distance: FIX NEXT (after B15; the biggest open item since round 25: distance silhouettes and value contrast between 60 and 200 m).
+2. Herds packed around one pond: DEFER (sim; the shoreSpread fix cost mule deer 39% over 1,200 years, review/stability/v11-feaa081/RESULT.md; a deer-safe variant is Next 5 item 1).
+3. Glossy orange saddle on bison, seal-like at mid range: FIX, builder B15 r-polish32 (confirmed by eye in lk_05).
+4. Prairie reads as sand dunes at distance, every shot in Dry years: DEFER (the far ground; the showcase scenario choice is the stills harness).
+5. Charts are set points with noise; mule deer and prairie dogs decline: DEFER (sim; v10b passed every gate; the declines are the known mule deer and prairie dog weak spots, and a 100-year zoom chart is cheap: next cycle).
+6. Animals glow pale at night, blotchy moonlit pond: FIX, B15 (confirmed by eye in lk_09).
+7. Ravens as a swarm of flies: DEFER (raven numbers are the sim's; a render cap on far birds is a candidate).
+8. Radial dust spokes, pink decal, white dashes, lily-pad bushes: DEFER (minor).
+9. Doily ice ring, dithered autumn crowns, hard leaf-card edges: DEFER (minor).
+10. Idle playback bar invisible: FIX, B15. Axis labels and the hawk lane: DEFER.
+
