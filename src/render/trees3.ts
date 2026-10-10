@@ -7,7 +7,7 @@
 //   leaf cards: x,z in crown-radius units (nominal 6 m), y in height units (nominal 14 m), exactly as the lump crowns;
 //   bark:       a uniform 1/14 scale (tree height is 1), like the old bark, so the furrow shader frequencies carry over.
 import * as THREE from 'three';
-import { NOISE_GLSL, OCCLUDE_GLSL, SharedUniforms, clamp, injectSafeOutput, injectTerrainShadow, smoothstep as smoothstepJs } from './common';
+import { CLOUD_SHADOW_GLSL, NOISE_GLSL, OCCLUDE_GLSL, SharedUniforms, clamp, cloudShadowUniforms, injectSafeOutput, smoothstep as smoothstepJs } from './common';
 import { cottonwoodParams, generateEzTree, willowParams, type EzTree } from './eztree';
 import { Pool, swayChunk, WORLDPOS_GLSL } from './trees';
 
@@ -20,7 +20,9 @@ export const VARIANTS3 = 6;
 const W0 = 2.2;
 const TH0 = 5;
 /** Beyond this distance (m) the older lump crowns draw the tree (trees.ts skips them inside it). */
-export const TREES3_RANGE = 150;
+export const TREES3_RANGE = 160;
+/** Where the hand-over to the lump crowns starts: trees3 fades out over TREES3_SWAP0 .. TREES3_RANGE, the lump crowns fade in over the same band. */
+export const TREES3_SWAP0 = 130;
 /** Tuning hooks for the cost experiments (?t3k=0.6,0.3 share of leaf clusters per LOD, ?t3g=1.2,1.7 their size, ?t3l=40 the LOD0 distance). */
 function tuneList(name: string, d: number[]): number[] {
   if (typeof location === 'undefined') return d;
@@ -29,11 +31,11 @@ function tuneList(name: string, d: number[]): number[] {
   const v = m[1].split(',').map(Number);
   return d.map((x, i) => (Number.isFinite(v[i]) ? v[i] : x));
 }
-const LEAF_LIM = [tuneList('t3l', [52])[0], TREES3_RANGE];
+const LEAF_LIM = [tuneList('t3l', [38, 90]), TREES3_RANGE].flat();
 const BARK_LIM = [46, TREES3_RANGE];
 /** Share of the leaf clusters each LOD keeps, and how much larger the survivors are drawn. */
-const LEAF_KEEP = tuneList('t3k', [0.85, 0.32]);
-const LEAF_GROW = tuneList('t3g', [1.1, 1.65]);
+const LEAF_KEEP = tuneList('t3k', [0.8, 0.3, 0.12]);
+const LEAF_GROW = tuneList('t3g', [1.1, 1.65, 2.3]);
 
 function mulberry32(a: number) {
   return () => {
@@ -201,7 +203,7 @@ function buildLeaves(tree: EzTree, keep: number, grow: number, seed: number, cel
   const cy = cyMin + (cyMax - cyMin) * 0.46;
   const ry = Math.max(cyMax - cy, cy - cyMin) * 1.08 + 0.5;
   const pos: number[] = [], nrm: number[] = [], uv: number[] = [], occ: number[] = [], rnd: number[] = [], cen: number[] = [], idx: number[] = [];
-  const P = new THREE.Vector3(), N = new THREE.Vector3(), C = new THREE.Vector3(), cardN = new THREE.Vector3(), E = new THREE.Vector3();
+  const P = new THREE.Vector3(), N = new THREE.Vector3(), C = new THREE.Vector3(), cardN = new THREE.Vector3(), E = new THREE.Vector3(), fN = new THREE.Vector3(), sA = new THREE.Vector3(), aA = new THREE.Vector3();
   let vi = 0;
   // pairs of anchors (the crossed quads of one leaf cluster) share their random numbers
   for (let k = 0; k < A.length; k += 2) {
@@ -213,8 +215,21 @@ function buildLeaves(tree: EzTree, keep: number, grow: number, seed: number, cel
     const kp = keep * (inner + (1 - inner) * smoothstepJs(0.3, 0.75, sh));
     if (r0 >= kp) continue;
     const rr = r0 / kp;
+    // the crossed pair, turned toward the crown's outward direction (cards stacked flat in horizontal tiers read as ledges from above):
+    // one card faces out, the other is perpendicular to it, both share the growth axis
+    {
+      fN.crossVectors(a0.a, a0.s).normalize();
+      C.copy(a0.o).addScaledVector(a0.a, a0.size * 0.5);
+      E.set((C.x - cx) / rx, (C.y - cy) / ry, (C.z - cz) / rx);
+      N.set(E.x / rx, E.y / ry, E.z / rx).normalize();
+      if (N.lengthSq() < 1e-6) N.set(0, 1, 0);
+      if (fN.dot(N) < 0) fN.negate();
+      fN.lerp(N, 0.6).normalize();
+      sA.crossVectors(a0.a, fN).normalize();
+      aA.crossVectors(fN, sA).normalize();
+    }
     for (let q = 0; q < 2 && k + q < A.length; q++) {
-      const a = A[k + q];
+      const a = { o: A[k + q].o, a: aA, s: q === 0 ? sA : fN, size: A[k + q].size };
       const size = a.size * grow * (0.9 + 0.2 * jit);
       const W = size, L = size;
       cardN.crossVectors(a.a, a.s).normalize();
@@ -270,12 +285,62 @@ float tgLeafVis( float keep, float rnd ) {
 }
 `;
 
-function leafMaterial(shared: SharedUniforms, atlas: THREE.Texture, willow = false): THREE.MeshStandardMaterial {
-  const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 1.0, metalness: 0, side: THREE.DoubleSide });
+/**
+ * The terrain (hill) and cloud shadow of common.ts injectTerrainShadow, but looked up once per VERTEX and interpolated: a leaf card is a
+ * couple of metres across, the shadow maps are far coarser than that, and three texture reads per fragment of a many-layered crown was a
+ * large share of its cost. Same maths, same result for the lighting (directLight.color is scaled by gTgShadow).
+ */
+function injectTerrainShadowPerVertex(shader: { vertexShader: string; fragmentShader: string; uniforms: Record<string, any> }, shared: SharedUniforms): void {
+  shader.uniforms.tTgShadow = shared.terrainShadow;
+  shader.uniforms.tTgShadowFar = shared.terrainShadowFar;
+  shader.uniforms.uTgFarRect = shared.farRect;
+  shader.uniforms.uTgWorld = shared.worldSize;
+  shader.uniforms.uTgOver = shared.overcast;
+  Object.assign(shader.uniforms, cloudShadowUniforms(shared));
+  shader.vertexShader = shader.vertexShader
+    .replace('void main() {', `uniform sampler2D tTgShadow;
+      uniform sampler2D tTgShadowFar;
+      uniform vec3 uTgFarRect;
+      uniform float uTgWorld;
+      uniform float uTgOver;
+      ${CLOUD_SHADOW_GLSL}
+      varying float vTgShadowK;
+      float tgVsShadow( vec2 xz ) {
+        vec2 uv = xz / uTgWorld;
+        vec2 qd = abs( xz - 0.5 * uTgWorld ) - 0.5 * uTgWorld;
+        float sd = max( qd.x, qd.y );
+        float wIn = 1.0 - smoothstep( -20.0, 30.0, sd );
+        vec2 fuv = ( xz - uTgFarRect.xy ) / uTgFarRect.z;
+        float far = texture2D( tTgShadowFar, clamp( fuv, 0.0, 1.0 ) ).r;
+        float hill = mix( mix( far, texture2D( tTgShadow, clamp( uv, 0.0, 1.0 ) ).r, wIn ), 1.0, 0.85 * uTgOver );
+        return hill * tgCloudShadowAt( xz );
+      }
+      void main() {`)
+    .replace('#include <fog_vertex>', `#include <fog_vertex>
+      vTgShadowK = tgVsShadow( ( cameraPosition + transpose( mat3( viewMatrix ) ) * mvPosition.xyz ).xz );`);
+  shader.fragmentShader = shader.fragmentShader
+    .replace('void main() {', 'varying float vTgShadowK;\nfloat gTgShadow = 1.0;\nvoid main() {')
+    .replace(
+      '#include <lights_fragment_begin>',
+      THREE.ShaderChunk.lights_fragment_begin
+        .replace(/getSunLightInfo\( sunLight, directLight \);/g, 'getSunLightInfo( sunLight, directLight ); directLight.color *= gTgShadow;')
+        .replace(/getDirectionalLightInfo\( directionalLight, directLight \);/g, 'getDirectionalLightInfo( directionalLight, directLight ); directLight.color *= gTgShadow;')
+        .replace(/^/, 'gTgShadow = vTgShadowK;\n'),
+    );
+}
+
+const LAMBERT = !(typeof location !== 'undefined' && /[?&]t3m=std(&|$)/.test(location.search));
+
+function leafMaterial(shared: SharedUniforms, atlas: THREE.Texture, willow = false, far = false): THREE.MeshStandardMaterial | THREE.MeshLambertMaterial {
+  // a Lambert surface (diffuse only): leaves have no gloss, and the GGX terms of a Standard material cost a lot over a many-layered crown
+  const mat = LAMBERT
+    ? new THREE.MeshLambertMaterial({ color: 0xffffff, side: THREE.DoubleSide })
+    : new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 1.0, metalness: 0, side: THREE.DoubleSide });
   mat.alphaTest = 0.5;
-  mat.alphaToCoverage = true;
+  // (past the near LOD a card is a few pixels: a hard cut-out is enough, and skips the coverage mask)
+  mat.alphaToCoverage = !far;
   mat.onBeforeCompile = (shader) => {
-    injectTerrainShadow(shader, shared);
+    injectTerrainShadowPerVertex(shader, shared);
     const u = shader.uniforms;
     u.uTime = shared.time; u.uWind = shared.wind;
     u.uLeaf = shared.leafAmount; u.uLeafA = shared.leafColorA; u.uLeafB = shared.leafColorB;
@@ -310,10 +375,9 @@ function leafMaterial(shared: SharedUniforms, atlas: THREE.Texture, willow = fal
           // (a card is mostly empty texels: drop them before any of the shading work)
           vec4 lt = texture2D( tLeaf, vLeafUv );
           if ( lt.a < 0.04 ) discard;
-          gTgShadow = tgSampleTerrainShadow();
           vec3 inst = diffuseColor.rgb; // instance colour: (brightness, hue shift, season phase)
           vec3 wpw = tgFragWorld();
-          diffuseColor.a = lt.a * tgOcclusionFade( wpw );
+          diffuseColor.a = lt.a * tgOcclusionFade( wpw )${willow ? '' : ' * ( 1.0 - smoothstep( 130.0, 160.0, length( vViewPosition ) ) )'};
           float occ = clamp( vOcc, 0.0, 1.0 );
           float mixT = clamp( 0.5 + ( vRnd - 0.5 ) * 0.5 + ( inst.g - 0.5 ) * 0.95 + ( lt.r - 0.75 ) * 0.5, 0.0, 1.0 );
           // autumn gold: the season's leaf colour ramps from green toward amber, and each tree turns on its own schedule
@@ -355,7 +419,7 @@ function leafMaterial(shared: SharedUniforms, atlas: THREE.Texture, willow = fal
         }`);
     shader.fragmentShader = injectSafeOutput(shader.fragmentShader);
   };
-  mat.customProgramCacheKey = () => (willow ? 'tg-leaf3-willow-v1' : 'tg-leaf3-v1');
+  mat.customProgramCacheKey = () => `tg-leaf3-v2-${willow ? 'w' : 'c'}${far ? 'f' : 'n'}${LAMBERT ? 'l' : 's'}`;
   return mat;
 }
 
@@ -401,7 +465,7 @@ export class Trees3 {
   /** Build time of the variants in ms, for the log and the bench. */
   readonly buildMs: number;
   verts = 0;
-  private willowMat: THREE.MeshStandardMaterial;
+  private willowMat: THREE.Material;
   private leafDepth: THREE.Material;
   private bark: THREE.Material;
   private depthMat: THREE.Material;
@@ -411,12 +475,13 @@ export class Trees3 {
     this.dummy.rotation.order = 'YXZ';
     const atlas = makeLeafAtlas();
     const leafMat = leafMaterial(shared, atlas);
+    const leafMatFar = leafMaterial(shared, atlas, false, true);
     const leafDepth = leafDepthMaterial(shared, atlas);
-    this.willowMat = leafMaterial(shared, atlas, true);
+    this.willowMat = leafMaterial(shared, atlas, true, true);
     this.leafDepth = leafDepth;
     this.bark = bark;
     this.depthMat = depthMat;
-    this.disposables.push(atlas, leafMat, leafDepth, this.willowMat);
+    this.disposables.push(atlas, leafMat, leafMatFar, leafDepth, this.willowMat);
     for (let v = 0; v < VARIANTS3; v++) {
       const tree = generateEzTree(cottonwoodParams(v));
       const pool = new Pool(Math.max(64, Math.ceil(capacity[v] * 1.6) + 32), LEAF_LIM, BARK_LIM);
@@ -424,7 +489,7 @@ export class Trees3 {
         const g = buildLeaves(tree, keep, LEAF_GROW[li], v + 1, COTTON_CELLS, R0, H0);
         this.disposables.push(g);
         this.verts += g.getAttribute('position').count;
-        pool.addMesh('crown', g, leafMat, `cottonwood-crown-t3-${v}-lod${li}`, true, group, meshes, leafDepth);
+        pool.addMesh('crown', g, li === 1 ? leafMatFar : leafMat, `cottonwood-crown-t3-${v}-lod${li}`, true, group, meshes, leafDepth);
       });
       [3, 2].forEach((maxLevel, li) => {
         const g = buildBark(tree, maxLevel, H0, H0);
@@ -477,7 +542,9 @@ export class Trees3 {
     dummy.scale.set(p.r * p.sw * p.grow * k, p.h * p.grow, p.r * p.sw * p.grow * p.swz * k);
     dummy.updateMatrix();
     dummy.matrix.toArray(pool.barkMats, slot * 16);
-    pool.barkCols[slot * 3] = p.bark[0]; pool.barkCols[slot * 3 + 1] = p.bark[1]; pool.barkCols[slot * 3 + 2] = p.bark[2];
+    // (darker and browner than the lump trees' bark: cottonwood bark is deep grey-brown, and a snow-dusted pale limb read as a bone-white dead forest)
+    const dk = p.burned ? 1 : 0.58;
+    pool.barkCols[slot * 3] = p.bark[0] * dk * 1.04; pool.barkCols[slot * 3 + 1] = p.bark[1] * dk * 0.96; pool.barkCols[slot * 3 + 2] = p.bark[2] * dk * 0.84;
     pool.barkOn[slot] = 1;
     pool.crownOn[slot] = p.burned ? 0 : 1;
   }
