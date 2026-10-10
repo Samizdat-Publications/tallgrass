@@ -13,7 +13,7 @@
 3. **Golden hour like the concept.** Low sun is warm and readable instead of purple and muddy, the glare near the sun is gone, the rippled-dune hills are smooth.
 4. **Real trees.** Branching cottonwoods and willows with leaf clusters, bare winter skeletons and clean bark, and cheaper than the old trees in groves. `?trees3=0` shows the old ones.
 5. **Ground, water and night.** Photo-scanned ground detail up close; darker ponds and creek with reflections and muddy, trampled shores; moonlit rims that separate the herds at night.
-6. **Speed.** A performance pass took the heaviest view from 17.5 to 13.7 ms at 1440p; every view is under the 16.7 ms budget, with room for all of the above.
+6. **Speed.** A performance pass took the heaviest view from 17.5 to 13.7 ms at 1440p, putting every view under the 16.7 ms budget; the later additions each measured neutral or cheaper in paired benches on a busy machine. A clean bench of the final build on an idle machine is still to do.
 7. **Smaller fixes:** snow by landform, a quiet selection ring that fades, small blood stains instead of a red disc, no dotted "screen door" on animals at mid range, the follow camera keeps a chasing wolf and its prey in frame, faded panels stay legible, field-note cards read as notebook entries.
 
 ![The golden-hour look, before and after](journey/20261010-040242_still_day-golden-look.jpg)
@@ -39,7 +39,7 @@
 - The **Chronicle hides completely** when the UI idles; the population panel stays faintly visible.
 
 ### Blocked or cut
-- Idle-machine measurements (page-ready time, 100x speed) never happened: the CPU ran batches all night. Pages took 2 to 4 minutes to load under that load; please tell me if the live site loads slowly for you.
+- Idle-machine measurements (page-ready time, 100x speed) never happened: the CPU ran batches all night. Under that load the live page took over 3 minutes to become ready; please tell me if the live site loads slowly for you.
 - Wide-view readability (telling species apart at mid range) and the noisy-looking population charts are still open.
 - Your CPU ruling (16:00, then 85% from 18:00) cost about two hours of builder speed in the evening; no work was lost.
 
