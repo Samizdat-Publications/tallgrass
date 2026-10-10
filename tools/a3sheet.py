@@ -1,12 +1,14 @@
 # a3 spike: contact sheets of the before/after stills made by tools/a3shots.mjs: one sheet per species and distance, rows = poses,
 # left = procedural near LOD (off), right = authored mesh (a3). Crops to the animal.
-#   python tools/a3sheet.py review/wip/a3-spike/lab review/wip/a3-spike
+#   python tools/a3sheet.py review/wip/a3-spike/lab review/wip/a3-spike [bison,wolf] [8,20,45]
 import sys, os
 from PIL import Image, ImageDraw
 src, dst = sys.argv[1], sys.argv[2]
 poses = ['idle', 'walk', 'run', 'graze', 'rest']
-for sp in ['bison', 'wolf']:
-    for d in [8, 20, 45]:
+sps = sys.argv[3].split(',') if len(sys.argv) > 3 else ['bison', 'wolf']
+dists = [int(x) for x in sys.argv[4].split(',')] if len(sys.argv) > 4 else [8, 20, 45]
+for sp in sps:
+    for d in dists:
         rows = []
         for pose in poses:
             a = os.path.join(src, f'{sp}_{pose}_{d:02d}m_off.jpg'); b = os.path.join(src, f'{sp}_{pose}_{d:02d}m_a3.jpg')

@@ -20,6 +20,11 @@ Owner ruling 2026-10-09: any model source and license is allowed for the spike, 
 - **Wolf**: "WOLF - Realistic 3D Model (DEMO FREE)" by WildMesh 3D, https://sketchfab.com/3d-models/wolf-realistic-3d-model-demo-free-8840b859a566485c874a27b1731e1db8 , CC Attribution-NonCommercial 4.0 (http://creativecommons.org/licenses/by-nc/4.0/). Output: `public/models/a3/wolf.*`. NON-COMMERCIAL: resolve before any commercial release.
 ## r-trees3 spike (branch r-trees3, behind ?trees3=1): branching cottonwoods
 - **ez-tree** by Daniel Greenheck, https://github.com/dgreenheck/ez-tree , MIT License (Copyright (c) 2024 Daniel Greenheck). `src/render/eztree.ts` is a geometry-only TypeScript port of its deciduous branch and leaf-anchor generator (the package's own build embeds 4 MB of textures, which the port leaves out). The bark texture and the leaf-cluster atlas are not from the library: the bark is shaded procedurally and the leaves are drawn by `makeLeafAtlas()` in `src/render/trees3.ts`.
+- **Pronghorn**: "Pronghorn" by FennecFyre, https://sketchfab.com/3d-models/pronghorn-a8cb6abfb49841ed97f8480a36c26b3b , CC Attribution-NonCommercial 4.0. Output: `public/models/a3/pronghorn.*`.
+- **Mule deer**: "DEER - Realistic 3D Model (DEMO FREE)" by WildMesh 3D, https://sketchfab.com/3d-models/deer-realistic-3d-model-demo-free-3997d669818c4e0d8c8bcafb0a1ae2ee , CC Attribution-NonCommercial 4.0 (source antlers left out; the procedural antlers are kept). Output: `public/models/a3/muledeer.*`.
+- **Coyote**: "coyote" by Raven-Woods, https://sketchfab.com/3d-models/coyote-e350e508749c45baab4df6fb6cba8cd9 , CC Attribution 4.0. Output: `public/models/a3/coyote.*`.
+- **Cougar**: "Puma Gray" by 1225659838@qq.com (as listed on Sketchfab), https://sketchfab.com/3d-models/puma-gray-90f0fd2c4ce24d05acce011256953ca5 , CC Attribution 4.0 (whiskers and claws left out). Output: `public/models/a3/cougar.*`.
+- The a3 models are now on by default (`?a3=0` turns them off). Non-commercial licences above (wolf, pronghorn, mule deer) need resolving before any commercial release.
 ## Third-party assets
 Any CC0 or CC-BY asset added later is listed here with its author, source URL and license.
 
