@@ -8,6 +8,7 @@
   - 16:00: D9 (r-alert2), D10 (trunk checkerboard), D11 (chase camera) all live and clean. Gemini round 31 and blind round 32 triaged in REVIEWS.md. Weekly 61% at 15:45.
   - 16:30: D12 live (r-polish32 merged). Weekly 61%.
   - 17:10: D13 live (r-read merged). Weekly 61%.
+  - RUNNING (CPU, 8 threads): scratch/v12/waves.sh, shoreWaves 1, 16 x 400 yr, out scratch/v12/waves1, log scratch/v12/waves.log. Compare with review/stability/v10b-1f3f658/baseline seeds 1 to 16, years 60 to 400: near_bison (tools/herdshape.py), mule deer, bison, wolves, prairie dogs. Gate: near-water share down clearly, mule deer within 5%.
   - CPU: throttle loop restarted (scratch/day/throttle_loop.sh now calls scratch/day/throttle.ps1). Worktree preview server for wt-start on 5198 can be killed.
   - After B14, if quota is under 65%: nothing new; final MORNING self-audit, NEXT-SESSION, and stop early by writing the time to .claude/hooks/run_until.local.txt when the quota rule says so.
 - Planned Friday afternoon at extra-high effort; executes at high effort once the owner switches. The plan: `DAY-PLAN.md` (stock-take, bang-for-buck ranking, blocks, gates, quota targets).
