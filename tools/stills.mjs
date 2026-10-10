@@ -265,6 +265,50 @@ const SETS = {
   ],
 };
 
+// r-trees3: cottonwood trees under real light, in a grove (the densest cluster of valley trees), by season. Run once without and once with
+// ?trees3=1 in --query and compare the same-named frames. t3_00_setup defines window.__grove(k, dist, pitch, relYaw) (k-th densest grove).
+SETS.trees3 = [
+  { name: 't3_00_setup', eval: `(() => {
+    const e = window.__engine, w = e.world;
+    window.__env = (o) => {
+      window.__envO = Object.assign({ season: 1.3, weather: 0, warmth: 0.7, rain: 0, dayFrac: 0.7 }, o);
+      if (!window.__envHook) window.__envHook = e.onFrame(() => e.setEnv(window.__envO));
+      e.setEnv(window.__envO); e.applyEnvNow();
+    };
+    const T = w.trees, n = T.length / 4, dens = [];
+    for (let i = 0; i < n; i++) {
+      let c = 0;
+      for (let j = 0; j < n; j++) if (j !== i && Math.hypot(T[i * 4] - T[j * 4], T[i * 4 + 1] - T[j * 4 + 1]) < 30) c++;
+      dens.push([c, i]);
+    }
+    dens.sort((a, b) => b[0] - a[0]);
+    // spread the picks: skip trees within 90 m of an earlier pick
+    const picks = [];
+    for (const [c, i] of dens) { if (picks.every((p) => Math.hypot(T[p * 4] - T[i * 4], T[p * 4 + 1] - T[i * 4 + 1]) > 90)) picks.push(i); if (picks.length >= 4) break; }
+    window.__picks = picks;
+    window.__grove = (k, dist, pitch, rel) => {
+      const i = picks[k], L = e.uniforms.lightDir.value;
+      const az = Math.atan2(L.x, L.z) * 180 / Math.PI;
+      e.cam.setView({ x: T[i * 4], y: T[i * 4 + 1], distance: dist, pitchDeg: pitch, yawDeg: az + 180 + rel }, true);
+    };
+    window.__speed(0); window.__step(900); window.__followId(null); window.__env({});
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'h', bubbles: true }));
+  })()`, wait: 6000 },
+  { name: 't3_01_grove_close', eval: "window.__grove(0, 24, 9, 35)", wait: 4500 },
+  { name: 't3_02_grove_mid', eval: "window.__grove(0, 62, 16, 35)", wait: 4000 },
+  { name: 't3_03_grove_wide', eval: "window.__grove(0, 150, 24, 35)", wait: 4000 },
+  { name: 't3_04_golden_low', eval: "window.__cam('low')", wait: 4000 },
+  { name: 't3_05_midday_close', eval: "window.__env({ dayFrac: 0.45 }); window.__grove(1, 26, 12, 20)", wait: 4500 },
+  { name: 't3_06_midday_mid', eval: "window.__grove(1, 80, 20, 20)", wait: 4000 },
+  { name: 't3_07_autumn_mid', eval: "window.__env({ season: 2.4, dayFrac: 0.6 }); window.__grove(0, 62, 16, 35)", wait: 4000 },
+  { name: 't3_08_autumn_wide', eval: "window.__cam('wide')", wait: 4000 },
+  { name: 't3_09_winter_close', eval: "window.__env({ season: 3.5, dayFrac: 0.42, warmth: 0.1 }); window.__grove(0, 26, 10, 35)", wait: 4500 },
+  { name: 't3_10_winter_mid', eval: "window.__grove(0, 90, 20, 35)", wait: 4000 },
+  { name: 't3_11_winter_wide', eval: "window.__engine.cam.setView({ distance: 170, pitchDeg: 26 })", wait: 4000 },
+  { name: 't3_12_winter_dusk_wide', eval: "window.__env({ season: 3.3, dayFrac: 0.7, warmth: 0.1 }); window.__cam('wide')", wait: 4000 },
+  { name: 't3_13_snags_close', eval: "(() => { const e = window.__engine, T = e.world.trees, c = window.__picks[2]; for (let j = 0; j < T.length / 4; j++) if (Math.hypot(T[j * 4] - T[c * 4], T[j * 4 + 1] - T[c * 4 + 1]) < 16 && j % 2 === 0) e.trees.updateTree(j, { burned: true }); window.__env({ season: 1.3, dayFrac: 0.6 }); window.__grove(2, 30, 10, 35); })()", wait: 4500 },
+];
+
 // v10: species glyphs at time-lapse speed (glyphs.ts GLYPH_LAPSE_*): the same drone view at 1x (no glyphs below 210 m) and at 100x
 SETS.lapse = [
   { name: 'lapse_01_drone_1x', eval: "window.__speed(1); window.__focusHerd(); window.__engine.cam.setView({ distance: 300, pitchDeg: 40 })", wait: 4000 },
