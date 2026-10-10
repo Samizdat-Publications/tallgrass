@@ -403,7 +403,7 @@ Scores: visual 5, readability 7, life and motion 3, ecosystem 6, UI 8, keep watc
 6. Camera drags through bushes into the carcass shot: DEFER (the reel's own cut).
 7. Static sick bison during the time-lapse: REJECT for now (bedded animals at 10x; the sickness reads in the panel).
 
-## Round 32 (fresh blind critic, stills of D11 plus the v10b overview chart; 2026-10-10 16:05) -> `review/round-32/critique.md`
+## Round 32 (fresh blind critic, stills of D11 plus the v10b overview chart; 2026-10-10 15:55) -> `review/round-32/critique.md`
 Scores: visual 6, readability 4, life 6, ecosystem 6, UI 7, keep watching 6 (round 28: 7, 5, 6, 6, 7, 6).
 1. Species unreadable at the overview distance: FIX NEXT (after B15; the biggest open item since round 25: distance silhouettes and value contrast between 60 and 200 m).
 2. Herds packed around one pond: DEFER (sim; the shoreSpread fix cost mule deer 39% over 1,200 years, review/stability/v11-feaa081/RESULT.md; a deer-safe variant is Next 5 item 1).
