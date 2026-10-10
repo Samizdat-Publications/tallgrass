@@ -1903,9 +1903,21 @@ button.tg-ent-b:hover {
 
 /* ---- idle: after about eight seconds with no pointer or key input the chrome fades to a faint, low-opacity outline, so a second monitor
    shows the valley and not a dashboard; any move or key brings it back at once (GameUI.updateDim decides when) ----- */
-.tg-ui.is-idle:not(.is-cinematic):not(.is-hidden) .tg-pop,
+/* r-polish28 (round 28, item 6): the two reading panels used to fade to 0.3 as a whole, which left half-visible text on an almost clear
+   panel, unreadable over snow or a busy herd. Now the chronicle (a log, not a live readout) goes away completely, and the population panel
+   keeps most of its dense glass and blur (0.82) with its content a little dimmer, so the faded numbers still read. Backing and text fade together. */
 .tg-ui.is-idle:not(.is-cinematic):not(.is-hidden) .tg-chron {
-  opacity: 0.3;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 1.4s var(--ease), visibility 0s linear 1.4s;
+}
+.tg-ui.is-idle:not(.is-cinematic):not(.is-hidden) .tg-pop {
+  opacity: 0.82;
+  transition: opacity 1.4s var(--ease);
+}
+.tg-ui.is-idle:not(.is-cinematic):not(.is-hidden) .tg-pop > * {
+  opacity: 0.74;
   transition: opacity 1.4s var(--ease);
 }
 .tg-ui.is-idle:not(.is-cinematic):not(.is-hidden) .tg-time,

@@ -768,7 +768,9 @@ function barkMaterial(shared: SharedUniforms): THREE.MeshStandardMaterial {
           float fur2 = tgNoise3(vec3(vBarkPos.x * 420.0, vBarkPos.y * 30.0, vBarkPos.z * 420.0));
           float lichen = smoothstep(0.72, 0.9, tgNoise3(vBarkPos * 90.0 + 3.0));
           diffuseColor.rgb *= (0.72 + 0.46 * fur) * (0.9 + 0.2 * fur2);
-          diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.5, 0.55, 0.38), lichen * 0.3);
+          // (r-polish28: the lichen is the bark's own colour a little paler and greener, not a pale grey-green mixed in: on the darkened cottonwood bark
+          // that mix showed as round white paint splats on every trunk, round 28 item 7)
+          diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(1.3, 1.4, 1.05) + vec3(0.004, 0.008, 0.0), lichen * 0.45);
           diffuseColor.rgb *= 0.86 + 0.14 * smoothstep(0.0, 0.25, vBarkPos.y);
           // twigs and thin branches are paler and warmer toward the tips
           // snow dusting: upward-facing surfaces catch it first (upper sides of limbs, the fork), lightly and unevenly
@@ -792,12 +794,12 @@ function barkMaterial(shared: SharedUniforms): THREE.MeshStandardMaterial {
           // stay grey-brown wood and never read as charred black; in full leaf the limbs seen through the gaps sit inside the canopy's
           // own shade: no rim light, less bounce
           float leafK = smoothstep( 0.35, 0.8, uLeaf );
-          totalEmissiveRadiance += diffuseColor.rgb * ( ( uSkyMid * 0.42 + uSkyHorizon * 0.34 + uLightColor * 0.03 ) * mix( 1.0, 0.45, leafK ) + uLightColor * pow( backD, 2.0 ) * rimB * rimB * 0.35 * gTgShadow * ( 1.0 - leafK ) );
+          totalEmissiveRadiance += diffuseColor.rgb * ( ( uSkyMid * 0.42 + uSkyHorizon * 0.34 + uLightColor * 0.03 ) * mix( 1.0, 0.85, leafK ) + uLightColor * pow( backD, 2.0 ) * rimB * rimB * 0.35 * gTgShadow * ( 1.0 - leafK ) );
         }`,
       );
     shader.fragmentShader = injectSafeOutput( shader.fragmentShader );
   };
-  mat.customProgramCacheKey = () => 'tg-bark-v8';
+  mat.customProgramCacheKey = () => 'tg-bark-v10';
   return mat;
 }
 

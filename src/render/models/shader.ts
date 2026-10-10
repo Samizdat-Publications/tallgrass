@@ -88,10 +88,16 @@ function stotDefines(p: AnimParams): string[] {
   ];
 }
 
+/** Width (m) of the near/far LOD cross-fade, centred on the middle of each model's lod range. */
+const LOD_BAND = 1.0;
 /** R7 constants as defines: which LOD this program draws, the cross-fade range, and the fur and shell shading. */
 function lodDefines(def: ModelDef | undefined, variant: Variant): string[] {
   const fur = def?.fur;
-  const lod = def?.lod ?? { d0: 50, d1: 70 };
+  const lod0 = def?.lod ?? { d0: 50, d1: 70 };
+  // r-polish28: the two LODs are lit differently, so a wide dithered cross-fade read as a screen door of dark dots on the animals (round 28, item 3).
+  // The fade keeps the model's centre but is only LOD_BAND metres wide: a near-hard switch, a thin ring instead of a stipple across the body.
+  const mid = 0.5 * (lod0.d0 + lod0.d1);
+  const lod = { d0: mid - 0.5 * LOD_BAND, d1: mid + 0.5 * LOD_BAND };
   const sh = fur?.shell;
   return [
     `#define NEARLOD ${variant === 'near' ? 1 : 0}`, `#define FARLOD ${variant === 'far' ? 1 : 0}`,
