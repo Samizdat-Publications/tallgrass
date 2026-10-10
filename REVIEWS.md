@@ -350,3 +350,15 @@ Scores: visual 6, readability 4, life 4, ecosystem 5, UI 2 (UI hidden in these c
 | 7 | Winter decal | mostly artifact | lk_10 holds the season at winter while the sim is in summer (no snow field yet); bare trees come with r-trees3. |
 | 8 | Water | defer | Next cycle. |
 | 9 | Close-up bison flat, same pose | in progress | a3 rollout (authored meshes). |
+
+## Round 26 (Gemini video at 8 fps sampling, motion reel of main after D2; 2026-10-09 22:59) -> `review/round-26-video/motion.gemini.md`
+Scores: visual 5, readability 3, life and motion 1, ecosystem 2, UI 6, keep watching 2. The reel caught mostly standing or lying animals at night and in snow.
+| # | Issue | Triage | Reason / outcome |
+|---|---|---|---|
+| 1 | Standing and resting animals are frozen (no breathing, ears, tail, weight shifts) | fix | Builder r-idle (queued for the next free slot): idle layer in the shader for every quadruped incl. a3 meshes. |
+| 2 | Chronicle tells (coyote pups) while the camera shows a lone adult | defer | The director already cuts to field-note subjects; the motion reel overrides the camera. |
+| 3 | Kills appear by cut; predator stands still at the carcass | fix | r-idle item 2 (continuous feeding motion). |
+| 4 | Big white ring around the followed animal | fix | r-idle item 3 (selected ring as quiet as the follow arc, fades after 5 s). |
+| 5 | Fast-forward pops | defer | The reel's warm-up; lapse look exists from 30x. |
+| 6 | UI heavy | reject | Idle fade exists (8 s); the capture kept the mouse active. |
+| 7 | Flat red blood decal on snow | fix | r-idle item 4. |
