@@ -32,6 +32,7 @@ import { Flood } from './flood';
 import { DustStorm } from './dust';
 import { Hoppers } from './hoppers';
 import { BeaverWorks } from './beaverworks';
+import { mark, frameMs } from '../startmarks';
 
 export type { Quality } from './post';
 export { injectTerrainShadow } from './common';
@@ -111,6 +112,8 @@ export interface EngineOptions {
   /** 'agx' | 'aces' | 'neutral' tone mapping; default aces. */
   toneMapping?: 'agx' | 'aces' | 'neutral';
   exposure?: number;
+  /** Start compiling the scene's shaders at the end of the constructor (default on; main.ts turns it off with ?prime=0). */
+  earlyCompile?: boolean;
 }
 
 export class Engine {
@@ -276,21 +279,7 @@ export class Engine {
     this.trailTexture.name = 'trail';
     this.uniforms.trailTex.value = this.trailTexture;
 
-    this.terrain = new Terrain(world, this.uniforms);
-    // r-perf: the ground is shaded after the grass, trees and animals (all opaque), so the depth test rejects every ground pixel they cover before the ground shader runs
-    this.terrain.mesh.renderOrder = 5;
-    this.water = new Water(world, this.uniforms, this.terrain.creekDist);
-    this.trees = new Trees(world, this.uniforms, this.terrain.heightAt);
-    this.flood = new Flood(world, this.uniforms);
-    this.storms = new Storms(world, this.uniforms, this.terrain.heightAt);
-    this.sky = new Sky(this.uniforms, this.storms.uniforms);
-    this.cloudShadow = new CloudShadow(this.uniforms, world.size);
-    this.smoke = new Smoke(world, this.uniforms, this.terrain.heightAt);
-    this.fireflies = new Fireflies(world, this.uniforms.time, this.terrain.heightAt);
-    this.dustStorm = new DustStorm(world.size, this.uniforms, world.hn, world.cell);
-    this.hoppers = new Hoppers(world.size, this.uniforms, world.hn, world.cell);
-    this.beaverWorks = new BeaverWorks(world, this.uniforms, this.terrain.heightAt);
-
+    // the lights come first: a shader program is made for the lights in the scene, and the terrain's starts compiling the moment it exists
     this.sun = new SunLight(0xffffff, 1);
     // two cascades with a wide blend band, so the drop in shadow resolution fades in instead of showing as a line (see sunshadow.ts)
     this.sun.shadow = new TgSunShadow();
@@ -303,11 +292,37 @@ export class Engine {
     this.sun.shadow.radius = 1.8;
     this.sun.shadow.intensity = 0.92;
     this.hemi = new THREE.HemisphereLight(0xffffff, 0x886644, 1);
+    this.scene.add(this.sun, this.hemi);
+    mark('eng_pre_terrain');
+    this.terrain = new Terrain(world, this.uniforms);
+    mark('eng_terrain');
+    if (opts.earlyCompile !== false) this.compileEarly(this.terrain.mesh);
+    // r-perf: the ground is shaded after the grass, trees and animals (all opaque), so the depth test rejects every ground pixel they cover before the ground shader runs
+    this.terrain.mesh.renderOrder = 5;
+    this.water = new Water(world, this.uniforms, this.terrain.creekDist);
+    if (opts.earlyCompile !== false) this.compileEarly(this.water.mesh);
+    mark('eng_water');
+    this.trees = new Trees(world, this.uniforms, this.terrain.heightAt);
+    if (opts.earlyCompile !== false) this.compileEarly(this.trees.group);
+    mark('eng_trees');
+    this.flood = new Flood(world, this.uniforms);
+    this.storms = new Storms(world, this.uniforms, this.terrain.heightAt);
+    this.sky = new Sky(this.uniforms, this.storms.uniforms);
+    this.cloudShadow = new CloudShadow(this.uniforms, world.size);
+    this.smoke = new Smoke(world, this.uniforms, this.terrain.heightAt);
+    this.fireflies = new Fireflies(world, this.uniforms.time, this.terrain.heightAt);
+    this.dustStorm = new DustStorm(world.size, this.uniforms, world.hn, world.cell);
+    this.hoppers = new Hoppers(world.size, this.uniforms, world.hn, world.cell);
+    this.beaverWorks = new BeaverWorks(world, this.uniforms, this.terrain.heightAt);
+
+    mark('eng_misc');
 
     this.scene.userData.tgUniforms = this.uniforms;
-    this.scene.add(this.sky.mesh, this.terrain.mesh, this.water.mesh, this.flood.mesh, this.trees.group, this.beaverWorks.group, this.smoke.mesh, this.fireflies.mesh, this.dustStorm.mesh, this.hoppers.mesh, this.storms.group, this.sun, this.hemi);
+    this.scene.add(this.sky.mesh, this.terrain.mesh, this.water.mesh, this.flood.mesh, this.trees.group, this.beaverWorks.group, this.smoke.mesh, this.fireflies.mesh, this.dustStorm.mesh, this.hoppers.mesh, this.storms.group);
 
+    mark('eng_pre_post');
     this.post = new PostFX(renderer, this.scene, this.camera, this.uniforms, this.storms.uniforms);
+    mark('eng_post');
     {
       const qs = typeof location === 'undefined' ? new URLSearchParams() : new URLSearchParams(location.search);
       const all = qs.get('cuts') !== '0';
@@ -516,14 +531,109 @@ export class Engine {
     return () => { this.preRenderCbs = this.preRenderCbs.filter((f) => f !== cb); };
   }
 
+  /**
+   * Build every shader program in one burst and wait for the GPU driver to finish them, before the first real frame (r-startup).
+   * Three links a program the first time something that needs it is drawn, and ANGLE on D3D11 compiles one program at a time in
+   * the GPU process in that order: a cold start took 30 to 70 s. With KHR_parallel_shader_compile enabled and all the links issued
+   * before any draw, the driver compiles them on its worker threads at once. Two steps: `compile` covers every material in the
+   * scene (also the ones whose instances do not exist yet), then one dry frame (draw calls replaced by no-ops) creates what only
+   * a frame creates: the shadow depth programs, the ambient occlusion, fog, grade and output passes. Then the programs are polled
+   * until linked, so the page stays responsive (the title card) while the driver works. Nothing is drawn and no sim state is read.
+   */
+  async prime(maxWaitMs = 90000): Promise<void> {
+    const r = this.renderer;
+    const gl = r.getContext() as WebGL2RenderingContext;
+    gl.getExtension('KHR_parallel_shader_compile');
+    mark('prime_start');
+    this.compileScene();
+    mark('prime_compiled');
+    // wait for the big batch first (the main thread stays free), so the dry frame below only meets programs that are already done
+    await this.programsReady(maxWaitMs);
+    mark('prime_compiled_ready');
+    const draws = ['drawArrays', 'drawElements', 'drawArraysInstanced', 'drawElementsInstanced', 'drawRangeElements'] as const;
+    const noop = (): void => {};
+    for (const n of draws) (gl as unknown as Record<string, unknown>)[n] = noop;
+    try {
+      if (new URLSearchParams(location.search).get('dryframe') !== '0') this.post.render(0);
+    } finally {
+      for (const n of draws) delete (gl as unknown as Record<string, unknown>)[n];
+    }
+    this.post.grade.resetAdapt(); // (the dry frame metered a blank picture)
+    r.setRenderTarget(null);
+    mark('prime_issued');
+    await this.programsReady(maxWaitMs);
+    mark('prime_done');
+  }
+
+  /** Start the driver compiling one object's programs now (the HDR scene target stands in for the real one: any render target gives the same programs). */
+  compileEarly(obj: THREE.Object3D): void {
+    const rt = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType });
+    this.renderer.setRenderTarget(rt);
+    this.renderer.compile(obj, this.camera, this.scene);
+    this.renderer.setRenderTarget(null);
+    rt.dispose();
+  }
+
+  /**
+   * Create the programs of every material in the scene without drawing (and so without waiting for any of them), in the state the
+   * frame will draw them in (the HDR scene target), plus the programs of the custom shadow depth materials: three only makes those
+   * inside the shadow pass, one at a time. Safe to call again after more layers are added: programs that exist are reused.
+   */
+  compileScene(): void {
+    const r = this.renderer;
+    r.setRenderTarget(this.post.scenePass.rt);
+    r.compile(this.scene, this.camera);
+    // A shadow caster is drawn with its depth material, which three first gives the caster's own material's side (flipped), alpha map,
+    // alpha test and map (WebGLShadowMap.getDepthMaterial). Do the same here, then compile that mesh with the depth material swapped in
+    // (same geometry, same instancing), once per distinct combination, so the program that gets made is the one the shadow pass wants.
+    const seen = new Set<string>();
+    this.scene.traverse((o) => {
+      const m = o as THREE.Mesh;
+      const d = m.isMesh && m.castShadow ? m.customDepthMaterial : undefined;
+      if (!d) return;
+      const mat = (Array.isArray(m.material) ? m.material[0] : m.material) as THREE.MeshStandardMaterial | undefined;
+      if (!mat) return;
+      const inst = m as THREE.InstancedMesh;
+      const shadowSide = mat.shadowSide ?? (mat.side === THREE.FrontSide ? THREE.BackSide : mat.side === THREE.BackSide ? THREE.FrontSide : THREE.DoubleSide);
+      const alphaTest = mat.alphaToCoverage ? 0.5 : mat.alphaTest;
+      const sig = `${d.uuid}|${shadowSide}|${alphaTest > 0}|${!!mat.map}|${!!mat.alphaMap}|${inst.isInstancedMesh ? (inst.instanceColor ? 2 : 1) : 0}`;
+      if (seen.has(sig)) return;
+      seen.add(sig);
+      const dm = d as THREE.MeshDepthMaterial;
+      dm.visible = mat.visible; dm.side = shadowSide; dm.alphaMap = mat.alphaMap; dm.alphaTest = alphaTest; dm.map = mat.map;
+      const own = m.material;
+      m.material = d;
+      try { r.compile(m, this.camera, this.scene); } finally { m.material = own; }
+    });
+    r.setRenderTarget(null);
+  }
+
+  /** Resolves when every shader program built so far has finished linking in the driver (or after maxWaitMs). */
+  private async programsReady(maxWaitMs: number): Promise<void> {
+    const t0 = performance.now();
+    await new Promise<void>((resolve) => {
+      const poll = (): void => {
+        let pending = 0;
+        for (const p of this.renderer.info.programs ?? []) if (!(p as unknown as { isReady(): boolean }).isReady()) pending++;
+        if (pending === 0 || performance.now() - t0 > maxWaitMs) resolve();
+        else setTimeout(poll, 20);
+      };
+      poll();
+    });
+  }
+
   start(): void {
     if (this.running) return;
     this.running = true;
     this.last = performance.now();
     const loop = (now: number) => {
       if (!this.running) return;
-      this.adaptScale(now - this.last, now);
-      const dt = Math.min(0.1, (now - this.last) / 1000);
+      // (the first callback's timestamp can be older than the performance.now() in start() when the main thread was busy just before,
+      // as after prime(): a negative dt sent the eased weather state to NaN and the first frames black)
+      const ms = Math.max(0, now - this.last);
+      if (frameMs.length < 120) frameMs.push(Math.round(ms));
+      this.adaptScale(ms, now);
+      const dt = Math.min(0.1, ms / 1000);
       this.last = now;
       this.renderOnce(dt);
       this.raf = requestAnimationFrame(loop);
