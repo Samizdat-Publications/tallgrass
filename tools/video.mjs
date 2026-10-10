@@ -53,7 +53,7 @@ if (arg('set', '') === 'breath') SEGMENTS.splice(0, SEGMENTS.length, ...BREATH);
 // (tools/gemini_video_review.py --fps 8). PRE runs before the recorded part (it is trimmed off): a short 10x warm-up so hunts start.
 const PRE = [];
 const MOTION = [
-  [8, "window.__speed(1); (() => { const c = window.__find(0, 3).concat(window.__find(0, 2)).concat(window.__find(0)); if (c.length) { window.__followId(c[0]); window.__engine.cam.setView({ distance: 18, pitchDeg: 12 }); } })()"],
+  [8, "window.__speed(1); window.__timeOfDay(0.6); (() => { const c = window.__find(0, 3).concat(window.__find(0, 2)).concat(window.__find(0)); if (c.length) { window.__followId(c[0]); window.__engine.cam.setView({ distance: 18, pitchDeg: 12 }); } })()"],
   [8, "(() => { const c = window.__find(3, 4).concat(window.__find(3, 3)).concat(window.__find(3)); if (c.length) { window.__followId(c[0]); window.__engine.cam.setView({ distance: 16, pitchDeg: 10 }); } })()"],
   [10, "(() => { const c = window.__find(1, 5).concat(window.__find(1, 10)).concat(window.__find(1, 3)).concat(window.__find(1)); if (c.length) { window.__followId(c[0]); window.__engine.cam.setView({ distance: 16, pitchDeg: 12 }); } })()"],
   [7, "(() => { const c = window.__find(1, 6).concat(window.__find(1, 5)); if (c.length) { window.__followId(c[0]); window.__engine.cam.setView({ distance: 14, pitchDeg: 16 }); } })()"],
