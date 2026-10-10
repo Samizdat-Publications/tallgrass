@@ -1,0 +1,22 @@
+near mesh: authored a3   ground slope 0 deg   camera 20 m   flat-footed sole centroid (2 cm band)
+species    gait     slip3d  front  hind  horiz | rig foot | sole centroid clearance cm mean/max | lowest vertex over ground cm mean (min..max) | sole - rig foot at rest (cm x, z)
+bison      walk      9.2%   9.7%   8.6%   2.6% |   0.2% |   3.1   7.5 |  -0.9 (-7.0..2.5) |   9.3  -6.9  OVER 5%
+bison      trot      7.7%   8.4%   7.0%   2.1% |   0.2% |   3.1   8.2 |  -0.9 (-7.9..2.5) |   9.3  -6.9  OVER 5%
+bison      gallop    9.6%  10.9%   8.2%   3.2% |   0.1% |   3.3   8.2 |  -2.4 (-8.2..2.5) |   9.3  -6.9  OVER 8%
+wolf       walk      4.1%   7.1%   1.1%   1.0% |   0.6% |   1.7   3.9 |  -1.8 (-5.6..0.8) |   1.9   0.0 
+wolf       trot      3.5%   6.2%   0.8%   0.9% |   0.3% |   1.7   4.3 |  -1.8 (-6.2..0.8) |   1.9   0.0 
+wolf       gallop    4.2%   7.5%   1.0%   1.9% |   0.2% |   1.7   4.5 |  -3.2 (-8.1..0.8) |   1.9   0.0 
+pronghorn  walk      3.6%   4.5%   2.8%   3.0% |   0.7% |   1.1   2.3 |  -1.6 (-4.7..0.3) |   1.0   0.3 
+pronghorn  trot      3.3%   3.9%   2.7%   2.6% |   0.3% |   1.2   2.4 |  -1.4 (-4.4..0.3) |   1.0   0.3 
+pronghorn  gallop    3.6%   4.7%   2.4%   3.3% |   0.1% |   0.9   1.8 |  -2.3 (-5.9..0.3) |   1.0   0.3 
+cougar     walk      6.3%   6.0%   6.7%   2.9% |   0.5% |   1.4   2.9 |  -0.0 (-2.3..1.3) |   2.3   0.4  OVER 5%
+cougar     trot      4.8%   4.5%   5.1%   2.2% |   0.2% |   1.5   3.1 |   0.0 (-2.7..1.3) |   2.3   0.4 
+cougar     gallop    5.8%   6.2%   5.3%   2.5% |   0.3% |   1.4   3.0 |  -0.8 (-3.7..1.4) |   2.3   0.4 
+coyote     walk      8.5%   8.2%   8.8%   2.3% |   0.6% |   1.5   3.6 |  -0.8 (-4.0..1.4) |   2.7   2.0  OVER 5%
+coyote     trot      6.9%   7.1%   6.7%   2.0% |   0.3% |   1.6   3.9 |  -0.8 (-4.2..1.4) |   2.7   2.0  OVER 5%
+coyote     gallop    8.0%   8.8%   7.2%   3.2% |   0.2% |   1.6   4.1 |  -1.9 (-5.5..1.4) |   2.7   2.0 
+mule deer  walk      5.1%   5.1%   5.1%   1.9% |   0.7% |   2.3   4.0 |   0.2 (-4.6..2.5) |   1.9   2.7  OVER 5%
+mule deer  trot      4.7%   4.5%   4.9%   1.7% |   0.4% |   2.3   4.3 |   0.2 (-4.7..2.5) |   1.9   2.7 
+mule deer  gallop    5.2%   5.9%   4.4%   2.7% |   0.2% |   1.8   4.5 |  -0.8 (-4.8..2.5) |   1.9   2.7 
+mule deer  stot      5.9%   6.1%   5.7%   2.6% |   0.2% |   2.2   4.6 |  -0.3 (-4.6..2.5) |   1.9   2.7 
+OVER GATE: see the rows marked OVER

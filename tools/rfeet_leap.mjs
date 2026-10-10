@@ -89,10 +89,13 @@ try {
   // aimed at the middle of the leap, so the leap runs across the frame
   const t0 = await page.evaluate(async () => {
     const S = window.__stage, A = window.__animals, c2 = window.__leapC;
-    const slot = A.slots.map.get(c2.id);
     const v = new (window.__engine.camera.position.constructor)();
-    const h = S.get(c2.k).h, yaw = -h * 57.2958 + 180;
+    const g0 = S.get(c2.k);
+    S.look(g0.x, g0.z, 6.5, 8, 0); // (bring the camera to the coyote so the layer draws it and has a slot for it)
+    await S.frames(4, 0.02);
+    const h = g0.h, yaw = -h * 57.2958 + 180;
     window.__focus = () => { A.getPosition(c2.id, v); S.look(v.x + Math.cos(h) * 0.5, v.z + Math.sin(h) * 0.5, 6.5, 8, yaw); };
+    const slot = A.slots.map.get(c2.id);
     A.getPosition(c2.id, v);
     const tx = v.x, tz = v.z;
     window.__focus = () => { S.look(tx + Math.cos(h) * 0.5, tz + Math.sin(h) * 0.5, 6.5, 8, yaw); };

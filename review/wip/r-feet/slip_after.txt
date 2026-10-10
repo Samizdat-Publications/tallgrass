@@ -1,0 +1,22 @@
+near mesh: authored a3   ground slope 0 deg   camera 20 m   flat-footed sole centroid (2 cm band)
+species    gait     slip3d  front  hind  horiz | rig foot | sole centroid clearance cm mean/max | lowest vertex over ground cm mean (min..max) | sole - rig foot at rest (cm x, z)
+bison      walk      1.3%   1.3%   1.3%   1.3% |   0.2% |   1.0   1.2 |  -0.0 (-0.1..0.0) |   9.3  -6.9 
+bison      trot      0.9%   0.9%   0.9%   0.9% |   0.2% |   1.0   1.2 |  -0.0 (-0.1..0.0) |   9.3  -6.9 
+bison      gallop    0.6%   0.5%   0.7%   0.6% |   0.1% |   1.0   1.2 |  -0.0 (-0.1..0.0) |   9.3  -6.9 
+wolf       walk      0.5%   0.9%   0.2%   0.5% |   0.6% |   1.5   1.6 |  -0.0 (-0.2..0.0) |   1.9   0.0 
+wolf       trot      0.3%   0.5%   0.1%   0.3% |   0.3% |   1.5   1.6 |  -0.0 (-0.2..0.0) |   1.9   0.0 
+wolf       gallop    0.2%   0.2%   0.1%   0.1% |   0.2% |   1.5   1.6 |  -0.0 (-0.2..0.0) |   1.9   0.0 
+pronghorn  walk      0.6%   0.8%   0.4%   0.3% |   0.7% |   1.0   1.2 |  -0.1 (-0.5..0.0) |   1.0   0.3 
+pronghorn  trot      0.3%   0.4%   0.2%   0.1% |   0.3% |   1.0   1.2 |  -0.0 (-0.3..0.0) |   1.0   0.3 
+pronghorn  gallop    0.1%   0.0%   0.1%   0.0% |   0.1% |   1.0   1.2 |  -0.0 (-0.2..0.0) |   1.0   0.3 
+cougar     walk      0.7%   0.7%   0.7%   0.7% |   0.5% |   1.3   1.4 |  -0.0 (-0.1..0.0) |   2.3   0.4 
+cougar     trot      0.3%   0.4%   0.3%   0.3% |   0.2% |   1.2   1.4 |  -0.0 (-0.1..0.0) |   2.3   0.4 
+cougar     gallop    0.3%   0.2%   0.3%   0.2% |   0.3% |   1.3   1.4 |   0.0 (-0.1..0.1) |   2.3   0.4 
+coyote     walk      1.2%   1.1%   1.2%   1.1% |   0.6% |   1.1   1.3 |  -0.1 (-0.3..0.0) |   2.7   2.0 
+coyote     trot      0.6%   0.6%   0.7%   0.6% |   0.3% |   1.1   1.3 |  -0.0 (-0.3..0.0) |   2.7   2.0 
+coyote     gallop    0.4%   0.2%   0.6%   0.4% |   0.2% |   1.1   1.3 |  -0.1 (-0.2..0.0) |   2.7   2.0 
+mule deer  walk      0.9%   1.0%   0.9%   0.7% |   0.7% |   0.7   0.9 |  -0.1 (-0.5..0.0) |   1.9   2.7 
+mule deer  trot      0.5%   0.5%   0.5%   0.4% |   0.4% |   0.7   0.9 |  -0.0 (-0.4..0.0) |   1.9   2.7 
+mule deer  gallop    0.3%   0.1%   0.5%   0.2% |   0.2% |   0.7   0.9 |  -0.0 (-0.5..0.0) |   1.9   2.7 
+mule deer  stot      0.3%   0.4%   0.3%   0.2% |   0.2% |   0.7   0.9 |  -0.0 (-0.4..0.0) |   1.9   2.7 
+PASS: every row within the gate (5% walk and trot, 8% gallop and stot)
