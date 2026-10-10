@@ -61,6 +61,12 @@ type Variant = 'single' | 'near' | 'far';
  */
 export const R8_SHADER = { on: true, bison: true, flare: true };
 
+/**
+ * r-idle switch (a benchmark and debugging hook): off, the quadruped programs are compiled without the idle layer (`?idle=0` on the page URL sets it
+ * before the programs are built). The idle layer is ALU only and keyed off the per-instance data the shader already reads, so it adds no attribute.
+ */
+export const IDLE_SHADER = { on: typeof location === 'undefined' || new URLSearchParams(location.search).get('idle') !== '0' };
+
 /** R6 mule deer: the antler anchor and the growth at which the forks and the second tines come out (defaults for every other model). */
 function seasonDefines(def?: ModelDef, variant: Variant = 'single'): string {
   const s = def?.seasonal;
@@ -99,6 +105,9 @@ function lodDefines(def: ModelDef | undefined, variant: Variant): string[] {
     `#define A3SKIN ${variant === 'near' && def?.a3 ? 1 : 0}`,
     // a3 graze: the head angle multiplier, the forebody pitch down and the neck drop (m) while grazing (an authored head is shorter than the procedural one)
     `#define A3_SPINE ${f(variant === 'near' ? def?.a3?.spineK ?? 1 : 1)}`, `#define A3_DN ${f(variant === 'near' ? def?.a3?.grazeK ?? 1 : 1)}`, `#define A3_PITCH ${f(variant === 'near' ? def?.a3?.grazePitch ?? 0 : 0)}`, `#define A3_DROP ${f(variant === 'near' ? def?.a3?.grazeDrop ?? 0 : 0)}`,
+    // r-idle: the ear region of an authored head (see ModelDef.a3.ear): base, tip, radius
+    `#define A3_EAR ${variant === 'near' && def?.a3?.ear ? 1 : 0}`, `#define A3_EAR_B vec3(${(def?.a3?.ear ?? [0, 0, 0]).slice(0, 3).map(f).join(',')})`,
+    `#define A3_EAR_T vec3(${(def?.a3?.ear ?? [0, 0, 0]).slice(3, 6).map(f).join(',')})`, `#define A3_EAR_R ${f(def?.a3?.ear?.[6] ?? 0.05)}`,
     `#define SHELL ${variant === 'near' && sh ? 1 : 0}`,
     `#define SHELL_SCALE ${f(sh?.scale ?? 30)}`, `#define SHELL_ALONG ${f(sh?.along ?? 0.5)}`, `#define SHELL_SPARSE ${f(sh?.sparse ?? 0.4)}`,
     `#define SHELL_D0 ${f(sh?.d0 ?? 30)}`, `#define SHELL_D1 ${f(sh?.d1 ?? 50)}`,
@@ -153,6 +162,8 @@ function defines(p: AnimParams, far: ModelDef['far'] | undefined, geometry: Mode
     `#define SWIM ${p.kind === 0 && p.swim ? 1 : 0}`, `#define SWIM_SINK ${f(p.swim?.sink ?? 0)}`, `#define SWIM_NOSE ${f(p.swim?.nose ?? 0)}`, `#define SWIM_WAKE ${f(p.swim?.wake ?? 1)}`,
     ...stotDefines(p),
     `#define MANGE ${p.hunts && p.kind === 0 ? 1 : 0}`, // canids can have mange: a patchy coat (the fragment stage mottles it)
+    // r-idle: the idle layer (breath, weight shifts, looks, ears, tail) and the tail style: 0 a grazer's fly swats, 1 a canid's sway, 2 a cat's twitching tip
+    `#define IDLE ${IDLE_SHADER.on && p.kind === 0 ? 1 : 0}`, `#define IDLE_STYLE ${p.stalk ? 2 : p.hunts ? 1 : 0}`,
     ...lodDefines(def, variant),
   ].join('\n');
 }
@@ -307,6 +318,8 @@ float tgSpR;
 float tgSpHip;  // x of the hip a leg vertex hangs from (the curve is read there, so the leg moves as a rigid part); 1e9 for every other vertex
 #endif
 float tgHeadK;  // head pitch correction of the slope (rad)
+float tgIdRoll; // r-idle: the weight shift of a standing animal (roll about the body axis, rad) and the sway of its haunches (yaw about the shoulders, rad)
+float tgIdYaw;
 // legmath.ts slopeResponse: the slope response is derived from the instance's own terrain pitch and roll (they are in the instance
 // matrix), so it needs no instance attribute. The extra pitch and roll are body-frame motion (the legs' IK takes them back out of
 // the foot targets, so planted feet stay planted); uphill the body leans in and the stride shortens, downhill it sits back and braces.
@@ -336,6 +349,9 @@ void tgBodyFwd(inout vec3 p, inout vec3 n) {
   p.y += tgYoff;
   tgRotZ(p, n, vec3(0.0, COM_Y, 0.0), tgPitchB);
   if (tgRollB != 0.0) tgRotX(p, n, vec3(0.0, COM_Y, 0.0), tgRollB);
+  // r-idle: body motions, so (like the feeding haul) the leg IK takes them back out of the foot targets and the feet stay planted
+  if (tgIdRoll != 0.0) tgRotX(p, n, vec3(0.0, COM_Y, 0.0), tgIdRoll);
+  if (tgIdYaw != 0.0) tgRotY(p, n, vec3(0.3 * BODY_LEN, COM_Y, 0.0), tgIdYaw);
 #if SPINE
   if (tgSpA != 0.0 || tgSpR != 0.0) {
     // legmath.ts bodyFwd, the spine: the back rises in the middle when arched (and drops when hollowed) and the head and tail ends dip the
@@ -657,6 +673,59 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
 #endif
   }
 
+  // ---- r-idle. An animal that is not travelling is never still (round 26: "taxidermy"). Everything here is derived from the animal's own seed
+  // (aLook.y) and the clock, so a herd never moves in step, and from the weights the shader already reads (lie, head-down, tug), so it adds no
+  // attribute. Amplitudes are small; what runs depends on the state: a bedded animal breathes, flicks its ears and lifts its head now and then;
+  // a grazer shifts its weight and swings its head between bites; an alert one (head up, watching) holds still but for breath and ears; one
+  // standing about looks around, sniffs the ground and rests a foot. A feeding predator tugs and sways continuously.
+  float idW = 0.0;        // 0..1: how much the layer runs (0 travelling, dead, swimming, or in a time-lapse)
+  float idAlert = 0.0;    // 0..1: head up, watching something (the animal layer sends a head-down weight below 0)
+  float idBr = 0.0;       // breath, about -1..1 (the chest and belly swell is applied to the rest pose, below)
+  float idLook = 0.0;     // head yaw of a look about (rad)
+  float idSniff = 0.0;    // 0..1: a sniff at the ground
+  float idLiftHead = 0.0; // 0..1: a bedded animal lifts its head
+  float idUnl = 0.0;      // 0..1: one leg is unloaded (rested on its toe)
+  float idUnlPart = 0.0;  // which leg (part id 1..4)
+  float idRl = 0.0, idYw = 0.0, idPt = 0.0; // body: weight shift roll, haunch sway yaw, pitch
+  float idShuf = 0.0;     // 0..1: a feeding predator shuffles its forefeet
+#if KIND == 0 && IDLE
+  if (!dead) {
+    float mvI = clamp(wWalk + wTrot + wGal, 0.0, 1.0);
+    idW = (1.0 - mvI) * (1.0 - clamp(uTL * 2.0, 0.0, 1.0)) * (1.0 - stotK) * (1.0 - swimW);
+    float hA = fract(seed * 13.17), hB = fract(seed * 7.91 + 0.31), hC = fract(seed * 29.3 + 0.7);
+    idAlert = smoothstep(0.03, 0.25, -aGait.z) * (1.0 - lie);
+    // breath: 3 to 5 s a cycle, a little slower out than in
+    float brA = TG_TAU * t / (3.0 + 2.0 * hA) + seed * 40.0;
+    idBr = sin(brA) + 0.25 * sin(2.0 * brA + 0.8);
+    float standW = idW * (1.0 - lie);
+    // weight shifts: the body rolls slowly from side to side and the haunches sway, a different beat for each animal
+    idRl = standW * (1.0 - 0.7 * idAlert) * 0.02 * sin(t * (0.35 + 0.3 * hB) + seed * 23.0);
+    idYw = standW * (1.0 - 0.7 * idAlert) * 0.022 * sin(t * (0.27 + 0.2 * hA) + seed * 11.0);
+    idPt = standW * 0.01 * sin(t * (0.31 + 0.2 * hC) + seed * 5.0);
+    // a leg is unloaded now and then (every 6 to 10 s, about a second and a half): the body leans off it and the foot rests on its toe
+    float uT = t / (6.0 + 4.0 * hB) + hC;
+    float uU = fract(uT);
+    float uB = smoothstep(0.0, 0.05, uU) * (1.0 - smoothstep(0.18, 0.26, uU));
+    float uPick = fract(sin(floor(uT) * 12.9898 + seed * 78.233) * 43758.5453);
+    idUnlPart = uPick < 0.3 ? (uPick < 0.15 ? 1.0 : 2.0) : (uPick < 0.65 ? 3.0 : 4.0);
+    idUnl = uB * standW * (1.0 - idAlert);
+    idRl -= idUnl * (mod(idUnlPart, 2.0) > 0.5 ? 1.0 : -1.0) * 0.018;
+    // head: a look to one side, back through the middle to the other, a sniff at the ground, then rest (9 to 16 s a round)
+    float lkU = fract(t / (9.0 + 7.0 * hB) + hC);
+    float sA = smoothstep(0.02, 0.1, lkU) * (1.0 - smoothstep(0.24, 0.32, lkU));
+    float sB = smoothstep(0.36, 0.44, lkU) * (1.0 - smoothstep(0.54, 0.62, lkU));
+    idLook = (sA * (0.55 + 0.45 * hA) - sB * (0.55 + 0.45 * hC)) * (0.35 + 0.5 * LOOK_YAW);
+    idSniff = smoothstep(0.68, 0.74, lkU) * (1.0 - smoothstep(0.86, 0.92, lkU));
+    // a bedded animal lifts its head for 2 to 4 s every 18 to 34 s
+    idLiftHead = lie * idW * smoothstep(0.0, 0.025, fract(t / (18.0 + 16.0 * hA) + hB)) * (1.0 - smoothstep(0.1, 0.15, fract(t / (18.0 + 16.0 * hA) + hB)));
+    // feeding: the body sways and twists with every tug, the forefeet shuffle
+    idShuf = tug;
+    idRl += tug * 0.025 * sin(t * 2.3 + seed * 5.0);
+    idYw += tug * 0.035 * sin(t * 1.7 + seed * 9.0);
+    idPt += tug * 0.015 * sin(t * 3.1 + seed * 13.0);
+  }
+#endif
+
 #if KIND == 0
   // the body's motion state, read by tgBodyFwd (the legs aim through it, then every vertex is moved by it). aFx.y of a living
   // quadruped is the body-height offset the animal layer works out from the ground under the stance feet (m, model units).
@@ -671,8 +740,10 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
   {
     float sDp = 0.0, sDr = 0.0, sK = 1.0, sHd = 0.0;
     if (!dead) tgSlope(camD, sDp, sDr, sK, sHd);
-    tgPitchB = pitch + sDp;
+    tgPitchB = pitch + idPt + sDp;
     tgRollB = sDr;
+    tgIdRoll = idRl;
+    tgIdYaw = idYw;
     tgStrideK = sK;
     tgHeadK = sHd;
   }
@@ -706,6 +777,16 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
   if (flareW > 0.001 && (part == 0 || part == 6)) {
     // R8 rump flare: the hairs of the patch stand up, so it swells outward over the haunches (and the little tail patch with it)
     p += n * (0.05 * flareW * smoothstep(-0.02, -0.3, p.x));
+  }
+#endif
+#if KIND == 0 && IDLE
+  if (idW > 0.001) {
+    // r-idle breath: the chest and belly swell (a soft window round the barrel just behind the shoulders, strongest on the underside and
+    // deeper in a bedded animal). Applied to the rest pose of every part before the parts move, so the legs, neck and an authored mesh's
+    // continuous skin all carry the same swell and nothing tears.
+    float bx = (p.x - 0.1 * BODY_LEN) / (0.27 * BODY_LEN);
+    float bw = exp(-bx * bx) * smoothstep(0.3 * COM_Y, 0.55 * COM_Y, p.y);
+    p += n * (idBr * BODY_LEN * 0.010 * (1.0 + 0.5 * lie) * idW * bw * (0.75 - 0.35 * n.y));
   }
 #endif
 #if A3SKIN
@@ -758,7 +839,7 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
       // legmath.ts IK_PASSES = 3: two more fixed-point passes (s <- s - (bodyFwd(s) - target)) so the big distance cues of a gallop
       // (bound, spine arch, pitch) come out of the foot target exactly and a planted foot stays on the ground
       vec2 sTg = 2.0 * tg.xy - tq.xy;
-      if (tgFarK > 0.001 || tgPitchB != 0.0) {
+      if (tgFarK > 0.001 || tgPitchB != 0.0 || tgIdRoll != 0.0 || tgIdYaw != 0.0) {
         for (int ip2 = 0; ip2 < 2; ip2++) {
           vec3 tq2 = vec3(sTg, zf);
           vec3 tn2 = vec3(0.0, 1.0, 0.0);
@@ -834,6 +915,19 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
     float lieKnee = front ? LIE_KNEE_F : LIE_KNEE_H;
     hip = mix(hip, lieHip, lie);
     knee = mix(knee, lieKnee, lie);
+#if KIND == 0 && IDLE
+    if (idUnl > 0.001 && float(part) == idUnlPart) {
+      // r-idle: the unloaded leg rests on its toe (the hock or the knee gives a little and the foot comes back and up)
+      hip += idUnl * (front ? 0.05 : -0.07);
+      knee += idUnl * (front ? -0.3 : 0.28 * HOCK_K);
+    }
+    if (front && idShuf > 0.001) {
+      // r-idle: a feeding predator shuffles its forefeet as it hauls
+      float shf = sin(t * 1.9 + float(part) * 2.4 + seed * 7.0);
+      hip += idShuf * 0.07 * shf;
+      knee -= idShuf * 0.12 * max(shf, 0.0);
+    }
+#endif
 #if BEHAV
     if (wallowW + digW > 0.001) {
     if (wallowW > 0.001) {
@@ -920,7 +1014,7 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
     // continuous near-LOD loft ramps from 0 (still the body) to full, so the neck bends without a seam
     float hw = 1.0 - aPart.y;
 #if STOT
-    if (aPart.w > 0.5) {
+    if (aPart.w > 0.5 && aPart.w < 3.5) {
       // R6 antlers (aPart.w: 1 main beam, 2 fork, 3 tine; aPivot2 = where the branch starts). They grow about the pedicle by the growth
       // weight (aFx2.x, 0 = none: a doe, a fawn, or a buck that has shed), the forks come out from ANT_FORK, the second tines from ANT_TINE.
       // (done before the head turns, so they ride on the head)
@@ -938,6 +1032,46 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
       // young antlers are short but stout (velvet knobs a couple of centimetres across), not hair-thin: a growing antler is inflated back to a
       // minimum girth; the branches that have not come out yet stay hidden
       p += n * 0.011 * smoothstep(0.0, 0.05, antK) * (1.0 - as) * lv;
+    }
+#endif
+#if KIND == 0 && IDLE
+    {
+      // r-idle ears. A procedural model tags its ear vertices 4 in aPart.w and pivots them about aPivot2, the base of the ear; an authored head (a3) has
+      // no tags, so the ear is the region of the head round the ear's axis (ModelDef.a3.ear) and it is moved by its weight in that region.
+      // Each ear has its own schedule: it swivels slowly the whole time (listening), flicks in a short quick burst every 3.5 to 8.5 s, and a watching
+      // animal keeps them forward and turns them to the sound; a bedded one flicks less. (Done before the head turns, so they ride on the head.)
+      float earW = 0.0;
+      vec3 earB = aPivot2;
+      float eSide = aPivot2.z >= 0.0 ? 1.0 : -1.0;
+      if (aPart.w > 3.5 && aPart.w < 4.5) earW = 1.0;
+#if A3SKIN && A3_EAR
+      if (aPart.w < 0.5) {
+        eSide = p.z >= 0.0 ? 1.0 : -1.0;
+        earB = vec3(A3_EAR_B.x, A3_EAR_B.y, A3_EAR_B.z * eSide);
+        vec3 eAx = vec3(A3_EAR_T.x - A3_EAR_B.x, A3_EAR_T.y - A3_EAR_B.y, (A3_EAR_T.z - A3_EAR_B.z) * eSide);
+        float eS = dot(p - earB, eAx) / dot(eAx, eAx);
+        float eD = length(p - earB - eAx * clamp(eS, 0.0, 1.0));
+        earW = (1.0 - smoothstep(0.5 * A3_EAR_R, A3_EAR_R, eD)) * smoothstep(-0.1, 0.45, eS);
+      }
+#endif
+      if (earW > 0.001 && !dead) {
+        float eH = fract(seed * 5.7 + (eSide > 0.0 ? 0.0 : 0.37));
+        float eP = 3.5 + 5.0 * eH;
+        float eU = fract(t / eP + fract(seed * 11.3 + (eSide > 0.0 ? 0.0 : 0.53)));
+        float eB = smoothstep(0.0, 0.015, eU) * (1.0 - smoothstep(0.06, 0.1, eU)) * (1.0 - 0.6 * lie);
+        float eFl = eB * sin(eU * eP * 40.0);
+        float eSw = sin(t * (0.5 + 0.4 * eH) + seed * 17.0 + eSide * 1.7);
+        float eSw2 = sin(t * 0.7 + seed * 5.0 - eSide * 0.9);
+        float eCup = idAlert * 0.12 * sin(t * 1.1 + seed * 3.0 + eSide);
+        vec3 eq = p;
+        vec3 en = n;
+        // outward tilt (+z ear: positive), fold back, swivel
+        tgRotX(eq, en, earB, eSide * (0.55 * eFl + 0.16 * eSw + 0.1 * idAlert + eCup));
+        tgRotZ(eq, en, earB, 0.3 * eB + 0.1 * eSw2 * (1.0 - 0.5 * idAlert));
+        tgRotY(eq, en, earB, eSide * (0.1 * eSw2 + 0.12 * idAlert));
+        p = mix(p, eq, earW);
+        n = normalize(mix(n, en, earW));
+      }
     }
 #endif
 #if KIND == 0
@@ -967,12 +1101,32 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
     float ang = -HEAD_DN * A3_DN * dn + nod + chew - 0.45 * crouchBody - 0.5 * sick * (1.0 - 0.5 * dn);
     ang += tugPull * 0.75 + tugSwallow * 1.5 - tugBite * 0.3 - peck * 1.0 + peckUp + biteUp;
     yaw += tugShake * 0.55;
+#if KIND == 0 && IDLE
+    // r-idle: a feeding head never stops between the phases of the cycle: it worries the meat (quick small pulls and turns)
+    ang += tug * 0.045 * sin(t * 8.5 + seed * 11.0);
+    yaw += tug * (0.1 * sin(t * 5.3 + seed * 3.0) + 0.06 * sin(t * 11.0 + seed * 7.0));
+#endif
     // holding the prey by the throat or flank: the head shakes it hard from side to side
     // (a cougar's head goes down onto the neck instead and shakes less)
     ang += holdW * ((0.5 + 0.2 * sin(t * 13.0 + seed * 5.0)) * (1.0 - CLASP) - CLASP * (0.55 - 0.08 * sin(t * 11.0 + seed * 5.0)));
     yaw += holdSh * (0.6 - 0.35 * CLASP);
     // after lifting the head it turns to look, then back
     yaw += idleK * raise * (fract(seed * 6.1) - 0.5) * 1.0 * sin(t * 0.9 + seed * 7.0);
+#if KIND == 0 && IDLE
+    {
+      // r-idle head. Standing about (head not down grazing, not watching something): a look to either side and a sniff at the ground, on the
+      // animal's own schedule. Grazing: the head swings slowly as it works along. Watching: it holds still (ears and breath only). Bedded: it lifts
+      // now and then and looks about; the rest of the time it drifts a little with the breath.
+      float dnI = clamp(dn, 0.0, 1.0);
+      float hwI = idW * (1.0 - lie) * (1.0 - idAlert) * (1.0 - dnI);
+      yaw *= 1.0 - 0.7 * idAlert;
+      yaw += hwI * idLook;
+      ang += hwI * (0.08 * abs(idLook) - idSniff * (0.3 + 0.3 * float(IDLE_STYLE > 0)) * (1.0 + 0.1 * sin(t * 13.0 + seed * 9.0)));
+      yaw += idW * (1.0 - lie) * (1.0 - idAlert) * dnI * 0.26 * sin(t * 0.55 + seed * 19.0);
+      ang += idW * lie * 0.02 * sin(TG_TAU * t / (3.0 + 2.0 * fract(seed * 13.17)) + seed * 40.0);
+      yaw += idLiftHead * 0.6 * sin(t * 1.3 + seed * 5.0);
+    }
+#endif
     // from the drone view the head pumps harder so a trot or a gallop reads as a body moving, not sliding
 #if SPINE
     // the neck takes the tilt of the spine at its root: the head cancels most of it, so it stays near level while the body flexes under it
@@ -1033,6 +1187,7 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
     }
 #endif
     ang = mix(ang, 0.15, lie * 0.7);
+    ang += idLiftHead * 0.4; // (r-idle: a bedded animal lifts its head)
 #if SWIM
     ang += swimW * (0.2 + 0.03 * sin(t * 1.3 + seed * 9.0)); // swimming: the nose comes up out of the water
 #endif
@@ -1040,9 +1195,9 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
     if (CURL > 0.0) {
       // curled rest: the head turns back toward the tail side and drops onto the paws
       float cside = fract(seed * 3.7) > 0.5 ? 1.0 : -1.0;
-      float ck = lie * CURL * (dead ? 0.0 : 1.0);
+      float ck = lie * CURL * (dead ? 0.0 : 1.0) * (1.0 - idLiftHead); // (r-idle: lifting the head uncurls it)
       ang = mix(ang, -0.5 - 0.15 * sin(t * 0.4 + seed * 9.0), ck);
-      yaw = mix(yaw, -cside * 0.95, ck);
+      yaw = mix(yaw, -cside * 0.95 + idW * 0.06 * sin(t * 0.33 + seed * 9.0), ck);
     }
 #endif
     if (dead) {
@@ -1077,6 +1232,26 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
     float flick = smoothstep(0.88, 0.98, sin(t * (0.38 + 0.2 * fract(seed * 2.7)) + seed * 31.0)) * (1.0 - lie * 0.7);
     sway += flick * (0.5 + 0.3 * farK) * sin(t * 17.0 + seed * 5.0);
     lift += flick * 0.3 * (0.5 + 0.5 * sin(t * 15.0));
+#if KIND == 0 && IDLE
+    if (idW > 0.001) {
+      // r-idle tail
+#if IDLE_STYLE == 0
+      // a grazer swats at flies: a burst of quick side to side with a lift, every 5 to 9 s, about a second long
+      float swU = fract(t / (5.0 + 4.0 * fract(seed * 9.7)) + fract(seed * 3.9));
+      float swB = smoothstep(0.0, 0.03, swU) * (1.0 - smoothstep(0.12, 0.17, swU));
+      sway += idW * swB * 0.6 * sin(t * 15.0 + seed * 5.0);
+      lift += idW * swB * 0.25;
+#elif IDLE_STYLE == 1
+      // a canid's tail sways slowly and rises and falls with its mood
+      sway += idW * (0.1 * sin(t * 1.3 + seed * 8.0) + 0.04 * sin(t * 3.1 + seed * 3.0)) * (1.0 - 0.5 * lie);
+      lift += idW * 0.05 * sin(t * 0.8 + seed * 6.0);
+#else
+      // a cat's tail drifts in a lazy curve (the tip twitches below)
+      sway += idW * 0.12 * sin(t * 0.9 + seed * 8.0);
+      lift += idW * 0.06 * sin(t * 0.6 + seed * 4.0);
+#endif
+    }
+#endif
 #if KIND == 0
     lift -= cnHowl * 1.05; // sitting: the body pitches up, so the tail comes up to lie along the ground behind it
 #if BEHAV
@@ -1106,6 +1281,10 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
       sway += crouchBody * 0.18 * sin(t * 1.7 + seed * 13.0);
       float tipK = smoothstep(0.35, 0.9, (aPivot.x - p.x) / (0.85 * BODY_LEN / 1.8));
       float twi = crouchBody * (0.25 + 0.55 * frzW) * sin(t * (4.2 + 5.0 * frzW) + seed * 7.0);
+#if IDLE
+      // r-idle: at rest the tip curls slowly and twitches in a short burst every 17 s or so
+      twi += idW * (0.14 * sin(t * 1.1 + seed * 7.0) + 0.5 * smoothstep(0.82, 0.96, sin(t * 0.37 + seed * 21.0)) * sin(t * 9.0 + seed * 3.0));
+#endif
       tgRotY(p, n, vec3(aPivot.x - 0.3, aPivot.y, 0.0), twi * tipK);
     }
 #endif
@@ -1418,7 +1597,7 @@ void tgShade(vec3 on) {
   float c = aPart.z;
   vec3 col = aColor * ((1.0 - c) + c * coat);
 #if STOT
-  if (aPart.w > 0.5 && int(aPart.x + 0.5) == 5) {
+  if (aPart.w > 0.5 && aPart.w < 3.5 && int(aPart.x + 0.5) == 5) {
     // antlers: hard bone-brown (the paint) or dark velvet (aFx2.z)
     col = mix(aColor, uVelvet * (0.7 + 0.6 * aColor.g * 3.0), clamp(aFx2.z, 0.0, 1.0));
   }

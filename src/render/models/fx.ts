@@ -278,8 +278,10 @@ export class KillSites {
         attribute vec4 aCen;  // patch centre xyz, radius
         varying vec4 vInfo;
         varying float vFar;
+        varying float vR;
         void main() {
           vInfo = aInfo;
+          vR = aCen.w;
           // the patch grows with camera distance (up to 1.8x) so a kill is still a mark from the wide view
           float k = clamp(distance(cameraPosition, aCen.xyz) / 200.0, 1.0, 1.8);
           vFar = (k - 1.0) / 0.8;
@@ -291,6 +293,7 @@ export class KillSites {
         uniform float uSnow;
         varying vec4 vInfo;
         varying float vFar;
+        varying float vR;
         float h21(vec2 p){ p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
         float vn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.0-2.0*f);
           return mix(mix(h21(i), h21(i+vec2(1,0)), f.x), mix(h21(i+vec2(0,1)), h21(i+vec2(1,1)), f.x), f.y); }
@@ -303,7 +306,6 @@ export class KillSites {
           a *= smoothstep(0.12, 0.4, r); // leave the carcass itself clear
           float rem = vInfo.z;
           a *= (0.7 + 0.3 * rem) * (1.0 + 0.25 * vFar);
-          if (a < 0.003) discard;
           // The patch MULTIPLIES whatever ground is there: a dark stain in the middle, trampled dirt toward the rim. Because it
           // scales the ground instead of painting a fixed dark colour over it, it reads as damp, trampled earth on gold
           // grass and as a rusty-grey stain on snow, never as a black ink blot.
@@ -312,12 +314,30 @@ export class KillSites {
           vec3 tint = mix(stain, dirt, smoothstep(0.1, 0.8, edge) * 0.9);
           // on bright snow the same multiply would read as an ink blot: keep only a faint trampled-slush mark
           tint = mix(tint, vec3(0.86, 0.84, 0.86), 0.7 * clamp(uSnow, 0.0, 1.0));
-          // a fresh kill (most of the meat still on it) has a dark red-brown stain at its heart, so it reads as a downed animal
-          // and not a lump: strongest right at the body, fading with the carcass; on snow it shows as blood
-          float fresh = smoothstep(0.7, 0.97, rem) * (1.0 - smoothstep(0.15, 0.75, edge));
-          tint *= mix(vec3(1.0), vec3(1.0, 0.55, 0.5), fresh);
-          a = max(a, fresh * 0.7 * smoothstep(0.1, 0.3, r));
-          gl_FragColor = vec4(mix(vec3(1.0), tint, min(a * 0.9, 0.85)), 1.0);
+          vec3 base = mix(vec3(1.0), tint, min(a * 0.9, 0.85));
+          // r-idle: a fresh kill (most of the meat still on it) has blood on the ground, but as a few small irregular stains of different
+          // strength round and under the body, not one flat red disc. A cell grid in metres (so a bison's are bigger than a wolf's); each
+          // cell may hold one blob with its own radius and strength, its edge roughened by noise. The stains MULTIPLY the ground like the
+          // patch (a dark red-brown, so snow and grass light them as they light themselves) and fade as the carcass is eaten.
+          float fresh = smoothstep(0.55, 0.97, rem);
+          float cs = 0.16 + 0.09 * vR;
+          vec2 q = uv * vR;
+          vec2 cid = floor(q / cs);
+          float spot = 0.0;
+          for (int j = -1; j <= 1; j++) {
+            for (int i = -1; i <= 1; i++) {
+              vec2 id = cid + vec2(float(i), float(j)) + vInfo.w * 17.0;
+              if (h21(id) < 0.3) continue;
+              vec2 cc = (cid + vec2(float(i), float(j)) + 0.2 + 0.6 * vec2(h21(id + 3.1), h21(id + 7.7))) * cs;
+              float rad = cs * (0.22 + 0.38 * h21(id + 11.3));
+              float dd = length(q - cc) + (vn(q * 11.0 + vInfo.w * 5.0) - 0.5) * cs * 0.4;
+              spot = max(spot, (1.0 - smoothstep(rad * 0.5, rad, dd)) * (0.45 + 0.55 * h21(id + 19.9)));
+            }
+          }
+          spot *= 1.0 - smoothstep(0.16, 0.36, r); // round and under the body, none out in the grass
+          vec3 blood = mix(vec3(1.0), vec3(0.34, 0.12, 0.1), clamp(spot * fresh, 0.0, 0.92));
+          if (a < 0.003 && spot * fresh < 0.01) discard;
+          gl_FragColor = vec4(base * blood, 1.0);
         }`,
     });
     this.mesh = new THREE.Mesh(this.geo, mat);

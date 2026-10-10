@@ -151,7 +151,7 @@ function make(near: boolean): { b: MeshBuilder; bodyTris: number } {
 
   // Big mule ears: long, cupped, broad in the middle, a dark rim at the tip, pale inside
   b.addPair({
-    part: PART.HEAD, piv: neckPiv, sides: near ? 10 : 6,
+    part: PART.HEAD, piv: neckPiv, piv2: [0.81, 1.15, 0.06], spare: 4, sides: near ? 10 : 6, // (tag 4 + piv2: an ear, pivoting at its base: the r-idle flick)
     paint: (_p, _n, t) => {
       const k = 1 - 0.55 * smooth(0.65, 1.0, t);
       return [0.9 * k, 0.84 * k, 0.78 * k, 1];

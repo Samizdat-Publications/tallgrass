@@ -15,12 +15,14 @@ export interface A3Asset {
 }
 
 /** Per species pose tuning of the authored mesh (see ModelDef.a3): graze head angle multiplier, forebody pitch (rad) and neck drop (m). */
-export const A3_TUNE: Record<string, { grazeK?: number; grazePitch?: number; grazeDrop?: number; antlerShift?: [number, number, number]; antlerScale?: number; spineK?: number }> = {
+export const A3_TUNE: Record<string, { grazeK?: number; grazePitch?: number; grazeDrop?: number; antlerShift?: [number, number, number]; antlerScale?: number; spineK?: number; ear?: number[] }> = {
+  // ear: [base x, y, z, tip x, y, z, radius] of the right ear on the authored head (r-idle flicks the region round it about its base; a bison's are lost in the wool)
+  wolf: { ear: [0.74, 0.92, 0.11, 0.77, 1.0, 0.14, 0.08] },
   bison: { grazeK: 1.3, grazePitch: 0.12, grazeDrop: 0.12 },
-  muledeer: { antlerShift: [0.12, 0.07, 0], antlerScale: 1.15, grazeK: 1.3, grazePitch: 0.08, grazeDrop: 0.1 },
-  pronghorn: { grazeK: 1.3, grazePitch: 0.08, grazeDrop: 0.1 },
-  coyote: { spineK: 0.25 },
-  cougar: { spineK: 0.2 },
+  muledeer: { antlerShift: [0.12, 0.07, 0], antlerScale: 1.15, grazeK: 1.3, grazePitch: 0.08, grazeDrop: 0.1, ear: [0.95, 1.19, 0.12, 1.0, 1.25, 0.21, 0.09] },
+  pronghorn: { grazeK: 1.3, grazePitch: 0.08, grazeDrop: 0.1, ear: [0.7, 1.12, 0.11, 0.72, 1.19, 0.15, 0.06] },
+  coyote: { spineK: 0.25, ear: [0.46, 0.75, 0.07, 0.465, 0.82, 0.1, 0.06] },
+  cougar: { spineK: 0.2, ear: [0.68, 0.89, 0.1, 0.69, 0.958, 0.12, 0.05] },
 };
 
 const assets = new Map<string, A3Asset>();
@@ -91,7 +93,7 @@ export async function preloadA3(): Promise<void> {
 }
 
 /** The pose tuning of a species, with the `?a3spine=<k>` probe override (spine flex multiplier) for tuning by eye. */
-export function a3Tune(key: string): { grazeK?: number; grazePitch?: number; grazeDrop?: number; antlerShift?: [number, number, number]; antlerScale?: number; spineK?: number } {
+export function a3Tune(key: string): { grazeK?: number; grazePitch?: number; grazeDrop?: number; antlerShift?: [number, number, number]; antlerScale?: number; spineK?: number; ear?: number[] } {
   const t = { ...A3_TUNE[key] };
   const q = typeof location === 'undefined' ? null : new URLSearchParams(location.search).get('a3spine');
   if (q !== null && Number.isFinite(Number(q))) t.spineK = Number(q);

@@ -951,6 +951,8 @@ export class AnimalLayer {
   private ringGeo: THREE.PlaneGeometry;
   private ringBase: Float32Array;
   private ringMat: THREE.ShaderMaterial;
+  /** r-idle: render clock of the last input that concerned the marked animal (a click, a follow starting, the pointer over it). The marker is quiet and fades about 5 s after it. */
+  private ringWake = -100;
   private selInfo = { found: false, x: 0, y: 0, z: 0, r: 1 };
 
   private bindTerrainShadow(scene: THREE.Object3D): void {
@@ -1021,7 +1023,7 @@ export class AnimalLayer {
     this.ringBase = new Float32Array(pos.array as Float32Array);
     this.ringMat = new THREE.ShaderMaterial({
       transparent: true, depthWrite: false, depthTest: false, fog: false,
-      uniforms: { uOpacity: { value: 1 }, uT: { value: 0 }, uLow: { value: 0 } },
+      uniforms: { uOpacity: { value: 1 }, uT: { value: 0 }, uLow: { value: 0 }, uThin: { value: 0.6 } },
       vertexShader: /* glsl */ `
         varying vec2 vUv;
         void main() {
@@ -1030,7 +1032,7 @@ export class AnimalLayer {
         }`,
       fragmentShader: /* glsl */ `
         precision highp float;
-        uniform float uOpacity, uT, uLow;
+        uniform float uOpacity, uT, uLow, uThin;
         varying vec2 vUv;
         void main() {
           float r = length(vUv);
@@ -1049,7 +1051,7 @@ export class AnimalLayer {
           prof = pow(prof, 0.6);
           float R0 = 0.86 + 0.012 * pulse;
           float d = abs(r - R0);
-          float hw = max(0.02 * prof, 0.8 * fw);                 // half width of the bright line (at least about 2 px across)
+          float hw = max(0.02 * uThin * prof, 0.8 * fw);         // half width of the bright line (r-idle: thin, at least about 2 px across)
           float line = (1.0 - smoothstep(hw - fw, hw + fw, d)) * inArc * (0.55 + 0.45 * prof);
           float edgeW = hw + max(0.016, 1.0 * fw);
           float dark = (1.0 - smoothstep(edgeW - fw, edgeW + fw, d)) * inArc * step(R0, r + 0.02);
@@ -3218,8 +3220,14 @@ export class AnimalLayer {
     const bloom = fAge < 3.6 ? (1 - smoothstep(0, 1.4, fAge)) : 0;
     const haloK = fAge < 3.6 ? smoothstep(0, 0.35, fAge) * (1 - smoothstep(2.4, 3.6, fAge)) : 0;
     const steady = this._followedId !== null && this.selectedId === null;
-    const quiet = this._followedId !== null && fAge >= 3.6 ? (steady ? 0.42 * (1 - smoothstep(4.5, 9, fAge)) : 0.4) : 0.8;
-    const R = Math.max(si.r * 0.82, cd * 0.006) * (1 + 0.03 * Math.sin(this.timeSec * 3)) * (1 + 0.4 * bloom * bloom);
+    // r-idle: the marker is as quiet as the follow arc (small, thin, low alpha) and, selected or not, fades about 5 s after the last input that
+    // concerned the animal (a click, a follow starting, the pointer over it: pokeRing), over 1.5 s. A click or a hover brings it back. A fresh
+    // click shows a little brighter for its first second so the click is acknowledged.
+    const wakeAge = this.timeSec - Math.max(this.ringWake, this._followedId !== null ? this.followT0 : -100);
+    const asleep = 1 - smoothstep(5, 6.5, wakeAge);
+    const ack = 1 - smoothstep(0.3, 1.3, wakeAge);
+    const quiet = (this._followedId !== null && fAge >= 3.6 ? (steady ? 0.42 : 0.4) : 0.42 + 0.3 * ack) * asleep;
+    const R = Math.max(si.r * 0.66, cd * 0.005) * (1 + 0.03 * Math.sin(this.timeSec * 3)) * (1 + 0.4 * bloom * bloom);
     const pos = this.ringGeo.getAttribute('position') as THREE.BufferAttribute;
     const arr = pos.array as Float32Array;
     for (let i = 0; i < arr.length; i += 3) {
@@ -3275,7 +3283,13 @@ export class AnimalLayer {
     return bestId;
   }
 
+  /** r-idle: the pointer is over (or the user just acted on) the marked animal: the marker comes back and its 5 s start again. */
+  pokeRing(): void {
+    this.ringWake = this.timeSec;
+  }
+
   setSelected(id: number | null): void {
+    if (id !== null) this.ringWake = this.timeSec;
     this.selectedId = id;
     if (id === null && this._followedId === null) { this.ring.visible = false; this.ringSolid.visible = false; }
   }
