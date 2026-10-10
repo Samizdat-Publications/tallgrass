@@ -282,9 +282,9 @@ export class KillSites {
         void main() {
           vInfo = aInfo;
           vR = aCen.w;
-          // the patch grows with camera distance (up to 1.8x) so a kill is still a mark from the wide view
-          float k = clamp(distance(cameraPosition, aCen.xyz) / 200.0, 1.0, 1.8);
-          vFar = (k - 1.0) / 0.8;
+          // the patch grows with camera distance (from about 110 m, up to 2.2x by 240 m) so a kill is still a mark from the default overview
+          float k = clamp(distance(cameraPosition, aCen.xyz) / 110.0, 1.0, 2.2);
+          vFar = (k - 1.0) / 1.2;
           vec3 p = vec3(aCen.x + (position.x - aCen.x) * k, position.y, aCen.z + (position.z - aCen.z) * k);
           gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
         }`,
@@ -305,7 +305,7 @@ export class KillSites {
           float a = 1.0 - smoothstep(0.45, 1.0, edge);
           a *= smoothstep(0.12, 0.4, r); // leave the carcass itself clear
           float rem = vInfo.z;
-          a *= (0.7 + 0.3 * rem) * (1.0 + 0.25 * vFar);
+          a *= (0.7 + 0.3 * rem) * (1.0 + 0.45 * vFar);
           // The patch MULTIPLIES whatever ground is there: a dark stain in the middle, trampled dirt toward the rim. Because it
           // scales the ground instead of painting a fixed dark colour over it, it reads as damp, trampled earth on gold
           // grass and as a rusty-grey stain on snow, never as a black ink blot.
@@ -335,7 +335,7 @@ export class KillSites {
             }
           }
           spot *= 1.0 - smoothstep(0.16, 0.36, r); // round and under the body, none out in the grass
-          vec3 blood = mix(vec3(1.0), vec3(0.34, 0.12, 0.1), clamp(spot * fresh, 0.0, 0.92));
+          vec3 blood = mix(vec3(1.0), vec3(0.34, 0.12, 0.1), clamp(spot * fresh * (1.0 + 0.8 * vFar), 0.0, 0.92));
           if (a < 0.003 && spot * fresh < 0.01) discard;
           gl_FragColor = vec4(base * blood, 1.0);
         }`,

@@ -257,8 +257,10 @@ export function buildMuleDeer(): ModelDef {
     // from the drone view a herd reads as a dull tan and white, not a bright smear
     // R-readable: guild value separation and edge lift at the default distances (see ModelDef.read)
     read: { pale: 0.3, rim: [1.0, 0.92, 0.78, 0.45] },
-    far: { gain: 0.9, rim: 0, hunt: 0, rimCol: [1, 1, 1], d0: 100, d1: 340, tint: [0.3, 0.215, 0.14], mix: 0.28, lowFill: 0.3,
-      top: [0.34, 0.25, 0.17], topMix: 0.7, side: 0.12, legs: 0.55, calm: 0.8, widen: 0.4 },
+    // r-read: grey-brown from 45 m out (full by 180 m), the belly and legs fade to a pale grey-tan and the cream rump patch stays
+    far: { gain: 0.85, rim: 0, hunt: 0, rimCol: [1, 1, 1], d0: 45, d1: 180, tint: [0.22, 0.175, 0.135], mix: 0.45, lowFill: 0.3, rimCut: 0.6,
+      top: [0.28, 0.22, 0.16], topMix: 0.7, side: 0.2, legs: 0.55, calm: 0.8, widen: 0.4,
+      mute: { col: [0.3, 0.24, 0.19], k: 0.7, keepX: -0.3 } },
     params: {
       ...DEFAULT_PARAMS,
       kind: 0,

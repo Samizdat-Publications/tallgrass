@@ -364,6 +364,16 @@ export interface ModelDef {
     calm?: number;
     /** Extra body width at range (fraction, full by about 380 m): a slender body is a stick from above, an oval reads as an animal. */
     widen?: number;
+    /**
+     * r-read: bright absolute markings (a pronghorn's or deer's white belly, flank band and legs) fade toward the cream-tan `col` by `k` at range, everywhere
+     * except behind model-space x < `keepX` (the rump patch stays white). An all-white animal reads as chalk flecks, a tan one with a white rump as itself.
+     */
+    mute?: { col: [number, number, number]; k: number; keepX: number };
+    /**
+     * r-read: how much of the `read.rim` edge lift is withdrawn at range (0..1, fading in with the far distance). A pronghorn or deer 10 pixels long is all edge, so
+     * the lift turns the whole animal pale and it reads as a chalk fleck; a dark bison keeps it, since the lift is what separates it from the shadow.
+     */
+    rimCut?: number;
   };
   /**
    * R-readable: value separation at the default distances (about 6 m and out, full by 40 m), by guild, against the season's grass. A
