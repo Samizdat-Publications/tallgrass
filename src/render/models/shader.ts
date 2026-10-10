@@ -160,6 +160,8 @@ function defines(p: AnimParams, far: ModelDef['far'] | undefined, geometry: Mode
     `#define LEG_CALM ${f(far?.calm ?? 0)}`, `#define WIDEN ${f(far?.widen ?? 0)}`,
     `#define FLAP_HZ ${f(p.flapHz)}`,
     ...raptorDefines(p),
+    // r-ravens: a folded wing hangs this far (rad) against the flank, and the takeoff leap (model units, lasting RV_LEAP_T s: matches TAKEOFF_LEAP in animals.ts)
+    '#define RV_TUCK 0.4', '#define RV_FOLD_CMP 0.45', '#define RV_LEAP 0.3', '#define RV_LEAP_T 0.7',
     `#define MIN_PX ${f(p.minPx)}`,
     `#define FAR_NEAR ${f(far?.d0 ?? 140)}`, `#define FAR_FAR ${f(far?.d1 ?? 400)}`,
     `#define ANIM_NEAR 20.0`, `#define ANIM_FAR 110.0`,
@@ -477,6 +479,10 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
 #endif
   float spd = aGait.y;
   bool dead = spd < -0.5;
+#if KIND == 2 && !RAPTOR
+  // r-ravens: a raven faded right out (the overview thins the ones that are not at a carcass, animals.ts) is collapsed to a point here, not animated and then discarded
+  if (!dead && tgFadeOf() < 0.02) { p = vec3(0.0); return; }
+#endif
 #if SWIM
   if (aPart.w > 6.5) {
     // R-marsh: the V wake of a swimmer (vertices tagged 7 in aPart.w, authored lying along the surface behind the nose). It exists only
@@ -1478,17 +1484,29 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
     float inner = 0.17 + glide * (0.05 + 0.1 * soar) + 0.03 * glide * sin(t * 1.9 + seed * 9.0 + right * 1.3) + fl * 0.75 * wAmp * sin(fph);
     float outer = 0.1 + glide * (0.06 + 0.1 * soar) + 0.04 * glide * sin(t * 2.7 + seed * 5.0 + right) + fl * 0.6 * wAmp * sin(fph - 1.1);
 #if KIND == 2
+    // r-ravens: a hop flick lifts the wings (a flat half-open pair at 1.7 x scale lay across the grass and the carcass beside it)
+    inner += flick * 0.4;
     if (tkW > 0.001) {
-      // the first beat is deep and slow: wings up, then swept down hard (0.25 s), fading into the normal beat
-      inner = mix(inner, 1.15 * cos(TG_TAU * tkT / 0.5), tkW);
-      outer = mix(outer, 0.9 * cos(TG_TAU * (tkT - 0.06) / 0.5), tkW);
+      // the first beat is deep and slow: wings up, then swept down (0.25 s), fading into the normal beat. The downstroke is shallower than
+      // the upstroke is high (r-ravens: a full one drove the wing tips a metre into the ground; the bird springs up as it beats, animals.ts)
+      float tkI = 1.15 * cos(TG_TAU * tkT / 0.5), tkO = 0.9 * cos(TG_TAU * (tkT - 0.06) / 0.5);
+      inner = mix(inner, tkI > 0.0 ? tkI : tkI * 0.5, tkW);
+      outer = mix(outer, tkO > 0.0 ? tkO : tkO * 0.5, tkW);
     }
 #endif
+#if KIND == 2
+    // r-ravens: a wing folded on the ground hangs against the flank (a flat blade laid back at body height, which at 1.7 x scale stuck out beyond the tail)
+    inner = mix(inner, dead ? 0.0 : -RV_TUCK, fold);
+#else
     inner = mix(inner, 0.0, fold);
+#endif
     float w1 = aPart.y;
     if (fold > 0.001) {
       // outer wing folds back on itself, whole wing sweeps along the body
       tgRotY(p, n, aPivot2, right * 2.4 * fold * w1);
+#if KIND == 2
+      if (!dead) p.z = aPivot.z + (p.z - aPivot.z) * (1.0 - RV_FOLD_CMP * fold); // (r-ravens: a folded wing is much shorter than the open one: its tips reach the tail, not past it)
+#endif
       tgRotY(p, n, aPivot, -right * 1.3 * fold);
     }
     tgRotX(p, n, aPivot2, -right * outer * w1);
@@ -1610,6 +1628,19 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
   float isc = length(vec3(instanceMatrix[0]));
   float px = BODY_LEN * isc * uPxK / max(length(uCamPos - ip), 1.0);
   p *= clamp(MIN_PX / max(px, 0.01), 1.0, 7.0);
+#if KIND == 2 && !RAPTOR
+  if (!dead) {
+    // r-ravens: nothing of a raven goes below the ground. The height of its feet above the ground (the sim altitude plus the render lifts of a
+    // hop, a flutter and a takeoff leap, in model units: see animals.ts) is known, so a wing tip, a pecking beak or a landing foot that would
+    // end up under it is held on it instead of sinking in. Only within a metre or so: a bird in the air is not touched.
+    float gm = aFx.y / max(isc, 0.05);
+    if (fx2.x >= 0.0) gm += 0.22 * 4.0 * fx2.x * (1.0 - fx2.x);
+    if (fx2.w > 0.0) gm += 0.3 * 4.0 * fx2.w * (1.0 - fx2.w);
+    if (fx2.z >= 0.0) gm += RV_LEAP * sin(3.14159265 * clamp(fx2.z / RV_LEAP_T, 0.0, 1.0));
+    float gOn = 1.0 - smoothstep(0.45, 0.9, gm);
+    p.y = mix(p.y, max(p.y, -gm + 0.004), gOn);
+  }
+#endif
 }
 `;
 

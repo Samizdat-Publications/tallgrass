@@ -610,6 +610,108 @@ SETS.read = [
   { name: 'rd_140_winter', eval: "window.__env({ season: 3.4, dayFrac: 0.42, warmth: 0.1 }); window.__rdRig(140, 26)", wait: 4000 },
 ];
 
+// r-ravens: ravens at a carcass. rv_00_setup steps the sim until a carcass has ravens feeding on it (state 6 within 6 m), then __rvRig(dist, pitch)
+// frames it. Close-ups run at 1x (the ravens hop and peck), overviews are held (speed 0) so before and after show the same birds.
+SETS.ravens = [
+  { name: 'rv_00_setup', eval: `(async () => {
+    const e = window.__engine;
+    window.__env = (o) => {
+      window.__envO = Object.assign({ season: 1.8, weather: 0, warmth: 0.7, rain: 0, dayFrac: 0.45 }, o);
+      if (!window.__envHook) window.__envHook = e.onFrame(() => e.setEnv(window.__envO));
+      e.setEnv(window.__envO); e.applyEnvNow();
+    };
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    window.__speed(0); await wait(1200); window.__step(Math.max(0, 1200 - window.__snap().tick)); window.__followId(null); window.__env({});
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'h', bubbles: true }));
+    window.__rvScan = () => {
+      const sn = window.__snap(), A = sn.agents, n = sn.count, C = sn.carcasses, nc = sn.carcassCount;
+      let best = -1, bs = 0, bg = 0;
+      for (let k = 0; k < nc; k++) {
+        let c = 0, g = 0;
+        for (let j = 0; j < n; j++) { const o = j * 12; if (A[o] !== 2) continue; const d = Math.hypot(A[o + 1] - C[k * 4], A[o + 2] - C[k * 4 + 1]); if (d < 6 && A[o + 7] === 6) g++; if (d < 25) c++; }
+        const s = g * 10 + c;
+        if (s > bs) { bs = s; best = k; bg = g; }
+      }
+      return best < 0 ? null : { k: best, x: C[best * 4], y: C[best * 4 + 1], rem: C[best * 4 + 2], grounded: bg, score: bs };
+    };
+    window.__rvRig = (dist, pitch) => {
+      const r = window.__rvScan(); if (!r) return window.__rvPin ? (e.cam.setView({ x: window.__rvPin.x, y: window.__rvPin.y, distance: dist, pitchDeg: pitch }, true), window.__rvPin) : null;
+      window.__rvPin = window.__rvPin || r;
+      window.__followId(null); window.__cam('wide');
+      const q = window.__rvPin;
+      e.cam.setView({ x: q.x, y: q.y, distance: dist, pitchDeg: pitch }, true);
+      return q;
+    };
+    // the densest sky of ravens that are not at a kill site (a carcass with 2 or more ravens eating; most ravens within 70 m): where the overview swarm is worst
+    window.__rvSky = (dist, pitch) => {
+      const sn = window.__snap(), A = sn.agents, n = sn.count, C = sn.carcasses, nc = sn.carcassCount;
+      const P = [], R = [], E = [], S = [];
+      for (let j = 0; j < n; j++) { const o = j * 12; if (A[o] === 2) { R.push([A[o + 1], A[o + 2]]); if (A[o + 7] === 6) E.push([A[o + 1], A[o + 2]]); } }
+      for (let k = 0; k < nc; k++) { if (C[k * 4 + 2] < 0.08) continue; let w = 0; for (const q of E) if (Math.hypot(q[0] - C[k * 4], q[1] - C[k * 4 + 1]) < 7) w++; if (w >= 2) S.push([C[k * 4], C[k * 4 + 1]]); }
+      window.__rvSites = S;
+      for (const q of R) if (!S.some((s) => Math.hypot(q[0] - s[0], q[1] - s[1]) < 28)) P.push(q);
+      let best = null, bs = -1;
+      for (const p of P) { let c = 0; for (const q of P) if (Math.hypot(p[0] - q[0], p[1] - q[1]) < 70) c++; if (c > bs) { bs = c; best = p; } }
+      if (!best) return { none: true, ravens: Array.from({ length: n }).filter((_, j) => A[j * 12] === 2).length, carcasses: nc };
+      window.__followId(null); window.__cam('wide');
+      e.cam.setView({ x: best[0], y: best[1], distance: dist, pitchDeg: pitch }, true);
+      return { x: best[0], y: best[1], near: bs, free: P.length, sites: S.length, ravens: R.length };
+    };
+    await new Promise((r) => { let last = -1, same = 0, n = 0; const t = setInterval(() => { const sn = window.__snap && window.__snap(); const k = sn ? sn.tick : -2; if (k === last) same++; else { same = 0; last = k; } if ((same >= 5 && k >= 1200) || ++n > 240) { clearInterval(t); r(); } }, 500); });
+    let found = window.__rvScan(), tries = 0;
+    while ((!found || found.grounded < 2) && tries++ < 120) { window.__step(60); await wait(700); found = window.__rvScan(); }
+    console.error('rv rig', tries, JSON.stringify(found));
+  })()`, wait: 4000 },
+  // the sim is paused at a fixed tick here, so before and after show the same birds: the wide default view, and the herd from 150 and 220 m
+  { name: 'rv_stat', eval: "(() => { const sn = window.__snap(), C = sn.carcasses, nc = sn.carcassCount, A = sn.agents; const rem = []; for (let k = 0; k < nc; k++) rem.push(+C[k * 4 + 2].toFixed(2)); rem.sort((a, b) => a - b); const bins = [0.02, 0.05, 0.1, 0.2, 0.4, 0.7, 1.01].map((t) => rem.filter((r) => r < t).length); const near = (th) => { let c = 0, tot = 0, grd = 0; for (let j = 0; j < sn.count; j++) { const o = j * 12; if (A[o] !== 2) continue; tot++; if (A[o + 7] === 6) grd++; let d = 1e9; for (let k = 0; k < nc; k++) if (C[k * 4 + 2] >= th) d = Math.min(d, Math.hypot(A[o + 1] - C[k * 4], A[o + 2] - C[k * 4 + 1])); if (d < 40) c++; } return [tot, grd, c]; }; console.error('stat rem<0.02,.05,.1,.2,.4,.7,1', JSON.stringify(bins), 'ravens/eating/near40 by rem>=0,.05,.1,.2', JSON.stringify([near(0), near(0.05), near(0.1), near(0.2)])); })()", wait: 100 },
+  { name: 'rv_s1_120', eval: "window.__speed(0); console.error('sky', JSON.stringify(window.__rvSky(120, 24)))", wait: 3500 },
+  { name: 'rv_s2_200', eval: "window.__rvSky(200, 28)", wait: 3500 },
+  { name: 'rv_s3_150', eval: "window.__rvSky(150, 18)", wait: 3500 },
+  { name: 'rv_w1_wide', eval: "window.__speed(0); window.__followId(null); window.__cam('wide')", wait: 3500 },
+  { name: 'rv_w2_150', eval: "window.__focusHerd(); window.__engine.cam.setView({ distance: 150, pitchDeg: 30 }, true)", wait: 3500 },
+  { name: 'rv_w3_220', eval: "window.__engine.cam.setView({ distance: 220, pitchDeg: 35 }, true)", wait: 3500 },
+  { name: 'rv_w4_top', eval: "window.__cam('top')", wait: 3500 },
+  // one standing raven, from 2.4 m out: its folded wings, feet and beak at the ground (the sim is held, so the bird stays put; only the beat of the pecking runs)
+  { name: 'rv_p1', eval: "window.__speed(0); (() => { const r = window.__find(2, 6); window.__select(null); window.__followId(r[Math.min(1, r.length - 1)]); window.__engine.cam.setView({ distance: 2.4, pitchDeg: 9 }, true); })()", wait: 2500 },
+  { name: 'rv_p2', eval: "window.__engine.cam.setView({ distance: 2.4, pitchDeg: 9, yawDeg: 90 }, true)", wait: 1200 },
+  { name: 'rv_p3', eval: "window.__engine.cam.setView({ distance: 2.4, pitchDeg: 9, yawDeg: 180 }, true)", wait: 1200 },
+  { name: 'rv_p4', eval: "window.__engine.cam.setView({ distance: 3.2, pitchDeg: 35, yawDeg: 45 }, true)", wait: 1200 },
+  { name: 'rv_o120', eval: "window.__speed(0); console.error('rig', JSON.stringify(window.__rvRig(120, 26)))", wait: 3500 },
+  { name: 'rv_o200', eval: "window.__rvRig(200, 28)", wait: 3500 },
+  { name: 'rv_o160', eval: "window.__rvRig(160, 27)", wait: 3500 },
+  { name: 'rv_o100', eval: "window.__rvRig(100, 25)", wait: 3500 },
+  { name: 'rv_o250', eval: "window.__rvRig(250, 30)", wait: 3500 },
+  { name: 'rv_c1', eval: "window.__speed(1); console.error('rig', JSON.stringify(window.__rvRig(9, 22)))", wait: 3000 },
+  { name: 'rv_c2', eval: "", wait: 1400 },
+  { name: 'rv_c3', eval: "", wait: 1400 },
+  { name: 'rv_c4', eval: "", wait: 1400 },
+  { name: 'rv_c5', eval: "console.error('rig', JSON.stringify(window.__rvRig(6, 14)))", wait: 3000 },
+  { name: 'rv_c6', eval: "", wait: 1400 },
+  { name: 'rv_c7', eval: "", wait: 1400 },
+  // low and close on the carcass (a side view at the ravens' feet): where the wings and the feet meet the ground and the carcass
+  { name: 'rv_f1', eval: "window.__speed(1); window.__rvRig(5, 6)", wait: 2500 },
+  { name: 'rv_f1b', eval: "(() => { const sn = window.__snap(), A = sn.agents, r = window.__rvScan(); const o = []; for (let j = 0; j < sn.count; j++) { const q = j * 12; if (A[q] !== 2) continue; const d = Math.hypot(A[q + 1] - r.x, A[q + 2] - r.y); if (d < 8) o.push([sn.ids[j], +d.toFixed(1), A[q + 7], +A[q + 9].toFixed(2), +A[q + 4].toFixed(2)]); } console.error('ravens', JSON.stringify(o)); })()", wait: 100 },
+  { name: 'rv_f2', eval: "", wait: 700 },
+  { name: 'rv_g1', eval: "", wait: 350 },
+  { name: 'rv_g2', eval: "", wait: 350 },
+  { name: 'rv_g3', eval: "", wait: 350 },
+  { name: 'rv_g4', eval: "", wait: 350 },
+  { name: 'rv_g5', eval: "", wait: 350 },
+  { name: 'rv_g6', eval: "", wait: 350 },
+  { name: 'rv_g7', eval: "", wait: 350 },
+  { name: 'rv_g8', eval: "", wait: 350 },
+  { name: 'rv_g9', eval: "", wait: 350 },
+  { name: 'rv_g10', eval: "", wait: 350 },
+  { name: 'rv_g11', eval: "", wait: 350 },
+  { name: 'rv_g12', eval: "", wait: 350 },
+  { name: 'rv_f3', eval: "", wait: 700 },
+  { name: 'rv_f4', eval: "", wait: 700 },
+  { name: 'rv_f5', eval: "", wait: 700 },
+  { name: 'rv_f6', eval: "", wait: 700 },
+  { name: 'rv_f7', eval: "", wait: 700 },
+  { name: 'rv_f8', eval: "", wait: 700 },
+];
+
 // v10: species glyphs at time-lapse speed (glyphs.ts GLYPH_LAPSE_*): the same drone view at 1x (no glyphs below 210 m) and at 100x
 SETS.lapse = [
   { name: 'lapse_01_drone_1x', eval: "window.__speed(1); window.__focusHerd(); window.__engine.cam.setView({ distance: 300, pitchDeg: 40 })", wait: 4000 },
