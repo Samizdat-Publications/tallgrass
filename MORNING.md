@@ -1,9 +1,9 @@
 # Good morning: Tallgrass overnight report
 
-*(Updated 07:20 Saturday 2026-10-10. This file is refreshed at every milestone.)*
+*(Updated 14:30 Saturday 2026-10-10. This file is refreshed at every milestone.)*
 
 ## 2026-10-09 to 10: the 24-hour day run (the plan is DAY-PLAN.md)
-**Play it:** https://tallgrass.stewartgregerson.workers.dev (or `npm run dev`, then http://localhost:5199/). Last deploy: 08:23 Saturday (D7), live check clean. The default world is still v10b.
+**Play it:** https://tallgrass.stewartgregerson.workers.dev (or `npm run dev`, then http://localhost:5199/). Last deploy: 14:03 Saturday (D8, faster start), live check clean. The default world is still v10b. The run continues to 13:30 Sunday, within the quota limits.
 
 **What you asked for:** take stock, then spend 24 hours on what gives the most: visuals and the remaining features. The ecosystem already passed every gate, so the day went to how the valley looks up close and how the animals move.
 
@@ -24,7 +24,7 @@
 
 ### Reviews (judge the trend; single rounds swing 2 to 3 points)
 - **Blind critic, stills:** round 25 (Friday 21:30) visual 6, readability 4, life 4, ecosystem 5, keep watching 5; round 28 (Saturday 05:10) visual 7, readability 5, life 6, ecosystem 6, UI 7, keep watching 6.
-- **Gemini video, now at 8 frames a second** (it used to see 1 frame a second, which hides every stride): life and motion 3 (baseline Friday 15:49), 1 (round 26, frozen animals), 3 (round 27, after the idle layer), 2 (round 29, different moments: deaths that snap into a rigid pose, which a builder is fixing now).
+- **Gemini video, now at 8 frames a second** (it used to see 1 frame a second, which hides every stride): life and motion 3 (baseline Friday 15:49), 1 (round 26, frozen animals), 3 (round 27, after the idle layer), 2 (round 29, on D6: deaths that snap into a rigid pose, fixed in D7), 2 (round 30, on D8: herds that ignore a passing wolf, which a builder is fixing now; UI 8, readability 7).
 - Triage for every round is in REVIEWS.md.
 
 ### Ecology this run (nothing adopted; v10b stays)
@@ -40,12 +40,12 @@
 
 ### Blocked or cut
 - **Your C: drive was full** (333 MB free of 925 GB) at 08:00 Saturday. I cleared about 22 GB of this project's own old scratch copies (old batch checkouts and review videos; results are kept in the repo); it now has 23 GB free. The rest of the drive is outside this project and worth a look.
-- **Slow start:** on a quiet machine the live page loads in 4 to 6 s but takes 28 to 70 s to become ready (shader compiles and setup for the new animals and trees). A builder is cutting it now (see the deploy log for whether it landed).
+- **Start time (fixed in D8, not all the way):** the live page used to take 28 to 70 s to become ready, nearly all of it shader compiles. D8 compiles them all at once before the first frame: the live page is now ready in 19 to 24 s from a cold browser (2 runs at 14:05, a busy machine; the local build measured 15 to 45 s against 84 to 158 s with the old path, interleaved). Still above the 15 s goal. A bug found on the way (a negative first-frame time step turned the weather values into NaN and the first frame black) is fixed.
 - Wide-view readability (telling species apart at mid range) and the noisy-looking population charts are still open.
 - Your CPU ruling (16:00, then 85% from 18:00) cost about two hours of builder speed in the evening; no work was lost.
 
 ### API spend
-- Gemini: 4 video critiques at 8 fps (logged at about $0.05 each; 8 fps sends more frames, so likely $0.10 to $0.30 in all).
+- Gemini: 5 video critiques at 8 fps (logged at about $0.05 each; 8 fps sends more frames, so likely $0.10 to $0.30 in all).
 - Sketchfab: free downloads only, no paid generation; Meshy: 0 credits used (746 left).
 - Everything is logged in ASSETS.md.
 
@@ -57,7 +57,7 @@
 5. A Gemini round on a quiet machine with a hand-picked reel (a hunt, a herd crossing, a death), so the motion score reflects the best moments rather than random ones.
 
 ### Deploy log (all live checks clean)
-D1 19:45 golden look, snow · D2 21:35 wading, alert heads, ground detail, performance · D3 01:10 real animals, real trees, land · D4 02:45 idle life · D5 04:05 planted feet, leap · D6 06:45 night and water, round 28 fixes · D7 08:23 deaths and takedowns at any speed, tumbling birds, animals on ice.
+D1 19:45 golden look, snow · D2 21:35 wading, alert heads, ground detail, performance · D3 01:10 real animals, real trees, land · D4 02:45 idle life · D5 04:05 planted feet, leap · D6 06:45 night and water, round 28 fixes · D7 08:23 deaths and takedowns at any speed, tumbling birds, animals on ice · D8 14:03 faster start (all shaders compiled at once), first-frame NaN fix.
 
 ## 2026-10-09 night: "The long breath" (v10)
 **Play it:** https://tallgrass.stewartgregerson.workers.dev (or `npm run dev`, then http://localhost:5199/). **v10b is now the default world** (v10 adopted at 10:30, then its refinement v10b at 13:00, each after its acceptance and shocks passed; live, see the last line of this section).

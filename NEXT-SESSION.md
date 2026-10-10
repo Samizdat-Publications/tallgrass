@@ -3,6 +3,11 @@
 **Updated:** 2026-10-04 afternoon, at the end of the v2 planning session. v1 is finished and live; v2 starts now. The plan is `V2-PLAN.md`.
 
 ## Day run 2026-10-09 ~15:30 to 2026-10-10 ~15:30: READ DAY-PLAN.md FIRST
+- STATE 14:30 Sat (resumed 13:30 after the drive; owner ruling: run 24 h to 2026-10-11 13:30, publish at the next checkpoint). Deadline file says 2026-10-11 13:30. Weekly quota 60% at 13:50: start nothing new at 65%, stop at 90% (never extra usage).
+  - DONE: r-startup merged (NaN cause = negative first-frame dt after prime; dt clamped at 0; dry frame on; debug flags gone) and D8 deployed 14:03, live check clean, live cold ready 19 to 24 s. Gemini round 30 (D8) triaged in REVIEWS.md.
+  - RUNNING: builder B14 r-alert2 (scratch/wt-alert, brief scratch/day/b14_alert.md): walking and lying grazers react to a passing predator. On report: check stills in review/wip/r-alert2, gpubench, merge, deploy D9, update MORNING deploy log.
+  - CPU: throttle loop restarted (scratch/day/throttle_loop.sh now calls scratch/day/throttle.ps1). Worktree preview server for wt-start on 5198 can be killed.
+  - After B14, if quota is under 65%: nothing new; final MORNING self-audit, NEXT-SESSION, and stop early by writing the time to .claude/hooks/run_until.local.txt when the quota rule says so.
 - Planned Friday afternoon at extra-high effort; executes at high effort once the owner switches. The plan: `DAY-PLAN.md` (stock-take, bang-for-buck ranking, blocks, gates, quota targets).
 - Start state: main 442a648 + the plan commit, v10b default and live (deploy 13:04), CPU idle, no builders, nothing running. Weekly quota 31% at 14:30.
 - First steps (Block 0): write "2026-10-10 15:30" to `.claude/hooks/run_until.local.txt`; idle-machine baselines (gpubench, 100x rate, r-snow A/B); the look-set capture and `tools/look_stats.py`; Gemini `videoMetadata.fps`; start v11 screen 1 on the CPU; brief builders B1 r-look, B2 r-ground, B3 a3-spike.

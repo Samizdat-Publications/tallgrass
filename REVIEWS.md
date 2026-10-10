@@ -380,3 +380,16 @@ Scores: visual 7, readability 5, life 6, ecosystem 6, UI 7, keep watching 6 (rou
 | 8 | Near-camera junk | defer | Capture framing; near-camera fade exists. |
 | 9 | Seasons disagree | reject | lk_10 holds the season at winter while the sim is in summer (capture artifact). |
 | 10 | Bedded bison loaves; 43x label | defer / reject | Lying pose improved in r-feet era; the label is honest by design. |
+
+## Round 29 (Gemini video at 8 fps, motion reel of D6; 2026-10-10 06:54) -> `review/round-29-video/motion.gemini.md`
+Scores: life and motion 2. Top items: (1) deaths freeze into a rigid pose and tip over, a raven falls mid-flap: FIX, done in r-death (merged, D7: staged deaths at any speed, tumbling fliers). (2) ice skating on the frozen river: FIX in part (r-death puts animals on the ice top; paw slip is measured under 1.4% per gait, so the rest is the chase steering). (5) rigid resting animal: DEFER (the idle layer covers standing animals; lying ones are next).
+
+## Round 30 (Gemini video at 8 fps, motion reel of D8; 2026-10-10 14:09) -> `review/round-30-video/motion.gemini.md`
+Scores: visual 4, readability 7, life and motion 2, ecosystem 2, UI 8, keep watching 2.
+1. Bison ignore a wolf running through the herd (00:15 to 00:17): FIX. Frames show the herd walking and some lying; the r-life alert only covers standing grazers. Builder B14 r-alert2: walking grazers look at the predator, lying ones lift their heads, bison face a wolf inside 25 m.
+2. Resting bison look like taxidermy (no breathing, ears, cud): DEFER behind item 1 (the breath layer exists; check it reads at mid range on lying animals).
+3. Floating, sliding locomotion of coyote and wolf: REJECT as stated (paw slip measured under 1.4%); the likely cause is the 8 fps sampling of a dark night shot. Revisit with a daylight reel.
+4. Flat night lighting: DEFER (the round 28 night pass was judged an improvement by the blind critic; a third opinion before more work).
+5. Predators zig-zag in tight circles: DEFER (sim steering; needs a sim-side param, off by default).
+6. Hard cuts between seasons: REJECT (the reel's own edit points, not the game).
+
