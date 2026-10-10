@@ -2034,7 +2034,7 @@ export function makeAnimalMaterials(sp: number, def: ModelDef, shared: AnimalSha
         // by its outline and by value, without the night looking like day.
         float tgNR = pow(1.0 - clamp(dot(normalize(vViewPosition), normal), 0.0, 1.0), 3.2);
         float tgNK = smoothstep(0.35, 0.88, uLow) * uNightK;
-        totalEmissiveRadiance += vec3(0.52, 0.64, 0.9) * 0.46 * tgNR * (0.3 + 0.7 * vTgUp) * tgNK * (0.6 + 0.4 * vTgFar) * (0.72 + 0.28 * vTgMid) * tgNL;
+        totalEmissiveRadiance += vec3(0.52, 0.64, 0.9) * 0.46 * tgNR * (0.3 + 0.7 * vTgUp) * tgNK * (0.65 + 0.75 * vTgMid) * (1.0 - 0.8 * vTgFar) * tgNL;
         totalEmissiveRadiance += diffuseColor.rgb * vec3(0.085, 0.105, 0.17) * tgNK * (0.5 + 0.5 * vTgUp) * tgNL;`,
       );
   };

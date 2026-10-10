@@ -313,6 +313,50 @@ SETS.trees3 = [
   { name: 't3_13_snags_close', eval: "(() => { const e = window.__engine, T = e.world.trees, c = window.__picks[2]; for (let j = 0; j < T.length / 4; j++) if (Math.hypot(T[j * 4] - T[c * 4], T[j * 4 + 1] - T[c * 4 + 1]) < 16 && j % 2 === 0) e.trees.updateTree(j, { burned: true }); window.__env({ season: 1.3, dayFrac: 0.6 }); window.__grove(2, 30, 10, 35); })()", wait: 4500 },
 ];
 
+// r-nightwater: night readability (herd at 20 to 90 m, wide, low) and water (pond and creek at golden hour, midday, wide, dusk, night).
+// Sim paused after 900 stepped ticks so animals stand in the same places; light held by __env. __wv(target, dist, pitch, yawFromLight).
+SETS.nw = [
+  { name: 'nw_00_setup', eval: `(async () => {
+    const e = window.__engine, w = e.world;
+    window.__env = (o) => {
+      window.__envO = Object.assign({ season: 1.8, weather: 0, warmth: 0.7, rain: 0, dayFrac: 0.7 }, o);
+      if (!window.__envHook) window.__envHook = e.onFrame(() => e.setEnv(window.__envO));
+      e.setEnv(window.__envO); e.applyEnvNow();
+    };
+    window.__wv = (t, dist, pitch, rel) => {
+      let x, y;
+      if (typeof t === 'string') { const q = Number(t.slice(1)) * 4; x = w.ponds[q]; y = w.ponds[q + 1]; }
+      else { const n = w.creek.length / 2, k = Math.min(n - 2, Math.max(0, Math.floor(n * t))); x = w.creek[2 * k]; y = w.creek[2 * k + 1]; }
+      const L = e.uniforms.lightDir.value;
+      const az = Math.atan2(L.x, L.z) * 180 / Math.PI;
+      e.cam.setView({ x, y, distance: dist, pitchDeg: pitch, yawDeg: az + 180 + rel }, true);
+    };
+    window.__lkPick = (sp, st) => { const c = (st !== undefined ? window.__find(sp, st) : []).concat(window.__find(sp)); return c.length ? c[0] : null; };
+    window.__lkFollow = (sp, st, dist, pitch) => { const id = window.__lkPick(sp, st); window.__followId(id); e.cam.setView({ distance: dist, pitchDeg: pitch }); };
+    window.__speed(0); window.__step(900); window.__followId(null); window.__env({});
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'h', bubbles: true }));
+    await new Promise((r) => { let last = -1, same = 0, n = 0; const t = setInterval(() => { const sn = window.__snap && window.__snap(); const k = sn ? sn.tick : -2; if (k === last) same++; else { same = 0; last = k; } if ((same >= 5 && k >= 900) || ++n > 240) { clearInterval(t); r(); } }, 500); });
+  })()`, wait: 6000 },
+  { name: 'nw_01_night_wide', eval: "window.__env({ dayFrac: 0.95 }); window.__cam('wide')", wait: 4000 },
+  { name: 'nw_02_night_mid90', eval: "window.__focusHerd(); window.__engine.cam.setView({ distance: 90, pitchDeg: 22 })", wait: 3500 },
+  { name: 'nw_03_night_herd60', eval: "window.__focusHerd(); window.__engine.cam.setView({ distance: 60, pitchDeg: 16 })", wait: 3500 },
+  { name: 'nw_04_night_herd35', eval: "window.__focusHerd(); window.__engine.cam.setView({ distance: 35, pitchDeg: 14 })", wait: 3500 },
+  { name: 'nw_05_night_close', eval: "window.__lkFollow(0, 1, 14, 12)", wait: 4000 },
+  { name: 'nw_06_night_wolves', eval: "window.__lkFollow(1, undefined, 16, 14)", wait: 4000 },
+  { name: 'nw_07_night_low', eval: "window.__followId(null); window.__cam('low')", wait: 3500 },
+  { name: 'nw_08_night_creek', eval: "window.__wv(0.32, 70, 20, 8)", wait: 3000 },
+  { name: 'nw_09_night_pond', eval: "window.__wv('p0', 55, 22, 5)", wait: 3000 },
+  { name: 'nw_10_golden_pond', eval: "window.__env({ dayFrac: 0.71 }); window.__wv('p0', 60, 24, 30)", wait: 3000 },
+  { name: 'nw_11_golden_creek', eval: "window.__wv(0.32, 95, 26, 20)", wait: 3000 },
+  { name: 'nw_12_golden_pond_wide', eval: "window.__wv('p0', 170, 28, 40)", wait: 3000 },
+  { name: 'nw_13_golden_creek_wide', eval: "window.__wv(0.45, 190, 28, 40)", wait: 3000 },
+  { name: 'nw_14_midday_pond', eval: "window.__env({ dayFrac: 0.45 }); window.__wv('p0', 60, 30, 50)", wait: 3000 },
+  { name: 'nw_15_midday_creek', eval: "window.__wv(0.6, 80, 28, 50)", wait: 3000 },
+  { name: 'nw_16_midday_wide', eval: "window.__cam('wide')", wait: 3000 },
+  { name: 'nw_17_dusk_pond', eval: "window.__env({ dayFrac: 0.77 }); window.__wv('p0', 90, 20, 20)", wait: 3000 },
+  { name: 'nw_18_day_wide', eval: "window.__env({ dayFrac: 0.62 }); window.__cam('wide')", wait: 3000 },
+];
+
 // v10: species glyphs at time-lapse speed (glyphs.ts GLYPH_LAPSE_*): the same drone view at 1x (no glyphs below 210 m) and at 100x
 SETS.lapse = [
   { name: 'lapse_01_drone_1x', eval: "window.__speed(1); window.__focusHerd(); window.__engine.cam.setView({ distance: 300, pitchDeg: 40 })", wait: 4000 },

@@ -53,6 +53,10 @@ const VIEW_SETUPS = {
     e.storms.debugStrike(f.x + fx * 230 + rx * -150, f.z + fz * 230 + rz * -150, false);
     e.storms.onThunder = null;
   }`,
+  // r-nightwater: the water close up (a pond and the creek at midday, a pond under the moon)
+  pond_midday: `() => { Object.assign(e.env, { dayFrac: 0.45, season: 1.3, weather: 0 }); e.applyEnvNow(); const w = e.world; e.cam.setView({ x: w.ponds[0], y: w.ponds[1], distance: 60, pitchDeg: 30, yawDeg: 40 }, true); }`,
+  creek_midday: `() => { Object.assign(e.env, { dayFrac: 0.45, season: 1.3, weather: 0 }); e.applyEnvNow(); const w = e.world, k = Math.floor(w.creek.length / 2 * 0.6); e.cam.setView({ x: w.creek[2 * k], y: w.creek[2 * k + 1], distance: 80, pitchDeg: 28, yawDeg: 40 }, true); }`,
+  pond_night: `() => { Object.assign(e.env, { dayFrac: 0.95, season: 1.3, weather: 0 }); e.applyEnvNow(); const w = e.world; e.cam.setView({ x: w.ponds[0], y: w.ponds[1], distance: 55, pitchDeg: 22, yawDeg: 40 }, true); }`,
 };
 const VIEW_NAMES = arg('views', '') ? arg('views', '').split(',').filter((n) => n in VIEW_SETUPS) : Object.keys(VIEW_SETUPS); // (--views low_golden,herd runs just those)
 const WARMUP = 6;
