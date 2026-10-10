@@ -33,9 +33,13 @@ const MARK_SNIFF = 1.5;
 /** A wolf chorus takes in resting wolves within this many metres of its site (a pack lies close); a coyote chorus the radius below. */
 const CHOIR_R_WOLF = 48;
 
-/** The mousing leap: airborne time, and the pin of the forefeet after it (s). */
+/** The mousing leap: the crouch before it (s), airborne time, and the pin of the forefeet after it (s). */
+export const ANT_TIME = 0.28;
 export const LEAP_TIME = 1.2;
 export const PIN_TIME = 0.6;
+/** How far the haunches settle in the crouch before the spring (m at drawn scale 1) and the nose-up pitch that goes with it (rad). */
+const ANT_DROP = 0.09;
+const ANT_PITCH = 0.16;
 /** Height and reach of the leap in metres at drawn scale 1 (the coyote is drawn at about 1.35). */
 const LEAP_HEIGHT = 0.62;
 const LEAP_REACH = 0.8;
@@ -88,6 +92,10 @@ export interface CanidOut {
   landed: boolean;
   /** A leap began this frame. */
   leapStarted: boolean;
+  /** r-feet: where the mousing leap is, for the shader (aFx2.z): 0 none, else 2 + segment (0 crouch, 1 arc, 2 pin) + the fraction of that segment (0 .. 0.999). */
+  leap: number;
+  /** The pin of the forefeet is on: the head goes down into the grass. */
+  pin: boolean;
   /** Howl weight eased 0..1 (the shader's sit) and whether it wants to be sitting now. */
   howl: number;
   howlWant: boolean;
@@ -107,7 +115,7 @@ export interface CanidOut {
 }
 
 export function newOut(): CanidOut {
-  return { ox: 0, oz: 0, lift: 0, pitch: 0, air: 0, landed: false, leapStarted: false, howl: 0, howlWant: false, pack: 0, spd: 0, play: false, sniff: false, mark: 0, face: 0, moving: false, pounced: false };
+  return { ox: 0, oz: 0, lift: 0, pitch: 0, air: 0, landed: false, leapStarted: false, leap: 0, pin: false, howl: 0, howlWant: false, pack: 0, spd: 0, play: false, sniff: false, mark: 0, face: 0, moving: false, pounced: false };
 }
 
 export function newIn(): CanidIn {
@@ -266,7 +274,7 @@ export class CanidState {
     const s = i.slot;
     this.ensure(s + 1);
     const dt = i.running, ts = i.timeScale;
-    o.lift = 0; o.pitch = 0; o.air = 0; o.landed = false; o.leapStarted = false; o.spd = 0; o.howlWant = false;
+    o.lift = 0; o.pitch = 0; o.air = 0; o.landed = false; o.leapStarted = false; o.leap = 0; o.pin = false; o.spd = 0; o.howlWant = false;
     o.play = false; o.sniff = false; o.moving = false; o.pounced = false;
 
     // mange: severity from how run down it is (the snapshot only carries the flag), eased so it never pops
@@ -298,18 +306,29 @@ export class CanidState {
       if (this.leapT[s] >= 0) {
         this.leapT[s] += dt;
         const t = this.leapT[s];
-        const u = t / LEAP_TIME;
-        if (u <= 1) {
+        const u = (t - ANT_TIME) / LEAP_TIME;
+        if (u < 0) {
+          // the crouch: the haunches settle and the nose comes up a touch, everything else still (the shader locks the head and ears on the prey)
+          const f = t / ANT_TIME;
+          const e = f * f * (3 - 2 * f);
+          o.lift = -ANT_DROP * i.vs * e;
+          o.pitch = ANT_PITCH * e;
+          o.leap = 2 + Math.min(0.999, f);
+        } else if (u <= 1) {
           this.lx[s] = this.lx0[s] + Math.cos(this.lh[s]) * this.ld[s] * u;
           this.lz[s] = this.lz0[s] + Math.sin(this.lh[s]) * this.ld[s] * u;
-          o.lift = LEAP_HEIGHT * i.vs * 4 * u * (1 - u);
-          o.pitch = 0.5 - 1.3 * smoothstep(0.1, 1.0, u);
+          // the spring: the crouch lets go over the first tenth of the arc, so the body rises out of it rather than snapping off the ground
+          o.lift = LEAP_HEIGHT * i.vs * 4 * u * (1 - u) - ANT_DROP * i.vs * (1 - smoothstep(0, 0.1, u));
+          o.pitch = ANT_PITCH + (0.5 - ANT_PITCH) * smoothstep(0, 0.1, u) - 1.3 * smoothstep(0.1, 1.0, u);
           o.air = smoothstep(0.03, 0.16, u) * (1 - smoothstep(0.86, 0.985, u));
+          o.leap = 3 + Math.min(0.999, u);
         } else {
           // the pin: the forefeet are down on the prey, the nose to the ground, then it lifts its head again
           if (!this.landedFlag[s]) { this.landedFlag[s] = 1; o.landed = true; }
-          const q = (t - LEAP_TIME) / PIN_TIME;
+          const q = (t - ANT_TIME - LEAP_TIME) / PIN_TIME;
           o.pitch = -0.45 * (1 - smoothstep(0.5, 1, q)) - 0.35 * (1 - smoothstep(0, 0.3, q));
+          o.leap = 4 + Math.min(0.999, q);
+          o.pin = q < 0.85;
           if (q >= 1) {
             this.leapT[s] = -1;
             this.landedFlag[s] = 0;

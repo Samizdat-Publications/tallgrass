@@ -128,6 +128,10 @@ export interface FrameSample {
   /** Per leg (FL, FR, HL, HR): foot point in the post-body model frame, in the world, stance flag, ground error (cm), IK short flag. */
   feet: Array<{ model: [number, number, number]; world: [number, number, number]; stance: boolean; err: number; short: boolean; hip: [number, number, number]; knee: [number, number, number] }>;
   phase: number;
+  /** The eased body-height offset (m) the shader is given in aFx.y, and the leg-cycle pace and stot weight it runs at (for tools that run the shader). */
+  bdy: number;
+  pace: number;
+  stotW: number;
 }
 
 /** Runs one case, calling `frame` for every simulated frame after the warm-up (used by the strips too). */
@@ -235,7 +239,7 @@ export function runCase(o: CaseOpts, frame?: (s: FrameSample) => void): CaseResu
           }
         }
       }
-      frame?.({ t: (f - warm) * dt, body, inst, feet, phase: ph });
+      frame?.({ t: (f - warm) * dt, body, inst, feet, phase: ph, bdy: legacy ? 0 : bdy, pace, stotW });
     }
     for (let i = 0; i < 4; i++) { prevW[i] = feet[i].world; prevStance[i] = feet[i].stance; }
     prevBody = body;

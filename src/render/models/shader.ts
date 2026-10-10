@@ -103,6 +103,8 @@ function lodDefines(def: ModelDef | undefined, variant: Variant): string[] {
     `#define FUR_DORSAL ${f(fur?.dorsal ?? 0)}`, `#define FUR_BELLY ${f(fur?.belly ?? 0)}`,
     `#define FUR_STREAK ${f(fur?.streak ?? 0)}`, `#define FUR_MOTTLE ${f(fur?.mottle ?? 0)}`, `#define FUR_MOTTLE_SCALE ${f(fur?.mottleScale ?? 7)}`, `#define FUR_INDIV ${f(fur?.indiv ?? 0)}`,
     `#define A3SKIN ${variant === 'near' && def?.a3 ? 1 : 0}`,
+    // r-feet: how much of the leg's net swing the foot is turned back by (1 = a level sole), and the foot's height range (fractions of the leg length) over which that fades out
+    `#define A3_ANKLE ${f(variant === 'near' ? def?.a3?.ankle ?? 1 : 0)}`, `#define A3_FOOT_Y0 ${f(def?.a3?.footY?.[0] ?? 0.07)}`, `#define A3_FOOT_Y1 ${f(def?.a3?.footY?.[1] ?? 0.2)}`,
     // a3 graze: the head angle multiplier, the forebody pitch down and the neck drop (m) while grazing (an authored head is shorter than the procedural one)
     `#define A3_SPINE ${f(variant === 'near' ? def?.a3?.spineK ?? 1 : 1)}`, `#define A3_DN ${f(variant === 'near' ? def?.a3?.grazeK ?? 1 : 1)}`, `#define A3_PITCH ${f(variant === 'near' ? def?.a3?.grazePitch ?? 0 : 0)}`, `#define A3_DROP ${f(variant === 'near' ? def?.a3?.grazeDrop ?? 0 : 0)}`,
     // r-idle: the ear region of an authored head (see ModelDef.a3.ear): base, tip, radius
@@ -606,10 +608,18 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
   float leapW = 0.0;
   // R3 canids (see tgUnpack): a mousing leap in the air, a howl (sitting) with its yips, mange severity
   float cnAir = 0.0, cnHowl = 0.0, cnYip = 0.0, cnMange = 0.0, cnMark = 0.0;
+  // r-feet: where a mousing leap is (aFx2.z of a canid carries 2 + segment + fraction while it leaps: 0 the crouch, 1 the arc, 2 the pin), -1 when it is not
+  float cnLeapSeg = -1.0, cnLeapF = 0.0;
 #if KIND == 0 && !STOT
   if (!dead) tgUnpack(fx2.w, cnAir, cnHowl, cnYip, cnMange, cnMark);
 #if !BEHAV && !FLARE
   leapW = dead ? 0.0 : clamp(fx2.z, 0.0, 1.0);
+  if (!dead && fx2.z >= 1.5) {
+    float lq = fx2.z - 2.0;
+    cnLeapSeg = floor(lq);
+    cnLeapF = lq - cnLeapSeg;
+    leapW = 0.0;
+  }
   holdW = dead ? 0.0 : clamp(fx2.x, 0.0, 1.0);
   holdSh = holdW * sin(t * 21.0 + seed * 40.0);
   pitch += holdW * 0.04 * sin(t * 8.0 + seed * 5.0);
@@ -691,7 +701,7 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
 #if KIND == 0 && IDLE
   if (!dead) {
     float mvI = clamp(wWalk + wTrot + wGal, 0.0, 1.0);
-    idW = (1.0 - mvI) * (1.0 - clamp(uTL * 2.0, 0.0, 1.0)) * (1.0 - stotK) * (1.0 - swimW);
+    idW = (1.0 - mvI) * (1.0 - clamp(uTL * 2.0, 0.0, 1.0)) * (1.0 - stotK) * (1.0 - swimW) * (cnLeapSeg < -0.5 ? 1.0 : 0.0); // (a leaping coyote is locked on its prey: no breath, look or ear flick)
     float hA = fract(seed * 13.17), hB = fract(seed * 7.91 + 0.31), hC = fract(seed * 29.3 + 0.7);
     idAlert = smoothstep(0.03, 0.25, -aGait.z) * (1.0 - lie);
     // breath: 3 to 5 s a cycle, a little slower out than in
@@ -894,8 +904,18 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
 #if KIND == 0
     // R3 canids. In the air of a mousing leap the forelegs reach ahead and the hind legs trail; sitting to howl, the hind legs fold under.
     if (cnAir > 0.001) {
-      hip = mix(hip, front ? 0.62 : -0.5, cnAir);
-      knee = mix(knee, front ? -0.45 : 0.75 * HOCK_K, cnAir);
+      float cfH = front ? 0.62 : -0.5;
+      float cfK = front ? -0.45 : 0.75 * HOCK_K;
+      if (cnLeapSeg > 0.5) {
+        // r-feet: the arc of a mousing leap. The forelegs fold up under the chest at the spring and reach down and forward for the pin; the hind legs
+        // drive back off the ground, come forward under the belly over the top and trail out again for the landing.
+        float lf = cnLeapF;
+        float tk = smoothstep(0.0, 0.3, lf) * (1.0 - smoothstep(0.55, 0.92, lf));
+        if (front) { cfH = 0.05 + 0.62 * smoothstep(0.4, 1.0, lf); cfK = -0.12 - 0.95 * tk; }
+        else { cfH = -0.7 + 0.5 * smoothstep(0.05, 0.4, lf) - 0.2 * smoothstep(0.7, 1.0, lf); cfK = (0.1 + 0.9 * tk) * HOCK_K; }
+      }
+      hip = mix(hip, cfH, cnAir);
+      knee = mix(knee, cfK, cnAir);
       stretch = mix(stretch, 1.0, cnAir);
     }
     if (cnHowl > 0.001 && !front) {
@@ -1003,6 +1023,25 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
     if (markLeg) tgRotX(p, n, aPivot, (part == 3 ? 1.0 : -1.0) * cnMark * 1.05);
     // a straight leg that still falls short (steep or uneven ground) lengthens a little, at most IK_CAP
     p = aPivot + (p - aPivot) * stretch;
+#endif
+#if A3SKIN && KIND == 0
+    if (!dead && lie < 0.99) {
+      // r-feet: an ankle. The lower leg of the authored mesh swings with the leg (about 0.5 rad each way through a stride), and a rigid hoof or paw
+      // on the end of it rocks, rolls its toe up and sinks its heel, so the drawn sole slides and floats while the rig's foot point is planted. The foot
+      // (the region within a hand's breadth of the sole, fading out up the pastern) is turned back about the rig's foot point by the leg's net swing
+      // plus the body's pitch, so the sole stays level (flat on the ground in stance, held level through the swing). The foot point itself is
+      // where the leg solve put it, so nothing the stance lock does changes.
+      float a3ank = (1.0 - lie) * (1.0 - cnAir) * (1.0 - cnMark) * (1.0 - clamp(holdW * 4.0, 0.0, 1.0));
+      float a3fw = 1.0 - smoothstep(A3_FOOT_Y0 * LEGL, A3_FOOT_Y1 * LEGL, a3p.y - (front ? FRONT_FOOT.y : HIND_FOOT.y));
+      if (a3ank * a3fw > 0.001) {
+        vec3 a3f = vec3(front ? FRONT_FOOT : HIND_FOOT, aPivot.z);
+        vec3 a3fd = vec3(0.0, 1.0, 0.0);
+        tgRotZ(a3f, a3fd, aPivot2, knee);
+        tgRotZ(a3f, a3fd, aPivot, hip);
+        a3f = aPivot + (a3f - aPivot) * stretch;
+        tgRotZ(p, n, a3f, -(hip + knee + tgPitchB) * A3_ANKLE * a3ank * a3fw);
+      }
+    }
 #endif
   } else if (part == 5) {
     float graze = dead ? 0.0 : aGait.z;
@@ -1254,6 +1293,7 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
 #endif
 #if KIND == 0
     lift -= cnHowl * 1.05; // sitting: the body pitches up, so the tail comes up to lie along the ground behind it
+    if (cnLeapSeg > 1.5) lift -= 0.85 * smoothstep(0.0, 0.25, cnLeapF) * (1.0 - smoothstep(0.6, 1.0, cnLeapF)); // r-feet: the tail comes up over the pin
 #if BEHAV
     lift -= bellowW * 1.15 + playW * 1.15; // a bellowing bull and a playing calf carry the tail up
     if (playW > 0.001) sway += playW * 0.25 * sin(t * 6.0 + seed * 3.0);
@@ -1686,7 +1726,9 @@ void tgShade(vec3 on) {
 `;
 
 /** The animation GLSL (defines for a model, and the shared declarations with tgAnimate), for tools that run it outside three: dev/footslip-gpu.ts checks it against legmath.ts. */
-export function animationShaderParts(def: ModelDef): { defs: string; decl: string } {
+export function animationShaderParts(def: ModelDef, variant?: 'near'): { defs: string; decl: string } {
+  // variant 'near': the program of the authored near LOD (with the a3 skin blend), as defsOf builds it; the default is the plain procedural program
+  if (variant === 'near') return { defs: defines(def.params, def.far, def.geometry, def, 'near') + '\n' + seasonDefines(def), decl: COMMON_DECL };
   return { defs: defines(def.params, def.far, def.geometry) + '\n' + seasonDefines(def), decl: COMMON_DECL };
 }
 

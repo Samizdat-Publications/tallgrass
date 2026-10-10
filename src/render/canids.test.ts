@@ -24,12 +24,20 @@ function frame(slot: number, over: Partial<typeof inp>, dt = 0.05): void {
 // ---- mousing: stand still in the stalk, then a leap that lifts off, arcs and lands, then pins, then ends
 {
   cs.reset(3);
-  let clock = 0, began = -1, maxLift = 0, maxAir = 0, landed = false, ended = -1, minPitch = 0, maxPitch = 0;
+  let clock = 0, began = -1, maxLift = 0, maxAir = 0, landed = false, ended = -1, minPitch = 0, maxPitch = 0, minLift = 0, crouchSeen = 0, arcSeen = 0, pinSeen = 0, headDownPin = false, codeOrder = true, lastCode = 0;
   for (let i = 0; i < 600; i++) {
     clock += 0.05;
     frame(3, { state: St.Stalk, spd: 0, clock });
     if (out.leapStarted && began < 0) began = clock;
     maxLift = Math.max(maxLift, out.lift);
+    minLift = Math.min(minLift, out.lift);
+    // r-feet: the leap code the shader reads (2 + segment + fraction) runs through the crouch, the arc and the pin in order
+    if (out.leap > 0) {
+      if (out.leap < 3) crouchSeen++; else if (out.leap < 4) arcSeen++; else pinSeen++;
+      if (out.leap < lastCode - 1e-6 && lastCode < 5) codeOrder = false;
+      lastCode = out.leap;
+      if (out.leap >= 4 && out.pin) headDownPin = true;
+    } else lastCode = 0;
     maxAir = Math.max(maxAir, out.air);
     minPitch = Math.min(minPitch, out.pitch);
     maxPitch = Math.max(maxPitch, out.pitch);
@@ -40,6 +48,10 @@ function frame(slot: number, over: Partial<typeof inp>, dt = 0.05): void {
   ok(maxLift > 0.6 && maxLift < 1.2, `the arc peaks at about 0.8 m (peak ${maxLift.toFixed(2)})`);
   ok(maxAir > 0.99, 'fully off the ground at the top');
   ok(landed, 'a landing is reported');
+  ok(minLift < -0.05 && crouchSeen >= 4, `the haunches settle in a crouch before the spring (lowest ${minLift.toFixed(3)} m, ${crouchSeen} frames of it)`);
+  ok(arcSeen >= 18 && pinSeen >= 8, `the arc and the pin each get their frames (${arcSeen}, ${pinSeen})`);
+  ok(codeOrder, 'the leap code only rises through the sequence');
+  ok(headDownPin, 'the head goes down for the pin');
   ok(maxPitch > 0.3 && minPitch < -0.6, `nose up at the spring, down at the landing (${maxPitch.toFixed(2)}, ${minPitch.toFixed(2)})`);
   ok(ended > 0, 'the leap ends');
   // it travelled forward along its heading: the offset after the first leap is about the reach, along h

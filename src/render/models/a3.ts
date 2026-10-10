@@ -15,7 +15,7 @@ export interface A3Asset {
 }
 
 /** Per species pose tuning of the authored mesh (see ModelDef.a3): graze head angle multiplier, forebody pitch (rad) and neck drop (m). */
-export const A3_TUNE: Record<string, { grazeK?: number; grazePitch?: number; grazeDrop?: number; antlerShift?: [number, number, number]; antlerScale?: number; spineK?: number; ear?: number[] }> = {
+export const A3_TUNE: Record<string, { grazeK?: number; grazePitch?: number; grazeDrop?: number; antlerShift?: [number, number, number]; antlerScale?: number; spineK?: number; ear?: number[]; ankle?: number; footY?: [number, number] }> = {
   // ear: [base x, y, z, tip x, y, z, radius] of the right ear on the authored head (r-idle flicks the region round it about its base; a bison's are lost in the wool)
   wolf: { ear: [0.74, 0.92, 0.11, 0.77, 1.0, 0.14, 0.08] },
   bison: { grazeK: 1.3, grazePitch: 0.12, grazeDrop: 0.12 },
@@ -93,9 +93,11 @@ export async function preloadA3(): Promise<void> {
 }
 
 /** The pose tuning of a species, with the `?a3spine=<k>` probe override (spine flex multiplier) for tuning by eye. */
-export function a3Tune(key: string): { grazeK?: number; grazePitch?: number; grazeDrop?: number; antlerShift?: [number, number, number]; antlerScale?: number; spineK?: number; ear?: number[] } {
+export function a3Tune(key: string): { grazeK?: number; grazePitch?: number; grazeDrop?: number; antlerShift?: [number, number, number]; antlerScale?: number; spineK?: number; ear?: number[]; ankle?: number; footY?: [number, number] } {
   const t = { ...A3_TUNE[key] };
   const q = typeof location === 'undefined' ? null : new URLSearchParams(location.search).get('a3spine');
   if (q !== null && Number.isFinite(Number(q))) t.spineK = Number(q);
+  const qa = typeof location === 'undefined' ? null : new URLSearchParams(location.search).get('a3ankle'); // (r-feet probe: 0 = the rigid foot of before)
+  if (qa !== null && Number.isFinite(Number(qa))) t.ankle = Number(qa);
   return t;
 }

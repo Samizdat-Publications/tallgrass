@@ -2301,7 +2301,7 @@ export class AnimalLayer {
       if (cnOn && (cnO.howlWant || cnO.howl > 0.4)) { lieT = 0; hdT = 0; }
       // R8: a pup romping stands up, head up; a canid about to scent mark stands and sniffs the ground; the bison's behaviours take the body
       if (cnOn && cnO.play) { lieT = 0; hdT = 0; }
-      else if (cnOn && cnO.sniff) { lieT = 0; hdT = 1; }
+      else if (cnOn && (cnO.sniff || cnO.pin)) { lieT = 0; hdT = 1; } // (the pin of a mousing leap: the head goes down into the grass)
       if (boOn) {
         if (bo.lie >= 0) lieT = bo.lie;
         if (bo.head >= 0) hdT = bo.head;
@@ -2877,7 +2877,7 @@ export class AnimalLayer {
         fx2[gp] = ant; fx2[gp + 1] = stotW; fx2[gp + 2] = ant > 0 ? deerS.velvet : 0; fx2[gp + 3] = clamp(deerS.winter + (hash01(id * 5 + 1) - 0.5) * 0.14, 0, 1);
       } else {
         // (a cat's freeze before the rush rides in the slot of the feeding phase while it is not feeding, see shader.ts)
-        fx2[gp] = holdE; fx2[gp + 1] = pr.stalk && S.tug[slot] < 0.02 ? S.frz[slot] : S.fph[slot]; fx2[gp + 2] = leapE; fx2[gp + 3] = cnO.pack; // (canids: leap in the air, sitting to howl, mange; see tgUnpack)
+        fx2[gp] = holdE; fx2[gp + 1] = pr.stalk && S.tug[slot] < 0.02 ? S.frz[slot] : S.fph[slot]; fx2[gp + 2] = cnOn && cnO.leap > 0 ? cnO.leap : leapE; fx2[gp + 3] = cnO.pack; // (canids: leap in the air, sitting to howl, mange; see tgUnpack)
       }
       look[gp] = clamp(coat, 0, 1);
       look[gp + 1] = hash01(id);
