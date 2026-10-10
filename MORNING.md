@@ -1,19 +1,62 @@
 # Good morning: Tallgrass overnight report
 
-*(Updated 10:40 Friday 2026-10-09. This file is refreshed at every milestone.)*
+*(Updated 07:20 Saturday 2026-10-10. This file is refreshed at every milestone.)*
 
-## 2026-10-09 to 10 day run (in progress; the plan is DAY-PLAN.md)
-**Status 16:20 Friday:** five builders at work (golden-hour look, photo ground up close, real animal models on our rig as a 3-hour trial, a performance pass, animals that notice and wade), all at Idle CPU priority since you asked at 16:00; the v11 band screen runs on 3 threads until you say full speed.
-- **Merged so far:** the snow look (snow by landform, ragged edges, no lavender dusk; +0.17 ms in winter), the v11 sim lever (bison bands move on to fresh grass; off until screened, golden unchanged), a field-note card that reads as a notebook entry ("Added to your field notes") instead of contradicting the shot.
-- **Measuring fixed:** the video critic now sees 8 frames a second (it saw 1, which hides every stride). Its first 8 fps read of today's build: motion 3, ecosystem 2; top complaint, animals walking on top of the river (builder on it now).
-- **Found on the idle machine:** the low golden view costs 18.8 ms at 1440p (the gate is 16.7), so a performance pass runs before the new visuals merge.
-- **Deployed 19:45 (D1), live check clean:** the warm golden-hour look (low sun now golden and readable instead of purple and muddy; shadows warm olive), the new snow, the field-note wording. Try it at dusk or dawn, or press the concept bookmark view.
-- **Deployed 21:35 (D2), live check clean:** animals wade in the creek instead of walking on it (the cause: they stood on the sim terrain while the renderer lowers the creek bed), soft ripples instead of white rings, a quiet follow arc, grazers lift their heads when a wolf passes, ravens cast shadows, wet grass in rain; photo-scanned ground detail up close; and a performance pass that took the heaviest view from 17.5 to 13.7 ms (every view now under the 16.7 ms budget).
-- **Deployed 01:10 (D3), live check clean: the biggest visual step of the day.** Real animal models (bison, wolf, pronghorn, mule deer, coyote, cougar) on our own animation rig, replacing the clay shapes up close (?a3=0 shows the old ones); real branching cottonwoods and willows with bare winter skeletons (?trees3=0 for the old trees), cheaper than the old trees in groves; the golden-hour glare trimmed and the rippled-dune hills smoothed.
-- **Deployed 02:45 (D4), live check clean:** animals are never frozen now: they breathe, shift weight, look around and sniff, flick ears and swish tails, and keep worrying at a carcass; the selection ring is small and fades after 5 s; small blood stains instead of a red disc. The 8 fps video critic moved life and motion from 1 to 3 with it.
-- **Deployed 04:05 (D5), live check clean:** planted feet on the new animal models (measured paw slip under 1.4% in every gait, was 3 to 11%) and a coyote mousing leap with a crouch, an arc and a pounce.
-- **Making-of page refreshed** (version 16, private): https://claude.ai/artifact/7jPHUFvbzTv6AUz5UCA3Mu, now with the v10 night and today's images (golden look, real animal models, new trees, wading, the D3 build).
-- **Coming next:** real animal models (bison and wolf done and merged behind ?a3=1; you can try them now with https://tallgrass.stewartgregerson.workers.dev/?a3=1 ; the rollout makes them the default and adds pronghorn, mule deer, coyote, cougar), photo ground up close, animals that wade and notice predators, the performance pass, a trees trial.
+## 2026-10-09 to 10: the 24-hour day run (the plan is DAY-PLAN.md)
+**Play it:** https://tallgrass.stewartgregerson.workers.dev (or `npm run dev`, then http://localhost:5199/). Last deploy: 06:45 Saturday (D6), live check clean. The default world is still v10b.
+
+**What you asked for:** take stock, then spend 24 hours on what gives the most: visuals and the remaining features. The ecosystem already passed every gate, so the day went to how the valley looks up close and how the animals move.
+
+### What changed (all live)
+1. **Real animal models.** Bison, wolf, pronghorn, mule deer, coyote and cougar are authored meshes now, driven by our own animation rig (foot lock, leg IK, gaits, poses), instead of the clay shapes. Measured paw slip is under 1.4% in every gait (it was 3 to 11% when the models first went in). `?a3=0` shows the old animals.
+2. **Animals that live.** They breathe, shift weight, look around and sniff, flick ears and swish tails; grazers lift their heads and turn toward a wolf that passes; predators keep worrying at a carcass; the coyote's mousing leap has a crouch, an arc and a pounce; animals wade in the creek instead of walking on top of it.
+3. **Golden hour like the concept.** Low sun is warm and readable instead of purple and muddy, the glare near the sun is gone, the rippled-dune hills are smooth.
+4. **Real trees.** Branching cottonwoods and willows with leaf clusters, bare winter skeletons and clean bark, and cheaper than the old trees in groves. `?trees3=0` shows the old ones.
+5. **Ground, water and night.** Photo-scanned ground detail up close; darker ponds and creek with reflections and muddy, trampled shores; moonlit rims that separate the herds at night.
+6. **Speed.** A performance pass took the heaviest view from 17.5 to 13.7 ms at 1440p; every view is under the 16.7 ms budget, with room for all of the above.
+7. **Smaller fixes:** snow by landform, a quiet selection ring that fades, small blood stains instead of a red disc, no dotted "screen door" on animals at mid range, the follow camera keeps a chasing wolf and its prey in frame, faded panels stay legible, field-note cards read as notebook entries.
+
+![The golden-hour look, before and after](journey/20261010-040242_still_day-golden-look.jpg)
+![The old bison and the new one at 8 m](journey/20261010-040243_still_day-a3-bison.jpg)
+![The old trees and the new ones](journey/20261010-040243_still_day-trees3.jpg)
+![Before: walking on the creek. After: wading](journey/20261010-040244_still_day-wading.jpg)
+![The live build at 01:10 Saturday](journey/20261010-040248_still_day-d3.jpg)
+
+### Reviews (judge the trend; single rounds swing 2 to 3 points)
+- **Blind critic, stills:** round 25 (Friday 21:30) visual 6, readability 4, life 4, ecosystem 5, keep watching 5; round 28 (Saturday 05:10) visual 7, readability 5, life 6, ecosystem 6, UI 7, keep watching 6.
+- **Gemini video, now at 8 frames a second** (it used to see 1 frame a second, which hides every stride): life and motion 3 (baseline Friday 15:49), 1 (round 26, frozen animals), 3 (round 27, after the idle layer), 2 (round 29, different moments: deaths that snap into a rigid pose, which a builder is fixing now).
+- Triage for every round is in REVIEWS.md.
+
+### Ecology this run (nothing adopted; v10b stays)
+- **Bison herd bands (v11 first try): dropped.** Seven variants, with and without a new "bands move on to fresh grass" lever; bison fell 16 to 35% in every one.
+- **The waterhole mob (round 25 and 28's top complaint): fix built, not adopted.** A new behaviour (bison drink in waves and walk back off the bank) cut the bison crowding the water from 53% to 42% and passed every standard gate over 20 worlds x 1,200 years, but mule deer fell from 71 to 43. That would undo v10b's mule deer recovery, so it stays an off setting (`?p=shoreSpread:1` to try it). `review/stability/v11-feaa081/RESULT.md`.
+- **Stronger climate (climate2 0.4): not adopted.** A little more breath, prairie dogs -25%.
+
+### Decisions you might want to overrule
+- **Licences:** following your ruling, some models are non-commercial (wolf, pronghorn, mule deer: CC BY-NC). All sources are in CREDITS.md. Clear them before any commercial release.
+- **v11 not adopted** on the mule deer cost although the gates passed (above).
+- **Trees and animals on by default** (`?trees3=0`, `?a3=0` restore the old ones).
+- The **Chronicle hides completely** when the UI idles; the population panel stays faintly visible.
+
+### Blocked or cut
+- Idle-machine measurements (page-ready time, 100x speed) never happened: the CPU ran batches all night. Pages took 2 to 4 minutes to load under that load; please tell me if the live site loads slowly for you.
+- Wide-view readability (telling species apart at mid range) and the noisy-looking population charts are still open.
+- Your CPU ruling (16:00, then 85% from 18:00) cost about two hours of builder speed in the evening; no work was lost.
+
+### API spend
+- Gemini: 4 video critiques at 8 fps (logged at about $0.05 each; 8 fps sends more frames, so likely $0.10 to $0.30 in all).
+- Sketchfab: free downloads only, no paid generation; Meshy: 0 credits used (746 left).
+- Everything is logged in ASSETS.md.
+
+### Next 5
+1. A mule-deer-safe waterhole fix (thirst waves without the walk-off, screened over 400 or more years, because the deer cost only shows over centuries).
+2. Measure page-ready time and 100x speed on an idle machine; trim the model preload if the load is slow.
+3. Mid-range readability: species glyphs or contrast between 60 and 200 m.
+4. Deaths and takedowns with weight (in progress at the end of this run; see the last deploy line).
+5. A Gemini round on a quiet machine with a hand-picked reel (a hunt, a herd crossing, a death), so the motion score reflects the best moments rather than random ones.
+
+### Deploy log (all live checks clean)
+D1 19:45 golden look, snow · D2 21:35 wading, alert heads, ground detail, performance · D3 01:10 real animals, real trees, land · D4 02:45 idle life · D5 04:05 planted feet, leap · D6 06:45 night and water, round 28 fixes.
 
 ## 2026-10-09 night: "The long breath" (v10)
 **Play it:** https://tallgrass.stewartgregerson.workers.dev (or `npm run dev`, then http://localhost:5199/). **v10b is now the default world** (v10 adopted at 10:30, then its refinement v10b at 13:00, each after its acceptance and shocks passed; live, see the last line of this section).
