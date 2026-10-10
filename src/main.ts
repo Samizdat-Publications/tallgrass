@@ -632,7 +632,8 @@ function startFollow(id: number | null): void {
   // the way the director films a hunt, so the camera never shows only the prey at the edge of the picture. `pw` eases the pair in and out.
   const pv = new THREE.Vector3();
   const base = { dist: frame.dist, distRate: frame.distRate };
-  let prey: number | null = null, pw = 0, need = 0, pt = performance.now();
+  let prey: number | null = null, pw = 0, need = 0, mix = 0.5, hold = 0, pt = performance.now();
+  const ndcV = new THREE.Vector3();
   const lp = { x: 0, z: 0 };
   const hunter = isLandHunter(sp);
   engine.cam.follow(() => {
@@ -649,11 +650,23 @@ function startFollow(id: number | null): void {
         const sep = Math.hypot(v.x - lp.x, v.z - lp.z);
         const cam = engine.cam.camera;
         const th = Math.tan((cam.fov * Math.PI) / 360) * cam.aspect;
-        need = Math.min(PAIR_MAX_DIST, (sep * 0.5 + 5) / (0.85 * Math.max(0.3, th)));
+        const want = (sep * 0.5 + 5) / (0.85 * Math.max(0.3, th));
+        need = Math.min(PAIR_MAX_DIST, want);
+        // past the widest pair shot the aim slides toward the hunter, so the followed animal stays in the picture (about 80% of the
+        // half-width out) and the prey is the one that leaves it (Gemini round 31: the camera sat on empty grass between a wolf and a far hare)
+        mix = want > need ? Math.min(0.5, (0.8 * (0.85 * Math.max(0.3, th) * need - 5)) / Math.max(sep, 1)) : 0.5;
       }
+      // the followed hunter must stay in the picture: a low shot puts a hunter far ahead in depth at the top edge whatever the width, so
+      // when it nears the frame edge (or is behind the lens) the aim eases back onto it, and returns to the pair once it is well inside
+      ndcV.copy(v).project(engine.camera);
+      const edge = ndcV.z > 1 || Math.abs(ndcV.x) > 0.8 || ndcV.y > 0.7 || ndcV.y < -0.85;
+      const inside = ndcV.z <= 1 && Math.abs(ndcV.x) < 0.6 && ndcV.y < 0.45 && ndcV.y > -0.7;
+      const holdT = edge ? 1 : inside ? 0 : hold;
+      hold += (holdT - hold) * (1 - Math.exp(-dt / (holdT > hold ? 0.25 : 1.0)));
       frame.dist = base.dist + Math.max(0, need - base.dist) * pw;
       frame.distRate = pw > 0 ? 2.2 : base.distRate;
-      if (pw > 0) return { x: v.x + (lp.x - v.x) * 0.5 * pw, y: v.z + (lp.z - v.z) * 0.5 * pw };
+      const k = mix * pw * (1 - hold);
+      if (k > 0) return { x: v.x + (lp.x - v.x) * k, y: v.z + (lp.z - v.z) * k };
     }
     return { x: v.x, y: v.z, h: air && v.y - engine.groundHeight(v.x, v.z) > 2 ? v.y : undefined };
   }, frame);
