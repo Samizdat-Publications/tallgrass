@@ -123,7 +123,7 @@ try {
     // a pronghorn running at 10 m/s drops dead (no predator near: a quiet death), and a bison that was standing
     SC.pron_die = (ox, oz) => {
       const td = 2.0, vp = 10;
-      return { cam: { x: () => ox + vp * td - 2, z: oz, dist: 8, pitch: 10, yaw: 20 }, at: (t) => {
+      return { cam: { x: (t) => ox + vp * Math.min(t, td) + 3.5 * (1 - Math.exp(-Math.max(t - td, 0) * 1.5)), z: oz, dist: 8, pitch: 10, yaw: 20 }, at: (t) => {
         const actors = [], carcasses = [];
         if (t < td) actors.push({ id: 9301, sp: SP.pron, x: ox + vp * t, z: oz, h: 0, v: vp, st: 4 });
         else carcasses.push({ x: ox + vp * td, z: oz, sp: SP.pron });
@@ -141,9 +141,9 @@ try {
       } };
     };
     SC.raven_land = (ox, oz) => {
-      return { cam: { x: () => ox + 14, z: oz, dist: 11, pitch: 5, yaw: 0, h: 3 }, at: (t) => {
-        const actors = [], carcasses = [{ x: ox + 20, z: oz + 1.2, sp: SP.pron, rem: 0.8 }];
-        const u = Math.min(t / 4.0, 1), lx = ox + 6 + 14 * u, lalt = 10 * (1 - u) * (1 - u);
+      return { cam: { x: () => ox + 16, z: oz, dist: 9, pitch: 6, yaw: 0, h: 1.5 }, at: (t) => {
+        const actors = [], carcasses = [{ x: ox + 19.5, z: oz + 1.2, sp: SP.pron, rem: 0.8 }];
+        const u = Math.min(t / 4.0, 1), lx = ox + 10 + 8 * u, lalt = 5 * (1 - u) * (1 - u);
         actors.push({ id: 9102, sp: SP.raven, x: lx, z: oz, h: 0, v: t < 4.0 ? 5 * (1 - 0.7 * u) : 0, st: t < 4.0 ? 9 : 6, alt: t < 4.0 ? lalt : 0 });
         return { actors, carcasses };
       } };
