@@ -51,7 +51,7 @@
 
 ### Next 5
 1. A mule-deer-safe waterhole fix (thirst waves without the walk-off, screened over 400 or more years, because the deer cost only shows over centuries).
-2. Measure 100x speed on an idle machine (the page-ready time was measured and is being cut).
+2. 100x runs at about 47x on this machine (471 of 1,000 ticks a second, measured Saturday 08:50 with one builder running; 1x and 10x hold): profile the sim worker and the snapshot path, or relabel the button by what it reaches.
 3. Mid-range readability: species glyphs or contrast between 60 and 200 m.
 4. A video round on the final build (D7 added staged deaths at any speed; the last Gemini round predates it).
 5. A Gemini round on a quiet machine with a hand-picked reel (a hunt, a herd crossing, a death), so the motion score reflects the best moments rather than random ones.
