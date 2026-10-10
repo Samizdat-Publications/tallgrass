@@ -19,18 +19,26 @@ const query = arg('query', '');
 const day = Number(arg('day', 0.62));
 const season = Number(arg('season', 1.8));
 const [W, H] = arg('size', '1280x720').split('x').map(Number);
-const noVideo = argv.includes('--no-video');
+const noVideo = true; // (frames are clipped screenshots now)
 
 // species ids: 0 bison, 1 wolf, 3 pronghorn, 5 cougar, 6 coyote, 10 mule deer. states: 0 idle, 1 graze, 6 eat, 8 rest
 const SCENES = {
-  herd: { cam: [22, 8], pup: [[0, 1, 0, 0, 8], [0, 1, 0, 1, 14], [0, 1, 0, -1, 20], [3, 0, 0, 0, 25], [3, 1, 0, 1, 29], [10, 0, 0, -1, 33]] },
-  rest: { cam: [20, 9], pup: [[1, 8, 0, 0, 10], [1, 8, 0, 1, 15], [1, 8, 0, -1, 20], [6, 8, 0, 0, 24], [0, 8, 0, 1, 30]] },
-  feed: { cam: [18, 9], pup: [[1, 6, 0, 0, 12], [1, 6, 0, 1, 17], [6, 6, 0, -1, 22], [5, 6, 0, 0, 27]] },
+  // (all within about 12 m of the camera, so the near meshes are drawn and the dithered hand-over to the far LOD does not flicker the picture)
+  herd: { cam: [11, 9], pup: [[0, 1, 0, 0, 16], [0, 0, 0, 0, 21], [3, 0, 0, 0, 25], [10, 0, 0, 0, 29]] },
+  rest: { cam: [11, 10], pup: [[1, 8, 0, 0, 16], [1, 8, 0, 0, 20], [6, 8, 0, 0, 24], [10, 8, 0, 0, 28]] },
+  feed: { cam: [10, 10], pup: [[1, 6, 0, 0, 16], [6, 6, 0, 0, 21], [5, 6, 0, 0, 26]] },
+  watch: { cam: [11, 9], pup: [[1, 0, 0, 0, 16], [5, 0, 0, 0, 21], [6, 0, 0, 0, 25], [3, 0, 0, 0, 29]] },
+  close: { cam: [8, 8], pup: [[1, 0, 0, 0, 18], [10, 0, 0, 0, 23]] },
+  close2: { cam: [8, 8], pup: [[6, 0, 0, 0, 18], [3, 0, 0, 0, 23]] },
+  closerest: { cam: [8, 12], pup: [[1, 8, 0, 0, 18], [6, 8, 0, 0, 23]] },
   // staged kill sites: [x offset, z offset, meat left, species id] (wolf 1: 1.8 m patch, bison 0: 3.8 m)
   kill: { cam: [10, 52], pup: [], kills: [[-5, 0, 1.0, 1], [0, 0, 0.7, 1], [5, 0, 0.35, 1], [-2, 9, 1.0, 0]] },
+  killnear: { cam: [5, 58], pup: [], kills: [[-1.5, 0, 1.0, 1], [1.5, 0, 0.5, 1]] },
   killlow: { cam: [9, 14], pup: [], kills: [[-5, 0, 1.0, 1], [0, 0, 0.7, 1], [5, 0, 0.35, 1]] },
   // the selection marker: one wolf and one bison standing, the wolf selected; stills at 0.6 s, 3 s and 8 s after the click, then with the pointer over it
   ring: { cam: [11, 12], pup: [[1, 0, 0, 0, 18], [0, 1, 0, 1, 23]], ring: true },
+  // close-ups for the filmstrips (tools/r_idle_strips.py): one row per animal
+  closefeed: { cam: [8, 12], pup: [[1, 6, 0, 0, 18], [5, 6, 0, 0, 23]] },
   watch: { cam: [20, 9], pup: [[1, 0, 0, 0, 10], [1, 0, 0, 1, 15], [5, 0, 0, -1, 20], [6, 0, 0, 0, 24], [3, 0, 0, 1, 29]] },
 };
 const SIZE = { 0: 3.2, 1: 1.7, 3: 1.6, 5: 2.0, 6: 1.3, 10: 1.8 };
@@ -124,7 +132,7 @@ try {
     if (!sc) { console.log('unknown scene', name); continue; }
     const n = await page.evaluate(`window.__scene(${JSON.stringify(sc.pup)}, ${sc.cam[0]}, ${sc.cam[1]}, ${JSON.stringify(sc.kills || [])})`);
     await page.waitForFunction('window.__settled()', null, { timeout: 240000, polling: 500 }).catch(() => console.log('not settled'));
-    await page.waitForTimeout(4000); // the poses ease in (lie 0.9 s, head 0.3 s) and the camera settles
+    await page.waitForTimeout(12000); // the poses ease in (a bedded animal takes several seconds to settle) and the camera settles
     const boxes = await page.evaluate(`window.__screenBoxes(${JSON.stringify(SIZE)})`);
     await page.screenshot({ path: `${out}/${name}.jpg`, type: 'jpeg', quality: 90, timeout: 150000 });
     if (sc.ring) {
@@ -142,10 +150,29 @@ try {
       await page.waitForTimeout(1500);
       await page.screenshot({ path: `${out}/ring_e_hover2s.jpg`, type: 'jpeg', quality: 90, timeout: 150000 });
     }
-    const tStart = (Date.now() - t0) / 1000;
-    await page.waitForTimeout(secs * 1000);
-    const tEnd = (Date.now() - t0) / 1000;
-    meta.scenes[name] = { tStart, tEnd, boxes, puppets: n };
+    // a burst of clipped screenshots round the staged animals for `secs` seconds (the page keeps running; each frame is stamped with its own time,
+    // so nothing depends on the pace of a video encoder on a loaded machine)
+    if (!boxes.length) {
+      await page.waitForTimeout(1500);
+      if (sc.kills) console.log('kill sites:', await page.evaluate(`(() => { const k = window.__animals.kills; return JSON.stringify({ visible: k.mesh.visible, draw: k.drawCount, cap: k.cap, parent: !!k.mesh.parent, sig: k.sig.slice(0, 40) }); })()`));
+      continue;
+    }
+    const pad = 1.25;
+    const cx0 = Math.max(0, Math.floor(Math.min(...boxes.map((b) => b.x - b.half * pad)))), cx1 = Math.min(W, Math.ceil(Math.max(...boxes.map((b) => b.x + b.half * pad))));
+    const cy0 = Math.max(0, Math.floor(Math.min(...boxes.map((b) => b.y - b.half * 0.9)))), cy1 = Math.min(H, Math.ceil(Math.max(...boxes.map((b) => b.y + b.half * 0.9))));
+    const clip = { x: cx0, y: cy0, width: cx1 - cx0, height: cy1 - cy0 };
+    mkdirSync(`${out}/${name}`, { recursive: true });
+    const stamps = [];
+    const tb = Date.now();
+    let k = 0;
+    while (Date.now() - tb < secs * 1000) {
+      const ts = (Date.now() - tb) / 1000;
+      await page.screenshot({ path: `${out}/${name}/f${String(k).padStart(3, '0')}.jpg`, type: 'jpeg', quality: 92, clip, timeout: 150000 });
+      stamps.push(ts);
+      k++;
+    }
+    const tStart = 0, tEnd = secs;
+    meta.scenes[name] = { clip, stamps, tStart, tEnd, boxes, puppets: n };
     console.log(name, 'puppets', n, 'window', tStart.toFixed(1), tEnd.toFixed(1), 'boxes', boxes.length);
   }
   await page.close();

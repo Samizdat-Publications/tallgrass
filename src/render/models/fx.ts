@@ -306,7 +306,6 @@ export class KillSites {
           a *= smoothstep(0.12, 0.4, r); // leave the carcass itself clear
           float rem = vInfo.z;
           a *= (0.7 + 0.3 * rem) * (1.0 + 0.25 * vFar);
-          if (a < 0.003) discard;
           // The patch MULTIPLIES whatever ground is there: a dark stain in the middle, trampled dirt toward the rim. Because it
           // scales the ground instead of painting a fixed dark colour over it, it reads as damp, trampled earth on gold
           // grass and as a rusty-grey stain on snow, never as a black ink blot.
@@ -321,22 +320,23 @@ export class KillSites {
           // cell may hold one blob with its own radius and strength, its edge roughened by noise. The stains MULTIPLY the ground like the
           // patch (a dark red-brown, so snow and grass light them as they light themselves) and fade as the carcass is eaten.
           float fresh = smoothstep(0.55, 0.97, rem);
-          float cs = 0.12 + 0.07 * vR;
+          float cs = 0.16 + 0.09 * vR;
           vec2 q = uv * vR;
           vec2 cid = floor(q / cs);
           float spot = 0.0;
           for (int j = -1; j <= 1; j++) {
             for (int i = -1; i <= 1; i++) {
               vec2 id = cid + vec2(float(i), float(j)) + vInfo.w * 17.0;
-              if (h21(id) < 0.4) continue;
+              if (h21(id) < 0.3) continue;
               vec2 cc = (cid + vec2(float(i), float(j)) + 0.2 + 0.6 * vec2(h21(id + 3.1), h21(id + 7.7))) * cs;
-              float rad = cs * (0.16 + 0.3 * h21(id + 11.3));
+              float rad = cs * (0.22 + 0.38 * h21(id + 11.3));
               float dd = length(q - cc) + (vn(q * 11.0 + vInfo.w * 5.0) - 0.5) * cs * 0.4;
-              spot = max(spot, (1.0 - smoothstep(rad * 0.5, rad, dd)) * (0.3 + 0.7 * h21(id + 19.9)));
+              spot = max(spot, (1.0 - smoothstep(rad * 0.5, rad, dd)) * (0.45 + 0.55 * h21(id + 19.9)));
             }
           }
           spot *= 1.0 - smoothstep(0.16, 0.36, r); // round and under the body, none out in the grass
-          vec3 blood = mix(vec3(1.0), vec3(0.4, 0.16, 0.13), clamp(spot * fresh, 0.0, 0.9));
+          vec3 blood = mix(vec3(1.0), vec3(0.34, 0.12, 0.1), clamp(spot * fresh, 0.0, 0.92));
+          if (a < 0.003 && spot * fresh < 0.01) discard;
           gl_FragColor = vec4(base * blood, 1.0);
         }`,
     });

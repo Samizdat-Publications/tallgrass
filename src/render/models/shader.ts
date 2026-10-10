@@ -105,6 +105,9 @@ function lodDefines(def: ModelDef | undefined, variant: Variant): string[] {
     `#define A3SKIN ${variant === 'near' && def?.a3 ? 1 : 0}`,
     // a3 graze: the head angle multiplier, the forebody pitch down and the neck drop (m) while grazing (an authored head is shorter than the procedural one)
     `#define A3_SPINE ${f(variant === 'near' ? def?.a3?.spineK ?? 1 : 1)}`, `#define A3_DN ${f(variant === 'near' ? def?.a3?.grazeK ?? 1 : 1)}`, `#define A3_PITCH ${f(variant === 'near' ? def?.a3?.grazePitch ?? 0 : 0)}`, `#define A3_DROP ${f(variant === 'near' ? def?.a3?.grazeDrop ?? 0 : 0)}`,
+    // r-idle: the ear region of an authored head (see ModelDef.a3.ear): base, tip, radius
+    `#define A3_EAR ${variant === 'near' && def?.a3?.ear ? 1 : 0}`, `#define A3_EAR_B vec3(${(def?.a3?.ear ?? [0, 0, 0]).slice(0, 3).map(f).join(',')})`,
+    `#define A3_EAR_T vec3(${(def?.a3?.ear ?? [0, 0, 0]).slice(3, 6).map(f).join(',')})`, `#define A3_EAR_R ${f(def?.a3?.ear?.[6] ?? 0.05)}`,
     `#define SHELL ${variant === 'near' && sh ? 1 : 0}`,
     `#define SHELL_SCALE ${f(sh?.scale ?? 30)}`, `#define SHELL_ALONG ${f(sh?.along ?? 0.5)}`, `#define SHELL_SPARSE ${f(sh?.sparse ?? 0.4)}`,
     `#define SHELL_D0 ${f(sh?.d0 ?? 30)}`, `#define SHELL_D1 ${f(sh?.d1 ?? 50)}`,
@@ -1032,23 +1035,43 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
     }
 #endif
 #if KIND == 0 && IDLE
-    if (aPart.w > 3.5 && aPart.w < 4.5 && !dead) {
-      // r-idle ears (head vertices tagged 4 in aPart.w by the model, pivoting about aPivot2, the base of the ear). Each ear has its own schedule:
-      // it swivels slowly the whole time (listening), flicks in a short quick burst every 3.5 to 8.5 s, and a watching animal keeps them forward
-      // and turns them to the sound; a bedded one flicks less. (Done before the head turns, so they ride on the head.)
+    {
+      // r-idle ears. A procedural model tags its ear vertices 4 in aPart.w and pivots them about aPivot2, the base of the ear; an authored head (a3) has
+      // no tags, so the ear is the region of the head round the ear's axis (ModelDef.a3.ear) and it is moved by its weight in that region.
+      // Each ear has its own schedule: it swivels slowly the whole time (listening), flicks in a short quick burst every 3.5 to 8.5 s, and a watching
+      // animal keeps them forward and turns them to the sound; a bedded one flicks less. (Done before the head turns, so they ride on the head.)
+      float earW = 0.0;
+      vec3 earB = aPivot2;
       float eSide = aPivot2.z >= 0.0 ? 1.0 : -1.0;
-      float eH = fract(seed * 5.7 + (eSide > 0.0 ? 0.0 : 0.37));
-      float eP = 3.5 + 5.0 * eH;
-      float eU = fract(t / eP + fract(seed * 11.3 + (eSide > 0.0 ? 0.0 : 0.53)));
-      float eB = smoothstep(0.0, 0.015, eU) * (1.0 - smoothstep(0.06, 0.1, eU)) * (1.0 - 0.6 * lie);
-      float eFl = eB * sin(eU * eP * 40.0);
-      float eSw = sin(t * (0.5 + 0.4 * eH) + seed * 17.0 + eSide * 1.7);
-      float eSw2 = sin(t * 0.7 + seed * 5.0 - eSide * 0.9);
-      float eCup = idAlert * 0.12 * sin(t * 1.1 + seed * 3.0 + eSide);
-      // outward tilt (+z ear: positive), fold back
-      tgRotX(p, n, aPivot2, eSide * (0.55 * eFl + 0.16 * eSw + 0.1 * idAlert + eCup));
-      tgRotZ(p, n, aPivot2, 0.3 * eB + 0.1 * eSw2 * (1.0 - 0.5 * idAlert));
-      tgRotY(p, n, aPivot2, eSide * (0.1 * eSw2 + 0.12 * idAlert));
+      if (aPart.w > 3.5 && aPart.w < 4.5) earW = 1.0;
+#if A3SKIN && A3_EAR
+      if (aPart.w < 0.5) {
+        eSide = p.z >= 0.0 ? 1.0 : -1.0;
+        earB = vec3(A3_EAR_B.x, A3_EAR_B.y, A3_EAR_B.z * eSide);
+        vec3 eAx = vec3(A3_EAR_T.x - A3_EAR_B.x, A3_EAR_T.y - A3_EAR_B.y, (A3_EAR_T.z - A3_EAR_B.z) * eSide);
+        float eS = dot(p - earB, eAx) / dot(eAx, eAx);
+        float eD = length(p - earB - eAx * clamp(eS, 0.0, 1.0));
+        earW = (1.0 - smoothstep(0.5 * A3_EAR_R, A3_EAR_R, eD)) * smoothstep(-0.1, 0.45, eS);
+      }
+#endif
+      if (earW > 0.001 && !dead) {
+        float eH = fract(seed * 5.7 + (eSide > 0.0 ? 0.0 : 0.37));
+        float eP = 3.5 + 5.0 * eH;
+        float eU = fract(t / eP + fract(seed * 11.3 + (eSide > 0.0 ? 0.0 : 0.53)));
+        float eB = smoothstep(0.0, 0.015, eU) * (1.0 - smoothstep(0.06, 0.1, eU)) * (1.0 - 0.6 * lie);
+        float eFl = eB * sin(eU * eP * 40.0);
+        float eSw = sin(t * (0.5 + 0.4 * eH) + seed * 17.0 + eSide * 1.7);
+        float eSw2 = sin(t * 0.7 + seed * 5.0 - eSide * 0.9);
+        float eCup = idAlert * 0.12 * sin(t * 1.1 + seed * 3.0 + eSide);
+        vec3 eq = p;
+        vec3 en = n;
+        // outward tilt (+z ear: positive), fold back, swivel
+        tgRotX(eq, en, earB, eSide * (0.55 * eFl + 0.16 * eSw + 0.1 * idAlert + eCup));
+        tgRotZ(eq, en, earB, 0.3 * eB + 0.1 * eSw2 * (1.0 - 0.5 * idAlert));
+        tgRotY(eq, en, earB, eSide * (0.1 * eSw2 + 0.12 * idAlert));
+        p = mix(p, eq, earW);
+        n = normalize(mix(n, en, earW));
+      }
     }
 #endif
 #if KIND == 0
