@@ -392,6 +392,8 @@ export function computeAtmosphere(env: EnvLike, sm: Smoothed, u: SharedUniforms,
   mixKey(u.skyHorizon.value, (k) => k.hor, k0, k1, t);
   mixKey(u.sunGlow.value, (k) => k.glow, k0, k1, t);
   const dayness = smoothstep(-6, 8, elDeg);
+  const GL = (globalThis as unknown as { __gl?: Record<string, number> }).__gl ?? {}; // DBGLAND
+  u.sunGlow.value.multiplyScalar(GL.glow ?? 1); // DBGLAND
   // a moonless night is darker: the sky and the ambient light drop toward starlight (0 by day and under a bright moon)
   const dark = u.night.value * (1 - moon.k);
   u.skyZenith.value.multiplyScalar(1 - 0.34 * dark);
@@ -412,6 +414,7 @@ export function computeAtmosphere(env: EnvLike, sm: Smoothed, u: SharedUniforms,
     u.sunGlow.value.multiplyScalar(1 - over * 0.9);
   }
   u.sunDiskColor.value.copy(k0.sun).lerp(k1.sun, t);
+  u.sunDiskColor.value.multiplyScalar(GL.disc ?? 1); // DBGLAND
 
   // key light: sun by day, moon at night, continuous through twilight
   const sunI = lerp(k0.sunI, k1.sunI, t) * (1 - over * 0.86);
@@ -491,6 +494,9 @@ export function computeAtmosphere(env: EnvLike, sm: Smoothed, u: SharedUniforms,
   // contrast, a softer bloom), fading back to the original cool grade by 20 degrees so midday, winter days and night keep their look
   const lowAmb = 1 - smoothstep(8, 20, elDeg);
   const gl = golden * lowAmb * (1 - 0.75 * winter);   // (deep winter keeps its cold dusk: snow and blue shade)
+  // r-land: the glow round a low sun was a white glare over a third of the frame (ACES takes a bright warm sky to white). Trimmed, the sky
+  // near the sun stays gold and the far hills keep their form; the glow colour is also what tints the horizon band and the haze.
+  u.sunGlow.value.multiplyScalar(1 - 0.36 * gl);
   L.gradeShadow.setRGB(1.0 - 0.14 * golden + 0.2 * gl - 0.2 * nightG, 1.0 + 0.0 * golden + 0.0 * nightG, 1.0 + 0.24 * golden - 0.36 * gl + 0.26 * nightG);
   L.gradeSat = 1.1 - 0.1 * golden + -0.02 * gl + 0.06 * twilight - 0.1 * nightG - 0.12 * over - 0.04 * winter;
   // (the night's contrast gain is kept modest: the power curve crushes everything under 0.18, which is the whole night scene)
