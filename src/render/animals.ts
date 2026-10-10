@@ -16,6 +16,7 @@ import { SPECIES } from '../sim/species';
 import { sampleHeight } from '../sim/world';
 import type { World } from '../sim/world';
 import { getModel } from './models';
+import { PREY_FAR, findChasePrey, isChasing } from './followframes';
 import { antlerOf, deerSeason } from './models/muledeer';
 import type { DeerSeason } from './models/muledeer';
 import type { AnimParams, ModelDef } from './models';
@@ -3327,6 +3328,26 @@ export class AnimalLayer {
     if (slot !== undefined && !this.slots.fresh[slot]) { x = this.slots.px[slot]; z = this.slots.pz[slot]; }
     out.set(x, sampleHeight(this.gh, w.hn, w.cell, x, z) + alt, z);
     return true;
+  }
+
+  /**
+   * r-polish28: the animal that a land hunter in a chase is running at, for a follow camera that keeps both in frame (null when the animal is not
+   * chasing or has no target). `prefer` (the target of the last call) is kept while it is still within range, so the frame does not flip between
+   * two prey.
+   */
+  chasePrey(id: number, prefer: number | null): number | null {
+    const snap = this.curr;
+    const i = this.currMap.get(id);
+    if (!snap || i === undefined || !isChasing(snap.agents, i)) return null;
+    if (prefer !== null) {
+      const j = this.currMap.get(prefer);
+      if (j !== undefined) {
+        const A = snap.agents, a = i * AGENT_STRIDE, b = j * AGENT_STRIDE;
+        if (Math.hypot(A[a + 1] - A[b + 1], A[a + 2] - A[b + 2]) < PREY_FAR) return prefer;
+      }
+    }
+    const k = findChasePrey(snap.agents, snap.count, i);
+    return k < 0 ? null : snap.ids[k];
   }
 
   /** Species of a living animal in the current snapshot, or -1. */

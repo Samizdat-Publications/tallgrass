@@ -9,9 +9,9 @@
 import * as THREE from 'three';
 import type { DroneCamera, FollowFrame } from './render/camera';
 import type { CutFx } from './render/cutfx';
-import { followFrameFor } from './render/followframes';
+import { findChasePrey, followFrameFor } from './render/followframes';
 import { AGENT_STRIDE, CARCASS_STRIDE, F_INFECTED, F_MANGE, F_MIGRANT, F_STOT, Sp, St } from './sim/types';
-import { SPECIES, canHunt, isPredator } from './sim/species';
+import { SPECIES, isPredator } from './sim/species';
 
 /** A land hunter by the registry (wolf, cougar, later coyote): worth a hunt shot when it is in a chase. Fliers hunt too high and fast to film. */
 const isLandHunter = (sp: number): boolean => isPredator(sp) && SPECIES[sp]?.flies === false;
@@ -691,22 +691,7 @@ export class Director {
    * already close). -1 when there is none: a coyote after a hare has no body to film, so it is not a hunt shot.
    */
   private findPrey(f: DirectorFrame, kp: number): number {
-    const A = f.agents, op = kp * AGENT_STRIDE;
-    const sp = A[op], px = A[op + 1], py = A[op + 2], hx = Math.cos(A[op + 3]), hy = Math.sin(A[op + 3]);
-    let best = -1, bd = Infinity;
-    for (let j = 0; j < f.count; j++) {
-      if (j === kp) continue;
-      const o = j * AGENT_STRIDE;
-      if (SPECIES[A[o]]?.flies || !canHunt(sp, A[o])) continue;
-      const dx = A[o + 1] - px, dy = A[o + 2] - py, d = Math.hypot(dx, dy);
-      if (d > PREY_FAR - 5 || d < 0.01) continue;
-      if ((dx * hx + dy * hy) / d < 0.3) continue; // behind it or to the side: not what it is running at
-      const st = A[o + 7];
-      const running = st === St.Flee || st === St.Run || st === St.Chase;
-      const dd = d + (running ? 0 : 25);
-      if (dd < bd) { bd = dd; best = j; }
-    }
-    return best;
+    return findChasePrey(f.agents, f.count, kp);
   }
 
   /**

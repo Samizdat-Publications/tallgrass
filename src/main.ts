@@ -20,7 +20,7 @@ import { hashSeed } from './sim/rng';
 import { scenarioById } from './scenarios';
 import { challengeById } from './challenges';
 import { Director } from './director';
-import { followFrameFor, isAirborneSpecies } from './render/followframes';
+import { followFrameFor, isAirborneSpecies, isLandHunter } from './render/followframes';
 import { JPEG_QUALITY, LensController, type PhotoFormat } from './ui/photomode';
 import { AudioDirector } from './audio/audio';
 import { Narrator } from './audio/narrator';
@@ -33,6 +33,9 @@ import { DAY_TICKS, SEASON_TICKS, setCalendarScale, Sp, YEAR_TICKS, type Interve
 import { applyOverrides, defaultParams } from './sim/params';
 import { isPredator } from './sim/species';
 import type { FromWorker, ToWorker } from './sim/worker';
+
+/** The widest a followed chase is framed to (orbit distance, m): past it the pair is allowed to leave the picture rather than the shot becoming a vista. */
+const PAIR_MAX_DIST = 56;
 
 const q = new URLSearchParams(location.search);
 // a shared valley (?w=): the whole world, interventions included. A code that cannot be read starts the usual valley
@@ -614,10 +617,36 @@ function startFollow(id: number | null): void {
   const v = new THREE.Vector3();
   const sp = animals.getSpecies(id);
   const air = isAirborneSpecies(sp);
+  const frame = followFrameFor(sp);
+  // r-polish28: a followed hunter in a chase is framed with the animal it is running at (the point between them, the shot widened for the pair),
+  // the way the director films a hunt, so the camera never shows only the prey at the edge of the picture. `pw` eases the pair in and out.
+  const pv = new THREE.Vector3();
+  const base = { dist: frame.dist, distRate: frame.distRate };
+  let prey: number | null = null, pw = 0, need = 0, pt = performance.now();
+  const lp = { x: 0, z: 0 };
+  const hunter = isLandHunter(sp);
   engine.cam.follow(() => {
     if (!animals.getPosition(id, v)) return null;
+    const now = performance.now(), dt = Math.min(0.25, (now - pt) / 1000);
+    pt = now;
+    if (hunter) {
+      prey = animals.chasePrey(id, prey);
+      const ok = prey !== null && animals.getPosition(prey, pv);
+      if (ok) { lp.x = pv.x; lp.z = pv.z; }
+      pw += ((ok ? 1 : 0) - pw) * (1 - Math.exp(-dt / (ok ? 0.5 : 1.2)));
+      if (pw < 0.01) pw = 0;
+      if (ok) {
+        const sep = Math.hypot(v.x - lp.x, v.z - lp.z);
+        const cam = engine.cam.camera;
+        const th = Math.tan((cam.fov * Math.PI) / 360) * cam.aspect;
+        need = Math.min(PAIR_MAX_DIST, (sep * 0.5 + 5) / (0.85 * Math.max(0.3, th)));
+      }
+      frame.dist = base.dist + Math.max(0, need - base.dist) * pw;
+      frame.distRate = pw > 0 ? 2.2 : base.distRate;
+      if (pw > 0) return { x: v.x + (lp.x - v.x) * 0.5 * pw, y: v.z + (lp.z - v.z) * 0.5 * pw };
+    }
     return { x: v.x, y: v.z, h: air && v.y - engine.groundHeight(v.x, v.z) > 2 ? v.y : undefined };
-  }, followFrameFor(sp));
+  }, frame);
 }
 
 function select(id: number | null): void {
