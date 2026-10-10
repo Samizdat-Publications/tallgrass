@@ -5,7 +5,10 @@ import * as THREE from 'three';
 import type { World } from '../sim/world';
 import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 import { NOISE_GLSL, OCCLUDE_GLSL, SharedUniforms, clamp, fbm2, hash2, injectSafeOutput, injectTerrainShadow, smoothstep, vnoise2 } from './common';
-import { Trees3, TREES3_RANGE } from './trees3';
+import { Trees3, TREES3_RANGE, TREES3_SWAP0 } from './trees3';
+
+/** 1 while trees3 draws the near range: the lump crowns fade in (screen-door through alpha-to-coverage) over TREES3_SWAP0 .. TREES3_RANGE as trees3 fades out. */
+const T3_SWAP = { value: 0 };
 
 /** Floats per tree in Snapshot.trees (sim/trees.ts TREE_STRIDE): x, y, height m, crown radius m, kind, stage. */
 const TREE_STRIDE = 6;
@@ -526,6 +529,7 @@ function foliageMaterial(shared: SharedUniforms, kind: FoliageKind): THREE.MeshS
     u.uLeaf = shared.leafAmount; u.uLeafA = shared.leafColorA; u.uLeafB = shared.leafColorB;
     u.uLightDir = shared.lightDir; u.uLightColor = shared.lightColor;
     u.uSnow = shared.snow;
+    u.uT3On = T3_SWAP;
     u.uOccCam = shared.occCam; u.uOccFocus = shared.occFocus; u.uOccParams = shared.occParams;
     shader.vertexShader = shader.vertexShader
       .replace(
@@ -547,6 +551,7 @@ function foliageMaterial(shared: SharedUniforms, kind: FoliageKind): THREE.MeshS
         uniform vec3 uLightDir;
         uniform vec3 uLightColor;
         uniform float uSnow;
+        uniform float uT3On;
         ${NOISE_GLSL}
         ${OCCLUDE_GLSL}
         ${WORLDPOS_GLSL}
@@ -641,7 +646,7 @@ function foliageMaterial(shared: SharedUniforms, kind: FoliageKind): THREE.MeshS
           float farCover = ${shrub ? '0.78 * ( 0.05 + 0.95 * keep )' : 'smoothstep( 0.06, 0.45, keepRaw ) * ( 1.0 - 0.85 * smoothstep( 0.62, 1.0, rim + ( farN - 0.5 ) * 0.5 ) )'};
           cover = mix( cover, farCover, lod );
           float fade = tgOcclusionFade( wpw );
-          diffuseColor.a = cover * fade;
+          diffuseColor.a = cover * fade${shrub || evergreen ? '' : `* mix( 1.0, smoothstep( ${TREES3_SWAP0.toFixed(1)}, ${TREES3_RANGE.toFixed(1)}, fdist ), uT3On )`};
 
           float mixT = clamp( 0.5 + ( tone - 0.5 ) * 0.6 + ( inst.g - 0.5 ) * 0.95 + ( vLump - 0.5 ) * ${shrub ? '0.06' : '0.2'}, 0.0, 1.0 );
           ${evergreen ? 'vec3 leaf = mix( vec3( 0.022, 0.05, 0.036 ), vec3( 0.06, 0.115, 0.07 ), mixT );' : shrub ? 'vec3 leaf = mix( uLeafA, uLeafB, mixT );' : `
@@ -728,7 +733,7 @@ if ( !( dot( normal, normal ) > 0.25 ) ) normal = vec3( 0.0, 1.0, 0.0 );`)
       );
     shader.fragmentShader = injectSafeOutput( shader.fragmentShader );
   };
-  mat.customProgramCacheKey = () => `tg-foliage-${kind}-v9`;
+  mat.customProgramCacheKey = () => `tg-foliage-${kind}-v10`;
   return mat;
 }
 
@@ -998,7 +1003,7 @@ export class Trees {
   private tuftsShown = true;
   private disposables: { dispose(): void }[] = [];
   private pools: Pool[] = [];
-  /** Branching cottonwoods for the near and mid range (?trees3=1, see trees3.ts); null when off. */
+  /** Branching cottonwoods for the near and mid range (default on, ?trees3=0 for the lump trees; see trees3.ts); null when off. */
   private t3: Trees3 | null = null;
   /** trees3 willow thickets: one pool per variant, each thicket also has an instance here (twin of its lump thicket). */
   private thick3: Pool[] = [];
@@ -1125,9 +1130,9 @@ export class Trees {
     // ---- pools. Capacity leaves room for dynamic growth (the sim's S13 plants and fells trees at run time)
     const cwCount = new Array(VARIANTS).fill(0);
     specs.forEach((s) => { if (s.spec.species !== 'juniper') cwCount[s.id % VARIANTS]++; });
-    // trees3 (URL toggle ?trees3=1): real branching cottonwoods inside TREES3_RANGE and willow thickets, drawn by their own pools; the lump
+    // trees3 (on by default; ?trees3=0 turns it off): real branching cottonwoods inside TREES3_RANGE and willow thickets, drawn by their own pools; the lump
     // crowns keep the far range
-    if (typeof location !== 'undefined' && /[?&]trees3=1(&|$)/.test(location.search)) this.t3 = new Trees3(this.group, this.meshes, shared, bark, depthMat, cwCount);
+    if (typeof location !== 'undefined' && !/[?&]trees3=0(&|$)/.test(location.search)) this.t3 = new Trees3(this.group, this.meshes, shared, bark, depthMat, cwCount);
     const crownDetails = [2, 1, 0];
     for (let v = 0; v < VARIANTS; v++) {
       const shape = SHAPES[v % SHAPES.length];
@@ -1148,7 +1153,7 @@ export class Trees {
         pool.addMesh('bark', g, bark, `cottonwood-bark-${v}-lod${li}`, true, this.group, this.meshes, depthMat);
         if (li === barkGeos.length - 1) pool.addMesh('bark', g, bark, `cottonwood-bark-${v}-lod${li}-far`, false, this.group, this.meshes, depthMat);
       });
-      if (this.t3) pool.nearSkip2 = TREES3_RANGE * TREES3_RANGE;
+      if (this.t3) { pool.nearSkip2 = TREES3_SWAP0 * TREES3_SWAP0; T3_SWAP.value = 1; }
       this.cw.push(pool); this.pools.push(pool);
     }
     for (let v = 0; v < 2; v++) {
@@ -1346,7 +1351,8 @@ export class Trees {
   setTrees3(on: boolean): boolean {
     const t3 = this.t3;
     if (!t3) return false;
-    const skip = on ? TREES3_RANGE * TREES3_RANGE : 0;
+    const skip = on ? TREES3_SWAP0 * TREES3_SWAP0 : 0;
+    T3_SWAP.value = on ? 1 : 0;
     for (const p of this.cw) { p.nearSkip2 = skip; p.dirty = true; }
     for (const p of this.thick) { p.off = on; p.dirty = true; }
     for (const p of this.thick3) { p.off = !on; p.dirty = true; }

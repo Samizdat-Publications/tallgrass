@@ -20,7 +20,9 @@ export const VARIANTS3 = 6;
 const W0 = 2.2;
 const TH0 = 5;
 /** Beyond this distance (m) the older lump crowns draw the tree (trees.ts skips them inside it). */
-export const TREES3_RANGE = 150;
+export const TREES3_RANGE = 160;
+/** Where the hand-over to the lump crowns starts: trees3 fades out over TREES3_SWAP0 .. TREES3_RANGE, the lump crowns fade in over the same band. */
+export const TREES3_SWAP0 = 130;
 /** Tuning hooks for the cost experiments (?t3k=0.6,0.3 share of leaf clusters per LOD, ?t3g=1.2,1.7 their size, ?t3l=40 the LOD0 distance). */
 function tuneList(name: string, d: number[]): number[] {
   if (typeof location === 'undefined') return d;
@@ -375,7 +377,7 @@ function leafMaterial(shared: SharedUniforms, atlas: THREE.Texture, willow = fal
           if ( lt.a < 0.04 ) discard;
           vec3 inst = diffuseColor.rgb; // instance colour: (brightness, hue shift, season phase)
           vec3 wpw = tgFragWorld();
-          diffuseColor.a = lt.a * tgOcclusionFade( wpw );
+          diffuseColor.a = lt.a * tgOcclusionFade( wpw )${willow ? '' : ' * ( 1.0 - smoothstep( 130.0, 160.0, length( vViewPosition ) ) )'};
           float occ = clamp( vOcc, 0.0, 1.0 );
           float mixT = clamp( 0.5 + ( vRnd - 0.5 ) * 0.5 + ( inst.g - 0.5 ) * 0.95 + ( lt.r - 0.75 ) * 0.5, 0.0, 1.0 );
           // autumn gold: the season's leaf colour ramps from green toward amber, and each tree turns on its own schedule
@@ -487,7 +489,7 @@ export class Trees3 {
         const g = buildLeaves(tree, keep, LEAF_GROW[li], v + 1, COTTON_CELLS, R0, H0);
         this.disposables.push(g);
         this.verts += g.getAttribute('position').count;
-        pool.addMesh('crown', g, li === 0 ? leafMat : leafMatFar, `cottonwood-crown-t3-${v}-lod${li}`, true, group, meshes, leafDepth);
+        pool.addMesh('crown', g, li === 1 ? leafMatFar : leafMat, `cottonwood-crown-t3-${v}-lod${li}`, true, group, meshes, leafDepth);
       });
       [3, 2].forEach((maxLevel, li) => {
         const g = buildBark(tree, maxLevel, H0, H0);
