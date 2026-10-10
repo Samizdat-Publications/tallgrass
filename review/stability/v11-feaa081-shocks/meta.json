@@ -1,0 +1,107 @@
+{
+ "args": {
+  "seeds": 12,
+  "seedBase": 1,
+  "ticks": 600000,
+  "generations": null,
+  "sampleEvery": 1500,
+  "threads": 3,
+  "scenarios": [
+   "cull70",
+   "drought",
+   "wolfwipe"
+  ],
+  "params": {
+   "shoreSpread": 1
+  },
+  "mock": false,
+  "maxMinutes": 0,
+  "progressSec": 900,
+  "out": "C:\\Users\\stewa\\Documents\\Claude\\ecosystem-sim\\scratch\\frozen\\feaa081\\review\\stability\\v11-feaa081-shocks",
+  "argv": [
+   "--seeds",
+   "12",
+   "--ticks",
+   "600000",
+   "--sample",
+   "1500",
+   "--scenario",
+   "cull70,drought,wolfwipe",
+   "--threads",
+   "3",
+   "--params",
+   "{\"shoreSpread\":1}",
+   "--out",
+   "review/stability/v11-feaa081-shocks",
+   "--progress-sec",
+   "900"
+  ]
+ },
+ "commit": "feaa081 (frozen copy)",
+ "node": "v24.19.0",
+ "platform": "win32 x64",
+ "startedAt": "2026-10-10T05:05:10.085Z",
+ "finishedAt": "2026-10-10T10:41:17.952Z",
+ "wallSeconds": 20167.85,
+ "stopReason": null,
+ "tasks": {
+  "total": 36,
+  "completed": 36,
+  "errors": 0,
+  "aborted": 0,
+  "skipped": 0
+ },
+ "msPerTick": 2.740972,
+ "ticksRun": 21600000,
+ "ticksPerSecWall": 1071,
+ "scenarios": {
+  "cull70": {
+   "seeds": 12,
+   "completed": 12,
+   "persistencePct": {
+    "bison": 100,
+    "wolf": 100,
+    "raven": 100,
+    "pronghorn": 100,
+    "rabbit": 100,
+    "cougar": 100,
+    "coyote": 100,
+    "prairiedog": 100,
+    "muledeer": 100
+   },
+   "maxGen": 234.73932584269662
+  },
+  "drought": {
+   "seeds": 12,
+   "completed": 12,
+   "persistencePct": {
+    "bison": 100,
+    "wolf": 100,
+    "raven": 100,
+    "pronghorn": 100,
+    "rabbit": 100,
+    "cougar": 100,
+    "coyote": 100,
+    "prairiedog": 100,
+    "muledeer": 100
+   },
+   "maxGen": 231.35987261146497
+  },
+  "wolfwipe": {
+   "seeds": 12,
+   "completed": 12,
+   "persistencePct": {
+    "bison": 100,
+    "wolf": 100,
+    "raven": 100,
+    "pronghorn": 100,
+    "rabbit": 100,
+    "cougar": 100,
+    "coyote": 100,
+    "prairiedog": 100,
+    "muledeer": 100
+   },
+   "maxGen": 230.89080459770116
+  }
+ }
+}
