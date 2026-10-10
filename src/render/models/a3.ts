@@ -18,8 +18,8 @@ export interface A3Asset {
 export const A3_TUNE: Record<string, { grazeK?: number; grazePitch?: number; grazeDrop?: number; antlerShift?: [number, number, number]; antlerScale?: number; spineK?: number }> = {
   bison: { grazeK: 1.3, grazePitch: 0.12, grazeDrop: 0.12 },
   muledeer: { antlerShift: [0.12, 0.07, 0], antlerScale: 1.15 },
-  coyote: { spineK: 0.5 },
-  cougar: { spineK: 0.5 },
+  coyote: { spineK: 0.25 },
+  cougar: { spineK: 0.2 },
 };
 
 const assets = new Map<string, A3Asset>();
@@ -33,8 +33,8 @@ export function a3Enabled(): boolean {
   return v === null || v !== '0';
 }
 
-/** On by default; the coyote and cougar stay off until their gallop is tuned (turn them on with `?a3=all` or by name). */
-export const A3_DEFAULT = ['bison', 'wolf', 'pronghorn', 'muledeer'];
+/** On by default for every species that has an asset (the coyote and cougar gallop spine is tuned down: A3_TUNE.spineK). */
+export const A3_DEFAULT = ['bison', 'wolf', 'pronghorn', 'muledeer', 'coyote', 'cougar'];
 
 /** The species a3 applies to for this page: no parameter, the default set; `?a3=1` or `all` every species with an asset; `?a3=bison,wolf` a list. */
 function wanted(): string[] {
