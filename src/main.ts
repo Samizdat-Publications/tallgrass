@@ -33,6 +33,7 @@ import { DAY_TICKS, SEASON_TICKS, setCalendarScale, Sp, YEAR_TICKS, type Interve
 import { applyOverrides, defaultParams } from './sim/params';
 import { isPredator } from './sim/species';
 import type { FromWorker, ToWorker } from './sim/worker';
+import { mark } from './startmarks';
 
 /** The widest a followed chase is framed to (orbit distance, m): past it the pair is allowed to leave the picture rather than the shot becoming a vista. */
 const PAIR_MAX_DIST = 56;
@@ -59,20 +60,27 @@ const savedSettings = loadSettings();
 const startPreset: QualityPreset = q.has('q') ? (q.get('q') === 'medium' ? 'medium' : 'high') : savedSettings.quality;
 const qualityTier = (p: QualityPreset): 'medium' | 'high' => (p === 'low' || p === 'medium' ? 'medium' : 'high');
 
+mark('main_start');
 const world = generateWorld(seed);
+mark('world');
 const host = document.getElementById('app')!;
 const engine = new Engine(host, world, {
   quality: qualityTier(startPreset),
   toneMapping: (q.get('tm') as 'aces' | 'agx' | 'neutral' | null) ?? undefined,
+  earlyCompile: q.get('prime') !== '0' && q.get('early') !== '0', // (the terrain, water and tree shaders start compiling as each is built: see Engine.compileEarly)
 });
+mark('engine');
 // grass and animals sit on the terrain as rendered (the creek banks are reshaped for drawing)
 const renderWorld = { ...world, height: engine.terrain.heightTex.image.data as Float32Array };
 const grass = new GrassField(renderWorld, engine.vegTexture, { quality: qualityTier(startPreset), cloudShadow: engine.uniforms });
 engine.scene.add(grass.object3D);
 engine.excludeFromAO(grass.object3D);
 if (q.get('grass') === '0') grass.object3D.visible = false;
+mark('grass');
 await preloadA3(); // (?a3=1: the authored near-LOD meshes load first, so the model builders stay synchronous)
+mark('a3_loaded');
 const animals = new AnimalLayer(renderWorld);
+mark('animals');
 engine.scene.add(animals.object3D);
 animals.snowField = engine.snowDepth;
 animals.setGround(engine.terrain.renderHeight);
@@ -174,6 +182,7 @@ window.addEventListener('keydown', (e) => {
 
 // ------------------------------------------------------------------ worker
 
+mark('pre_worker');
 const worker = new Worker(new URL('./sim/worker.ts', import.meta.url), { type: 'module' });
 const send = (m: ToWorker) => worker.postMessage(m);
 
@@ -272,6 +281,7 @@ worker.onmessage = (e: MessageEvent<FromWorker>) => {
   pending = m;
   if (!ready) {
     ready = true;
+    mark('first_snap');
     engine.applyEnvNow();
     if (!q.has('cam')) focusHerd(m.agents, m.count, true);
   }
@@ -810,6 +820,7 @@ const w = window as unknown as Record<string, unknown>;
 w.__overlay = overlay;
 w.__trails = trails;
 engine.onFrame((dt, t) => {
+  if (frameMarks < 40) mark('frame' + frameMarks++);
   const alpha = Math.min(1, (performance.now() - lastTickChange) / Math.max(16, tickInterval));
   // legs keep pace with how fast the sim actually moves animals (capped where gaits would alias)
   animals.timeScale = speed > 0 ? Math.min(speed, 12) : 0;
@@ -893,13 +904,18 @@ engine.onFrame((dt, t) => {
   if (fpsAcc > 1) { w.__fps = Math.round(fpsN / fpsAcc); fpsAcc = 0; fpsN = 0; }
   if (ready && t > 1.5) {
     w.__ready = true;
+    mark('ready');
     if (startNotice) {
       ui.notify(startNotice.text, startNotice.label, startNotice.ms);
       startNotice = null;
     }
   }
 });
-engine.start();
+let frameMarks = 0;
+mark('pre_start');
+// the shader programs are built in parallel first (engine.prime), then the frames run; ?prime=0 starts at once, the way it used to
+if (q.get('prime') === '0') engine.start();
+else engine.prime().catch((e) => console.warn('prime failed', e)).then(() => { mark('primed'); engine.start(); });
 
 // hooks for capture scripts
 w.__engine = engine;
