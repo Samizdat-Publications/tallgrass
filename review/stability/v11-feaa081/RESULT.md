@@ -15,3 +15,5 @@ What it buys: bison within 30 m of water fall from 53% to 42% of the herd (32-wo
 What it costs: mule deer -39% over 1,200 years (the 150-year screen showed only -12%), and a slightly weaker climate signal.
 
 Decision (2026-10-10 06:05): not adopted. The mule deer recovery was one of v10b's main gains; shoreSpread stays as an off-by-default param. Next session: a deer-safe version (stagger thirst only, no walk-off, or a walk-off that avoids woody cover), screened over at least 400 years because the deer cost only shows over centuries. The shock suite ran for the record (review/stability/v11-feaa081-shocks once copied).
+
+Shocks (12 worlds x 500 years, review/stability/v11-feaa081-shocks): bison and wolves persist and recover in 100% after cull70, drought and wolfwipe (bison median 14, 28, 44 years); mule deer recover in only 83%, 83% and 67%, which supports the decision.
