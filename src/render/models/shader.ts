@@ -608,10 +608,18 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
   float leapW = 0.0;
   // R3 canids (see tgUnpack): a mousing leap in the air, a howl (sitting) with its yips, mange severity
   float cnAir = 0.0, cnHowl = 0.0, cnYip = 0.0, cnMange = 0.0, cnMark = 0.0;
+  // r-feet: where a mousing leap is (aFx2.z of a canid carries 2 + segment + fraction while it leaps: 0 the crouch, 1 the arc, 2 the pin), -1 when it is not
+  float cnLeapSeg = -1.0, cnLeapF = 0.0;
 #if KIND == 0 && !STOT
   if (!dead) tgUnpack(fx2.w, cnAir, cnHowl, cnYip, cnMange, cnMark);
 #if !BEHAV && !FLARE
   leapW = dead ? 0.0 : clamp(fx2.z, 0.0, 1.0);
+  if (!dead && fx2.z >= 1.5) {
+    float lq = fx2.z - 2.0;
+    cnLeapSeg = floor(lq);
+    cnLeapF = lq - cnLeapSeg;
+    leapW = 0.0;
+  }
   holdW = dead ? 0.0 : clamp(fx2.x, 0.0, 1.0);
   holdSh = holdW * sin(t * 21.0 + seed * 40.0);
   pitch += holdW * 0.04 * sin(t * 8.0 + seed * 5.0);
@@ -693,7 +701,7 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
 #if KIND == 0 && IDLE
   if (!dead) {
     float mvI = clamp(wWalk + wTrot + wGal, 0.0, 1.0);
-    idW = (1.0 - mvI) * (1.0 - clamp(uTL * 2.0, 0.0, 1.0)) * (1.0 - stotK) * (1.0 - swimW);
+    idW = (1.0 - mvI) * (1.0 - clamp(uTL * 2.0, 0.0, 1.0)) * (1.0 - stotK) * (1.0 - swimW) * (cnLeapSeg < -0.5 ? 1.0 : 0.0); // (a leaping coyote is locked on its prey: no breath, look or ear flick)
     float hA = fract(seed * 13.17), hB = fract(seed * 7.91 + 0.31), hC = fract(seed * 29.3 + 0.7);
     idAlert = smoothstep(0.03, 0.25, -aGait.z) * (1.0 - lie);
     // breath: 3 to 5 s a cycle, a little slower out than in
@@ -896,8 +904,18 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
 #if KIND == 0
     // R3 canids. In the air of a mousing leap the forelegs reach ahead and the hind legs trail; sitting to howl, the hind legs fold under.
     if (cnAir > 0.001) {
-      hip = mix(hip, front ? 0.62 : -0.5, cnAir);
-      knee = mix(knee, front ? -0.45 : 0.75 * HOCK_K, cnAir);
+      float cfH = front ? 0.62 : -0.5;
+      float cfK = front ? -0.45 : 0.75 * HOCK_K;
+      if (cnLeapSeg > 0.5) {
+        // r-feet: the arc of a mousing leap. The forelegs fold up under the chest at the spring and reach down and forward for the pin; the hind legs
+        // drive back off the ground, come forward under the belly over the top and trail out again for the landing.
+        float lf = cnLeapF;
+        float tk = smoothstep(0.0, 0.3, lf) * (1.0 - smoothstep(0.55, 0.92, lf));
+        if (front) { cfH = 0.05 + 0.62 * smoothstep(0.4, 1.0, lf); cfK = -0.12 - 0.95 * tk; }
+        else { cfH = -0.7 + 0.5 * smoothstep(0.05, 0.4, lf) - 0.2 * smoothstep(0.7, 1.0, lf); cfK = (0.1 + 0.9 * tk) * HOCK_K; }
+      }
+      hip = mix(hip, cfH, cnAir);
+      knee = mix(knee, cfK, cnAir);
       stretch = mix(stretch, 1.0, cnAir);
     }
     if (cnHowl > 0.001 && !front) {
@@ -1275,6 +1293,7 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
 #endif
 #if KIND == 0
     lift -= cnHowl * 1.05; // sitting: the body pitches up, so the tail comes up to lie along the ground behind it
+    if (cnLeapSeg > 1.5) lift -= 0.85 * smoothstep(0.0, 0.25, cnLeapF) * (1.0 - smoothstep(0.6, 1.0, cnLeapF)); // r-feet: the tail comes up over the pin
 #if BEHAV
     lift -= bellowW * 1.15 + playW * 1.15; // a bellowing bull and a playing calf carry the tail up
     if (playW > 0.001) sway += playW * 0.25 * sin(t * 6.0 + seed * 3.0);
