@@ -398,7 +398,7 @@ Scores: visual 5, readability 7, life and motion 3, ecosystem 6, UI 8, keep watc
 1. Wolves slide across the grass at 00:25 to 00:30: FIX (the camera part). Frames show the follow camera losing the running wolf (empty grass, the pack at the top edge): the chase framing aimed between the wolf and a far hare, and a low shot puts a far hunter at the top edge. D11: the aim eases back onto the hunter near the frame edge. Paw slip itself is measured under 1.4%.
 2. Blocky checkerboard tree trunk at 00:19 to 00:23: FIX, D10. The see-through hole toward the focus used fixed 0.2 m rag cells, big squares on a trunk 2 to 5 m from the lens; bark now gets a clean soft edge, foliage cells shrink near the lens. Before/after in review/round-31-video/fix/.
 3. Weightless mousing leap: DEFER (it has a crouch and arc since r-feet; judge on a daylight close-up).
-4. Ravens clip into the ground and carcass: DEFER (next candidate).
+4. Ravens clip into the ground and carcass: FIX, D14 (B17 r-ravens: folded wings, a ground clamp, a stand-off from the carcass).
 5. Wolves move in lockstep: DEFER (sim pack steering; needs an off-by-default param).
 6. Camera drags through bushes into the carcass shot: DEFER (the reel's own cut).
 7. Static sick bison during the time-lapse: REJECT for now (bedded animals at 10x; the sickness reads in the panel).
@@ -411,7 +411,7 @@ Scores: visual 6, readability 4, life 6, ecosystem 6, UI 7, keep watching 6 (rou
 4. Prairie reads as sand dunes at distance, every shot in Dry years: DEFER (the far ground; the showcase scenario choice is the stills harness).
 5. Charts are set points with noise; mule deer and prairie dogs decline: DEFER (sim; v10b passed every gate; the declines are the known mule deer and prairie dog weak spots, and a 100-year zoom chart is cheap: next cycle). Zoom made 16:20 (tools/zoom_chart.py, review/stability/v10b-1f3f658/zoom_600_700.png, seeds 1, 7, 13, years 600 to 700): the critic is right that there are no classic lagged predator-prey cycles; inside a century the counts are regulated noise at the batch's 1.7-year sampling with occasional events (seed 1: bison 860 to 220 around year 670, back near 600 by 685; a mule deer pulse to 80 at year 648). Making real cycles is a sim design change (stronger, slower predator numerical response), a candidate for a v12 screen, not tonight.
 6. Animals glow pale at night, blotchy moonlit pond: FIX, B15 (confirmed by eye in lk_09).
-7. Ravens as a swarm of flies: DEFER (raven numbers are the sim's; a render cap on far birds is a candidate).
+7. Ravens as a swarm of flies: FIX, D14 (B17 r-ravens: idle far ravens thin to a stable 12% subset from 60 to 130 m and glide; feeding flocks stay drawn).
 8. Radial dust spokes, pink decal, white dashes, lily-pad bushes: DEFER (minor).
 9. Doily ice ring, dithered autumn crowns, hard leaf-card edges: DEFER (minor).
 10. Idle playback bar invisible: FIX, B15. Axis labels and the hawk lane: DEFER.
