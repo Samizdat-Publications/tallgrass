@@ -300,9 +300,11 @@ vec3 tgSolveLeg(vec2 hipP, vec2 kneeP, vec2 footP, float s, vec2 tgt) {
 // Height of the ground under a foot at model position (tx, ty, zf), in the model frame (relative to the model's own ground plane).
 // The foot's world xz comes from the instance matrix, the ground from the height texture, and the point goes back through the
 // inverse of the (rotation x uniform scale) matrix.
+float tgIce; // r-death: 1 while the animal stands on ice (the animal layer flags it in aFx.y): the ground under its feet is the plane of the body, not the bed
 float tgGroundModelY(float tx, float ty, float zf) {
   vec3 wp = (instanceMatrix * vec4(tx, ty, zf, 1.0)).xyz;
   float gw = tgHeightAt(wp.xz);
+  gw = tgIce > 0.5 ? max(gw, instanceMatrix[3].y) : gw;
   mat3 R3 = mat3(instanceMatrix);
   vec3 d = vec3(wp.x, gw, wp.z) - vec3(instanceMatrix[3]);
   return dot(R3[1], d) / dot(R3[1], R3[1]);
@@ -500,7 +502,7 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
   float fallen = dead ? clamp(aFx.w, 0.0, 1.0) : 1.0;
   float stag = dead ? (1.0 - smoothstep(0.05, 0.4, fallen)) : 1.0;
   // The takedown struggle (about 1.2 s of the 2.4 s fall): full strength from 0.1 s to 0.9 s, easing out as it gives way.
-  float strug = dead ? smoothstep(0.0, 0.05, fallen) * (1.0 - smoothstep(0.38, 0.5, fallen)) : 0.0;
+  float strug = dead ? smoothstep(0.0, 0.05, fallen) * (1.0 - smoothstep(0.38, 0.5, fallen)) * min(fract(aLook.w) / 0.9, 1.0) : 0.0; // (r-death: a death with no hunter near buckles quietly, the animal layer puts the strength in aLook.w)
   // How far it has gone down (the roll, the drop and the leg fold happen after the struggle).
   float down = dead ? smoothstep(0.42, 1.0, fallen) : 1.0;
   float spdG = dead ? aFx.z : spd;
@@ -743,11 +745,13 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
 #endif
 
 #if KIND == 0
+  tgIce = (!dead && aFx.y > 4.0) ? 1.0 : 0.0;
+  float tgBdyIn = aFx.y - 8.0 * tgIce;
   // the body's motion state, read by tgBodyFwd (the legs aim through it, then every vertex is moved by it). aFx.y of a living
   // quadruped is the body-height offset the animal layer works out from the ground under the stance feet (m, model units).
   // (legmath.ts bodyMotion) the body also sinks a little while it moves, so the knees stay bent (flex)
   float flex = LEGL * dot(gN, FLEX.xyz) * gAmt * moveK;
-  tgYoff = bob - flex + breathe - lie * LIE_DROP - crouchBody * CROUCH_DROP - sick * 0.035 * COM_Y + (dead ? 0.0 : aFx.y) - holdW * LEGL * (0.3 + 0.05 * CLASP); // a sick animal sags a little, a predator holding prey sits back on its haunches
+  tgYoff = bob - flex + breathe - lie * LIE_DROP - crouchBody * CROUCH_DROP - sick * 0.035 * COM_Y + (dead ? 0.0 : tgBdyIn) - holdW * LEGL * (0.3 + 0.05 * CLASP); // a sick animal sags a little, a predator holding prey sits back on its haunches
 #if STALK
   // the freeze before the rush: the belly goes right down and the shoulders sink forward, the haunches high and gathered
   tgYoff -= frzW * crouchBody * CROUCH_DROP * 0.14;
@@ -1347,7 +1351,7 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
 #endif
   } else if (part == 7 || part == 8) {
 #if RAPTOR
-    if (!dead) {
+    {
       // ---- R5 bird of prey. The wing is a chain: the primaries ("fingers", tagged in aPart.w) fan about HAND_ROOT, the hand turns about
       // the wrist (aPivot2, weighted by aPart.y along the wing), then the whole wing turns about the shoulder (aPivot): sweep back,
       // dihedral, and for a folded wing a droop. Every rotation is applied child first, so each joint stays attached.
@@ -1358,6 +1362,12 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
       fold *= 1.0 - (tkT >= 0.0 ? smoothstep(0.0, 0.14, tkT) : 0.0); // leaving the perch: the wings come open
       float fph = 0.0;
       float fl = tgBirdBeat(t, seed, aGait.z * (1.0 - fold), clamp(aFx.z, 0.0, 1.0), fph);
+      if (dead) {
+        // r-death: a bird that has been killed: the wings flail for a moment, then fold and go limp, each a little differently
+        fl = 0.9 * (1.0 - smoothstep(0.05, 0.5, fallen));
+        fold = smoothstep(0.1, 0.65, fallen) * (0.85 - 0.3 * fract(seed * 7.1 + right * 0.37 + 0.5));
+        fph = TG_TAU * t * 5.0 + seed * 10.0 + right * 1.7;
+      }
       float strikeT = stoopW * (1.0 - smoothstep(1.4, 5.0, aFx.y));  // the last metres of a stoop: the wings are thrown open to brake
       float sE = stoopW * (1.0 - strikeT);                             // the drawn-in stoop pose
       fl = max(fl * (1.0 - sE) * (1.0 - fold), tkW * 0.7);
@@ -1432,6 +1442,14 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
     float opened = clamp(max(flick, max(fx2.w * 0.85, tkT >= 0.0 ? smoothstep(0.0, 0.12, tkT) : 0.0)), 0.0, 1.0);
     fold *= 1.0 - opened;
     if (fx2.w > 0.001) { fph = TG_TAU * t * 9.0; fl = max(fl, fx2.w); }
+    if (dead) {
+      // r-death: a bird that has been killed: the wings flail for a moment, then fold and go limp, each a little differently
+      // (not the takeoff or flap pose of whatever the carcass slots hold: that was the raven frozen mid-flap on the ground)
+      fl = 0.9 * (1.0 - smoothstep(0.05, 0.5, fallen));
+      fold = smoothstep(0.1, 0.65, fallen) * (0.85 - 0.3 * fract(seed * 7.1 + right * 0.37 + 0.5));
+      fph = TG_TAU * t * 6.0 + seed * 10.0 + right * 1.7;
+      tkW = 0.0;
+    }
 #endif
     float wAmp = 1.0 + 0.6 * farK; // a deeper beat from the drone view, where a raven is a few pixels across
     // gliding and soaring: with the wings still they are held out with a dihedral that drifts between a flat glide and a
