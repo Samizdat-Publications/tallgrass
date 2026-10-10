@@ -198,8 +198,10 @@ export function buildCoyote(): ModelDef {
     // from range a coyote is a tan-grey slim form: warmer than the wolf's slate, so the two canids read apart
     // R-readable: guild value separation and edge lift at the default distances (see ModelDef.read)
     read: { dark: [0.8, 0.78, 0.8], rim: [0.78, 0.86, 1.0, 0.6] },
-    far: { gain: 0.85, rim: 0.045, hunt: 0.22, rimCol: [0.95, 0.92, 0.86], d0: 70, d1: 280, tint: [0.27, 0.205, 0.125], mix: 0.65, floor: 0.12, lowFill: 0.5,
-      top: [0.46, 0.38, 0.27], topMix: 0.5, side: 0.2, legs: 0.9, calm: 0.6, widen: 0.1 },
+    // r-read: the far coat comes in from 50 m (full by 220 m), and the coyote's minimum size is smaller than the wolf's, so the two canids differ in size too
+    far: { gain: 0.85, rim: 0.045, hunt: 0.22, rimCol: [0.95, 0.92, 0.86], d0: 50, d1: 220, tint: [0.19, 0.15, 0.1], mix: 0.7, floor: 0.12, lowFill: 0.5,
+      // (a darker tawny-grey than the gold grass: at the old tan a coyote vanished into it from 140 m)
+      top: [0.3, 0.25, 0.19], topMix: 0.55, side: 0.3, legs: 0.9, calm: 0.6, widen: 0.1 },
     params: {
       ...DEFAULT_PARAMS,
       kind: 0,
@@ -220,7 +222,7 @@ export function buildCoyote(): ModelDef {
       crouchDrop: 0.18 * K, hunts: true,
       curl: 1, curlAng: 1.6, curlX: 0.14 * K, curlLen: 0.95 * K,
       deadDrop: 0.36 * K, deadHipF: 0.9, deadHipH: -0.6,
-      length: 1.5 * K, height: 0.85 * K, ring: 0.85, minPx: 11.5, boostLen: 1.5 * K,
+      length: 1.5 * K, height: 0.85 * K, ring: 0.85, minPx: 8.5, boostLen: 1.5 * K,
     },
   };
 }

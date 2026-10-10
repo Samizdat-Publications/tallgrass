@@ -525,6 +525,91 @@ SETS.nw = [
   { name: 'nw_18_day_wide', eval: "window.__env({ dayFrac: 0.62 }); window.__cam('wide')", wait: 3000 },
 ];
 
+// r-read: the species at the distances a viewer leaves running (80, 140, 200 m), over the spot with the most bison, pronghorn and a wolf
+// together. __rdRig(dist, pitch) frames the best mixed group (a wolf with bison and pronghorn within 90 m); the rd_a frames at the same
+// distances are over an open herd without the wolf. Same fixed-tick setup as the look set so before and after show the same animals.
+SETS.read = [
+  { name: 'rd_00_setup', eval: `(async () => {
+    const e = window.__engine;
+    window.__env = (o) => {
+      window.__envO = Object.assign({ season: 1.8, weather: 0, warmth: 0.7, rain: 0, dayFrac: 0.7 }, o);
+      if (!window.__envHook) window.__envHook = e.onFrame(() => e.setEnv(window.__envO));
+      e.setEnv(window.__envO); e.applyEnvNow();
+    };
+    window.__speed(0); await new Promise((r) => setTimeout(r, 1200)); window.__step(Math.max(0, 1200 - window.__snap().tick)); window.__followId(null); window.__env({});
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'h', bubbles: true }));
+    window.__rdRig = (dist, pitch, R) => {
+      // centre on the wolf with the most bison and pronghorn round it (within 60 m), so a wolf, bison and pronghorn share the frame
+      const sn = window.__snap(), A = sn.agents, n = sn.count, r = R || 60;
+      const P = { 0: [], 1: [], 3: [], 6: [], 10: [] };
+      for (let k = 0; k < n; k++) { const o = k * 12, s = A[o]; if (P[s]) P[s].push([A[o + 1], A[o + 2]]); }
+      let best = null, bs = -1;
+      for (const w of P[1]) {
+        const c = (L) => L.reduce((a, q) => a + (Math.hypot(q[0] - w[0], q[1] - w[1]) < r ? 1 : 0), 0);
+        const b = c(P[0]), p = c(P[3]);
+        const sc = Math.min(b, 12) * Math.min(p, 12) + 0.1 * (b + p);
+        if (sc > bs) { bs = sc; best = [w[0], w[1], b, p]; }
+      }
+      if (!best) return null;
+      window.__cam('wide');
+      e.cam.setView({ x: best[0], y: best[1], distance: dist, pitchDeg: pitch }, true);
+      window.__rdBest = best;
+      return best;
+    };
+    // follow the animal of species sp with the most of its own kind within 40 m (a herd or a pack), at the given distance and pitch
+    window.__rdFollow = (sp, dist, pitch) => {
+      // frame (without following) the animal of species sp with the most of its own kind within 40 m, preferring open ground (few trees within 25 m)
+      const sn = window.__snap(), A = sn.agents, n = sn.count, P = [], T = e.world.trees;
+      for (let k = 0; k < n; k++) if (A[k * 12] === sp) P.push([k, A[k * 12 + 1], A[k * 12 + 2]]);
+      let best = -1, bs = -1e9;
+      for (const p of P) {
+        let c = 0, tr = 0;
+        for (const q of P) if (Math.hypot(p[1] - q[1], p[2] - q[2]) < 40) c++;
+        for (let i = 0; i < T.length; i += 4) if (Math.hypot(T[i] - p[1], T[i + 1] - p[2]) < 25) tr++;
+        const s = Math.min(c, 8) - 2 * tr;
+        if (s > bs) { bs = s; best = p[0]; }
+      }
+      if (best < 0) return null;
+      window.__followId(null);
+      window.__cam('wide');
+      e.cam.setView({ x: A[best * 12 + 1], y: A[best * 12 + 2], distance: dist, pitchDeg: pitch }, true);
+      return [best, bs];
+    };
+    // a kill: the freshest carcass (most meat left), framed from dist
+    window.__rdKill = (dist, pitch) => {
+      const sn = window.__snap(), C = sn.carcasses, n = sn.carcassCount;
+      let best = -1, br = -1;
+      for (let k = 0; k < n; k++) if (C[k * 4 + 2] > br) { br = C[k * 4 + 2]; best = k; }
+      if (best < 0) return null;
+      window.__followId(null);
+      window.__cam('wide');
+      e.cam.setView({ x: C[best * 4], y: C[best * 4 + 1], distance: dist, pitchDeg: pitch }, true);
+      return [C[best * 4], C[best * 4 + 1], br, n];
+    };
+    await new Promise((r) => { let last = -1, same = 0, n = 0; const t = setInterval(() => { const sn = window.__snap && window.__snap(); const k = sn ? sn.tick : -2; if (k === last) same++; else { same = 0; last = k; } if ((same >= 5 && k >= 1200) || ++n > 240) { clearInterval(t); r(); } }, 500); })
+    console.error('rig', JSON.stringify(window.__rdRig(140, 26)));
+  })()`, wait: 6000 },
+  { name: 'rd_80', eval: "window.__rdRig(80, 24)", wait: 3500 },
+  { name: 'rd_140', eval: "window.__rdRig(140, 26)", wait: 3500 },
+  { name: 'rd_200', eval: "window.__rdRig(200, 28)", wait: 3500 },
+  { name: 'rd_80_mid', eval: "window.__env({ dayFrac: 0.45 }); window.__rdRig(80, 24)", wait: 3500 },
+  { name: 'rd_140_mid', eval: "window.__rdRig(140, 26)", wait: 3500 },
+  { name: 'rd_200_mid', eval: "window.__rdRig(200, 28)", wait: 3500 },
+  { name: 'rf_pron_140', eval: "window.__env({}); window.__rdFollow(3, 140, 26)", wait: 4500 },
+  { name: 'rf_pron_200', eval: "window.__rdFollow(3, 200, 28)", wait: 4000 },
+  { name: 'rf_wolf_80', eval: "window.__rdFollow(1, 80, 24)", wait: 4500 },
+  { name: 'rf_wolf_140', eval: "window.__rdFollow(1, 140, 26)", wait: 4000 },
+  { name: 'rf_wolf_200', eval: "window.__rdFollow(1, 200, 28)", wait: 4000 },
+  { name: 'rf_coy_140', eval: "window.__rdFollow(6, 140, 26)", wait: 4500 },
+  { name: 'rf_bison_140', eval: "window.__rdFollow(0, 140, 26)", wait: 4500 },
+  { name: 'rf_bison_200', eval: "window.__rdFollow(0, 200, 28)", wait: 4000 },
+  { name: 'rf_deer_140', eval: "window.__rdFollow(10, 140, 26)", wait: 4500 },
+  { name: 'rf_kill_140', eval: "console.error('kill', JSON.stringify(window.__rdKill(140, 26)))", wait: 3500 },
+  { name: 'rf_kill_200', eval: "window.__rdKill(200, 28)", wait: 3500 },
+  { name: 'rf_kill_300', eval: "window.__rdKill(300, 30)", wait: 3500 },
+  { name: 'rd_140_winter', eval: "window.__env({ season: 3.4, dayFrac: 0.42, warmth: 0.1 }); window.__rdRig(140, 26)", wait: 4000 },
+];
+
 // v10: species glyphs at time-lapse speed (glyphs.ts GLYPH_LAPSE_*): the same drone view at 1x (no glyphs below 210 m) and at 100x
 SETS.lapse = [
   { name: 'lapse_01_drone_1x', eval: "window.__speed(1); window.__focusHerd(); window.__engine.cam.setView({ distance: 300, pitchDeg: 40 })", wait: 4000 },

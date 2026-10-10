@@ -180,10 +180,13 @@ export function buildPronghorn(): ModelDef {
     neutral: 0.7,
     // from the drone view the pale coat is pulled down a little so a herd reads as tan and white, not a bright smear
     // R-readable: guild value separation and edge lift at the default distances (see ModelDef.read)
-    read: { pale: 0.3, rim: [1.0, 0.92, 0.78, 0.45] },
-    far: { gain: 0.85, rim: 0, hunt: 0, rimCol: [1, 1, 1], d0: 100, d1: 340, tint: [0.4, 0.255, 0.13], mix: 0.55, lowFill: 0.3,
+    read: { pale: 0.18, rim: [1.0, 0.92, 0.78, 0.45] },
+    // r-read: the far coat comes in from 45 m and is full by 180 m (it used to start at 100 m, so a herd at the default 140 m was still chalk white)
+    far: { gain: 0.8, rim: 0, hunt: 0, rimCol: [1, 1, 1], d0: 45, d1: 180, tint: [0.26, 0.165, 0.085], mix: 0.65, lowFill: 0.3, rimCut: 0.75,
     // r-far-read: a warm tan back with a white rump; the pale belly and legs read as chalk specks from above, so the flanks darken and the legs tone down
-    top: [0.5, 0.33, 0.17], topMix: 0.95, side: 0.4, legs: 0.38, calm: 0.85, widen: 0.4 },
+    // r-read: and the white belly, flank band and legs fade to a cream tan, so only the rump patch (model x behind -0.12) stays white
+    top: [0.32, 0.21, 0.11], topMix: 0.95, side: 0.4, legs: 0.38, calm: 0.85, widen: 0.4,
+    mute: { col: [0.3, 0.2, 0.11], k: 0.85, keepX: -0.12 } },
     params: {
       ...DEFAULT_PARAMS,
       kind: 0,
@@ -203,7 +206,7 @@ export function buildPronghorn(): ModelDef {
       lieDrop: 0.45, lieHipF: 1.25, lieKneeF: -2.3, lieHipH: 0.55, lieKneeH: 1.7,
       crouchDrop: 0.1,
       deadDrop: 0.38, deadHipF: 0.9, deadHipH: -0.6,
-      length: 1.4, height: 1.2, ring: 1.0, minPx: 9, boostLen: 1.4,
+      length: 1.4, height: 1.2, ring: 1.0, minPx: 10.5, boostLen: 1.4,
     },
   };
 }
