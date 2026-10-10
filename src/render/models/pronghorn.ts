@@ -188,6 +188,7 @@ export function buildPronghorn(): ModelDef {
       ...DEFAULT_PARAMS,
       kind: 0,
       flare: true,
+      alertYaw: true,
       comY: 0.78, legL: 0.72,
       // on-screen m/s at 1x: walking herds (0.6 to 5) walk then trot, a flight (10 to 24) is a full gallop
       trot0: 3.0, trot1: 4.0, gal0: 8.0, gal1: 11.0,

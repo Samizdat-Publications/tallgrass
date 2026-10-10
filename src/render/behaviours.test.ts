@@ -1,7 +1,7 @@
 // Unit tests for the R8 bison behaviours: the session schedule, the tree grid, the sparring pairs and every pose with its offsets.
 // Run: npx tsx src/render/behaviours.test.ts
 import { AGENT_STRIDE, F_JUVENILE, F_MALE, Sp, St } from '../sim/types';
-import { BEH, BisonBehaviour, MAX_OFF, SPAR_GAP, TreeGrid, newBisonIn, newBisonOut, packBisonA, packBisonB, rutK, sessionAt } from './behaviours';
+import { BEH, BisonBehaviour, MAX_OFF, SPAR_GAP, TreeGrid, alertYawCode, newBisonIn, newBisonOut, packBisonA, packBisonB, rutK, sessionAt } from './behaviours';
 
 let failures = 0;
 let checks = 0;
@@ -276,6 +276,37 @@ function run(slot: number, over: Partial<typeof inp>, t0: number, secs: number):
   ok(a < 16777216 && b < 16777216, 'both fit a float exactly');
   o.spar = 0;
   ok(packBisonB(o) === Math.round(0.75 * 63) + 64 * 63, 'a bull that is not shoving carries no mark');
+}
+
+// ---- r-alert2: the head yaw of a watching bison rides in the top bits of the two floats, decoded as the shader does (models/shader.ts, BEHAV), beside every other weight
+{
+  const o = newBisonOut();
+  Object.assign(o, { dig: 1, wallow: 0.5, rub: 1, air: 1, bellow: 1, play: 0.4, spar: 1, sparPh: 0.5 });
+  let worst = 0, exact = true, others = true;
+  for (let c = 1; c <= 127; c++) {
+    const a = packBisonA(o, c), b = packBisonB(o, c);
+    if (Math.fround(a) !== a || Math.fround(b) !== b || a >= 16777216 || b >= 16777216) exact = false;
+    let pa = a, pb = b;
+    const yq = Math.floor(pa / 4194304); pa -= yq * 4194304;
+    let yc = Math.floor(pb / 524288); pb -= yc * 524288;
+    yc = yc * 4 + yq;
+    const yaw = yc > 0.5 ? ((yc - 64) / 63) * 1.0 : 0;
+    worst = Math.max(worst, Math.abs(yaw - (c - 64) / 63));
+    if (yc !== c) others = false;
+    // the rest decodes as before
+    let q = Math.floor(pa / 262144); if (q !== 15) others = false; pa -= q * 262144;
+    q = Math.floor(pa / 4096); if (q !== 63) others = false; pa -= q * 4096;
+    q = Math.floor(pa / 64); if (q !== Math.round(0.5 * 63)) others = false; pa -= q * 64;
+    if (pa !== 63) others = false;
+    q = Math.floor(pb / 262144); if (q !== 1) others = false; pb -= q * 262144;
+    q = Math.floor(pb / 4096); if (q !== 63) others = false; pb -= q * 4096;
+    q = Math.floor(pb / 64); if (q !== Math.round(0.4 * 63)) others = false; pb -= q * 64;
+    if (pb !== 63) others = false;
+  }
+  ok(exact, 'the yaw code leaves both floats exact (below 2^24)');
+  ok(others && worst < 1e-9, 'all 127 yaw codes round trip beside the seven weights');
+  ok(alertYawCode(0, 1) === 64 && alertYawCode(1, 1) === 127 && alertYawCode(-1, 1) === 1 && alertYawCode(5, 1) === 127, 'the code: 64 straight on, 1..127 across the range, clamped');
+  ok(packBisonA(newBisonOut()) === 0 && packBisonB(newBisonOut()) === 0, 'no yaw, nothing else: still 0');
 }
 
 // ---- in a time-lapse, or far from the camera, nothing is displaced and every weight eases to nothing

@@ -135,12 +135,19 @@ const q6 = (w: number): number => Math.round(clamp(w, 0, 1) * 63);
  * A = dig + 64 wallow + 4096 rub + 262144 air (0..15, the hop of a calf), B = bellow + 64 play + 4096 spar + 262144 (1 for the bull that shoves half a
  * cycle later, only while it shoves). Both are 0 for an animal with nothing going on, so the shader skips the lot.
  */
-export function packBisonA(o: BisonOut): number {
-  return q6(o.dig) + 64 * q6(o.wallow) + 4096 * q6(o.rub) + 262144 * Math.round(clamp(o.air, 0, 1) * 15);
+export function packBisonA(o: BisonOut, yawCode = 0): number {
+  return q6(o.dig) + 64 * q6(o.wallow) + 4096 * q6(o.rub) + 262144 * Math.round(clamp(o.air, 0, 1) * 15) + 4194304 * (yawCode & 3);
 }
-export function packBisonB(o: BisonOut): number {
+export function packBisonB(o: BisonOut, yawCode = 0): number {
   const sp = q6(o.spar);
-  return q6(o.bellow) + 64 * q6(o.play) + 4096 * sp + (sp > 0 && o.sparPh > 0.25 ? 262144 : 0);
+  return q6(o.bellow) + 64 * q6(o.play) + 4096 * sp + (sp > 0 && o.sparPh > 0.25 ? 262144 : 0) + 524288 * (yawCode >> 2);
+}
+/**
+ * r-alert2: the head yaw of an animal watching a predator (rad, positive to its right, within +-ALERT_YAW_MAX) as the 7 bit code the bison carries in the top bits
+ * of the two floats above: low 2 bits in A, high 5 bits in B; 0 means none, 64 straight on, 1..127 the range (about 0.9 degrees a step at a yaw of 1).
+ */
+export function alertYawCode(yaw: number, max: number): number {
+  return Math.round(clamp(yaw / max, -1, 1) * 63) + 64;
 }
 
 export const BEH = { None: 0, Bellow: 1, Spar: 2, Wallow: 3, Rub: 4, Dig: 5, Play: 6 } as const;

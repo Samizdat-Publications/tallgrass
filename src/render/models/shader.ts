@@ -24,8 +24,10 @@
 //            hop), aFx.z = bellow + 64 calf play + 4096 spar shove + 262144 (1 for the bull that shoves half a cycle later). A pronghorn (FLARE)
 //            reads aFx.w, which it never uses for a pounce, as the rump flare. A perched raptor reads aFx2.w as the preen weight. A canid's pack
 //            (aFx2.w) also carries the scent mark.
+//   r-alert2 head yaw toward a passing predator (a watching grazer): a bison packs it as a 7 bit code in the top bits of the two floats above (aLook.z
+//            bits 22 and 23, aFx.z bits 19 to 23); a pronghorn or mule deer (ALYAW) carries it in aFx.z as radians. The bedded head lift rides in aGait.z (below 0).
 import * as THREE from 'three';
-import { IK_CAP, footReach, plantedStride, stotStride } from './types';
+import { ALERT_YAW_MAX, IK_CAP, footReach, plantedStride, stotStride } from './types';
 import type { AnimParams, ModelDef } from './types';
 import { HEIGHT_GLSL } from '../common';
 import { IK_FAR, IK_NEAR, LEG_FLEX, LIFT_K, LNCOSH1, SPINE_K, SPINE_PHASE, SPINE_TROT, legLength, legRigOf } from './legmath';
@@ -165,6 +167,7 @@ function defines(p: AnimParams, far: ModelDef['far'] | undefined, geometry: Mode
     `#define FX2 ${p.hunts || p.kind === 2 || (p.kind === 0 && p.stot) ? 1 : 0}`,
     `#define BEHAV ${R8_SHADER.on && R8_SHADER.bison && p.kind === 0 && p.behave ? 1 : 0}`,
     `#define FLARE ${R8_SHADER.on && R8_SHADER.flare && p.kind === 0 && p.flare ? 1 : 0}`,
+    `#define ALYAW ${p.kind === 0 && p.alertYaw ? 1 : 0}`, `#define ALYAW_MAX ${f(ALERT_YAW_MAX)}`,
     `#define CLASP ${f(p.clasp ?? 0)}`,
     `#define STALK ${p.kind === 0 && p.stalk ? 1 : 0}`,
     `#define SWIM ${p.kind === 0 && p.swim ? 1 : 0}`, `#define SWIM_SINK ${f(p.swim?.sink ?? 0)}`, `#define SWIM_NOSE ${f(p.swim?.nose ?? 0)}`, `#define SWIM_WAKE ${f(p.swim?.wake ?? 1)}`,
@@ -635,12 +638,21 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
 #endif
   // R8 behaviour weights of a bison (see the top of the file) and of a pronghorn's rump flare
   float wallowW = 0.0, rubW = 0.0, sparW = 0.0, digW = 0.0, bellowW = 0.0, playW = 0.0, flareW = 0.0;
+  float alYaw = 0.0; // r-alert2: the head yaw (rad) of an animal watching a predator pass, signed like the layer's bearing (positive: to its right)
 #if BEHAV
   if (!dead) {
     // two floats carry seven weights in 6-bit steps (the animal layer's packBison): aLook.z = dig + 64 wallow + 4096 rub + 262144 air (0..15, the
     // legs follow the body in the air of a hop), aFx.z = bellow + 64 play + 4096 spar + 262144 (1 when this bull shoves half a cycle later)
     float pa = aLook.z, pb = aFx.z;
     if (pa + pb > 0.5) {
+      // r-alert2: the head yaw of a watching animal rides in the top bits: 2 bits of a 7 bit code above 4194304 in pa, 5 bits above 524288 in pb
+      // (a float holds 24 bits exactly: 3 * 4194304 + 4194303 and 31 * 524288 + 524287 both fit), code 0 = none, else 64 is straight on
+      float yq = floor(pa / 4194304.0);
+      pa -= yq * 4194304.0;
+      float yc = floor(pb / 524288.0);
+      pb -= yc * 524288.0;
+      yc = yc * 4.0 + yq;
+      alYaw = yc > 0.5 ? (yc - 64.0) / 63.0 * ALYAW_MAX : 0.0;
       float q = floor(pa / 262144.0);
       cnAir = max(cnAir, q / 15.0);
       pa -= q * 262144.0;
@@ -665,6 +677,9 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
 #endif
 #if FLARE
   flareW = dead ? 0.0 : clamp(aFx.w, 0.0, 1.0); // (the pronghorn's pounce slot, which it never uses)
+#endif
+#if ALYAW && !BEHAV
+  alYaw = dead ? 0.0 : clamp(aFx.z, -ALYAW_MAX, ALYAW_MAX); // (a pronghorn's or deer's hunting weight, which it never uses)
 #endif
 #if KIND == 2
   if (fx2.x >= 0.0) pitch += 0.35 * sin(TG_TAU * fx2.x); // a hop: the beak comes up leaving the ground, down landing
@@ -1176,6 +1191,8 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
       yaw += idLiftHead * 0.6 * sin(t * 1.3 + seed * 5.0);
     }
 #endif
+    // r-alert2: the head turns to a predator passing (a walking, bedded or standing animal; the animal layer works out the angle off the drawn body axis)
+    yaw -= alYaw;
     // from the drone view the head pumps harder so a trot or a gallop reads as a body moving, not sliding
 #if SPINE
     // the neck takes the tilt of the spine at its root: the head cancels most of it, so it stays near level while the body flexes under it
@@ -1237,6 +1254,8 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
 #endif
     ang = mix(ang, 0.15, lie * 0.7);
     ang += idLiftHead * 0.4; // (r-idle: a bedded animal lifts its head)
+    // r-alert2: a bedded animal with a predator passing lifts its head (the animal layer sends a head-down weight below 0 for any alert)
+    if (lie > 0.01 && aGait.z < -0.03) ang += lie * smoothstep(0.03, 0.25, -aGait.z) * 0.5;
 #if SWIM
     ang += swimW * (0.2 + 0.03 * sin(t * 1.3 + seed * 9.0)); // swimming: the nose comes up out of the water
 #endif
@@ -1718,8 +1737,8 @@ void tgShade(vec3 on) {
   // distance readability: 0 close up, 1 from the wide view (see ModelDef.far)
   vTgFar = smoothstep(FAR_NEAR, FAR_FAR, distance(uCamPos, vec3(instanceMatrix[3])));
   vTgMid = smoothstep(6.0, 40.0, distance(uCamPos, vec3(instanceMatrix[3])));
-#if BEHAV
-  vTgHunt = 0.0; // (R8: a bison's aFx.z is its bellow weight)
+#if BEHAV || ALYAW
+  vTgHunt = 0.0; // (R8: a bison's aFx.z is its bellow weight; r-alert2: a pronghorn's or deer's is its head yaw)
 #else
   vTgHunt = dead ? 0.0 : aFx.z;
 #endif

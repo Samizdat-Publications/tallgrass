@@ -277,6 +277,7 @@ export function buildMuleDeer(): ModelDef {
       crouchDrop: 0.1,
       deadDrop: 0.4, deadHipF: 0.9, deadHipH: -0.6,
       // R6 stotting: four feet down together for a fifth of the cycle, then a bound with the body rising 0.26 m and the feet tucked up under it
+      alertYaw: true,
       stot: { amp: 0.62, duty: 0.2, knee: 1.25, bob: 0.26, sink: 0.05, pitch: 0.1, off: [0, 0, 0, 0] },
       length: 1.5, height: 1.3, ring: 1.1, minPx: 9, boostLen: 1.5,
     },

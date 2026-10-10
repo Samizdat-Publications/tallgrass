@@ -17,6 +17,7 @@ const N = Number(arg('n', 6)), GAP = Number(arg('gap', 700));
 const [W, H] = arg('size', '1280x720').split('x').map(Number);
 const day = Number(arg('day', 0.62)), rain = Number(arg('rain', 0));
 const ck = Number(arg('ck', 0.5)); // creek fraction where the crossing is
+const at = arg('at', ''); // arena centre x,z (default: the emptiest dry spot, which differs from run to run)
 const ext = 'jpg';
 
 // puppet specs: sp, state, speed (world m/s), lateral offset along the creek (m), cross offset (m)
@@ -29,6 +30,17 @@ const SCENES = {
   // alert: three grazing bison on the far bank (cr 34 = 14 m across the creek) and a wolf that trots the crossing line past them
   alert: { arena: true, speed: 0.05, cam: [14, 9, 'side', 10], pup: [[0, 1, 0, 0, 30], [0, 1, 0, 5, 32], [0, 1, 0, -5, 29], [1, 2, 4.0, 9, 0]] },
   alert_pg: { arena: true, speed: 0.05, cam: [16, 9, 'side', 10], pup: [[3, 1, 0, 0, 30], [3, 1, 0, 5, 32], [10, 1, 0, -5, 29], [1, 2, 4.0, 9, 0]] },
+  // r-alert2: a wolf trots through a herd that is walking, lying or grazing (puppets loop on a 40 m line; the wolf passes 11 to 12 m off the herd on the camera side)
+  alert_walk: { arena: true, speed: 0.05, cam: [24, 8, 'side', 2], pup: [[0, 2, 1.3, -7, 4], [0, 2, 1.2, -2, 9], [0, 2, 1.4, 3, 2], [0, 2, 1.3, 8, 12], [0, 2, 1.2, -5, 17], [0, 2, 1.4, 5, 20], [1, 2, 4.5, 11, 0]] },
+  alert_lie: { arena: true, speed: 0.05, cam: [24, 8, 'side', 0], pup: [[0, 8, 0, -7, 17], [0, 8, 0, -2, 22], [0, 8, 0, 3, 19], [0, 8, 0, 8, 23], [0, 8, 0, -5, 25], [0, 8, 0, 5, 15], [1, 2, 4.5, 11, 0]] },
+  alert_stand: { arena: true, speed: 0.05, cam: [24, 8, 'side', 0], pup: [[0, 1, 0, -7, 17], [0, 1, 0, -2, 22], [0, 1, 0, 3, 19], [0, 1, 0, 8, 23], [0, 1, 0, -5, 25], [0, 1, 0, 5, 15], [1, 2, 4.5, 11, 0]] },
+  alert_mix: { arena: true, speed: 0.05, cam: [26, 8, 'side', 2], pup: [[0, 2, 1.3, -7, 4], [0, 2, 1.2, -2, 9], [0, 8, 0, 3, 19], [0, 8, 0, 8, 23], [0, 1, 0, -5, 25], [0, 1, 0, 5, 15], [1, 2, 4.5, 12, 0]] },
+  alert_pg2: { arena: true, speed: 0.05, cam: [20, 8, 'side', 2], pup: [[3, 2, 1.3, -4, 4], [3, 2, 1.2, 0, 9], [3, 1, 0, 4, 22], [10, 2, 1.2, -2, 14], [10, 1, 0, 3, 18], [3, 8, 0, 7, 24], [1, 2, 4.5, 9, 0]] },
+  // r-alert2 pop check (--trace): the wolf grazes the edge of the alert range (58 m for a standing or walking herd, 33 m for a bedded one), so it enters and leaves
+  trace_walk: { arena: true, speed: 0.05, cam: [24, 8, 'side', 0], pup: [[0, 2, 1.3, 0, 4], [0, 2, 1.2, 3, 9], [0, 2, 1.4, -3, 2], [1, 2, 4.5, 58, 0]] },
+  trace_stand: { arena: true, speed: 0.05, cam: [24, 8, 'side', 0], pup: [[0, 1, 0, 0, 20], [0, 1, 0, 3, 23], [0, 1, 0, -3, 17], [1, 2, 4.5, 58, 0]] },
+  trace_lie: { arena: true, speed: 0.05, cam: [24, 8, 'side', 0], pup: [[0, 8, 0, 0, 20], [0, 8, 0, 3, 23], [0, 8, 0, -3, 17], [1, 2, 4.5, 33, 0]] },
+  trace_pg: { arena: true, speed: 0.05, cam: [24, 8, 'side', 0], pup: [[3, 2, 1.3, 0, 4], [3, 1, 0, 3, 23], [10, 2, 1.2, -3, 17], [1, 2, 4.5, 58, 0]] },
   wade_deer: { cam: [14, 11, 'side'], pup: [[3, 2, 2.0, 0, 0], [10, 2, 2.0, 4, 3], [3, 5, 9.0, -4, 6]] },
 };
 
@@ -59,6 +71,7 @@ try {
     const creekFrame = { cx, cz, tx, tz, nx, nz };
     const LEN = 40; let t0 = performance.now(); let pups = []; window.__lifePups = () => pups;
     window.__scene = (spec, mode, dist, pitch, fa, arena) => {
+      window.__arenaOn = !!arena;
       if (arena) {
         // the emptiest dry spot of the valley: the animals there are only the puppets
         const sn = window.__snap(); let best = -1, bx = 256, bz = 256;
@@ -69,6 +82,7 @@ try {
           for (let i = 0; i < sn.count; i++) { const dx = sn.agents[i * 12 + 1] - gx, dz = sn.agents[i * 12 + 2] - gz; const q = Math.sqrt(dx * dx + dz * dz); if (q < d) d = q; }
           if (d > best) { best = d; bx = gx; bz = gz; }
         }
+        const fixed = ${JSON.stringify(at)}; if (fixed) { const q = fixed.split(',').map(Number); bx = q[0]; bz = q[1]; }
         cx = bx; cz = bz; tx = 0; tz = 1; nx = 1; nz = 0;
         console.log('arena', bx, bz, 'clear radius', best);
       } else { cx = creekFrame.cx; cz = creekFrame.cz; tx = creekFrame.tx; tz = creekFrame.tz; nx = creekFrame.nx; nz = creekFrame.nz; }
@@ -82,6 +96,8 @@ try {
       if (!snap) return;
       const idx = new Map(); for (let i = 0; i < snap.count; i++) idx.set(snap.ids[i], i);
       const now = (performance.now() - t0) / 1000;
+      // an arena scene: every wolf, cougar and coyote that is not a puppet is moved far away (the sim runs on at a crawl, and a real predator in range would answer the alert)
+      if (window.__arenaOn) { const mine = new Set(pups.map((q) => q.id)); for (let i = 0; i < snap.count; i++) { const s = snap.agents[i * 12]; if ((s === 1 || s === 5 || s === 6) && !mine.has(snap.ids[i])) { snap.agents[i * 12 + 1] = -4000; snap.agents[i * 12 + 2] = -4000; } } }
       for (const p of pups) {
         const i = idx.get(p.id); if (i === undefined) continue;
         const o = i * 12, A = snap.agents;
@@ -102,12 +118,41 @@ try {
     await page.evaluate(`window.__speed(${sc.speed ?? 1})`);
     await page.evaluate(`window.__scene(${JSON.stringify(sc.pup)}, '${sc.cam[2]}', ${sc.cam[0]}, ${sc.cam[1]}, ${sc.cam[3] || 0}, ${sc.arena ? 'true' : 'false'})`);
     await page.evaluate('window.__animals.alertProfile = true; window.__animals.alertMs = 0; window.__animals.alertFrames = 0');
-    await page.waitForTimeout(3500);
+    await page.waitForTimeout(3500 + Number(arg('wait', 0)));
     for (let i = 0; i < N; i++) {
       const p = `${out}/${name}_${String(i).padStart(2, '0')}.${ext}`;
       await page.screenshot({ path: p, type: 'jpeg', quality: 90, timeout: 150000 });
       console.log('saved', p);
       await page.waitForTimeout(GAP);
+    }
+    if (argv.includes('--trace')) {
+      // per frame: the layer clock, and for each puppet grazer the alert weight, the eased yaw, the head-down weight and the drawn heading (reads the layer's slots)
+      const tr = await page.evaluate(`(async () => {
+        const an = window.__animals, orig = an.update.bind(an), S = an.slots;
+        const ids = window.__lifePups().filter((p) => p.sp !== 1).map((p) => p.id);
+        const rows = []; let last = performance.now();
+        an.update = (...a) => { orig(...a); const t = performance.now(); const r = { t: (t - last) / 1000, c: an.clock, s: ids.map((id) => { const k = S.map.get(id); return k === undefined ? null : [S.al[k], S.aly[k], S.hdn[k], S.hs[k], S.alD[k], S.lie[k], S.alN[k], an.alX[0], an.alZ[0], an.alSnap === an.curr ? 1 : 0]; }) }; last = t; rows.push(r); };
+        await new Promise((r) => setTimeout(r, 10000));
+        an.update = orig; return rows;
+      })()`);
+      if (argv.includes('--dump')) console.log(JSON.stringify(tr.filter((_, i) => i % 40 === 0).map((r) => [r.c.toFixed(2), r.s[0] && r.s[0].map((v) => +v.toFixed(2))])));
+      const wrap = (a) => { while (a > Math.PI) a -= 2 * Math.PI; while (a < -Math.PI) a += 2 * Math.PI; return a; };
+      const nB = tr[0].s.length; const worst = [];
+      for (let b = 0; b < nB; b++) {
+        let mAl = 0, mYaw = 0, mHd = 0, mHs = 0, inR = 0, outR = 0, maxAl = 0, maxYaw = 0, dMin = 1e9, dMax = 0;
+        for (let i = 1; i < tr.length; i++) {
+          const a = tr[i - 1].s[b], c = tr[i].s[b]; if (!a || !c) continue;
+          const dt = Math.max(tr[i].c - tr[i - 1].c, 1e-3);
+          mAl = Math.max(mAl, Math.abs(c[0] - a[0]) / dt); mYaw = Math.max(mYaw, Math.abs(c[1] - a[1]) / dt);
+          mHd = Math.max(mHd, Math.abs(c[2] - a[2]) / dt); mHs = Math.max(mHs, Math.abs(wrap(c[3] - a[3])) / dt);
+          dMin = Math.min(dMin, c[4]); if (c[4] < 1e8) dMax = Math.max(dMax, c[4]);
+          maxAl = Math.max(maxAl, c[0]); maxYaw = Math.max(maxYaw, Math.abs(c[1]));
+          if (c[0] > 0.5) inR++; else outR++;
+        }
+        worst.push({ b, 'max alert': +maxAl.toFixed(2), 'max yaw rad': +maxYaw.toFixed(2), 'alert /s': +mAl.toFixed(2), 'yaw rad/s': +mYaw.toFixed(2), 'headdown /s': +mHd.toFixed(2), 'heading rad/s': +mHs.toFixed(2), 'frames alert>0.5': inR, 'not': outR, 'alD min': +dMin.toFixed(1), 'alD max': +dMax.toFixed(1) });
+      }
+      console.log(name, 'trace', tr.length, 'frames, clock span', (tr[tr.length - 1].c - tr[0].c).toFixed(2), 's');
+      console.table(worst);
     }
     if (argv.includes('--bench')) {
       // A/B of the whole animal update with the alert pass on and off (interleaved, 4 s each), the layer's own cost per frame
