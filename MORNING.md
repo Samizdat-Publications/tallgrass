@@ -3,7 +3,7 @@
 *(Updated 14:30 Saturday 2026-10-10. This file is refreshed at every milestone.)*
 
 ## 2026-10-09 to 10: the 24-hour day run (the plan is DAY-PLAN.md)
-**Play it:** https://tallgrass.stewartgregerson.workers.dev (or `npm run dev`, then http://localhost:5199/). Last deploy: 16:26 Saturday (D12, matte bison, dark night herds), live check clean. The default world is still v10b. The run continues to 13:30 Sunday, within the quota limits.
+**Play it:** https://tallgrass.stewartgregerson.workers.dev (or `npm run dev`, then http://localhost:5199/). Last deploy: 17:10 Saturday (D13, species readable from the overview), live check clean. The default world is still v10b. The run continues to 13:30 Sunday, within the quota limits.
 
 **What you asked for:** take stock, then spend 24 hours on what gives the most: visuals and the remaining features. The ecosystem already passed every gate, so the day went to how the valley looks up close and how the animals move.
 
@@ -23,7 +23,7 @@
 ![The live build at 01:10 Saturday](journey/20261010-040248_still_day-d3.jpg)
 
 ### Reviews (judge the trend; single rounds swing 2 to 3 points)
-- **Blind critic, stills:** round 25 (Friday 21:30) visual 6, readability 4, life 4, ecosystem 5, keep watching 5; round 28 (Saturday 05:10) visual 7, readability 5, life 6, ecosystem 6, UI 7, keep watching 6; round 32 (Saturday 15:55, on D11) visual 6, readability 4, life 6, ecosystem 6, UI 7, keep watching 6. Its top item, telling species apart at the overview distance, is being worked on now (builder B16); its bison and night items are fixed in D12. A 100-year zoom of the v10b runs (review/stability/v10b-1f3f658/zoom_600_700.png) backs its point that the populations hold steady with noise rather than swinging in predator-prey cycles.
+- **Blind critic, stills:** round 25 (Friday 21:30) visual 6, readability 4, life 4, ecosystem 5, keep watching 5; round 28 (Saturday 05:10) visual 7, readability 5, life 6, ecosystem 6, UI 7, keep watching 6; round 32 (Saturday 15:55, on D11) visual 6, readability 4, life 6, ecosystem 6, UI 7, keep watching 6. Its top item, telling species apart at the overview distance, is improved in D13 (clearly for pronghorn, mildly for coyotes and kills; a kill inside a crowded herd is still hard to find); its bison and night items are fixed in D12. A 100-year zoom of the v10b runs (review/stability/v10b-1f3f658/zoom_600_700.png) backs its point that the populations hold steady with noise rather than swinging in predator-prey cycles.
 - **Gemini video, now at 8 frames a second** (it used to see 1 frame a second, which hides every stride): life and motion 3 (baseline Friday 15:49), 1 (round 26, frozen animals), 3 (round 27, after the idle layer), 2 (round 29, on D6: deaths that snap into a rigid pose, fixed in D7), 2 (round 30, on D8: herds that ignore a passing wolf, fixed in D9; UI 8, readability 7), 3 (round 31, on D9: ecosystem believability up from 2 to 6, keep watching 4; its blocky trunk and lost chase shot are fixed in D10 and D11).
 - Triage for every round is in REVIEWS.md.
 
@@ -57,7 +57,7 @@
 5. A Gemini round on a quiet machine with a hand-picked reel (a hunt, a herd crossing, a death), so the motion score reflects the best moments rather than random ones.
 
 ### Deploy log (all live checks clean)
-D1 19:45 golden look, snow · D2 21:35 wading, alert heads, ground detail, performance · D3 01:10 real animals, real trees, land · D4 02:45 idle life · D5 04:05 planted feet, leap · D6 06:45 night and water, round 28 fixes · D7 08:23 deaths and takedowns at any speed, tumbling birds, animals on ice · D8 14:03 faster start (all shaders compiled at once), first-frame NaN fix · D9 15:13 walking and bedded grazers turn their heads to a passing predator, bison face a wolf inside 25 m · D10 15:28 no more checkerboard tree trunks near the camera · D11 15:43 the chase camera keeps a followed wolf in the picture · D12 16:26 matte bison coat with a pale tan cape and a dark head, dark animals at night with a thin moon rim, calm moonlit ponds, a legible idle playback bar.
+D1 19:45 golden look, snow · D2 21:35 wading, alert heads, ground detail, performance · D3 01:10 real animals, real trees, land · D4 02:45 idle life · D5 04:05 planted feet, leap · D6 06:45 night and water, round 28 fixes · D7 08:23 deaths and takedowns at any speed, tumbling birds, animals on ice · D8 14:03 faster start (all shaders compiled at once), first-frame NaN fix · D9 15:13 walking and bedded grazers turn their heads to a passing predator, bison face a wolf inside 25 m · D10 15:28 no more checkerboard tree trunks near the camera · D11 15:43 the chase camera keeps a followed wolf in the picture · D12 16:26 matte bison coat with a pale tan cape and a dark head, dark animals at night with a thin moon rim, calm moonlit ponds, a legible idle playback bar · D13 17:10 species read apart from the overview: pronghorn are tan with a white rump instead of white flecks, coyotes darker and smaller than wolves, kill sites readable from further out.
 
 ## 2026-10-09 night: "The long breath" (v10)
 **Play it:** https://tallgrass.stewartgregerson.workers.dev (or `npm run dev`, then http://localhost:5199/). **v10b is now the default world** (v10 adopted at 10:30, then its refinement v10b at 13:00, each after its acceptance and shocks passed; live, see the last line of this section).
