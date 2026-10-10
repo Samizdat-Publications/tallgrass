@@ -24,6 +24,13 @@ const DAWN_DENSITY = 0.07;
 const _snowCol = new THREE.Color();
 const _rainCol = new THREE.Color();
 
+/** Size of the ambient-occlusion buffers as a share of the frame (1 = full size, no upsample). `?aoscale=1` in the URL puts it back. */
+const AO_SCALE_DEFAULT = ((): number => {
+  if (typeof location === 'undefined') return 0.5;
+  const v = Number(new URLSearchParams(location.search).get('aoscale'));
+  return v >= 0.25 && v <= 1 ? v : 0.5;
+})();
+
 const FS_VERT = 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }';
 
 /** Renders the scene into a private MSAA half-float target that keeps a depth texture, then copies it on. */
@@ -1149,6 +1156,12 @@ export class PostFX {
   readonly composer: EffectComposer;
   readonly scenePass: ScenePass;
   readonly gtao: GTAOPass;
+  private aoComposite!: THREE.ShaderMaterial;
+  private aoScale = AO_SCALE_DEFAULT;
+  private applyAoScale: () => void = () => {};
+  /** Ambient-occlusion buffer size as a share of the frame (0.25 to 1). */
+  setAoScale(s: number): void { this.aoScale = Math.min(1, Math.max(0.25, s)); this.applyAoScale(); }
+  private aoCompositeQuad!: FullScreenQuad;
   readonly fog: FogPass;
   readonly godrays: GodRayPass;
   readonly snow = new Snow();
@@ -1175,7 +1188,9 @@ export class PostFX {
     this.composer.addPass(this.scenePass);
 
     this.gtao = new GTAOPass(scene, camera, w, h);
-    this.gtao.output = GTAOPass.OUTPUT.Default;
+    // r-perf: three's Default output copies the whole HDR frame and then multiplies the AO over it (two full-frame passes). Off renders
+    // the G-buffer, the AO and the denoise only; the wrapped render below composites in a single pass (the same product).
+    this.gtao.output = GTAOPass.OUTPUT.Off;
     this.gtao.blendIntensity = 0.9;
     this.gtao.updateGtaoMaterial({ radius: 1.6, distanceExponent: 1.4, thickness: 2.0, scale: 1.4, samples: 12, distanceFallOff: 1.0 });
     this.gtao.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: 6, rings: 2, samples: 12 });
@@ -1185,7 +1200,91 @@ export class PostFX {
       for (const o of this.aoExclude) if (o.visible) { o.visible = false; hidden.push(o); }
       origRender(r, wb, rb, dt as number, mask as boolean);
       for (const o of hidden) o.visible = true;
+      const cu = this.aoComposite.uniforms;
+      cu.tDiffuse.value = rb.texture;
+      cu.tAO.value = this.gtao.pdRenderTarget.texture;
+      cu.tDepth.value = this.gtao.depthTexture;
+      cu.intensity.value = this.gtao.blendIntensity;
+      cu.uNear.value = this.camera.near;
+      cu.uFar.value = this.camera.far;
+      r.setRenderTarget(this.gtao.renderToScreen ? null : wb);
+      this.aoCompositeQuad.render(r);
     };
+    this.aoComposite = new THREE.ShaderMaterial({
+      uniforms: {
+        tDiffuse: { value: null }, tAO: { value: null }, tDepth: { value: null }, intensity: { value: 0.9 },
+        uNear: { value: 0.5 }, uFar: { value: 9000 }, uHalf: { value: new THREE.Vector2(1, 1) },
+      },
+      vertexShader: FS_VERT,
+      // The AO is computed at a fraction of the frame size (AO_SCALE) and put back with a depth-aware (bilateral) upsample: each of the four
+      // nearest AO texels is weighted by how close its depth is to this pixel's, both read from the AO pre-pass depth (which is full size),
+      // so the AO never leaks across a silhouette. The product with the frame is the same one three's blend pass makes.
+      fragmentShader: /* glsl */ `
+        precision highp float;
+        varying vec2 vUv;
+        uniform sampler2D tDiffuse;
+        uniform sampler2D tAO;
+        uniform sampler2D tDepth;
+        uniform float intensity;
+        uniform float uNear;
+        uniform float uFar;
+        uniform vec2 uHalf;
+        float lin(float d) { return 2.0 * uNear * uFar / (uFar + uNear - (d * 2.0 - 1.0) * (uFar - uNear)); }
+        void main() {
+          vec4 c = texture2D(tDiffuse, vUv);
+          vec4 a;
+          if (uHalf.x < 0.5) {
+            a = texture2D(tAO, vUv);
+          } else {
+            float zc = lin(texture2D(tDepth, vUv).x);
+            vec2 hp = vUv * uHalf - 0.5;
+            vec2 i0 = floor(hp);
+            vec2 f = hp - i0;
+            vec4 acc = vec4(0.0);
+            float wsum = 0.0;
+            for (int j = 0; j < 2; j++) {
+              for (int i = 0; i < 2; i++) {
+                vec2 tap = clamp(i0 + vec2(float(i), float(j)), vec2(0.0), uHalf - 1.0);
+                vec2 tuv = (tap + 0.5) / uHalf;
+                float zt = lin(texture2D(tDepth, tuv).x);
+                float rel = (zt - zc) / zc;
+                float wb = (i == 0 ? 1.0 - f.x : f.x) * (j == 0 ? 1.0 - f.y : f.y);
+                float w = wb / (1.0 + 600.0 * rel * rel) + 1e-5;
+                acc += w * texture2D(tAO, tuv);
+                wsum += w;
+              }
+            }
+            a = acc / wsum;
+          }
+          gl_FragColor = vec4(c.rgb * mix(vec3(1.0), a.rgb, intensity), c.a * a.a);
+        }`,
+      depthTest: false, depthWrite: false,
+    });
+    this.aoCompositeQuad = new FullScreenQuad(this.aoComposite);
+    // the AO and its denoise run at AO_SCALE of the frame; the normal and depth pre-pass stays full size (it is what the upsample keys on)
+    const gtaoSetSize = this.gtao.setSize.bind(this.gtao);
+    const applyAoScale = (): void => {
+      const g = this.gtao;
+      const sc = this.aoScale;
+      const hw = Math.max(2, Math.ceil(g.width * sc)), hh = Math.max(2, Math.ceil(g.height * sc));
+      if (sc < 1) {
+        g.gtaoRenderTarget.setSize(hw, hh);
+        g.pdRenderTarget.setSize(hw, hh);
+        g.gtaoMaterial.uniforms.resolution.value.set(hw, hh);
+        g.pdMaterial.uniforms.resolution.value.set(hw, hh);
+        g.pdMaterial.uniforms.radius.value = 6 * sc; // (the same reach on the screen, in the coarser pixels)
+      } else {
+        g.gtaoRenderTarget.setSize(g.width, g.height);
+        g.pdRenderTarget.setSize(g.width, g.height);
+        g.gtaoMaterial.uniforms.resolution.value.set(g.width, g.height);
+        g.pdMaterial.uniforms.resolution.value.set(g.width, g.height);
+        g.pdMaterial.uniforms.radius.value = 6;
+      }
+      (this.aoComposite.uniforms.uHalf.value as THREE.Vector2).set(sc < 1 ? hw : 0, hh);
+    };
+    this.applyAoScale = applyAoScale;
+    this.gtao.setSize = (w: number, h: number): void => { gtaoSetSize(w, h); applyAoScale(); };
+    applyAoScale();
     this.composer.addPass(this.gtao);
 
     this.fog = new FogPass(shared, camera, this.scenePass, storm);
@@ -1503,6 +1602,7 @@ export class PostFX {
     this.grade.dispose();
     this.finish.dispose();
     this.gtao.dispose();
+    this.aoComposite.dispose(); this.aoCompositeQuad.dispose();
     this.bloom.dispose();
     this.composer.dispose();
   }

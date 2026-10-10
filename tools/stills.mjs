@@ -17,6 +17,8 @@ const set = arg('set', 'review');
 const query = arg('query', '');
 const [W, H] = arg('size', '1600x900').split('x').map(Number);
 const loadTimeout = Number(arg('timeout', 90000));
+const shotTimeout = Number(arg('shot-timeout', 30000)); // (a starved machine needs longer)
+const waitScale = Number(arg('wait-scale', 1)); // multiplies every step's wait: easing runs per rendered frame, so a slow machine needs more real time
 const png = argv.includes('--png'); // default is JPEG quality 90 (much smaller, fine for review); --png opts back into lossless
 const ext = png ? 'png' : 'jpg';
 
@@ -275,7 +277,7 @@ SETS.lapse = [
 const only = arg('only', '').split(',').filter(Boolean); // --only lk_02,lk_08: just those steps (the first, the setup step, always runs)
 const steps = SETS[set] && only.length ? SETS[set].filter((s, i) => i === 0 || only.some((o) => s.name.startsWith(o))) : SETS[set];
 if (!steps) { console.error('unknown set', set); process.exit(1); }
-const kill = setTimeout(() => { console.error('stills: hard timeout'); process.exit(2); }, 10 * 60 * 1000 + 2 * loadTimeout);
+const kill = setTimeout(() => { console.error('stills: hard timeout'); process.exit(2); }, 10 * 60 * 1000 * waitScale + 2 * loadTimeout);
 const server = await createServer({ configFile: resolve('vite.config.ts'), server: { port: 5300 + Math.floor(Math.random() * 600), strictPort: false, hmr: false }, logLevel: 'error', cacheDir: arg('cache', undefined) });
 await server.listen();
 const base = server.resolvedUrls.local[0].replace(/\/$/, '');
@@ -291,9 +293,9 @@ try {
   mkdirSync(out, { recursive: true });
   for (const s of steps) {
     if (s.eval) await page.evaluate(s.eval);
-    await page.waitForTimeout(s.wait ?? 2500);
+    await page.waitForTimeout((s.wait ?? 2500) * waitScale);
     const p = `${out}/${s.name}.${ext}`;
-    await page.screenshot(png ? { path: p } : { path: p, type: 'jpeg', quality: 90 });
+    await page.screenshot(png ? { path: p, timeout: shotTimeout } : { path: p, type: 'jpeg', quality: 90, timeout: shotTimeout });
     console.log('saved', p);
   }
 } catch (e) {

@@ -4,6 +4,9 @@
 //  - The world is cut into square "cells" at four LOD levels (4, 8, 16, 32 m). Each level has a fixed
 //    number of blades per cell (a jittered grid, so the field never clumps or leaves holes) and its own blade
 //    mesh (13, 7, 5, 3 vertices). Level L draws only blades whose distance to the camera falls inside its ring.
+//  - r-perf: a blade's rank j in its cell doubles as its thinning threshold ((j + 0.5) / N), so a cell whose nearest point is far out
+//    only needs its first ceil(N x keep) blades launched. Cells are bucketed by that share (GROUPS), each bucket with its own per-cell
+//    count, so the vertex shader never runs for the blades that the density falloff would reject anyway (they were most of the grass cost).
 //  - One draw call per level. Instance id -> (cell slot, blade index); the cell slot indexes a small float
 //    data texture the CPU refills every frame with the frustum-culled list of cells.
 //  - Blade density is one smooth function of distance D(d). Every blade carries a stable random number and is kept
@@ -85,6 +88,9 @@ const VERTEX_ROWS: number[][] = [
   [0],
 ];
 const MAX_CELLS_PER_LEVEL = 512;
+/** Upper bounds of the keep-share buckets cells are sorted into (the last must be 1): each bucket launches ceil(N x bound) blades per cell. */
+const GROUPS = [0.12, 0.2, 0.3, 0.4, 0.5, 0.62, 0.75, 0.88, 1];
+const NGRP = GROUPS.length;
 
 type Level = {
   cs: number; // cell size
@@ -293,6 +299,9 @@ uniform float uWindStr;
 uniform vec3 uCam;
 uniform float uCamDy;
 uniform vec4 uRing;
+uniform float uGrpStart[4 * NGRP];  // per level and bucket: first instance id, blades launched per cell, first cell slot
+uniform float uGrpCap[4 * NGRP];
+uniform float uGrpSlot[4 * NGRP];
 uniform vec4 uDens;    // D0, halfDist, fadeStart, fadeEnd
 uniform float uPixW;
 uniform float uMaxH;
@@ -384,8 +393,15 @@ void cullBlade() {
 }
 
 void main() {
-  int slot = gl_InstanceID / NBLADE;
-  int bi = gl_InstanceID - slot * NBLADE;
+  // the instance's bucket (cells sorted by how many of their blades can survive), then its cell and its rank j inside the cell
+  int gbase = LEVEL * NGRP;
+  int grp = 0;
+  for (int k = 1; k < NGRP; k++) if (float(gl_InstanceID) >= uGrpStart[gbase + k]) grp = k;
+  int gcap = int(uGrpCap[gbase + grp]);
+  int grel = gl_InstanceID - int(uGrpStart[gbase + grp]);
+  int gcell = grel / gcap;
+  int bi = grel - gcell * gcap;
+  int slot = int(uGrpSlot[gbase + grp]) + gcell;
   vec4 cell = texelFetch(uCells, ivec2(slot, LEVEL), 0);
   uint cid = uint(cell.z + 0.5) * 1664525u + uint(LEVEL) * 1013904223u + 12345u;
   uint h1 = pcg(cid + uint(bi) * 2654435761u);
@@ -394,12 +410,10 @@ void main() {
   uint h4 = pcg(h3 + 0xC2B2AE35u);
   uint h5 = pcg(h4 + 0x27D4EB2Fu);
   uint h6 = pcg(h5 + 0x165667B1u);
-  vec2 jit = vec2(u01(h1), u01(h2));
-  float rThin = u01(h3);
-
-  int gx = bi % GRID;
-  int gz = bi / GRID;
-  vec2 p = cell.xy + (vec2(float(gx), float(gz)) + jit) * (CELLSZ / float(GRID));
+  // positions are uniform in the cell and the thinning threshold is the blade's rank, so any prefix of a cell's blades is a thinner
+  // random scatter of the same kind (the CPU launches only the prefix a cell can use, see selectCells)
+  float rThin = (float(bi) + 0.5) / float(NBLADE);
+  vec2 p = cell.xy + vec2(u01(h1), u01(h2)) * CELLSZ;
 
   // shared distance metric (CPU uses the same one for ring and cell selection)
   float dh = length(p - uCam.xz);
@@ -1197,6 +1211,9 @@ export class GrassField {
       uCam: { value: new THREE.Vector3() },
       uCamDy: { value: 2 },
       uRing: { value: new THREE.Vector4(...RING_EDGE) },
+      uGrpStart: { value: new Float32Array(4 * NGRP) },
+      uGrpCap: { value: new Float32Array(4 * NGRP).fill(1) },
+      uGrpSlot: { value: new Float32Array(4 * NGRP) },
       uDens: { value: new THREE.Vector4(this.d0, HALF_DIST, FADE_START, FADE_END) },
       uPixW: { value: 0.0012 },
       uMaxH: { value: 1.05 },
@@ -1339,6 +1356,7 @@ export class GrassField {
         LEVEL: l,
         GRID: grid,
         NBLADE: blades,
+        NGRP: NGRP,
         CELLSZ: cs.toFixed(1),
         MAXDENS: maxDens.toFixed(3),
         DENSPOW: DENS_POW.toFixed(2),
@@ -1567,7 +1585,7 @@ export class GrassField {
       const n = this.selectCells(l, cam, camDy);
       L.cells = n;
       this.stats.cells[l] = n;
-      const count = n * L.blades;
+      const count = this.layoutGroups(l, n);
       L.geo.instanceCount = count;
       L.mesh.visible = n > 0;
       inst += count;
@@ -1614,6 +1632,9 @@ export class GrassField {
     const rowBase = l * MAX_CELLS_PER_LEVEL * 4;
     let count = 0;
     const box = this.box;
+    const maxDens = L.maxDens, d0 = this.d0;
+    const gcount = this.grpCount;
+    gcount.fill(0);
     for (let cz = cz0; cz <= cz1; cz++) {
       for (let cx = cx0; cx <= cx1; cx++) {
         const ci = cz * nc + cx;
@@ -1631,16 +1652,62 @@ export class GrassField {
         box.max.set(x0 + cs + 1.4, L.hMax[ci] + 1.9, z0 + cs + 1.4);
         if (!this.frustum.intersectsBox(box)) continue;
         if (count >= MAX_CELLS_PER_LEVEL) break;
+        // the largest share of this cell's blades that can pass the density test: the share at its nearest point inside the ring
+        // (the density only falls with distance; the same formula as the vertex shader's `dens`)
+        const dn = Math.max(Math.sqrt(dMin2), lo);
+        const ratio = dn / HALF_DIST;
+        let keep = (d0 / Math.pow(1 + ratio * ratio, DENS_POW)) / maxDens;
+        if (dn > FADE_START) { const t = Math.min(1, (dn - FADE_START) / (FADE_END - FADE_START)); keep *= 1 - t * t * (3 - 2 * t); }
+        let g = 0;
+        while (g < NGRP - 1 && keep > GROUPS[g]) g++;
         const o = rowBase + count * 4;
         data[o] = x0;
         data[o + 1] = z0;
         data[o + 2] = cz * 256 + cx;
-        data[o + 3] = 0;
+        data[o + 3] = g;   // (the bucket, until layoutGroups sorts the rows)
+        gcount[g]++;
         count++;
       }
     }
     return count;
   }
+
+  private grpCount = new Int32Array(NGRP);
+  private grpTmp = new Float32Array(MAX_CELLS_PER_LEVEL * 4);
+
+  /**
+   * Sort the level's `n` selected cell rows by bucket (stable inside a bucket), write each bucket's first instance, blades per cell and
+   * first slot into the shader's tables, and return the instance count: the sum of cells x blades launched per cell.
+   */
+  private layoutGroups(l: number, n: number): number {
+    const L = this.levels[l];
+    const u = this.uniforms;
+    const start = u.uGrpStart.value as Float32Array, cap = u.uGrpCap.value as Float32Array, slot = u.uGrpSlot.value as Float32Array;
+    const gcount = this.grpCount;
+    const rowBase = l * MAX_CELLS_PER_LEVEL * 4;
+    const data = this.cellData;
+    const tmp = this.grpTmp;
+    // bucket slot offsets
+    let s0 = 0, inst = 0;
+    const fill = this.grpFill;
+    for (let g = 0; g < NGRP; g++) {
+      const c = Math.min(L.blades, Math.ceil(L.blades * GROUPS[g]) + 1);
+      slot[l * NGRP + g] = s0;
+      start[l * NGRP + g] = inst;
+      cap[l * NGRP + g] = c;
+      fill[g] = s0;
+      s0 += gcount[g];
+      inst += gcount[g] * c;
+    }
+    tmp.set(data.subarray(rowBase, rowBase + n * 4));
+    for (let i = 0; i < n; i++) {
+      const g = tmp[i * 4 + 3] | 0;
+      const o = rowBase + fill[g]++ * 4;
+      data[o] = tmp[i * 4]; data[o + 1] = tmp[i * 4 + 1]; data[o + 2] = tmp[i * 4 + 2]; data[o + 3] = 0;
+    }
+    return inst;
+  }
+  private grpFill = new Int32Array(NGRP);
 
   dispose(): void {
     for (const L of this.levels) {
