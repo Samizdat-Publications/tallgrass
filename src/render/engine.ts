@@ -154,6 +154,7 @@ export class Engine {
 
   private parent: HTMLElement;
   private frameCbs: Array<(dt: number, t: number) => void> = [];
+  private preRenderCbs: Array<() => void> = [];
   private running = false;
   private raf = 0;
   private last = 0;
@@ -276,6 +277,8 @@ export class Engine {
     this.uniforms.trailTex.value = this.trailTexture;
 
     this.terrain = new Terrain(world, this.uniforms);
+    // r-perf: the ground is shaded after the grass, trees and animals (all opaque), so the depth test rejects every ground pixel they cover before the ground shader runs
+    this.terrain.mesh.renderOrder = 5;
     this.water = new Water(world, this.uniforms, this.terrain.creekDist);
     this.trees = new Trees(world, this.uniforms, this.terrain.heightAt);
     this.flood = new Flood(world, this.uniforms);
@@ -507,6 +510,12 @@ export class Engine {
     return () => { this.frameCbs = this.frameCbs.filter((f) => f !== cb); };
   }
 
+  /** Register a callback that runs once per frame after every camera move and before the scene is drawn (r-perf: per-instance culling). */
+  onPreRender(cb: () => void): () => void {
+    this.preRenderCbs.push(cb);
+    return () => { this.preRenderCbs = this.preRenderCbs.filter((f) => f !== cb); };
+  }
+
   start(): void {
     if (this.running) return;
     this.running = true;
@@ -539,6 +548,8 @@ export class Engine {
     this.storms.update(dt, this.camera, this.env);
     this.updateEnvState(dt);
     this.fireflies.update(fireflyAmount(this.env.season, this.lighting.sunElDeg, this.rainSm, this.sm.overcast, this.env.warmth), this.renderer.domElement.height, this.camera.fov);
+    this.camera.updateMatrixWorld();
+    for (const cb of this.preRenderCbs) cb();
     this.post.render(dt);
     this.firstFrame = false;
   }
