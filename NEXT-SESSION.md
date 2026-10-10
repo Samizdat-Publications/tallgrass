@@ -8,8 +8,9 @@
   - 16:00: D9 (r-alert2), D10 (trunk checkerboard), D11 (chase camera) all live and clean. Gemini round 31 and blind round 32 triaged in REVIEWS.md. Weekly 61% at 15:45.
   - 16:30: D12 live (r-polish32 merged). Weekly 61%.
   - 17:10: D13 live (r-read merged). Weekly 61%.
-  - shoreWaves rejected (DECISIONS 18:00). RUNNING (CPU, 8 threads, about 65 min from 18:00): scratch/v12/open.sh (sA shoreOpen 2 with shoreSpread 1, sB shoreSpread 0.5; frozen f219729), log scratch/v12/open.log. Compare: .venv/Scripts/python -I tools/screen_cmp.py scratch/v12/sA/baseline (near-water SHARE = near_bison / pop_bison; gate: share down clearly, mule deer within 5%). If one passes: full acceptance 20 x 1200 yr + shocks.
-  - RUNNING: builder B17 r-ravens (scratch/wt-rav, brief scratch/day/b17_ravens.md).
+  - 19:00 (session restarted at 18:05 after an accidental archive; owner gaming since 18:15: 4 batch threads, Idle priority, no GPU benches, minimal captures, until he says otherwise).
+  - Waterhole: shoreWaves rejected; sA (shoreSpread 1 + shoreOpen 2) passed the 400-year screen (DECISIONS 18:58). RUNNING: sB screen (scratch/v12/open.sh, log open.log), then automatically the sA acceptance 20 x 1200 yr and shocks (scratch/v12/accept_sA.sh, log accept_sA.log, out scratch/v12/acc_sA and acc_sA-shocks). If sB beats sA, kill and re-point the acceptance. Adoption: .venv/Scripts/python tools/adoption.py v12=scratch/v12/acc_sA --burn 0.15 and the v11 RESULT.md table; then flip the default, extend testpins (V7C_OFF, CHALLENGE_PIN with shoreSpread 0, shoreOpen 0), re-record golden, as v11-adopt did.
+  - RUNNING: builder B17 r-ravens (scratch/wt-rav), resumed after an API error. On report: run the GPU A/B yourself when the owner is done gaming, then merge and deploy.
   - CPU: throttle loop restarted (scratch/day/throttle_loop.sh now calls scratch/day/throttle.ps1). Worktree preview server for wt-start on 5198 can be killed.
   - After B14, if quota is under 65%: nothing new; final MORNING self-audit, NEXT-SESSION, and stop early by writing the time to .claude/hooks/run_until.local.txt when the quota rule says so.
 - Planned Friday afternoon at extra-high effort; executes at high effort once the owner switches. The plan: `DAY-PLAN.md` (stock-take, bang-for-buck ranking, blocks, gates, quota targets).
