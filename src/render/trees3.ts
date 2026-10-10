@@ -7,7 +7,7 @@
 //   leaf cards: x,z in crown-radius units (nominal 6 m), y in height units (nominal 14 m), exactly as the lump crowns;
 //   bark:       a uniform 1/14 scale (tree height is 1), like the old bark, so the furrow shader frequencies carry over.
 import * as THREE from 'three';
-import { NOISE_GLSL, OCCLUDE_GLSL, SharedUniforms, clamp, injectSafeOutput, injectTerrainShadow } from './common';
+import { NOISE_GLSL, OCCLUDE_GLSL, SharedUniforms, clamp, injectSafeOutput, injectTerrainShadow, smoothstep as smoothstepJs } from './common';
 import { cottonwoodParams, generateEzTree, willowParams, type EzTree } from './eztree';
 import { Pool, swayChunk, WORLDPOS_GLSL } from './trees';
 
@@ -21,11 +21,19 @@ const W0 = 2.2;
 const TH0 = 5;
 /** Beyond this distance (m) the older lump crowns draw the tree (trees.ts skips them inside it). */
 export const TREES3_RANGE = 150;
-const LEAF_LIM = [52, TREES3_RANGE];
+/** Tuning hooks for the cost experiments (?t3k=0.6,0.3 share of leaf clusters per LOD, ?t3g=1.2,1.7 their size, ?t3l=40 the LOD0 distance). */
+function tuneList(name: string, d: number[]): number[] {
+  if (typeof location === 'undefined') return d;
+  const m = new RegExp('[?&]' + name + '=([0-9.,]+)').exec(location.search);
+  if (!m) return d;
+  const v = m[1].split(',').map(Number);
+  return d.map((x, i) => (Number.isFinite(v[i]) ? v[i] : x));
+}
+const LEAF_LIM = [tuneList('t3l', [52])[0], TREES3_RANGE];
 const BARK_LIM = [46, TREES3_RANGE];
 /** Share of the leaf clusters each LOD keeps, and how much larger the survivors are drawn. */
-const LEAF_KEEP = [1, 0.5];
-const LEAF_GROW = [1, 1.32];
+const LEAF_KEEP = tuneList('t3k', [0.85, 0.32]);
+const LEAF_GROW = tuneList('t3g', [1.1, 1.65]);
 
 function mulberry32(a: number) {
   return () => {
@@ -181,7 +189,7 @@ function buildBark(tree: EzTree, maxLevel: number, ux: number, uy: number): THRE
  * cards the season drops first, and `aCenter` is where a dropped card shrinks to.
  * keep < 1 draws a share of the cards (the ones with the lowest aRnd), larger.
  */
-function buildLeaves(tree: EzTree, keep: number, grow: number, seed: number, cells: number[], ux: number, uy: number): THREE.BufferGeometry {
+function buildLeaves(tree: EzTree, keep: number, grow: number, seed: number, cells: number[], ux: number, uy: number, inner = 0.2): THREE.BufferGeometry {
   const rng = mulberry32(seed * 7717 + 5);
   const A = tree.anchors;
   // crown ellipsoid from the anchors
@@ -198,8 +206,13 @@ function buildLeaves(tree: EzTree, keep: number, grow: number, seed: number, cel
   // pairs of anchors (the crossed quads of one leaf cluster) share their random numbers
   for (let k = 0; k < A.length; k += 2) {
     const r0 = rng(), cell = cells[Math.floor(rng() * cells.length)], flip = rng() < 0.5 ? -1 : 1, jit = rng();
-    if (r0 >= keep) continue;
-    const rr = r0 / keep;
+    // clusters deep inside the crown are hidden behind the shell (and cost a layer of overdraw each): keep only a few of them, and
+    // all of the outer ones
+    const a0 = A[k];
+    const sh = clamp(Math.hypot((a0.o.x + a0.a.x * a0.size * 0.5 - cx) / rx, (a0.o.y + a0.a.y * a0.size * 0.5 - cy) / ry, (a0.o.z + a0.a.z * a0.size * 0.5 - cz) / rx), 0, 1.15);
+    const kp = keep * (inner + (1 - inner) * smoothstepJs(0.3, 0.75, sh));
+    if (r0 >= kp) continue;
+    const rr = r0 / kp;
     for (let q = 0; q < 2 && k + q < A.length; q++) {
       const a = A[k + q];
       const size = a.size * grow * (0.9 + 0.2 * jit);
@@ -294,8 +307,10 @@ function leafMaterial(shared: SharedUniforms, atlas: THREE.Texture, willow = fal
         void main() {`)
       .replace('#include <color_fragment>', `#include <color_fragment>
         {
-          gTgShadow = tgSampleTerrainShadow();
+          // (a card is mostly empty texels: drop them before any of the shading work)
           vec4 lt = texture2D( tLeaf, vLeafUv );
+          if ( lt.a < 0.04 ) discard;
+          gTgShadow = tgSampleTerrainShadow();
           vec3 inst = diffuseColor.rgb; // instance colour: (brightness, hue shift, season phase)
           vec3 wpw = tgFragWorld();
           diffuseColor.a = lt.a * tgOcclusionFade( wpw );

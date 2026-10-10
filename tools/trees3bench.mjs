@@ -1,7 +1,7 @@
 // Interleaved GPU A/B of the trees3 layer inside ONE page load (so another process using the GPU, thermals and clock changes hit both
 // sides alike). The page is built with ?trees3=1, which holds both the lump trees and the branching trees; Trees.setTrees3(false/true)
 // switches between them at run time. Per view: ROUNDS rounds of (off, on) or (on, off) alternately, each FRAMES timed frames
-// (EXT_disjoint_timer_query_webgl2). Reports the median of each side and the paired deltas (on minus off).
+// (EXT_disjoint_timer_query_webgl2), each reduced to its lower quartile (other GPU users only ever add time). Reports the median over rounds of each side and the paired deltas (on minus off).
 //
 //   node tools/trees3bench.mjs [--size 2560x1440] [--out file.json] [--rounds 6] [--frames 30] [--views wide_golden,low_golden]
 import { chromium } from 'playwright';
@@ -13,7 +13,7 @@ const argv = process.argv.slice(2);
 const arg = (k, d) => { const i = argv.indexOf('--' + k); return i >= 0 && argv[i + 1] !== undefined ? argv[i + 1] : d; };
 const [W, H] = arg('size', '2560x1440').split('x').map(Number);
 const ROUNDS = Number(arg('rounds', 6));
-const FRAMES = Number(arg('frames', 30));
+const FRAMES = Number(arg('frames', 40));
 const outFile = arg('out', null);
 const query = arg('query', '');
 const only = arg('views', '').split(',').filter(Boolean);
@@ -86,9 +86,10 @@ try {
       barkOnly: () => { for (const m of t3m) if (isLeaf(m)) m.visible = false; },
       noWillow: () => { for (const m of t3m) if (isWillow(m)) m.visible = false; },
       cottonOnly: () => { for (const m of t3m) if (!isCotton(m)) m.visible = false; },
+      noRecv: () => { for (const m of t3m) if (isLeaf(m)) m.receiveShadow = false; },
       noLod1Leaf: () => { for (const m of t3m) if (m.name.endsWith('lod1') && isLeaf(m)) m.visible = false; },
     };
-    const reset = () => { for (const m of t3m) { m.visible = !(isLeaf(m) && isCotton(m)) || e.uniforms.leafAmount.value > 0.1; m.castShadow = !m.name.includes('willow3'); } };
+    const reset = () => { for (const m of t3m) { m.visible = !(isLeaf(m) && isCotton(m)) || e.uniforms.leafAmount.value > 0.1; m.castShadow = !m.name.includes('willow3'); m.receiveShadow = true; } };
     const apply = (on) => { reset(); if (on) (VARIANTS[variant] || VARIANTS[''])(); };
     const timed = async () => {
       for (let i = 0; i < 4; i++) e.renderOnce(0.016);
@@ -104,7 +105,7 @@ try {
       let tries = 0;
       while (tries++ < 400) { if (gl.getQueryParameter(qs[qs.length - 1], gl.QUERY_RESULT_AVAILABLE)) break; await new Promise((r) => setTimeout(r, 25)); }
       const t = qs.map((q) => (gl.getQueryParameter(q, gl.QUERY_RESULT_AVAILABLE) ? gl.getQueryParameter(q, gl.QUERY_RESULT) / 1e6 : NaN)).filter(Number.isFinite).sort((a, b) => a - b);
-      return t.length ? t[Math.floor(t.length / 2)] : NaN;
+      return t.length ? t[Math.floor(t.length * 0.25)] : NaN; // lower quartile: other GPU users only ever add time
     };
     const out = {};
     for (const name of names) {
