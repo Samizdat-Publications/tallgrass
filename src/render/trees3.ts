@@ -390,13 +390,16 @@ function leafMaterial(shared: SharedUniforms, atlas: THREE.Texture, willow = fal
           vec3 gA = mix( vec3( 0.34, 0.185, 0.022 ), uLeafA, 0.35 );
           vec3 gB = mix( vec3( 0.66, 0.42, 0.045 ), uLeafB, 0.3 );
           vec3 leaf = mix( mix( lA, gA, turnT ), mix( lB, gB, turnT ), mixT );
-          leaf *= mix( vec3( 0.9, 1.0, 1.08 ), vec3( 1.12, 1.0, 0.82 ), clamp( inst.b * 0.5 + inst.g * 0.5, 0.0, 1.0 ) );
+          // r-polish28 (round 28, item 7): each tree sits somewhere between a deep, cool green and an olive (the concept's cottonwoods), a wider
+          // spread than before; the autumn gold keeps the old, narrower tint
+          float tgTone = clamp( inst.b * 0.5 + inst.g * 0.5, 0.0, 1.0 );
+          leaf *= mix( mix( vec3( 0.66, 0.88, 0.8 ), vec3( 1.0, 0.95, 0.62 ), tgTone ), mix( vec3( 0.9, 1.0, 1.08 ), vec3( 1.12, 1.0, 0.82 ), tgTone ), autK );
           float shade = 0.2 + 0.9 * pow( occ, 1.15 );
           shade = mix( shade, max( shade, 0.74 ), tgOcclusionLift( wpw ) );
           // the grey leaf texture is the leaf-scale light and dark (deep leaves darker, veins lighter)
           ${willow ? 'leaf = mix( leaf, leaf * vec3( 0.86, 1.1, 0.72 ), 0.8 ); leaf = mix( leaf, mix( vec3( 0.06, 0.11, 0.03 ), vec3( 0.14, 0.2, 0.05 ), mixT ), 0.45 * ( 1.0 - autK ) );' : ''}
-          leaf *= shade * ( 0.42 + 0.9 * lt.r ) * inst.r;
-          leaf = mix( leaf, leaf * vec3( 1.12, 1.08, 0.78 ), 0.5 * smoothstep( 0.5, 1.0, occ ) );
+          leaf *= shade * ( 0.42 + 0.9 * lt.r ) * inst.r * 0.84;
+          leaf = mix( leaf, leaf * vec3( 1.06, 1.04, 0.84 ), 0.35 * smoothstep( 0.5, 1.0, occ ) );
           diffuseColor.rgb = mix( leaf, vec3( 0.9, 0.93, 1.0 ), uSnow * 0.5 * smoothstep( 0.3, 0.9, occ ) );
         }`)
       // a card is lit the same from both faces (its stored normal already points out of the crown): no back-face flip
@@ -413,13 +416,13 @@ function leafMaterial(shared: SharedUniforms, atlas: THREE.Texture, willow = fal
           // light through the leaves: strongest looking toward the sun, strongest at thin silhouette edges
           float back = pow( backD, 1.7 );
           float wrapB = pow( backD, 0.9 );
-          vec3 warm = diffuseColor.rgb * vec3( 1.2, 1.1, 0.62 );
-          totalEmissiveRadiance += warm * uLightColor * ( back * ( 0.2 + 0.6 * rimT * rimT ) + 0.04 * wrapB ) * gTgShadow * ( 0.35 + 0.65 * clamp( vOcc, 0.0, 1.0 ) );
+          vec3 warm = diffuseColor.rgb * vec3( 1.1, 1.05, 0.7 );
+          totalEmissiveRadiance += warm * uLightColor * ( back * ( 0.12 + 0.4 * rimT * rimT ) + 0.03 * wrapB ) * gTgShadow * ( 0.35 + 0.65 * clamp( vOcc, 0.0, 1.0 ) );
           totalEmissiveRadiance += diffuseColor.rgb * 0.045 * ( 1.0 - clamp( vOcc, 0.0, 1.0 ) );
         }`);
     shader.fragmentShader = injectSafeOutput(shader.fragmentShader);
   };
-  mat.customProgramCacheKey = () => `tg-leaf3-v2-${willow ? 'w' : 'c'}${far ? 'f' : 'n'}${LAMBERT ? 'l' : 's'}`;
+  mat.customProgramCacheKey = () => `tg-leaf3-v3-${willow ? 'w' : 'c'}${far ? 'f' : 'n'}${LAMBERT ? 'l' : 's'}`;
   return mat;
 }
 
@@ -543,7 +546,7 @@ export class Trees3 {
     dummy.updateMatrix();
     dummy.matrix.toArray(pool.barkMats, slot * 16);
     // (darker and browner than the lump trees' bark: cottonwood bark is deep grey-brown, and a snow-dusted pale limb read as a bone-white dead forest)
-    const dk = p.burned ? 1 : 0.58;
+    const dk = p.burned ? 1 : 0.52;
     pool.barkCols[slot * 3] = p.bark[0] * dk * 1.04; pool.barkCols[slot * 3 + 1] = p.bark[1] * dk * 0.96; pool.barkCols[slot * 3 + 2] = p.bark[2] * dk * 0.84;
     pool.barkOn[slot] = 1;
     pool.crownOn[slot] = p.burned ? 0 : 1;
