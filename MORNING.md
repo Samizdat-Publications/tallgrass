@@ -3,7 +3,7 @@
 *(Updated 14:30 Saturday 2026-10-10. This file is refreshed at every milestone.)*
 
 ## 2026-10-09 to 10: the 24-hour day run (the plan is DAY-PLAN.md)
-**Play it:** https://tallgrass.stewartgregerson.workers.dev (or `npm run dev`, then http://localhost:5199/). Last deploy: 14:03 Saturday (D8, faster start), live check clean. The default world is still v10b. The run continues to 13:30 Sunday, within the quota limits.
+**Play it:** https://tallgrass.stewartgregerson.workers.dev (or `npm run dev`, then http://localhost:5199/). Last deploy: 15:13 Saturday (D9, herds notice predators), live check clean. The default world is still v10b. The run continues to 13:30 Sunday, within the quota limits.
 
 **What you asked for:** take stock, then spend 24 hours on what gives the most: visuals and the remaining features. The ecosystem already passed every gate, so the day went to how the valley looks up close and how the animals move.
 
@@ -24,7 +24,7 @@
 
 ### Reviews (judge the trend; single rounds swing 2 to 3 points)
 - **Blind critic, stills:** round 25 (Friday 21:30) visual 6, readability 4, life 4, ecosystem 5, keep watching 5; round 28 (Saturday 05:10) visual 7, readability 5, life 6, ecosystem 6, UI 7, keep watching 6.
-- **Gemini video, now at 8 frames a second** (it used to see 1 frame a second, which hides every stride): life and motion 3 (baseline Friday 15:49), 1 (round 26, frozen animals), 3 (round 27, after the idle layer), 2 (round 29, on D6: deaths that snap into a rigid pose, fixed in D7), 2 (round 30, on D8: herds that ignore a passing wolf, which a builder is fixing now; UI 8, readability 7).
+- **Gemini video, now at 8 frames a second** (it used to see 1 frame a second, which hides every stride): life and motion 3 (baseline Friday 15:49), 1 (round 26, frozen animals), 3 (round 27, after the idle layer), 2 (round 29, on D6: deaths that snap into a rigid pose, fixed in D7), 2 (round 30, on D8: herds that ignore a passing wolf, fixed in D9; UI 8, readability 7).
 - Triage for every round is in REVIEWS.md.
 
 ### Ecology this run (nothing adopted; v10b stays)
@@ -57,7 +57,7 @@
 5. A Gemini round on a quiet machine with a hand-picked reel (a hunt, a herd crossing, a death), so the motion score reflects the best moments rather than random ones.
 
 ### Deploy log (all live checks clean)
-D1 19:45 golden look, snow · D2 21:35 wading, alert heads, ground detail, performance · D3 01:10 real animals, real trees, land · D4 02:45 idle life · D5 04:05 planted feet, leap · D6 06:45 night and water, round 28 fixes · D7 08:23 deaths and takedowns at any speed, tumbling birds, animals on ice · D8 14:03 faster start (all shaders compiled at once), first-frame NaN fix.
+D1 19:45 golden look, snow · D2 21:35 wading, alert heads, ground detail, performance · D3 01:10 real animals, real trees, land · D4 02:45 idle life · D5 04:05 planted feet, leap · D6 06:45 night and water, round 28 fixes · D7 08:23 deaths and takedowns at any speed, tumbling birds, animals on ice · D8 14:03 faster start (all shaders compiled at once), first-frame NaN fix · D9 15:13 walking and bedded grazers turn their heads to a passing predator, bison face a wolf inside 25 m.
 
 ## 2026-10-09 night: "The long breath" (v10)
 **Play it:** https://tallgrass.stewartgregerson.workers.dev (or `npm run dev`, then http://localhost:5199/). **v10b is now the default world** (v10 adopted at 10:30, then its refinement v10b at 13:00, each after its acceptance and shocks passed; live, see the last line of this section).
