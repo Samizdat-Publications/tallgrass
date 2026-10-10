@@ -102,7 +102,7 @@ export interface Params {
    *  instead of ringing every pond; a grazer that has drunk its fill also drifts back off the bank. 0 = off: any shore is a drinking place. */
   drinkSpots: number;
   /** If > 0 (round 25 waterhole mob): grazers keep their own thirst (each animal starts for water at a hydration between 0.3 and
-   *  0.3 - 0.18 x shoreSpread, a stable per-animal value, no random draws), so a herd goes down to drink in waves instead of all at once,
+   *  0.3 + 0.15 x shoreSpread (never later than without it, so no extra thirst), a stable per-animal value, no random draws), so a herd goes down to drink in waves instead of all at once,
    *  and one that has drunk its fill walks back off the bank (within 12 + 18 x shoreSpread m of the water). 0 = off. */
   shoreSpread: number;
   /** If > 0, personal space while grazing: a grazing herbivore keeps this multiple of the usual separation (spacing and range) from herd-mates,

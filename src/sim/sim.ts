@@ -1659,7 +1659,7 @@ export class Sim implements SimLike {
       dvx = a.fleeX[i] * run + sepx * 2;
       dvy = a.fleeY[i] * run + sepy * 2;
       state = St.Flee;
-    } else if (a.hydration[i] < (p.shoreSpread > 0 ? 0.3 - 0.18 * p.shoreSpread * ((Math.imul(a.id[i] | 0, 0x9e3779b1) >>> 8) / 16777216) : 0.3) || (a.state[i] === St.Drink && a.hydration[i] < 0.97)) {
+    } else if (a.hydration[i] < (p.shoreSpread > 0 ? 0.3 + 0.15 * p.shoreSpread * ((Math.imul(a.id[i] | 0, 0x9e3779b1) >>> 8) / 16777216) : 0.3) || (a.state[i] === St.Drink && a.hydration[i] < 0.97)) {
       if (this.drinkD[c] < 3) {
         state = St.Drink;
         a.hydration[i] = Math.min(1, a.hydration[i] + 0.09);
