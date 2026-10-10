@@ -105,6 +105,10 @@ export interface Params {
    *  0.3 + 0.15 x shoreSpread (never later than without it, so no extra thirst), a stable per-animal value, no random draws), so a herd goes down to drink in waves instead of all at once,
    *  and one that has drunk its fill walks back off the bank (within 12 + 18 x shoreSpread m of the water). 0 = off. */
   shoreSpread: number;
+  /** If > 0 (deer-safe waterhole try, 2026-10-10): the staggered bison thirst of shoreSpread alone, without the walk back off the bank (the walk-off
+   *  is the suspect for the mule deer cost of shoreSpread: it pushes bison into the woody creek cover). Thresholds 0.3 to 0.3 + 0.15 x shoreWaves.
+   *  Ignored where shoreSpread is larger. 0 = off. */
+  shoreWaves: number;
   /** If > 0, personal space while grazing: a grazing herbivore keeps this multiple of the usual separation (spacing and range) from herd-mates,
    *  and its cohesion pull is divided by the same factor, so the herd spreads out over the patch (1.6 is the screened value). 0 = off (1 would match the old spacing). */
   herdSpacingGraze: number;
@@ -624,6 +628,7 @@ export function defaultParams(): Params {
     herdNearest: 0,
     drinkSpots: 0,
     shoreSpread: 0,
+    shoreWaves: 0,
     herdSpacingGraze: 1.6, // v7c (was 0)
     herdBands: 0,
     bandSize: 30,
