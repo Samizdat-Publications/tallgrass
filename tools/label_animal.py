@@ -176,6 +176,20 @@ piv[body] = neck
 piv2[body] = neck
 coat = np.full(n, cfg.get('coat', 0.25))
 
+# ---- 3b. every foot stands on the rig's foot height exactly. The leg retarget leaves a hoof or paw 1 to 2.5 cm off the ground on some legs (the lowest
+# vertex of each leg is not at the same height), which shows as a leg that floats in stance while the rig's foot point is planted. Lower each leg's
+# vertices by the gap, fading to nothing at the knee (a stretch of a couple of centimetres over the shin, which no one can see).
+for pid in (1, 2, 3, 4):
+    sel = part == pid
+    if not sel.any():
+        continue
+    R_ = rig['front' if pid <= 2 else 'hind']
+    lo_ = pos[sel, 1].min()
+    gap = lo_ - R_['foot'][1]
+    if abs(gap) > 1e-6:
+        pos[sel, 1] -= gap * (1 - smooth(lo_ + 0.03, R_['knee'][1], pos[sel, 1]))
+        print('lowered leg', pid, 'by', round(gap, 4))
+
 # ---- 4. normals (smooth across uv seams: merge by position), baked ambient occlusion
 key = np.round(pos * 1e4).astype(np.int64)
 _, inv = np.unique(key, axis=0, return_inverse=True)
