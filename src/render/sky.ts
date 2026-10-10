@@ -29,11 +29,11 @@ const KEYS: Key[] = [
   { el: -7, zen: C('#1c326c'), mid: C('#4a5c94'), hor: C('#b07a8a'), glow: C('#ff9a60'), sun: C('#ff7038'), sunI: 0.85,
     hSky: C('#7e98d4'), hGnd: C('#6a5248'), hI: 1.35, expo: 1.7, haze: 0.5 },
   { el: -1.5, zen: C('#31529a'), mid: C('#7a8cba'), hor: C('#dca880'), glow: C('#ff9a55'), sun: C('#ffc29a'), sunI: 2.2,
-    hSky: C('#8eaae2'), hGnd: C('#a88060'), hI: 1.7, expo: 1.5, haze: 0.6 },
+    hSky: C('#aeaebe'), hGnd: C('#a88a68'), hI: 1.7, expo: 1.5, haze: 0.6 },
   { el: 3, zen: C('#3a66aa'), mid: C('#8fa8c8'), hor: C('#efc796'), glow: C('#ffb060'), sun: C('#ffcb9a'), sunI: 3.7,
-    hSky: C('#8eaae0'), hGnd: C('#b08850'), hI: 1.5, expo: 1.1, haze: 0.9 },
+    hSky: C('#c8bca4'), hGnd: C('#b89464'), hI: 2.1, expo: 1.0, haze: 0.9 },
   { el: 9, zen: C('#4a7ac0'), mid: C('#a8c0d8'), hor: C('#f0d6aa'), glow: C('#ffc070'), sun: C('#ffddb0'), sunI: 5.3,
-    hSky: C('#92b0e2'), hGnd: C('#b88f50'), hI: 1.3, expo: 1.0, haze: 0.9 },
+    hSky: C('#c2bcaa'), hGnd: C('#b89460'), hI: 1.8, expo: 0.92, haze: 0.9 },
   { el: 18, zen: C('#5287cc'), mid: C('#aac6dd'), hor: C('#ecdab4'), glow: C('#ffd08a'), sun: C('#ffe6c8'), sunI: 5.2,
     hSky: C('#94b4e4'), hGnd: C('#b8944f'), hI: 1.2, expo: 0.95, haze: 0.85 },
   { el: 34, zen: C('#4a86d4'), mid: C('#a4c8e6'), hor: C('#e2e4d6'), glow: C('#ffe2b0'), sun: C('#fff0dc'), sunI: 4.8,
@@ -449,6 +449,15 @@ export function computeAtmosphere(env: EnvLike, sm: Smoothed, u: SharedUniforms,
   mixKey(L.hemiGround, (k) => k.hGnd, k0, k1, t);
   L.hemiSky.multiply(_a.setRGB(lerp(1, 0.95, winter), lerp(1, 0.98, winter), lerp(1, 1.04, winter)));
   L.hemiIntensity = lerp(k0.hI, k1.hI, t) * (1 + over * 0.3) * (1 - 0.15 * dark);
+  {
+    // r-look: the low-sun keys carry a warm, brighter fill (shadowed grass stays olive-gold); deep winter keeps the cool one
+    const wk = winter * (1 - smoothstep(8, 20, elDeg)) * smoothstep(-6, 0, elDeg);
+    if (wk > 0.001) {
+      L.hemiSky.lerp(_b.set('#8eaae0'), 0.75 * wk);
+      L.hemiGround.lerp(_b.set('#b08850'), 0.6 * wk);
+      L.hemiIntensity *= 1 - 0.25 * wk;
+    }
+  }
   if (over > 0.001) {
     const l = (L.hemiSky.r + L.hemiSky.g + L.hemiSky.b) / 3;
     L.hemiSky.lerp(_b.setRGB(l, l, l * 1.05), over * 0.5);
@@ -478,14 +487,18 @@ export function computeAtmosphere(env: EnvLike, sm: Smoothed, u: SharedUniforms,
   const nightG = Math.max(night, 0.28 * smoothstep(-3, -10, elDeg));
   L.gradeNight = nightG;
   L.gradeHighlight.setRGB(1.0 + 0.08 * golden - 0.1 * nightG, 1.0 + 0.0 * golden + 0.02 * nightG, 1.0 - 0.1 * golden + 0.14 * nightG);
-  L.gradeShadow.setRGB(1.0 - 0.14 * golden - 0.2 * nightG, 1.0 + 0.0 * golden + 0.0 * nightG, 1.0 + 0.24 * golden + 0.26 * nightG);
-  L.gradeSat = 1.1 - 0.1 * golden + 0.06 * twilight - 0.1 * nightG - 0.12 * over - 0.04 * winter;
+  // r-look: below about 8 degrees of sun the grade turns warm instead (shadows toward warm brown, not blue; a little more colour and
+  // contrast, a softer bloom), fading back to the original cool grade by 20 degrees so midday, winter days and night keep their look
+  const lowAmb = 1 - smoothstep(8, 20, elDeg);
+  const gl = golden * lowAmb * (1 - 0.75 * winter);   // (deep winter keeps its cold dusk: snow and blue shade)
+  L.gradeShadow.setRGB(1.0 - 0.14 * golden + 0.2 * gl - 0.2 * nightG, 1.0 + 0.0 * golden + 0.0 * nightG, 1.0 + 0.24 * golden - 0.36 * gl + 0.26 * nightG);
+  L.gradeSat = 1.1 - 0.1 * golden + -0.02 * gl + 0.06 * twilight - 0.1 * nightG - 0.12 * over - 0.04 * winter;
   // (the night's contrast gain is kept modest: the power curve crushes everything under 0.18, which is the whole night scene)
-  L.gradeContrast = 1.1 - 0.06 * over + 0.12 * nightG + 0.08 * twilight;
+  L.gradeContrast = 1.1 - 0.06 * over + 0.12 * nightG + 0.08 * twilight + 0.04 * gl;
   L.vignette = 0.26 + 0.06 * nightG;
-  L.bloom = 0.17 + 0.13 * golden + 0.06 * nightG;
+  L.bloom = 0.17 + 0.13 * golden - 0.04 * gl + 0.06 * nightG;
   // shadow floor: a faint cool lift, plus more at night so nothing is ever pure black
-  L.gradeLift.setRGB(0.0016 + 0.0048 * nightG, 0.0021 + 0.0078 * nightG, 0.0034 + 0.0135 * nightG);
+  L.gradeLift.setRGB(0.0016 + 0.0048 * nightG + 0.004 * gl, 0.0021 + 0.0078 * nightG + 0.0026 * gl, 0.0034 + 0.0135 * nightG - 0.001 * gl);
   L.gradeLift.multiplyScalar(1 - 0.3 * dark);
 
   // russet ground under red dusk light compounds into wine: in autumn the low sun gives up some of its red

@@ -72,6 +72,7 @@ await preloadA3(); // (?a3=1: the authored near-LOD meshes load first, so the mo
 const animals = new AnimalLayer(renderWorld);
 engine.scene.add(animals.object3D);
 animals.snowField = engine.snowDepth;
+animals.setGround(engine.terrain.renderHeight);
 animals.swimLevelAt = (x, z) => { const l = engine.water.levelAt(x, z); return l === l ? l : engine.beaverWorks.surfaceAt(x, z); }; // (the drawn surface first)
 engine.cam.preset((q.get('cam') as 'wide' | 'low' | 'top' | null) ?? 'wide', true);
 // captures pin full resolution; players get an automatic render scale that holds 60 fps

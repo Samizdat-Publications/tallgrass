@@ -414,7 +414,8 @@ export class Sim implements SimLike {
       // v11 band rotation (bandRoam) reads the grass under a band as a share of what the ground carries, and keeps bands off water and the rim
       const land = this.p.bandRoam > 0 ? {
         grassFrac: (x: number, y: number) => { const c = this.veg.cellAt(x, y), cap = this.veg.capacityOf(c); return cap > 1e-6 ? this.veg.grass[c] / cap : 0; },
-        open: (x: number, y: number) => x > 25 && y > 25 && x < this.world.size - 25 && y < this.world.size - 25 && this.world.water[this.veg.cellAt(x, y)] === 0,
+        // fresh ground within a walk of water (a band that roams far from water loses its members to thirst)
+        open: (x: number, y: number) => x > 25 && y > 25 && x < this.world.size - 25 && y < this.world.size - 25 && this.world.water[this.veg.cellAt(x, y)] === 0 && this.drinkD[this.veg.cellAt(x, y)] < 90,
       } : null;
       this.bands = new Bands(this.a, this.p, this.seed, land);
       this.bands.seedFounders();
@@ -1806,8 +1807,8 @@ export class Sim implements SimLike {
         const reach = nc === 0 ? Math.min(10, p.bandReach) : p.bandReach;
         if (d > reach) { const k = push * p.bandPull * herd * Math.min(3, d / reach) / d; dvx += dx * k; dvy += dy * k; }
       }
-      // v11 band rotation (bandRoam): a band that has moved on draws its members toward the fresh ground it picked
-      if (p.bandRoam > 0 && this.bands!.goal(myBand, this.bandCentre)) {
+      // v11 band rotation (bandRoam): a band that has moved on draws its members toward the fresh ground it picked (not a thirsty one on its way to water)
+      if (p.bandRoam > 0 && a.hydration[i] >= 0.3 && this.bands!.goal(myBand, this.bandCentre)) {
         const dx = this.bandCentre[0] - x, dy = this.bandCentre[1] - y, d = Math.sqrt(dx * dx + dy * dy);
         if (d > 1) { const k = push * p.bandRoam / d; dvx += dx * k; dvy += dy * k; }
       }

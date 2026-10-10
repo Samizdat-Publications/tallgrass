@@ -105,33 +105,39 @@ export class Splash {
       vertexShader: /* glsl */ `
         attribute vec4 aP; attribute vec4 aQ;
         ${COMMON}
-        varying vec2 vUv; varying float vAlpha;
+        varying vec2 vUv; varying float vAlpha; varying float vU; varying float vSeed;
         void main() {
           float age = uNow - aP.w;
           float u = age / aQ.x;
-          if (u < 0.0 || u > 1.0) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); vAlpha = 0.0; vUv = vec2(0.0); return; }
+          if (u < 0.0 || u > 1.0) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); vAlpha = 0.0; vUv = vec2(0.0); vU = 0.0; vSeed = 0.0; return; }
+          vU = u; vSeed = fract(aP.w * 7.31 + aP.x * 0.37 + aP.z * 0.53);
           float rad = mix(aQ.y, aQ.z, 1.0 - (1.0 - u) * (1.0 - u));
           // keep it visible from the wide views: the ring widens with distance (a ripple a metre across is a pixel at 100 m)
           rad *= clamp(distance(cameraPosition, aP.xyz) / 40.0, 1.0, 2.5);
           vec3 pos = aP.xyz + vec3(position.x, 0.0, -position.y) * rad * 2.0;
           gl_Position = projectionMatrix * viewMatrix * vec4(pos, 1.0);
           vUv = position.xy * 2.0;
-          vAlpha = aQ.w * smoothstep(0.0, 0.08, u) * pow(1.0 - u, 1.4);
+          vAlpha = aQ.w * smoothstep(0.0, 0.08, u) * pow(1.0 - u, 2.0);
         }`,
       fragmentShader: /* glsl */ `
         precision highp float;
         ${COMMON}
-        varying vec2 vUv; varying float vAlpha;
+        varying vec2 vUv; varying float vAlpha; varying float vU; varying float vSeed;
         void main() {
           float r = length(vUv);
           if (r > 1.0) discard;
-          // an outer crest and a fainter inner one
-          float ring = smoothstep(0.62, 0.86, r) * (1.0 - smoothstep(0.88, 1.0, r));
-          float inner = smoothstep(0.28, 0.42, r) * (1.0 - smoothstep(0.44, 0.58, r)) * 0.45;
-          float a = (ring + inner) * vAlpha;
-          if (a < 0.01) discard;
-          vec3 col = vec3(0.82, 0.9, 0.97) * (uAmb * 1.15 + uSun * 0.3);
-          gl_FragColor = vec4(min(col, vec3(2.0)), a);
+          // r-life: a soft, broken ripple, not a drawn circle. One crest whose band widens as it spreads and fades fast, broken round its
+          // length by a per-ripple pattern, with a faint trailing trough inside. Grey-blue and low in contrast: it reads as a disturbance of the
+          // water, not as a UI ring (the round 24 video critic read the old crisp white rings as 2D decals).
+          float ang = atan(vUv.y, vUv.x);
+          float broken = 0.35 + 0.65 * smoothstep(0.1, 0.9, 0.5 + 0.5 * sin(ang * 3.0 + vSeed * 25.0) * sin(ang * 5.0 - vSeed * 11.0));
+          float w = mix(0.07, 0.2, vU);
+          float crest = exp(-pow((r - 0.8) / w, 2.0));
+          float trough = exp(-pow((r - 0.55) / (w * 1.6), 2.0)) * 0.3;
+          float a = (crest * broken + trough) * vAlpha;
+          if (a < 0.008) discard;
+          vec3 col = vec3(0.56, 0.64, 0.7) * (uAmb * 1.1 + uSun * 0.22);
+          gl_FragColor = vec4(min(col, vec3(1.4)), a);
         }`,
     });
     this.rings = new THREE.Mesh(this.rGeo, ringMat);
@@ -173,7 +179,29 @@ export class Splash {
       this.dQ[o] = life; this.dQ[o + 1] = seed; this.dQ[o + 2] = 0.8; this.dQ[o + 3] = 0;
       this.busyUntil = Math.max(this.busyUntil, t + life);
     }
-    this.ring(x, y, z, 0.25 * size, (0.9 + 0.9 * power) * size, 1.0 + 0.4 * power, 0.45);
+    this.ring(x, y, z, 0.15 * size, (0.45 + 0.5 * power) * size, 0.8 + 0.25 * power, 0.34);
+    this.dirtyD = true;
+  }
+
+  /**
+   * r-life: droplets only, no ring: a fan of mud and water thrown up from wet ground (a takedown in the rain, a hoof on soaked earth). (x, y, z) is
+   * the ground point, `size` the animal's scale (a bison is 1.5), `n` the number of droplets.
+   */
+  spray(x: number, y: number, z: number, size: number, n = 12): void {
+    const t = this.now;
+    for (let i = 0; i < n; i++) {
+      const o = this.dHead * 4;
+      this.dHead = (this.dHead + 1) % DROP_CAP;
+      const a = Math.random() * Math.PI * 2, r = (0.15 + 0.5 * Math.random()) * size;
+      const sp = (0.8 + 2.2 * Math.random()) * Math.sqrt(size);
+      const vy = (2.0 + 2.8 * Math.random()) * Math.sqrt(size);
+      this.dP[o] = x + Math.cos(a) * r * 0.5; this.dP[o + 1] = y; this.dP[o + 2] = z + Math.sin(a) * r * 0.5; this.dP[o + 3] = t;
+      this.dV[o] = Math.cos(a) * sp; this.dV[o + 1] = vy; this.dV[o + 2] = Math.sin(a) * sp;
+      this.dV[o + 3] = 0.03 + 0.03 * Math.random() * size;
+      const life = (2 * vy) / G;
+      this.dQ[o] = life; this.dQ[o + 1] = Math.random(); this.dQ[o + 2] = 0.7; this.dQ[o + 3] = 0;
+      this.busyUntil = Math.max(this.busyUntil, t + life);
+    }
     this.dirtyD = true;
   }
 

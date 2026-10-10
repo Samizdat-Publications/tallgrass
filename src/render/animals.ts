@@ -51,6 +51,14 @@ const CANID: boolean[] = SPECIES.map((s) => s.key === 'wolf' || s.key === 'coyot
 /** R8: the bison (wallow, rub, spar, bellow, snow dig, calf play: render/behaviours.ts), the pronghorn (rump flare) and the ravens (rolls in the air). */
 const BISON: boolean[] = SPECIES.map((s) => s.key === 'bison');
 const PRONGHORN: boolean[] = SPECIES.map((s) => s.key === 'pronghorn');
+/** r-life alert: grazers that lift their heads and turn to a moving predator, and the predators they watch (a resting or feeding one is ignored). */
+const ALERTS: boolean[] = SPECIES.map((s) => s.key === 'bison' || s.key === 'pronghorn' || s.key === 'muledeer');
+const WATCHED: boolean[] = SPECIES.map((s) => s.key === 'wolf' || s.key === 'coyote' || s.key === 'cougar');
+/** Alert range (m), the range inside which the body turns the full half step, and the turn limits (rad): far (a glance) and near (a startled half step, 30 degrees). */
+const ALERT_R = 60, ALERT_NEAR = 25, ALERT_TURN_FAR = 0.2, ALERT_TURN_NEAR = 0.52;
+const ALERT_CELL = 48;
+/** How far the head comes up past its neutral carriage in an alert (the head-down weight goes negative by this much: a share of the grazing pitch). */
+const ALERT_RAISE = 0.4;
 const RAVEN: boolean[] = SPECIES.map((s) => s.key === 'raven');
 /** Animals that swim on the water's surface where there is water (the beaver, S14). */
 const SWIMS: boolean[] = SPECIES.map((s) => s.key === 'beaver');
@@ -629,6 +637,14 @@ class Slots {
   /** Water contact: 1 while the feet were in water last frame, and the distance (m) drawn since the last wake step. */
   wetP = new Float32Array(this.cap);
   spl = new Float32Array(this.cap);
+  /** r-life: which foot enters the water next (wake ripples), 0..3. */
+  wst = new Float32Array(this.cap);
+  /** r-life alert: clock time of the next predator check, the eased alert weight 0..1, distance (m) and bearing (rad) of the nearest watched predator, and the clock time it was last in range. */
+  alN = new Float32Array(this.cap);
+  al = new Float32Array(this.cap);
+  alD = new Float32Array(this.cap).fill(1e9);
+  alB = new Float32Array(this.cap);
+  alS = new Float32Array(this.cap).fill(-1e9);
   fresh = new Uint8Array(this.cap);
   stamp = new Uint32Array(this.cap);
   map = new Map<number, number>();
@@ -714,6 +730,12 @@ class Slots {
     this.snw = g(this.snw, Float32Array);
     this.wetP = g(this.wetP, Float32Array);
     this.spl = g(this.spl, Float32Array);
+    this.wst = g(this.wst, Float32Array);
+    this.alN = g(this.alN, Float32Array);
+    this.al = g(this.al, Float32Array);
+    { const b = new Float32Array(n).fill(1e9); b.set(this.alD); this.alD = b; }
+    this.alB = g(this.alB, Float32Array);
+    { const b = new Float32Array(n).fill(-1e9); b.set(this.alS); this.alS = b; }
     this.fresh = g(this.fresh, Uint8Array);
     this.stamp = g(this.stamp, Uint32Array);
     this.cap = n;
@@ -729,6 +751,36 @@ export class AnimalLayer {
   private glyphLapse = 0;
   /** Water surface (m) at a point, NaN on dry land: lets swimmers ride the water (set by main.ts from the engine; null = none). */
   swimLevelAt: ((x: number, z: number) => number) | null = null;
+  /** The ground the animals stand on: the sim's heights until the engine hands over the rendered terrain (setGround). */
+  private gh: Float32Array;
+  /** r-life alert: a grid of the moving watched predators (rebuilt per snapshot), its cells' list heads, the chain, and the positions. */
+  private alHead = new Int32Array(0);
+  private alNext = new Int32Array(256);
+  private alX = new Float32Array(256);
+  private alZ = new Float32Array(256);
+  private alGW = 0;
+  private alSnap: Snapshot | null = null;
+  private alClock = -1;
+  /** Dev hook: set true to time the predator grid build (ms in alertMs over alertFrames frames); the per-grazer scan is measured by A/B on update() with alertEnabled (tools/r_life_shots.mjs --bench). */
+  alertProfile = false;
+  alertMs = 0;
+  alertFrames = 0;
+  /** Switch for A/B comparisons from the console (true = alert on). */
+  alertEnabled = true;
+  /**
+   * r-life: stand the animals on the terrain as drawn. The renderer reshapes the creek channel and its banks (terrain.ts shapeCreek: a smooth
+   * bed at most half a metre under the surface, banks lifted above it) and the sim's own creek bed differs from it by up to a metre, so on
+   * the sim's heights a wolf in the creek stood on a bed that was drawn above the water: it walked on the surface. Same size as world.height.
+   */
+  setGround(h: Float32Array): void {
+    if (h.length !== this.world.height.length) return;
+    this.gh = h;
+    const img = this.heightTex.image as { data: Float32Array };
+    img.data.set(h);
+    this.heightTex.needsUpdate = true;
+    this.shoreCache.clear();
+    this.wadeCache.clear();
+  }
   /** Per species visual size multiplier by species id (readability boost for small animals: wolf 1.35 (the concept art wolves read at ~0.65 of a bison), raven 1.7 (circling ravens are the "kill here" tell), rabbit 1.2, cougar 1.05). */
   readonly speciesScale: number[] = byId({ bison: 1, wolf: 1.35, raven: 1.7, pronghorn: 1, rabbit: 1.2, cougar: 1.05, coyote: 1.35, eagle: 1.7, hawk: 1.6, muledeer: 1.05, beaver: 1.25 }, () => 1);
   /**
@@ -903,6 +955,7 @@ export class AnimalLayer {
 
   constructor(world: World) {
     this.world = world;
+    this.gh = world.height;
     this.object3D.name = 'AnimalLayer';
     this.heightTex = new THREE.DataTexture(new Float32Array(world.height), world.hn, world.hn, THREE.RedFormat, THREE.FloatType);
     this.heightTex.needsUpdate = true;
@@ -988,19 +1041,19 @@ export class AnimalLayer {
           prof = pow(prof, 0.6);
           float R0 = 0.86 + 0.012 * pulse;
           float d = abs(r - R0);
-          float hw = max(0.034 * prof, 0.9 * fw);                 // half width of the bright line (at least about 2 px across)
+          float hw = max(0.02 * prof, 0.8 * fw);                 // half width of the bright line (at least about 2 px across)
           float line = (1.0 - smoothstep(hw - fw, hw + fw, d)) * inArc * (0.55 + 0.45 * prof);
           float edgeW = hw + max(0.016, 1.0 * fw);
           float dark = (1.0 - smoothstep(edgeW - fw, edgeW + fw, d)) * inArc * step(R0, r + 0.02);
           // the pool: a warm wash that is clear at the centre, rising toward the ring and gone just outside it, a little uneven
           float uneven = 0.82 + 0.18 * sin(ang * 3.0 + uT * 0.4 + r * 4.0);
           float pool = smoothstep(0.5, 0.86, r) * (1.0 - smoothstep(0.87, 0.99, r)) * uneven;
-          float poolA = pool * mix(0.05, 0.11, uLow) * (0.75 + 0.25 * pulse);
-          float lineA = line * (0.72 + 0.28 * pulse);
+          float poolA = pool * mix(0.02, 0.05, uLow) * (0.75 + 0.25 * pulse);
+          float lineA = line * (0.5 + 0.2 * pulse);
           float darkA = dark * mix(0.34, 0.16, uLow);
           float a = max(poolA, max(lineA, darkA * (1.0 - line)));
           if (a < 0.006) discard;
-          vec3 col = mix(vec3(0.05, 0.03, 0.015), vec3(1.35, 1.2, 0.9), clamp(max(line, pool * 0.9), 0.0, 1.0));
+          vec3 col = mix(vec3(0.05, 0.03, 0.015), vec3(1.05, 0.95, 0.75), clamp(max(line, pool * 0.9), 0.0, 1.0));
           col = mix(col, vec3(1.15, 1.0, 0.7), (1.0 - line) * pool);
           gl_FragColor = vec4(col, a * uOpacity);
         }`,
@@ -1041,9 +1094,9 @@ export class AnimalLayer {
         void main() {
           float r = length(vUv);
           float band = smoothstep(0.3, 0.78, r) * (1.0 - smoothstep(0.86, 1.0, r));
-          float a = band * uHalo * 0.42;
+          float a = band * uHalo * 0.09;
           if (a < 0.004) discard;
-          gl_FragColor = vec4(1.35, 1.12, 0.72, a);
+          gl_FragColor = vec4(1.0, 0.86, 0.6, a);
         }`,
     });
     this.halo = new THREE.Mesh(this.ringGeo, this.haloMat);
@@ -1093,7 +1146,7 @@ export class AnimalLayer {
         S.phase[slot] = hash01(id * 7 + 3);
         S.sick[slot] = 0;
         S.dust[slot] = 0;
-        S.snx[slot] = 0; S.snz[slot] = 0; S.snw[slot] = 0; S.wetP[slot] = 0; S.spl[slot] = 0;
+        S.snx[slot] = 0; S.snz[slot] = 0; S.snw[slot] = 0; S.wetP[slot] = 0; S.spl[slot] = 0; S.wst[slot] = 0; S.alN[slot] = 0; S.al[slot] = 0; S.alD[slot] = 1e9; S.alS[slot] = -1e9;
         S.pounce[slot] = -1;
         S.pkey[slot] = -1;
         S.pstop[slot] = STRUGGLE_END;
@@ -1255,7 +1308,7 @@ export class AnimalLayer {
       const a = Math.random() * Math.PI * 2, r = Math.random() * 0.4 * vs;
       const px = x + Math.cos(a) * r, pz = z + Math.sin(a) * r;
       this.dust.emit(
-        px, sampleHeight(w.height, w.hn, w.cell, px, pz) + 0.1, pz,
+        px, sampleHeight(this.gh, w.hn, w.cell, px, pz) + 0.1, pz,
         Math.cos(a) * 0.9, 0.3 + Math.random() * 0.4, Math.sin(a) * 0.9,
         (0.35 + Math.random() * 0.3) * vs, 0.6 + Math.random() * 0.5, 0.25 + Math.random() * 0.15, Math.random(), dryK,
       );
@@ -1382,13 +1435,18 @@ export class AnimalLayer {
     const big = sp === Sp.Bison ? 1.6 : sp === Sp.Wolf ? 0.9 : 1;
     // a kill on wet ground, under snow or in the rain raises little or no dust
     const dryK = this.dust.dryness * this.groundDry(cx, cz);
-    const n = Math.round((sp === Sp.Bison ? 16 : 10) * dryK);
+    const n = Math.round((sp === Sp.Bison ? 20 : 12) * dryK);
+    // r-life: on damp ground or in the rain, where no dust is drawn, the takedown throws up a fan of mud and water instead
+    if (dryK <= 0.15) {
+      const gy = sampleHeight(this.gh, w.hn, w.cell, cx, cz);
+      this.splash.spray(cx, gy + 0.15, cz, big * 0.8, sp === Sp.Bison ? 22 : 14);
+    }
     for (let i = 0; i < n; i++) {
       const a = Math.random() * Math.PI * 2, r = Math.random() * 1.2 * big;
       const px = cx + Math.cos(a) * r, pz = cz + Math.sin(a) * r;
       const sp2 = (1.4 + Math.random() * 2.2) * big;
       this.dust.emit(
-        px, sampleHeight(w.height, w.hn, w.cell, px, pz) + 0.2, pz,
+        px, sampleHeight(this.gh, w.hn, w.cell, px, pz) + 0.2, pz,
         Math.cos(a) * sp2 + Math.cos(fi.h) * fi.v * 0.12, 0.4 + Math.random() * 0.9, Math.sin(a) * sp2 + Math.sin(fi.h) * fi.v * 0.12,
         (1.2 + Math.random() * 1.0) * big, 0.9 + Math.random() * 0.9, 0.4 + Math.random() * 0.25, Math.random(), dryK,
       );
@@ -1438,11 +1496,11 @@ export class AnimalLayer {
     if (best < Infinity && bleft > 0.3) len = Math.min(DRAG_MAX, bleft);
     else if (best === Infinity) {
       // no cover about: up the steepest ground within 6 m, if there is any worth the effort
-      const h0 = sampleHeight(w.height, w.hn, w.cell, x, z);
+      const h0 = sampleHeight(this.gh, w.hn, w.cell, x, z);
       let bc = 0.25;
       for (let k = 0; k < 12; k++) {
         const a = (k / 12) * Math.PI * 2, ux = Math.cos(a), uz = Math.sin(a);
-        const climb = sampleHeight(w.height, w.hn, w.cell, x + ux * 6, z + uz * 6) - h0;
+        const climb = sampleHeight(this.gh, w.hn, w.cell, x + ux * 6, z + uz * 6) - h0;
         if (climb > bc) { bc = climb; bx = ux; bz = uz; len = Math.min(DRAG_MAX, 1.2 + 4 * climb); }
       }
     }
@@ -1734,10 +1792,65 @@ export class AnimalLayer {
   private rvB = [0, 0];
 
   private shoreV = { dx: 0, dz: 0 };
+  /** r-life alert: bucket the moving watched predators of this snapshot into a coarse grid (a few dozen animals; refreshed once per snapshot). */
+  private buildAlertGrid(snap: Snapshot): void {
+    this.alSnap = snap;
+    const gw = Math.ceil(this.world.size / ALERT_CELL) + 1;
+    if (this.alGW !== gw) { this.alGW = gw; this.alHead = new Int32Array(gw * gw); }
+    this.alHead.fill(-1);
+    const A = snap.agents;
+    let m = 0;
+    for (let i = 0; i < snap.count; i++) {
+      const o = i * AGENT_STRIDE;
+      const sp = A[o] | 0;
+      if (!WATCHED[sp]) continue;
+      const st = A[o + 7] | 0;
+      if (A[o + 4] < 0.35 || st === St.Rest || st === St.Eat || st === St.Idle || st === St.Drink) continue;
+      if (m >= this.alNext.length) {
+        const n2 = this.alNext.length * 2;
+        const nn = new Int32Array(n2); nn.set(this.alNext); this.alNext = nn;
+        const nx = new Float32Array(n2); nx.set(this.alX); this.alX = nx;
+        const nz = new Float32Array(n2); nz.set(this.alZ); this.alZ = nz;
+      }
+      const x = A[o + 1], z = A[o + 2];
+      this.alX[m] = x; this.alZ[m] = z;
+      const c = Math.min(gw - 1, Math.max(0, Math.floor(z / ALERT_CELL))) * gw + Math.min(gw - 1, Math.max(0, Math.floor(x / ALERT_CELL)));
+      this.alNext[m] = this.alHead[c];
+      this.alHead[c] = m;
+      m++;
+    }
+  }
+  /** The nearest moving watched predator to (x, z) within ALERT_R: distance in alD and bearing in alB of the slot (1e9 when none). */
+  private alertScan(x: number, z: number, S: Slots, slot: number): void {
+    const gw = this.alGW;
+    const ci = Math.floor(x / ALERT_CELL), cj = Math.floor(z / ALERT_CELL);
+    let best = ALERT_R * ALERT_R, bx = 0, bz = 0, hit = false;
+    for (let dj = -1; dj <= 1; dj++) {
+      const j = cj + dj;
+      if (j < 0 || j >= gw) continue;
+      for (let di = -1; di <= 1; di++) {
+        const i = ci + di;
+        if (i < 0 || i >= gw) continue;
+        for (let q = this.alHead[j * gw + i]; q >= 0; q = this.alNext[q]) {
+          const dx = this.alX[q] - x, dz = this.alZ[q] - z, d2 = dx * dx + dz * dz;
+          if (d2 < best) { best = d2; bx = dx; bz = dz; hit = true; }
+        }
+      }
+    }
+    if (hit) { S.alD[slot] = Math.sqrt(best); S.alB[slot] = Math.atan2(bz, bx); } else S.alD[slot] = 1e9;
+  }
+  /** The water surface as drawn at (x, z), NaN on dry land. Only asks the water mesh near water (the cell field knows how far the nearest water is). */
+  private surfaceAt(x: number, z: number): number {
+    const w = this.world;
+    const c = Math.min(w.n - 1, Math.max(0, Math.floor(z / w.cell))) * w.n + Math.min(w.n - 1, Math.max(0, Math.floor(x / w.cell)));
+    if (w.waterDist[c] > 9 && !w.water[c]) return NaN;
+    if (this.swimLevelAt) { const l = this.swimLevelAt(x, z); if (l === l) return l; }
+    return w.water[c] ? w.waterHeight[c] : NaN;
+  }
   /** Depth of the water over the terrain at the centre of water cell (i, j), m (0 or less: dry). */
   private depthAt(i: number, j: number): number {
     const w = this.world;
-    return w.waterHeight[j * w.n + i] - sampleHeight(w.height, w.hn, w.cell, (i + 0.5) * w.cell, (j + 0.5) * w.cell);
+    return w.waterHeight[j * w.n + i] - sampleHeight(this.gh, w.hn, w.cell, (i + 0.5) * w.cell, (j + 0.5) * w.cell);
   }
   /**
    * Where a body that lies in water is moved to: the offset (m) from (x, z) to dry ground on the nearest bank, a metre or two inland and spread along
@@ -1804,7 +1917,7 @@ export class AnimalLayer {
     const P = prev ? prev.agents : null;
     const S = this.slots;
     const world = this.world;
-    const H = world.height, hn = world.hn, cell = world.cell;
+    const H = this.gh, hn = world.hn, cell = world.cell;
     const k8 = 1 - Math.exp(-dt * 8);
     const kHead = 1 - Math.exp(-dt / 0.3);
     const kLie = 1 - Math.exp(-dt / 0.9);
@@ -1839,6 +1952,14 @@ export class AnimalLayer {
     this.shared.uTL.value = tl;
     let tlBudget = tl > 0.05 ? TL_PUFFS_PER_FRAME : 0;
     this.contact.begin();
+    const alertOn = this.alertEnabled && this.timeScale > 0 && this.timeScale <= 3;
+    if (this.alertProfile) this.alertFrames++;
+    if (alertOn && (this.alSnap !== snap || this.clock - this.alClock > 0.15)) {
+      this.alClock = this.clock;
+      const t0 = this.alertProfile ? performance.now() : 0;
+      this.buildAlertGrid(snap);
+      if (this.alertProfile) this.alertMs += performance.now() - t0;
+    }
     this.clock += running;
     const clock = this.clock;
     // at dusk, with no audio calling for a while, the coyotes sing now and then on their own (render/canids.ts)
@@ -2094,6 +2215,31 @@ export class AnimalLayer {
       else if (boOn && bo.faceOn) h = bo.face; // (bison: the opponent, the tree it rubs against, the way round its ring)
       else if (cnOn && cnO.moving) h = cnO.face; // (a pup romping on its ring)
 
+      // r-life alert: a grazer standing about, with a moving wolf, coyote or cougar within 60 m, lifts its head (and stops chewing: the head-down
+      // weight goes to 0), eases in over about 0.4 s and out over about 1.5 s after the predator has passed. Within 25 m it also turns its body up
+      // to 30 degrees toward it (the drawn heading follower makes that a slow turn on the spot, no position change); a pronghorn flares its rump
+      // patch inside 40 m. The predators are bucketed once a snapshot and each grazer looks again every 0.1 to 0.2 s.
+      let alW = 0;
+      if (ALERTS[sp]) {
+        const standing = alertOn && (state === St.Graze || state === St.Idle || state === St.Drink) && S.lie[slot] < 0.5;
+        if (standing && clock >= S.alN[slot]) {
+          S.alN[slot] = clock + 0.1 + 0.1 * hash01(id * 5 + (Math.floor(clock * 5) & 63));
+          this.alertScan(x1, z1, S, slot);
+          if (S.alD[slot] < ALERT_R) S.alS[slot] = clock;
+        }
+        const want = standing && clock < S.alS[slot] + 0.5 ? 1 : 0;
+        if (want > 0 || S.al[slot] > 0.002) {
+          S.al[slot] += (want - S.al[slot]) * (1 - Math.exp(-dt / (want > S.al[slot] ? 0.13 : 0.55)));
+          if (S.al[slot] < 0.002) S.al[slot] = 0;
+        }
+        alW = S.al[slot];
+        if (alW > 0.01 && S.alD[slot] < ALERT_R * 1.5) {
+          const near = 1 - smoothstep(ALERT_NEAR - 5, ALERT_NEAR + 5, S.alD[slot]);
+          const lim = ALERT_TURN_FAR + (ALERT_TURN_NEAR - ALERT_TURN_FAR) * near;
+          h += clamp(wrapPi(S.alB[slot] - h), -lim, lim) * alW;
+        }
+      }
+
       // A bedded animal never lies on a pond: the sim lets a grazer settle for the night wherever it stands, water included, so the drawn body is
       // moved to the bank (a display offset, eased in with the lie weight; S.snx and S.snz are taken out of the follower above like the other offsets)
       if (!flier && !SWIMS[sp]) {
@@ -2150,6 +2296,7 @@ export class AnimalLayer {
         if (bo.lie >= 0) lieT = bo.lie;
         if (bo.head >= 0) hdT = bo.head;
       }
+      if (alW > 0.002) hdT = hdT * (1 - alW) - ALERT_RAISE * alW; // (past 0, the neutral head: it comes up above the line of the back)
       if (flier) {
         const grounded = groundedBird;
         crT = grounded ? 1 : 0; // wing fold
@@ -2242,7 +2389,7 @@ export class AnimalLayer {
       S.flap[slot] += (flapT - S.flap[slot]) * kHead;
       // R8: the pronghorn's rump flare (on alarm: it flees or runs: up fast, down slowly) and the preen of a perched raptor (5 to 8 s every 20 to 50 s)
       if (PRONGHORN[sp]) {
-        const flT = this.timeScale > 0 && (state === St.Flee || state === St.Run) ? 1 : 0;
+        const flT = this.timeScale > 0 && (state === St.Flee || state === St.Run) ? 1 : alW > 0.01 && S.alD[slot] < 40 ? 0.8 * alW * (1 - smoothstep(30, 40, S.alD[slot])) : 0;
         S.flare[slot] += (flT - S.flare[slot]) * (1 - Math.exp(-dt / (flT > S.flare[slot] ? FLARE_IN : FLARE_OUT)));
       } else if (raptor) {
         const prT = perched && state !== St.Eat && alt > 0.5 && this.timeScale > 0 && this.timeScale <= 3 && sessionAt(id, 21, clock, PREEN_P0, PREEN_P1, 0.8, 5, 8) >= 0 ? 1 : 0;
@@ -2368,24 +2515,37 @@ export class AnimalLayer {
       const camP = this.shared.uCamPos.value;
       const camD = Math.hypot(x - camP.x, g0 - camP.y, z - camP.z);
       const sizeBoost = pr.kind === 0 ? legBoost(pr, vs, camD, this.shared.uPxK.value) : 1;
+      // the water surface as drawn under this animal (NaN on dry land), against the terrain as drawn (this.gh): the wading depth
+      const wSurf = !flier || alt <= 0.3 ? this.surfaceAt(x, z) : NaN;
       // water contact (models/splash.ts): a splash where a running animal's feet go into water, a wake ring for a wading one, near the camera only
       if (pr.kind <= 1 && !SWIMS[sp] && camD < SPLASH_RANGE && running > 0 && this.timeScale <= 6 && S.lie[slot] < 0.3 && this.splashBudget > 0) {
-        const wcs = Math.min(world.n - 1, Math.max(0, Math.floor(z / cell))) * world.n + Math.min(world.n - 1, Math.max(0, Math.floor(x / cell)));
-        const inW = world.water[wcs] !== 0 && world.waterHeight[wcs] - g0 > 0.04;
+        const inW = wSurf === wSurf && wSurf - g0 > 0.04;
         const mvs = S.vis[slot];
         if (inW && mvs > 0.5) {
-          const sy = world.waterHeight[wcs], hx = Math.cos(h), hz = Math.sin(h), sd = hash01(id * 3 + 5);
+          // (r-life: the ripples sit on the water as drawn, and start at the feet: a few small soft rings at the foot that went in, a V either side of a
+          // fast mover, spray that grows with speed. A step's size follows the animal, not the camera)
+          const sy = wSurf;
+          const hx = Math.cos(h), hz = Math.sin(h), sd = hash01(id * 3 + 5);
           if (S.wetP[slot] < 0.5 && mvs > 2.2) {
             this.splash.splash(x, sy, z, clamp(mvs / 11, 0.3, 1.2), vs, hx, hz, sd, 7);
             this.splashBudget--;
           }
           S.spl[slot] += ds;
-          const stepLen = (mvs > 4.5 ? 1.1 : 0.65) * vs;
+          const stepLen = (mvs > 4.5 ? 0.9 : 0.55) * vs * Math.max(0.6, pr.length * 0.5);
           if (S.spl[slot] >= stepLen) {
             S.spl[slot] = 0;
             this.splashBudget--;
-            if (mvs > 4.5) this.splash.splash(x - hx * 0.2 * vs, sy, z - hz * 0.2 * vs, clamp(mvs / 11, 0.3, 1.1), vs, hx, hz, sd + S.phase[slot], 3);
-            else this.splash.ring(x - hx * 0.25 * vs, sy, z - hz * 0.25 * vs, 0.1 * vs, 0.55 * vs, 1.3, 0.28);
+            S.wst[slot] = (S.wst[slot] + 1) % 4;
+            const fl = pr.length * vs, fw = 0.12 * Math.max(pr.length, 1) * vs;
+            // the foot that went in: front or back, left or right, in turn
+            const fa = (S.wst[slot] & 1) === 0 ? 0.3 : -0.3, fs = (S.wst[slot] & 2) === 0 ? 1 : -1;
+            const fxp = x + hx * fl * fa - hz * fw * fs, fzp = z + hz * fl * fa + hx * fw * fs;
+            if (mvs > 4.5) {
+              this.splash.splash(fxp - hx * 0.15 * vs, sy, fzp - hz * 0.15 * vs, clamp(mvs / 11, 0.3, 1.1), vs, hx, hz, sd + S.phase[slot], 3);
+              // the V: two ripples at the flanks, thrown out behind the shoulders
+              this.splash.ring(x - hx * 0.1 * fl - hz * fw * 1.8, sy, z - hz * 0.1 * fl + hx * fw * 1.8, 0.1 * vs, 0.55 * vs, 0.85, 0.2);
+              this.splash.ring(x - hx * 0.1 * fl + hz * fw * 1.8, sy, z - hz * 0.1 * fl - hx * fw * 1.8, 0.1 * vs, 0.55 * vs, 0.85, 0.2);
+            } else this.splash.ring(fxp, sy, fzp, 0.05 * vs, (0.22 + 0.04 * mvs) * vs, 0.9, 0.24);
           }
         }
         S.wetP[slot] = inW ? 1 : 0;
@@ -2547,14 +2707,14 @@ export class AnimalLayer {
       // wading: in a water cell the animal stands on the bed while the water is shallower than its belly; in deeper
       // water it rides with the belly at the surface (a gentle bob, level pose) instead of looking like it stands on it
       if (!swimming && (!FLIES[sp] || alt <= 0.3)) {
-        const wc = Math.min(world.n - 1, Math.max(0, Math.floor(z / cell))) * world.n + Math.min(world.n - 1, Math.max(0, Math.floor(x / cell)));
-        if (world.water[wc]) {
-          const surf = world.waterHeight[wc];
+        if (wSurf === wSurf) {
+          const surf = wSurf;
           const belly = pr.height * 0.36 * vs;
           if (surf - ground > belly) {
-            // (r-far-read: the deeper the water, the further the body sinks, to about the middle of its depth, so a crosser reads as wading chest-deep, not afloat)
+            // (r-far-read: the deeper the water, the further the body sinks, to about the middle of its depth, so a crosser reads as wading chest-deep, not afloat;
+            // r-life: past the height of its own body it swims, only the back and the head clear of the water)
             const dep = surf - ground;
-            const sink = belly + 0.3 * pr.height * vs * smoothstep(belly, belly + 0.7 * vs, dep);
+            const sink = belly + 0.3 * pr.height * vs * smoothstep(belly, belly + 0.7 * vs, dep) + 0.2 * pr.height * vs * smoothstep(0.7 * pr.height * vs, 1.3 * pr.height * vs, dep);
             y = surf - sink + 0.04 * Math.sin(this.timeSec * 1.7 + hash01(id) * 40);
             pitch *= 0.25;
             roll *= 0.25;
@@ -2599,8 +2759,7 @@ export class AnimalLayer {
       // little wider, and grows with the distance readability boost so a herd seen from afar keeps its grounding.
       if (pr.kind <= 1 && camD < 150 && fadeQ < 8 && !swimming) {
         const cw = sampleHeight(H, hn, cell, x, z);
-        const wcell = Math.min(world.n - 1, Math.max(0, Math.floor(z / cell))) * world.n + Math.min(world.n - 1, Math.max(0, Math.floor(x / cell)));
-        if (!world.water[wcell]) {
+        if (!(wSurf === wSurf && wSurf - cw > 0.02)) {
           const bl = pr.length * vs * sizeBoost;
           const bw = (0.12 * Math.max(pr.length, 1) * vs + 0.05) * sizeBoost;
           // (lying animals cast a rounder, slightly wider shadow; the blob lies at knee height: the canopy of the grass, not the soil)
@@ -2610,16 +2769,18 @@ export class AnimalLayer {
       }
       // A raptor below 40 m throws a soft wing-shaped shadow on the grass, offset away from the sun by its height (the sun's shadow map is too
       // coarse to show a bird's shadow on the ground until it is a few metres up). It grows and fades with height, and is gone at night.
-      if (raptor && !perched && alt < RAPTOR_SHADOW_ALT && camD < 170 && fadeQ < 8) {
+      if (flier && (raptor ? !perched : alt > 0.4) && alt < RAPTOR_SHADOW_ALT && camD < 170 && fadeQ < 8) {
         const L = this.tg ? this.tg.lightDir.value : null;
         const ly = L ? L.y : 0.8;
         if (ly > 0.12) {
           const ox = L ? -(L.x / ly) * alt : 0, oz = L ? -(L.z / ly) * alt : 0;
           const sx = x + ox, sz = z + oz;
           const swc = sampleHeight(H, hn, cell, sx, sz);
-          const fall = 1 - alt / RAPTOR_SHADOW_ALT;
-          const grow = 1 + alt * 0.03;
-          this.contact.add(sx, swc, sz, ch, sh, 0, 0, 1.0, 0.3 * pr.length * vs * grow, 0.5 * pr.boostLen * vs * grow * 0.85, 0.62 * fall * Math.min(1, ly * 2.5));
+          // (r-life: the penumbra opens with height, so a bird high up throws a wide, faint smudge and one a few metres over the grass a
+          // tight, dark one; ravens too, not only the raptors)
+          const fall = Math.pow(1 - alt / RAPTOR_SHADOW_ALT, 1.4);
+          const grow = 1 + alt * 0.045;
+          this.contact.add(sx, swc, sz, ch, sh, 0, 0, 1.0, 0.3 * pr.length * vs * grow, 0.5 * pr.boostLen * vs * grow * 0.85, (raptor ? 0.62 : 0.5) * fall * Math.min(1, ly * 2.5) / (1 + alt * 0.03));
         }
       }
       if (fadeQ < 8) this.markers.add(sp, x, y + (FLIES[sp] ? 0.3 : pr.height * 0.6 * vs), z, pr.boostLen, vs);
@@ -2928,16 +3089,19 @@ export class AnimalLayer {
     // follow marker: for the first 3 s of a follow the ring blooms (it contracts onto the animal from about 2.5 times its size and a soft
     // warm band lies round the feet), then the band is gone and the ring is a little fainter than a plain selection's
     const fAge = this._followedId !== null ? this.timeSec - this.followT0 : 1e9;
+    // (r-life: a small, thin, low-contrast arc that reads only when you look for it. A follow with nothing selected fades it out after
+    // about 8 s of steady follow; a clicked animal keeps a quiet arc. The bloom is a gentle 40% contraction, the warm band a faint wash.)
     const bloom = fAge < 3.6 ? (1 - smoothstep(0, 1.4, fAge)) : 0;
     const haloK = fAge < 3.6 ? smoothstep(0, 0.35, fAge) * (1 - smoothstep(2.4, 3.6, fAge)) : 0;
-    const quiet = this._followedId !== null && fAge >= 3.6 ? 0.62 : 1;
-    const R = Math.max(si.r, cd * 0.0085) * (1 + 0.03 * Math.sin(this.timeSec * 3)) * (1 + 1.5 * bloom * bloom);
+    const steady = this._followedId !== null && this.selectedId === null;
+    const quiet = this._followedId !== null && fAge >= 3.6 ? (steady ? 0.42 * (1 - smoothstep(4.5, 9, fAge)) : 0.4) : 0.8;
+    const R = Math.max(si.r * 0.82, cd * 0.006) * (1 + 0.03 * Math.sin(this.timeSec * 3)) * (1 + 0.4 * bloom * bloom);
     const pos = this.ringGeo.getAttribute('position') as THREE.BufferAttribute;
     const arr = pos.array as Float32Array;
     for (let i = 0; i < arr.length; i += 3) {
       const wx = si.x + this.ringBase[i] * R, wz = si.z + this.ringBase[i + 2] * R;
       arr[i] = wx;
-      arr[i + 1] = sampleHeight(w.height, w.hn, w.cell, wx, wz) + 0.26;
+      arr[i + 1] = sampleHeight(this.gh, w.hn, w.cell, wx, wz) + 0.26;
       arr[i + 2] = wz;
     }
     pos.needsUpdate = true;
@@ -2950,8 +3114,9 @@ export class AnimalLayer {
     this.ringMat.uniforms.uT.value = this.ringSolidMat.uniforms.uT.value = this.timeSec;
     this.ringMat.uniforms.uLow.value = this.ringSolidMat.uniforms.uLow.value = this.shared.uLow.value;
     this.ringSolidMat.uniforms.uOpacity.value = op;
-    this.ring.visible = true;
-    this.ringSolid.visible = true;
+    const shown = op > 0.01;
+    this.ring.visible = shown;
+    this.ringSolid.visible = shown;
     this.haloMat.uniforms.uHalo.value = haloK;
     this.halo.visible = haloK > 0.004;
   }
@@ -3021,7 +3186,7 @@ export class AnimalLayer {
     // the drawn position (smoothed), so a camera following the animal does not fight its own smoothing
     const slot = this.slots.map.get(id);
     if (slot !== undefined && !this.slots.fresh[slot]) { x = this.slots.px[slot]; z = this.slots.pz[slot]; }
-    out.set(x, sampleHeight(w.height, w.hn, w.cell, x, z) + alt, z);
+    out.set(x, sampleHeight(this.gh, w.hn, w.cell, x, z) + alt, z);
     return true;
   }
 

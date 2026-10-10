@@ -756,6 +756,7 @@ uniform float uDebug;
 uniform float uSat;
 uniform float uBounce;
 uniform float uSnow;
+uniform float uWetNow;
 uniform float uSpecK;
 uniform float uMoon;
 uniform vec3 uGreenB;
@@ -1069,6 +1070,12 @@ void main() {
   vec3 col = ambient + (diffuse + trans) * mix(1.0, ao, 0.75) + spec * canopy * (1.0 - 0.9 * headGlow);
   col *= 1.0 + uGustLight * (gust - 0.4) * (0.35 + 0.65 * uWindStr);
 
+  // r-life: rain on the field. Wet blades go darker and pick up a sheen (more of it where the ground is moist, the blades there stay wet longest);
+  // the amount is the terrain's own wet weight, which rises with the rain and drains away over minutes after it
+  float wetG = uWetNow * (1.0 - smoothstep(0.1, 0.6, uSnow)) * (0.65 + 0.55 * (1.0 - dry));
+  col *= 1.0 - 0.2 * wetG;
+  col += spec * canopy * wetG * 1.1;
+
   col = mix(vec3(dot(col, vec3(0.2126, 0.7152, 0.0722))), col, uSat);
   if (uDebug > 0.5) {
     if (uDebug < 1.5) col = albedo;
@@ -1133,6 +1140,7 @@ export class GrassField {
   private blackTex: THREE.DataTexture;
   private frameNo = 0;
   private snowU: { value: number } | null = null;
+  private wetU: { value: number } | null = null;
   /** The shared seasonKeep uniform (1 normally, lower in a time-lapse: the share of the seasonal swing kept). */
   private keepU: { value: number } | null = null;
   private snowDepthU: { tex: { value: THREE.Texture | null }; on: { value: number }; fall: { value: number } } | null = null;
@@ -1197,6 +1205,7 @@ export class GrassField {
       uWinterK: { value: 0 },
       uDrought: { value: 0 },
       uWetYr: { value: 0 },
+      uWetNow: { value: 0 },
       uSeedFrac: { value: 0.1 },
       uStubFloor: { value: 1 },
       uMoistK: { value: 1.1 },
@@ -1507,8 +1516,9 @@ export class GrassField {
     if (!this.snowU && (this.snowTry++ & 15) === 0) {
       let root: THREE.Object3D = this.object3D;
       while (root.parent) root = root.parent;
-      const tu = root.userData?.tgUniforms as { snow?: { value: number }; snowDepthTex?: { value: THREE.Texture | null }; snowDepthOn?: { value: number }; snowDepthFall?: { value: number }; drought?: { value: number }; frost?: { value: number }; trailTex?: { value: THREE.Texture | null }; seasonKeep?: { value: number } } | undefined;
+      const tu = root.userData?.tgUniforms as { wet?: { value: number }; snow?: { value: number }; snowDepthTex?: { value: THREE.Texture | null }; snowDepthOn?: { value: number }; snowDepthFall?: { value: number }; drought?: { value: number }; frost?: { value: number }; trailTex?: { value: THREE.Texture | null }; seasonKeep?: { value: number } } | undefined;
       if (tu?.snow) this.snowU = tu.snow;
+      if (tu?.wet) this.wetU = tu.wet;
       if (tu?.seasonKeep) this.keepU = tu.seasonKeep;
       if (tu?.snowDepthTex && tu.snowDepthOn && tu.snowDepthFall) this.snowDepthU = { tex: tu.snowDepthTex, on: tu.snowDepthOn, fall: tu.snowDepthFall };
       if (tu?.frost) this.frostU = tu.frost;
@@ -1525,6 +1535,7 @@ export class GrassField {
     u.uFrostG.value = (this.frostU?.value ?? 0) * (1 - smooth01((env.dayFrac - 0.26) / 0.06));
     u.uDrought.value = this.droughtU?.value ?? 0;
     u.uWetYr.value = CLIMATE_GRADE.wet;
+    u.uWetNow.value = this.wetU?.value ?? 0;
     // grass blades under moonlight (blue key light) must not sparkle like static: damp the specular sheen there
     const moon = Math.max(0, Math.min(1, (sun.color.b / Math.max(sun.color.r, 1e-3) - 0.95) * 3));
     u.uSpecK.value = 1 - 0.93 * moon;
