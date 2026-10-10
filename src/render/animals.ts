@@ -318,6 +318,27 @@ const SUB_CAP = 6.5;
 /** A feeding predator pulls, shakes and swallows once per cycle, every 2.5 to 4 s (its own period). */
 const FEED_MIN = 2.5;
 const FEED_VAR = 1.5;
+/**
+ * r-ravens: from the overview a raven that is not at a carcass recedes. Inside RAVEN_FADE_D0 m of the camera every raven is drawn as it always was; out to
+ * RAVEN_FADE_D1 m the share of them drawn thins to RAVEN_KEEP_FAR (a stable subset by id: the same birds stay, so nothing pops or reshuffles as the camera
+ * moves, and each one fades through the stipple of the border fade over RAVEN_FADE_BAND of the share); the ones that are left glide with their wings out
+ * (RAVEN_SOAR_D0 to RAVEN_SOAR_D1) instead of beating in a blur. A raven within RAVEN_GATHER_R0 to RAVEN_GATHER_R1 m of a kill site (see buildRavenSites) stays fully drawn: a
+ * gathering of birds feeding is how the overview shows where a kill is.
+ */
+const RAVEN_FADE_D0 = 60;
+const RAVEN_FADE_D1 = 130;
+const RAVEN_KEEP_FAR = 0.12;
+const RAVEN_FADE_BAND = 0.2;
+const RAVEN_GATHER_R0 = 12;
+const RAVEN_GATHER_R1 = 28;
+const RAVEN_SITE_REM = 0.08;
+const RAVEN_SITE_R = 7;
+const RAVEN_SITE_MIN = 2;
+const RAVEN_SITES_MAX = 96;
+const RAVEN_SOAR_D0 = 70;
+const RAVEN_SOAR_D1 = 140;
+/** r-ravens: a raven at a carcass keeps at least this far (m) outside the footprint ellipse of the body. */
+const RAVEN_STAND_OFF = 0.8;
 /** A raven on the ground flutters back from a wolf that lunges or feeds within this many metres. */
 const RAVEN_WOLF_R = 2;
 /**
@@ -331,6 +352,9 @@ const CREEP_SPEED = 0.55;
 const FREEZE_D = 38;
 /** A grounded raven takes off with a deep downstroke flare lasting this many seconds. */
 const TAKEOFF_TIME = 1.1;
+/** r-ravens: and springs up by this much (model units, so times its drawn scale) over the first TAKEOFF_LEAP_T seconds of it (the vertex shader has the same two numbers: RV_LEAP, RV_LEAP_T). */
+const TAKEOFF_LEAP = 0.3;
+const TAKEOFF_LEAP_T = 0.7;
 /** A raptor calls (or screams at the start of a stoop) only within this many metres of the camera (R5). */
 const RAPTOR_EAR = 200;
 /** A flying raptor lower than this (m) casts a ground shadow (R5). */
@@ -1659,6 +1683,68 @@ export class AnimalLayer {
   }
 
   /** Index of the carcass nearest (x, z) within r metres in the current snapshot, or -1. */
+  /**
+   * r-ravens: the kill sites of this snapshot, rebuilt once per snapshot: a carcass with meat on it (RAVEN_SITE_REM) that ravens are feeding on right now
+   * (RAVEN_SITE_MIN or more of them in the eating state within RAVEN_SITE_R m: a bird passing over, or circling high above old kills, is not one: the valley
+   * has hundreds of carcasses, so "a carcass is near" would exempt every raven there is).
+   */
+  private buildRavenSites(): void {
+    const snap = this.curr;
+    this.rvSnap = snap;
+    this.rvN = 0;
+    if (!snap) return;
+    const A = snap.agents, C = snap.carcasses;
+    let m = 0;
+    for (let i = 0; i < snap.count; i++) {
+      const o = i * AGENT_STRIDE;
+      if (!RAVEN[A[o] | 0] || (A[o + 7] | 0) !== St.Eat) continue;
+      if (m * 2 + 2 > this.rvPos.length) { const g = new Float32Array(this.rvPos.length * 2); g.set(this.rvPos); this.rvPos = g; }
+      this.rvPos[m * 2] = A[o + 1];
+      this.rvPos[m * 2 + 1] = A[o + 2];
+      m++;
+    }
+    if (m < RAVEN_SITE_MIN) return;
+    const r2 = RAVEN_SITE_R * RAVEN_SITE_R;
+    for (let k = 0; k < snap.carcassCount && this.rvN < RAVEN_SITES_MAX; k++) {
+      const o = k * CARCASS_STRIDE;
+      if (C[o + 2] < RAVEN_SITE_REM) continue;
+      const cx = C[o], cz = C[o + 1];
+      let n = 0;
+      for (let q = 0; q < m; q++) {
+        const dx = this.rvPos[q * 2] - cx, dz = this.rvPos[q * 2 + 1] - cz;
+        if (dx * dx + dz * dz < r2) n++;
+      }
+      if (n < RAVEN_SITE_MIN) continue;
+      this.rvSite[this.rvN * 2] = cx;
+      this.rvSite[this.rvN * 2 + 1] = cz;
+      this.rvN++;
+    }
+  }
+  private rvSnap: Snapshot | null = null;
+  private rvN = 0;
+  private rvPos = new Float32Array(1024);
+  private rvSite = new Float32Array(RAVEN_SITES_MAX * 2);
+
+  /** r-ravens: how far a raven at (x, z) is in a gathering at a kill: 1 within RAVEN_GATHER_R0 m of a kill site to 0 beyond RAVEN_GATHER_R1 m. */
+  private ravenGather(x: number, z: number): number {
+    if (this.rvSnap !== this.curr) this.buildRavenSites();
+    let best = RAVEN_GATHER_R1 * RAVEN_GATHER_R1;
+    for (let k = 0; k < this.rvN; k++) {
+      const dx = this.rvSite[k * 2] - x, dz = this.rvSite[k * 2 + 1] - z, d2 = dx * dx + dz * dz;
+      if (d2 < best) best = d2;
+    }
+    return 1 - smoothstep(RAVEN_GATHER_R0, RAVEN_GATHER_R1, Math.sqrt(best));
+  }
+
+  /** r-ravens: the border-fade level (0 fully drawn .. 15 gone) a raven at camera distance camD is drawn at: see RAVEN_FADE_D0. */
+  private ravenRecede(id: number, x: number, z: number, camD: number): number {
+    if (camD <= RAVEN_FADE_D0) return 0;
+    const keep = 1 - (1 - RAVEN_KEEP_FAR) * smoothstep(RAVEN_FADE_D0, RAVEN_FADE_D1, camD);
+    const u = hash01(id * 7 + 13);
+    const v = Math.max(clamp((keep * (1 + RAVEN_FADE_BAND) - u) / RAVEN_FADE_BAND, 0, 1), this.ravenGather(x, z));
+    return Math.round((1 - v) * 15);
+  }
+
   private carcassNear(x: number, z: number, r: number): number {
     const snap = this.curr;
     if (!snap) return -1;
@@ -1819,7 +1905,8 @@ export class AnimalLayer {
       const a = 6.2832 * hash01(id * 17 + 5) + 1.1 * Math.sin(0.7 * n + 6 * hash01(id * 29 + 3));
       const ca = Math.cos(a), sa = Math.sin(a);
       const rs = 1 / Math.sqrt((ca / (R.a + 0.3)) ** 2 + (sa / (R.b + 0.3)) ** 2);
-      const r = rs + 0.5 + hash01(Math.imul(n, 7919) + id * 131 + 11);
+      // (r-ravens: a raven is a metre long once drawn, and a half-open wing reaches further, so it stands clear of the body: 0.8 m past the footprint at least)
+      const r = rs + RAVEN_STAND_OFF + hash01(Math.imul(n, 7919) + id * 131 + 11);
       o[0] = ca * r; o[1] = sa * r;
     };
     const w0 = this.rvA, w1 = this.rvB;
@@ -1831,7 +1918,14 @@ export class AnimalLayer {
     const dur = hop ? 0.28 + 0.12 * dist : Math.min(segLen * 0.72, dist / 0.6);
     const u = clamp(tau / dur, 0, 1);
     const e = hop ? u * u * (3 - 2 * u) : u;
-    const lx = w0[0] + dx * e, lz = w0[1] + dz * e;
+    let lx = w0[0] + dx * e, lz = w0[1] + dz * e;
+    // (r-ravens: the straight line between two places can cut across the body when they are on opposite sides of it: it goes round, kept the same clear distance out)
+    const lr = Math.hypot(lx, lz);
+    if (lr > 1e-4) {
+      const ux = lx / lr, uz = lz / lr;
+      const rmin = 1 / Math.sqrt((ux / (R.a + 0.3)) ** 2 + (uz / (R.b + 0.3)) ** 2) + RAVEN_STAND_OFF;
+      if (lr < rmin) { lx = ux * rmin; lz = uz * rmin; }
+    }
     const ch = Math.cos(fi.h), sh = Math.sin(fi.h);
     out.cx = fi.cx; out.cz = fi.cz;
     out.px = fi.cx + ch * lx - sh * lz;
@@ -2337,7 +2431,7 @@ export class AnimalLayer {
       // (a predator walking to its slot round a carcass moves at the pace of that walk)
       const spdT = this.timeScale > 0 ? Math.max(spd1 * VIS_PER_SIM, hunter ? offSpd : 0, cnO.spd, boOn ? bo.spd : 0) : 0;
       let hdT = 0, lieT = 0, crT = 0;
-      let flapT = 0, perchT = 0;
+      let flapT = 0, perchT = 0, soarK = 0;
       if (state === St.Graze || state === St.Eat || state === St.Drink) hdT = 1;
       if (state === St.Rest) lieT = 1;
       if (state === St.Stalk) crT = 1;
@@ -2367,6 +2461,12 @@ export class AnimalLayer {
         hdT = grounded && state === St.Eat ? 1 : 0;
         // (a raptor held at 6 m or more beats only in its own bursts and when climbing hard: a soaring eagle's wings are still)
         flapT = grounded || (raptor && state === St.Chase) ? 0 : alt < 6 ? 1 : raptor ? 0 : 0.1;
+        // r-ravens: from the overview a raven glides on spread wings (the beat is a blur of specks from there); near it is as it was
+        if (RAVEN[sp]) {
+          const cpS = this.shared.uCamPos.value;
+          soarK = smoothstep(RAVEN_SOAR_D0, RAVEN_SOAR_D1, Math.hypot(x - cpS.x, g0 + alt - cpS.y, z - cpS.z));
+          flapT *= 1 - 0.85 * soarK;
+        }
         lieT = 0;
         // how upright a raptor sits: bolt upright on a tree top, leaning over the carcass or catch it stands on
         if (raptor && perched) perchT = alt > 1.2 ? 1 : state === St.Eat ? 0.4 : 0.6;
@@ -2423,7 +2523,7 @@ export class AnimalLayer {
       // (a raptor flaps steadily only when it is climbing hard, or cruising on a migration: its soaring climbs are wings-still)
       const huntT = raptor
         ? perched || state === St.Chase ? 0 : state === St.Migrate ? 0.5 : clamp((climb / Math.max(1, this.timeScale) - 1.6) / 2.4, 0, 1)
-        : FLIES[sp] ? (alt > 0.3 ? clamp(climb / 1.2, 0, 1) : 0) : hunting;
+        : FLIES[sp] ? (alt > 0.3 ? clamp(climb / 1.2, 0, 1) * (1 - 0.85 * soarK) : 0) : hunting;
       S.hunt[slot] += (huntT - S.hunt[slot]) * kHead;
       if (raptor) {
         // the stoop pose comes on fast (it is a dive), the upright perch over half a second
@@ -2566,6 +2666,8 @@ export class AnimalLayer {
           rvWalk = S.rph[slot];
         }
         if (rvFlut > 0) rvLift += 0.3 * 4 * rvFlut * (1 - rvFlut);
+        // r-ravens: the bird springs off the ground as the first beat comes down (the shader holds the wing tips above the ground by the same lift)
+        if (!raptor && S.rtk[slot] >= 0 && S.rtk[slot] < TAKEOFF_LEAP_T) rvLift += TAKEOFF_LEAP * Math.sin(Math.PI * S.rtk[slot] / TAKEOFF_LEAP_T);
       }
       // a creature that is not actually going anywhere (blocked, turning on the spot) stands rather than marching in place
       const gaitSpd1 = Math.min(spdS, S.vis[slot] * 1.6 + 0.15);
@@ -2715,6 +2817,13 @@ export class AnimalLayer {
         if (sitting) {
           pitch = 0;
           roll = 0;
+          if (!raptor) {
+            // r-ravens: a raven on the ground stands on the slope (a share of its tilt: it stays near upright, the wings and the head still read as a bird's),
+            // so a wing or the feet are not driven into the hill on one side and held off it on the other (the shader's ground clamp is flat in the body frame)
+            const sl = 1 - alt / 0.3, hl = 0.4 * vs, hw = 0.55 * vs;
+            pitch = clamp(Math.atan2(sampleHeight(H, hn, cell, x + ch * hl, z + sh * hl) - sampleHeight(H, hn, cell, x - ch * hl, z - sh * hl), 2 * hl), -0.35, 0.35) * sl;
+            roll = clamp(-Math.atan2(sampleHeight(H, hn, cell, x - sh * hw, z + ch * hw) - sampleHeight(H, hn, cell, x + sh * hw, z - ch * hw), 2 * hw), -0.35, 0.35) * sl;
+          }
         } else if (alt > 2) {
           // a bird aloft never holds a line: it rides thermals, rocks and trims, each at its own slow rhythm
           const wv = hash01(id) * 40, aloft = Math.min(1, alt / 6);
@@ -2850,6 +2959,8 @@ export class AnimalLayer {
         const edge = Math.min(x, z, world.size - x, world.size - z);
         fadeQ = Math.round((1 - smoothstep(FADE_GONE, FADE_FULL, edge)) * 15);
       }
+      // r-ravens: the ones not at a carcass thin out with distance (a selected or followed bird never does)
+      if (RAVEN[sp] && id !== sel && id !== fol) fadeQ = Math.max(fadeQ, this.ravenRecede(id, x, z, Math.hypot(x - camP.x, g0 + alt - camP.y, z - camP.z)));
       // Contact shadow: a soft blob at knee height under every ground animal (models/contact.ts). It is as long as the body, a
       // little wider, and grows with the distance readability boost so a herd seen from afar keeps its grounding.
       if (pr.kind <= 1 && camD < 150 && fadeQ < 8 && !swimming) {
