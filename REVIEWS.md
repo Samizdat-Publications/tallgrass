@@ -336,3 +336,17 @@ Scores: visual 6, readability 8 (round 23: 4), life and motion 3 (4), ecosystem 
 | 5 | Wolves run on the river surface | defer | Wading and swimming states (render) next cycle. |
 | 6 | Rain as white dashes; no wet ground | defer | Same as round 23 item 7. |
 | 7 | Bird shadows disconnected from altitude | defer | Flier shadow height next cycle. |
+
+## Round 25 (blind critic, look set of main after r-look, r-life, r-perf, r-ground, plus the v10b overview chart, 2026-10-09 21:30) -> `review/round-25/critique.md`
+Scores: visual 6, readability 4, life 4, ecosystem 5, UI 2 (UI hidden in these captures), keep watching 5.
+| # | Issue | Triage | Reason / outcome |
+|---|---|---|---|
+| 1 | Waterhole mob (100+ bison at one pond, same pose, overlapping) | fix | Sim: a shore capacity param (bison wait back from a crowded shore, then drink in waves), off by default, screened tonight; render pose variety comes with the a3 rollout. |
+| 2 | Chart is noise, mule deer and prairie dogs drift down, few cougars | defer | The breath (45-year swing) shows on the climate graph in game; mule deer mean 70 in v10b; a stronger climate screen (climate2 0.4) is running now. |
+| 3 | No UI | reject | Capture artifact: the look set hides the UI on purpose. |
+| 4, 10 | Wide shots unreadable, sun haze and blowout | fix | Builder r-land: trim bloom and sun-side haze at golden hour, check far-read values under the new grade. |
+| 5 | Trees | in progress | Builder r-trees3 (ez-tree spike). |
+| 6 | Mid-distance terrain reads as dunes | fix | Builder r-land: soften the mid-range ripple, add moisture, slope and grazing colour variation. |
+| 7 | Winter decal | mostly artifact | lk_10 holds the season at winter while the sim is in summer (no snow field yet); bare trees come with r-trees3. |
+| 8 | Water | defer | Next cycle. |
+| 9 | Close-up bison flat, same pose | in progress | a3 rollout (authored meshes). |

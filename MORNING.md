@@ -8,6 +8,7 @@
 - **Measuring fixed:** the video critic now sees 8 frames a second (it saw 1, which hides every stride). Its first 8 fps read of today's build: motion 3, ecosystem 2; top complaint, animals walking on top of the river (builder on it now).
 - **Found on the idle machine:** the low golden view costs 18.8 ms at 1440p (the gate is 16.7), so a performance pass runs before the new visuals merge.
 - **Deployed 19:45 (D1), live check clean:** the warm golden-hour look (low sun now golden and readable instead of purple and muddy; shadows warm olive), the new snow, the field-note wording. Try it at dusk or dawn, or press the concept bookmark view.
+- **Deployed 21:35 (D2), live check clean:** animals wade in the creek instead of walking on it (the cause: they stood on the sim terrain while the renderer lowers the creek bed), soft ripples instead of white rings, a quiet follow arc, grazers lift their heads when a wolf passes, ravens cast shadows, wet grass in rain; photo-scanned ground detail up close; and a performance pass that took the heaviest view from 17.5 to 13.7 ms (every view now under the 16.7 ms budget).
 - **Coming next:** real animal models (bison and wolf done and merged behind ?a3=1; you can try them now with https://tallgrass.stewartgregerson.workers.dev/?a3=1 ; the rollout makes them the default and adds pronghorn, mule deer, coyote, cougar), photo ground up close, animals that wade and notice predators, the performance pass, a trees trial.
 
 ## 2026-10-09 night: "The long breath" (v10)

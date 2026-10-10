@@ -144,3 +144,6 @@ Also downloaded for comparison and not used: European Bison NHMW (e8166095..., C
 | coyote (e350e508...) | Raven-Woods | CC BY 4.0 | a3 coyote |
 | Puma Gray (90f0fd2c...) | 1225659838@qq.com | CC BY 4.0 | a3 cougar |
 Rollout: Sketchfab free downloads only, no Meshy credits spent.
+
+### r-ground (2026-10-09): scanned ground detail
+Six Poly Haven 1K scans (CC0) downloaded through the public API (`api.polyhaven.com/files/<id>`, Diffuse and nor_gl, jpg), no paid calls: `withered_grass`, `brown_mud_dry`, `grass_path_2`, `brown_mud_03`, `burned_ground_01`, `snow_02`. Reduced by `tools/build_ground_textures.py` (source scans kept out of the repo) to 12 small jpgs, about 2.5 MB, in `public/textures/ground/`. Sources and licenses are in `CREDITS.md`.

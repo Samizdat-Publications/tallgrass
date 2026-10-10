@@ -1659,7 +1659,7 @@ export class Sim implements SimLike {
       dvx = a.fleeX[i] * run + sepx * 2;
       dvy = a.fleeY[i] * run + sepy * 2;
       state = St.Flee;
-    } else if (a.hydration[i] < 0.3 || (a.state[i] === St.Drink && a.hydration[i] < 0.97)) {
+    } else if (a.hydration[i] < (p.shoreSpread > 0 ? 0.3 - 0.18 * p.shoreSpread * ((Math.imul(a.id[i] | 0, 0x9e3779b1) >>> 8) / 16777216) : 0.3) || (a.state[i] === St.Drink && a.hydration[i] < 0.97)) {
       if (this.drinkD[c] < 3) {
         state = St.Drink;
         a.hydration[i] = Math.min(1, a.hydration[i] + 0.09);
@@ -1796,6 +1796,12 @@ export class Sim implements SimLike {
     if (p.drinkSpots > 0 && state !== St.Drink && state !== St.Flee && a.hydration[i] > 0.85 && this.drinkD[c] < 12) {
       dvx -= this.waterGX[c] * 0.5;
       dvy -= this.waterGY[c] * 0.5;
+    }
+    // shoreSpread (round 25): a grazer that has drunk its fill walks back off the bank, further than the drink-spot drift
+    if (p.shoreSpread > 0 && state !== St.Drink && state !== St.Flee && a.hydration[i] > 0.7 && this.drinkD[c] < 12 + 18 * p.shoreSpread) {
+      const k = 0.5 + 0.4 * p.shoreSpread;
+      dvx -= this.waterGX[c] * k;
+      dvy -= this.waterGY[c] * k;
     }
     // herdBands (guarded): drift away from other bands, and head back to the band when none of it is in reach; flight and drinking ignore bands
     if (bandsOn && state !== St.Flee && state !== St.Drink) {
