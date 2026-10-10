@@ -40,16 +40,20 @@ function make(near: boolean): MeshBuilder {
     const high = smooth(0.85, 1.75, p[1]);
     const belly = mix(1, 0.6, smooth(-0.1, -0.8, n[1]));
     const w = Math.min(1, front * (0.45 + 0.55 * high));
-    const top = smooth(0.2, 0.9, n[1]) * smooth(0.0, 0.5, p[0]) * 0.2;
-    return [(1 + (1.0 + top) * w) * belly, (1 + (0.8 + top) * w) * belly, (1 + 0.4 * w) * belly, 1];
+    // (round 32: the cape is a paler, greyer tan wool, not an orange one. Equal-ish gains on all three channels shift the dark chocolate
+    // body toward a pale brown without pushing it toward saturated orange; the top term lightens the hump evenly)
+    const top = smooth(0.2, 0.9, n[1]) * smooth(0.0, 0.5, p[0]) * 0.1;
+    return [(1 + (0.7 + top) * w) * belly, (1 + (0.68 + top) * w) * belly, (1 + (0.58 + top) * w) * belly, 1];
   };
   const headPaint: PaintFn = (p) => {
-    // paler brown forehead cap and mane, dark muzzle
-    const cap = smooth(1.3, 1.75, p[0]) * (1 - smooth(1.95, 2.15, p[0]));
-    const mane = 1 - smooth(1.2, 1.5, p[0]);
-    const k = Math.max(cap * 0.8, mane);
+    // round 32: near black head (a real bison's head and beard are the darkest part), the pale wool stops at the neck so the head
+    // reads against the cape. A touch of brown stays in the forehead tuft.
+    const mane = 1 - smooth(1.2, 1.55, p[0]);
+    const tuft = smooth(1.45, 1.75, p[0]) * (1 - smooth(1.9, 2.1, p[0])) * 0.25;
+    const k = Math.max(mane, tuft);
     const lowSnout = smooth(1.95, 2.15, p[0]);
-    return [mix(1.5, 1.1, lowSnout) * (0.6 + 0.4 * k), mix(1.3, 1.0, lowSnout) * (0.6 + 0.4 * k), mix(1.1, 0.95, lowSnout) * (0.6 + 0.4 * k), 1];
+    const d = mix(0.5, 0.42, lowSnout); // dark head multiplier
+    return [mix(d, 1.45, k), mix(d * 0.95, 1.25, k), mix(d * 0.9, 1.0, k), 1];
   };
   const neckPiv: V3 = [0.95, 1.32, 0];
 
@@ -232,24 +236,24 @@ export function buildBison(): ModelDef {
     geometry,
     nearGeometry,
     lod: { d0: 38, d1: 54 },
-    fur: { sheen: 0.4, sheenPow: 40, sheenTint: [1.15, 0.9, 0.7], rim: 2.6, dorsal: 0.34, belly: 0.22, mottle: 0.22, mottleScale: 5, streak: 0.32, indiv: 0.1,
+    fur: { sheen: 0.1, sheenPow: 28, sheenTint: [1.0, 0.95, 0.88], rim: 2.0, dorsal: 0.34, belly: 0.22, mottle: 0.22, mottleScale: 5, streak: 0.32, indiv: 0.1,
       shell: { scale: 34, along: 0.42, sparse: 0.2, d0: 20, d1: 38, tone: [0.6, 1.12] } },
     triangles: far.triangleCount,
-    coatPale: lin(0x5e3a24),
-    coatDark: lin(0x2b1a10),
+    coatPale: lin(0x4a403a),
+    coatDark: lin(0x211b18),
     bone: lin(0xd4cbb0),
     roughness: 0.95,
     fill: 1.6,
-    warm: [1.24, 0.98, 0.7],
+    warm: [1.2, 0.98, 0.76],
     neutral: 0.85,
     // at range the near-black chocolate coat is lifted to a readable warm brown (never a stain), with an ambient floor so a
     // herd in shade or at dusk stays a value above the shadows
     // R-readable: guild value separation and edge lift at the default distances (see ModelDef.read)
-    read: { rim: [1.0, 0.86, 0.62, 0.4] },
+    read: { rim: [0.92, 0.86, 0.74, 0.4] },
     far: { gain: 1, rim: 0, hunt: 0, rimCol: [1, 0.8, 0.5], d0: 40, d1: 220, tint: [0.14, 0.095, 0.068], mix: 0.42, floor: 0.2,
     // r-far-read: a dark oval with a lighter tawny back and shoulder hump (the coat's own paler forequarters show through, less of the
     // flat tint), darker flanks, so each animal in a herd is its own shape (a dark carpet otherwise)
-    top: [0.42, 0.31, 0.2], topMix: 0.75, side: 0.7, calm: 0.3, widen: 0.3 },
+    top: [0.44, 0.33, 0.22], topMix: 0.78, side: 0.7, calm: 0.3, widen: 0.3 },
     params: {
       ...DEFAULT_PARAMS,
       kind: 0,

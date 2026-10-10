@@ -1891,7 +1891,9 @@ const FUR_LIGHT = /* glsl */ `
 #if SHELL
             // hair of the shells, lit from behind, glows through (translucent): the sun shows through a fringe of tufts
             float fwrapS = clamp(dot(normal, fLd) * 0.5 + 0.5, 0.0, 1.0);
-            reflectedLight.directSpecular += directLight.color * diffuseColor.rgb * (vTgShell.x * fback * fwrapS * 0.6 * fnear * (1.0 - uLow));
+            // (round 32: the glow takes a share of grey, so a backlit cape is a warm tan highlight and not saturated orange)
+            vec3 fshC = mix(vec3(dot(diffuseColor.rgb, vec3(0.2126, 0.7152, 0.0722))), diffuseColor.rgb, 0.55);
+            reflectedLight.directSpecular += directLight.color * fshC * (vTgShell.x * fback * fwrapS * 0.6 * fnear * (1.0 - uLow));
 #endif
           }
         }
@@ -2047,11 +2049,11 @@ export function makeAnimalMaterials(sp: number, def: ModelDef, shared: AnimalSha
         float tgMidK = vTgMid * (1.0 - 0.5 * vTgFar);
         diffuseColor.rgb *= mix(vec3(1.0), uReadDark, uGrassB * tgMidK);
         diffuseColor.rgb *= 1.0 + uReadPale * smoothstep(0.16, 0.42, dot(diffuseColor.rgb, vec3(0.2126, 0.7152, 0.0722))) * tgMidK * (1.0 - uLow);
-        // night lift: the coat reflects more of the little light there is, so the animals do not sink into the blue ground (the
-        // far-view dimming above takes the coat down at night, this gives part of it back)
+        // night: the coat is a little darker, not lifted. (Round 32: this used to be a lift of 0.55 and, with the cool fill below, it lit the herds
+        // pale blue-white against dark trees and ground. Animals now stay darker than the moonlit grass; the thin rim below separates them.)
         // (pale coats, a pronghorn's white, get little of it: they already stand out against the dark ground)
         float tgNL = 1.0 - 0.7 * smoothstep(0.18, 0.5, dot(diffuseColor.rgb, vec3(0.2126, 0.7152, 0.0722)));
-        diffuseColor.rgb *= 1.0 + 0.55 * uLow * uNightK * tgNL;${mangeFrag}`)
+        diffuseColor.rgb *= 1.0 - 0.22 * uLow * uNightK * tgNL;${mangeFrag}`)
       // sky fill: pull toward a warm neutral (so brown coats stay brown in blue shade), then boost it so the shaded side keeps form
       .replace(
         '#include <lights_fragment_end>',
@@ -2075,10 +2077,10 @@ export function makeAnimalMaterials(sp: number, def: ModelDef, shared: AnimalSha
         // Moonlight (night only, uLow near 1): a cool rim along every silhouette edge, strongest on the surfaces that face the sky,
         // plus a cool fill on the coat itself. Starker than the day lighting on purpose, so an animal reads against the dark ground
         // by its outline and by value, without the night looking like day.
-        float tgNR = pow(1.0 - clamp(dot(normalize(vViewPosition), normal), 0.0, 1.0), 3.2);
+        float tgNR = pow(1.0 - clamp(dot(normalize(vViewPosition), normal), 0.0, 1.0), 5.0);
         float tgNK = smoothstep(0.35, 0.88, uLow) * uNightK;
-        totalEmissiveRadiance += vec3(0.52, 0.64, 0.9) * 0.46 * tgNR * (0.3 + 0.7 * vTgUp) * tgNK * (0.65 + 0.75 * vTgMid) * (1.0 - 0.8 * vTgFar) * tgNL;
-        totalEmissiveRadiance += diffuseColor.rgb * vec3(0.085, 0.105, 0.17) * tgNK * (0.5 + 0.5 * vTgUp) * tgNL;`,
+        totalEmissiveRadiance += vec3(0.5, 0.62, 0.9) * 0.4 * tgNR * (0.3 + 0.7 * vTgUp) * tgNK * (0.65 + 0.75 * vTgMid) * (1.0 - 0.8 * vTgFar) * tgNL;
+        totalEmissiveRadiance += diffuseColor.rgb * vec3(0.085, 0.105, 0.17) * 0.25 * tgNK * (0.5 + 0.5 * vTgUp) * tgNL;`,
       );
   };
   material.customProgramCacheKey = () => `tg-animal-${sp}-${variant}-${R8_SHADER.on ? 1 : 0}${R8_SHADER.bison ? 1 : 0}${R8_SHADER.flare ? 1 : 0}`;
