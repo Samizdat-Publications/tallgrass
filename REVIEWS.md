@@ -393,3 +393,13 @@ Scores: visual 4, readability 7, life and motion 2, ecosystem 2, UI 8, keep watc
 5. Predators zig-zag in tight circles: DEFER (sim steering; needs a sim-side param, off by default).
 6. Hard cuts between seasons: REJECT (the reel's own edit points, not the game).
 
+## Round 31 (Gemini video at 8 fps, motion reel of D9; 2026-10-10 15:20) -> `review/round-31-video/motion.gemini.md`
+Scores: visual 5, readability 7, life and motion 3, ecosystem 6, UI 8, keep watching 4 (round 30: 4, 7, 2, 2, 8, 2).
+1. Wolves slide across the grass at 00:25 to 00:30: FIX (the camera part). Frames show the follow camera losing the running wolf (empty grass, the pack at the top edge): the chase framing aimed between the wolf and a far hare, and a low shot puts a far hunter at the top edge. D11: the aim eases back onto the hunter near the frame edge. Paw slip itself is measured under 1.4%.
+2. Blocky checkerboard tree trunk at 00:19 to 00:23: FIX, D10. The see-through hole toward the focus used fixed 0.2 m rag cells, big squares on a trunk 2 to 5 m from the lens; bark now gets a clean soft edge, foliage cells shrink near the lens. Before/after in review/round-31-video/fix/.
+3. Weightless mousing leap: DEFER (it has a crouch and arc since r-feet; judge on a daylight close-up).
+4. Ravens clip into the ground and carcass: DEFER (next candidate).
+5. Wolves move in lockstep: DEFER (sim pack steering; needs an off-by-default param).
+6. Camera drags through bushes into the carcass shot: DEFER (the reel's own cut).
+7. Static sick bison during the time-lapse: REJECT for now (bedded animals at 10x; the sickness reads in the panel).
+
