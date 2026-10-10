@@ -53,6 +53,174 @@ const SETS = {
     // last: __concept() installs a per-frame light hold that outranks __env (found by the r-look builder), so it must come after the others
     { name: 'lk_01_concept', eval: "window.__concept()", wait: 4000 },
   ],
+  // r-polish28 chase set: the sim steps (paused between steps) until a land hunter is in a chase with a target ahead of it, then the camera follows
+  // it with the player's follow (the same frame the F key gives). ch_01 right after the cut, ch_02 and ch_03 a few ticks on.
+  chase: [
+    { name: 'ch_00_setup', eval: `(async () => {
+      const e = window.__engine;
+      window.__env = (o) => {
+        window.__envO = Object.assign({ season: 1.8, weather: 0, warmth: 0.7, rain: 0, dayFrac: 0.7 }, o);
+        if (!window.__envHook) window.__envHook = e.onFrame(() => e.setEnv(window.__envO));
+        e.setEnv(window.__envO); e.applyEnvNow();
+      };
+      window.__speed(0); window.__step(900); window.__followId(null); window.__env({});
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'h', bubbles: true }));
+      const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+      const sp = await import('/src/sim/species.ts');
+      window.__findPrey = (A, count, kp) => {
+        const op = kp * 12, s = A[op], px = A[op + 1], py = A[op + 2], hx = Math.cos(A[op + 3]), hy = Math.sin(A[op + 3]);
+        let best = -1, bd = Infinity;
+        for (let j = 0; j < count; j++) {
+          if (j === kp) continue;
+          const o = j * 12;
+          if (sp.SPECIES[A[o]]?.flies || !sp.canHunt(s, A[o])) continue;
+          const dx = A[o + 1] - px, dy = A[o + 2] - py, d = Math.hypot(dx, dy);
+          if (d > 55 || d < 0.01) continue;
+          if ((dx * hx + dy * hy) / d < 0.3) continue;
+          const st = A[o + 7], running = st === 4 || st === 3 || st === 5;
+          const dd = d + (running ? 0 : 25);
+          if (dd < bd) { bd = dd; best = j; }
+        }
+        return best;
+      };
+      await wait(6000);
+      let found = null, tries = 0;
+      while (!found && tries++ < 80) {
+        const c = window.__find(1, 5).concat(window.__find(5, 5), window.__find(6, 5));
+        // (a hunter with a target the game itself would film it with: the same nearest-ahead rule as findChasePrey, page side, so before and after agree)
+        const sn = window.__snap(), A = sn.agents;
+        for (const id of c) {
+          const k = Array.from(sn.ids).indexOf(id), j = window.__findPrey(A, sn.count, k);
+          if (j >= 0) { found = id; window.__preyOf = sn.ids[j]; break; }
+        }
+        if (!found) { window.__step(25); await wait(900); }
+      }
+      window.__chaseId = found;
+      console.log('chase id', found, 'tries', tries);
+    })()`, wait: 3000 },
+    { name: 'ch_01_follow', eval: "window.__chaseId !== null && window.__followId(window.__chaseId)", wait: 4500 },
+    { name: 'ch_02_later', eval: "window.__step(8)", wait: 3000 },
+    { name: 'ch_03_later', eval: "window.__step(8)", wait: 3000 },
+  ],
+  // r-polish28: how much of a real chase the follow camera keeps in frame. Follows a chasing hunter at 1x for 14 s and, 10 times a second while the
+  // hunter is still in a chase and its target (found page-side: the nearest hoofed animal ahead) is alive, records whether hunter and target are
+  // each inside the picture. Printed as '[page error] CHASEMEASURE {...}'.
+  chasemeasure: [
+    { name: 'cm_00_setup', eval: `(async () => {
+      const e = window.__engine;
+      window.__env = (o) => {
+        window.__envO = Object.assign({ season: 1.8, weather: 0, warmth: 0.7, rain: 0, dayFrac: 0.7 }, o);
+        if (!window.__envHook) window.__envHook = e.onFrame(() => e.setEnv(window.__envO));
+        e.setEnv(window.__envO); e.applyEnvNow();
+      };
+      window.__speed(0); window.__step(900); window.__followId(null); window.__env({});
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'h', bubbles: true }));
+      const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+      const sp = await import('/src/sim/species.ts');
+      window.__findPrey = (A, count, kp) => {
+        const op = kp * 12, s = A[op], px = A[op + 1], py = A[op + 2], hx = Math.cos(A[op + 3]), hy = Math.sin(A[op + 3]);
+        let best = -1, bd = Infinity;
+        for (let j = 0; j < count; j++) {
+          if (j === kp) continue;
+          const o = j * 12;
+          if (sp.SPECIES[A[o]]?.flies || !sp.canHunt(s, A[o])) continue;
+          const dx = A[o + 1] - px, dy = A[o + 2] - py, d = Math.hypot(dx, dy);
+          if (d > 55 || d < 0.01) continue;
+          if ((dx * hx + dy * hy) / d < 0.3) continue;
+          const st = A[o + 7], running = st === 4 || st === 3 || st === 5;
+          const dd = d + (running ? 0 : 25);
+          if (dd < bd) { bd = dd; best = j; }
+        }
+        return best;
+      };
+      await wait(6000);
+      let found = null, tries = 0;
+      while (!found && tries++ < 80) {
+        const c = window.__find(1, 5).concat(window.__find(5, 5), window.__find(6, 5));
+        // (a hunter with a target the game itself would film it with: the same nearest-ahead rule as findChasePrey, page side, so before and after agree)
+        const sn = window.__snap(), A = sn.agents;
+        for (const id of c) {
+          const k = Array.from(sn.ids).indexOf(id), j = window.__findPrey(A, sn.count, k);
+          if (j >= 0) { found = id; window.__preyOf = sn.ids[j]; break; }
+        }
+        if (!found) { window.__step(25); await wait(900); }
+      }
+      window.__chaseId = found; window.__chasePrey = window.__preyOf;
+      console.log('chase id', found, 'tries', tries);
+    })()`, wait: 3000 },
+    { name: 'cm_01_measure', eval: `(async () => {
+      const e = window.__engine, V = e.camera.position.constructor;
+      const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+      const vis = (x, y, z) => { const v = new V(x, y, z).project(e.camera); return v.z < 1 && Math.abs(v.x) < 0.96 && Math.abs(v.y) < 0.94; };
+      const p = new V(), q = new V();
+      const T = { trials: 0, settleBoth: 0, settleHunter: 0, live: 0, liveBoth: 0, liveHunter: 0 };
+      const rows = [];
+      for (let trial = 0; trial < 6; trial++) {
+        window.__speed(0); window.__followId(null);
+        let id = null, pid = null;
+        for (let tries = 0; tries < 70 && id === null; tries++) {
+          const sn = window.__snap();
+          for (const cand of window.__find(1, 5).concat(window.__find(5, 5), window.__find(6, 5))) {
+            const k = Array.from(sn.ids).indexOf(cand), j = window.__findPrey(sn.agents, sn.count, k);
+            if (j >= 0) { id = cand; pid = sn.ids[j]; break; }
+          }
+          if (id === null) { window.__step(30); await wait(900); }
+        }
+        if (id === null) break;
+        T.trials++;
+        window.__followId(id);
+        await wait(2500);
+        if (window.__animals.getPosition(id, p) && window.__animals.getPosition(pid, q)) {
+          const a = vis(p.x, p.y + 0.6, p.z), b2 = vis(q.x, q.y + 0.8, q.z);
+          if (a && b2) T.settleBoth++; if (a) T.settleHunter++;
+          rows.push('settle sep ' + Math.hypot(p.x - q.x, p.z - q.z).toFixed(0) + ' dist ' + e.cam.distance.toFixed(0) + ' hunter ' + a + ' prey ' + b2);
+        }
+        window.__speed(1);
+        for (let t = 0; t < 60; t++) {
+          await wait(100);
+          const sn = window.__snap(); if (!sn) continue;
+          const k = Array.from(sn.ids).indexOf(id), j = Array.from(sn.ids).indexOf(pid);
+          if (k < 0 || j < 0 || sn.agents[k * 12 + 7] !== 5) break;
+          if (!window.__animals.getPosition(id, p) || !window.__animals.getPosition(pid, q)) continue;
+          T.live++;
+          const a = vis(p.x, p.y + 0.6, p.z), b2 = vis(q.x, q.y + 0.8, q.z);
+          if (a && b2) T.liveBoth++; if (a) T.liveHunter++;
+        }
+        window.__speed(0);
+      }
+      console.error('CHASEMEASURE ' + JSON.stringify(T));
+      for (const r of rows) console.error('CM ' + r);
+    })()`, wait: 500 },
+  ],
+  // r-polish28 tree set: the golden look (same setup as the look set), then a trunk, a tree and a grove close up. The tree is the tallest one
+  // within 160 m of the herd, so every run frames the same one. pl_trunk looks at the trunk base in the low sun; pl_tree the whole tree;
+  // pl_grove a stand from a middling height; pl_summer the same tree at midday; pl_night the grove by moonlight.
+  trees: [
+    { name: 'pl_00_setup', eval: `(async () => {
+      const e = window.__engine;
+      window.__env = (o) => {
+        window.__envO = Object.assign({ season: 1.8, weather: 0, warmth: 0.7, rain: 0, dayFrac: 0.7 }, o);
+        if (!window.__envHook) window.__envHook = e.onFrame(() => e.setEnv(window.__envO));
+        e.setEnv(window.__envO); e.applyEnvNow();
+      };
+      window.__speed(0); window.__step(900); window.__followId(null); window.__env({});
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'h', bubbles: true }));
+      window.__focusHerd();
+      const f = e.cam.getFocus();
+      const T = e.world.trees; let best = -1, bh = 0;
+      for (let i = 0; i < T.length; i += 4) { if (Math.hypot(T[i] - f.x, T[i + 1] - f.z) < 160 && T[i + 2] > bh) { bh = T[i + 2]; best = i; } }
+      window.__tree = best >= 0 ? { x: T[best], z: T[best + 1], h: bh } : { x: f.x, z: f.z, h: 10 };
+      window.__tv = (dist, pitch, yaw, up) => e.cam.setView({ x: window.__tree.x, y: window.__tree.z, h: e.cam.groundAt(window.__tree.x, window.__tree.z) + (up ?? 1.2), distance: dist, pitchDeg: pitch, yawDeg: yaw }, true);
+      await new Promise((r) => { let last = -1, same = 0, n = 0; const t = setInterval(() => { const sn = window.__snap && window.__snap(); const k = sn ? sn.tick : -2; if (k === last) same++; else { same = 0; last = k; } if ((same >= 5 && k >= 900) || ++n > 240) { clearInterval(t); r(); } }, 500); });
+    })()`, wait: 6000 },
+    { name: 'pl_01_trunk', eval: "window.__tv(7, 6, 200)", wait: 3500 },
+    { name: 'pl_02_tree', eval: "window.__tv(26, 10, 200, window.__tree.h * 0.45)", wait: 3500 },
+    { name: 'pl_03_tree_back', eval: "window.__tv(26, 10, 20, window.__tree.h * 0.45)", wait: 3500 },
+    { name: 'pl_04_grove', eval: "window.__tv(60, 18, 140, window.__tree.h * 0.4)", wait: 3500 },
+    { name: 'pl_05_midday', eval: "window.__env({ dayFrac: 0.45 }); window.__tv(32, 14, 200, window.__tree.h * 0.45)", wait: 3500 },
+    { name: 'pl_06_night', eval: "window.__env({ dayFrac: 0.95 }); window.__tv(40, 14, 200, window.__tree.h * 0.4)", wait: 3500 },
+    { name: 'pl_07_autumn', eval: "window.__env({ season: 2.2, dayFrac: 0.7 }); window.__tv(40, 12, 200, window.__tree.h * 0.45)", wait: 3500 },
+  ],
   // r-look regression set: the lighting cases the look set does not cover. NOTE: in the look set, lk_01's __concept() installs a per-frame
   // env hold (day 0.28, season 1.8) that outranks every later __env() call, so lk_02 to lk_10 all share that dawn light and lk_08 to
   // lk_10 are NOT midday, night and winter. This set never calls __concept, so each step really has the light it names.
