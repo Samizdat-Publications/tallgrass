@@ -14,10 +14,12 @@ const RES = 1024;
 const METRES_PER_CP = 60;
 /** How fast the shadows travel downwind, m/s: this plus this times the wind strength (0..1). The dome's own drift is far slower than any real wind. */
 const SPEED_BASE = 3, SPEED_WIND = 6;
-/** Shadow edge width in mask texels (penumbra is about 3x this, bilinear included). */
-const PENUMBRA_TEXELS = 1.6;
+/** Shadow edge half-width in mask texels of 2 m. A cloud shadow from a couple of kilometres up has a penumbra of about 20 m (the sun's disc), so 5 texels; the old 1.6 gave a hard-edged blot that read as a stain on the ground from the follow camera. */
+const PENUMBRA_TEXELS = 5.0;
 /** The shadow keeps to the dense core of a cloud: its edge sits this far above the sky's visible-cloud threshold (fbm units). */
 const CORE_OFFSET = 0.075;
+/** Fraction of the direct sun a fair-weather cloud shadow removes (was 0.55: at golden hour the sun is nearly all the light, so that left olive-grey blotches the ground and blades never recover from). */
+const CLOUD_SHADOW_K = 0.42;
 /** The mask is redrawn every this many frames (the drift is a few metres per second, texels are 2 m). */
 const EVERY = 3;
 
@@ -88,7 +90,7 @@ export class CloudShadow {
     // strength: a fair-weather day takes about 55% off the direct sun under a cloud; the sun near the horizon, night and overcast fade it out
     const sunUp = THREE.MathUtils.smoothstep(u.sunDir.value.y, 0.0, 0.1);
     const open = 1 - THREE.MathUtils.smoothstep(u.overcast.value, 0.3, 0.75);
-    u.cloudK.value = 0.55 * sunUp * open;
+    u.cloudK.value = CLOUD_SHADOW_K * sunUp * open;
     if (u.cloudK.value < 0.002) { this.frame = 0; return; }
     if (!force && (this.frame++ % EVERY) !== 0) return;
     (this.mat.uniforms.uOffset.value as THREE.Vector2).copy(this.offset);

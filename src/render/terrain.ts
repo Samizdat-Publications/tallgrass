@@ -11,6 +11,7 @@ import {
 import { SEASON_GLSL, SNOW_GLSL } from './season';
 import { buildSnowLand } from './snowland';
 import { SMALL_TEX, TOWN_ON } from './smalltex';
+import { GroundTex } from './groundtex';
 
 const SHADOW_RES = 512;
 const FAR_RES = 512;
@@ -187,6 +188,10 @@ export class Terrain {
   private readonly pondOn = { value: 0 };
   /** 1 = the close-range worn-ground grain (soil grain, clods, straw flecks) is on, 0 = off (for A/B timing and debugging). */
   readonly closeGrain = { value: 1 };
+  /** Photo-scanned ground detail (soil, litter, stones, mud, ash, snow) blended into the ground within about 90 m of the camera; see groundtex.ts. */
+  readonly groundTex = new GroundTex();
+  /** 1 = the scanned detail is on, 0 = off (for A/B timing and debugging). Multiplies groundTex.on in the shader. */
+  readonly groundDetail = { value: 1 };
   /** Small tileable random texture (4 independent channels) the ground shader samples for fine grain instead of evaluating hash noise. */
   private detailTex!: THREE.DataTexture;
   private shadowQuad: FullScreenQuad;
@@ -784,6 +789,9 @@ export class Terrain {
       u.tSmall = SMALL_TEX; // prairie dog towns (smallprey.ts)
       u.uTownOn = TOWN_ON;
       u.uCloseGrain = this.closeGrain;
+      u.tGround = this.groundTex.tex;
+      u.uGroundOn = this.groundTex.on;
+      u.uGroundUser = this.groundDetail;
       u.tStatic = sh.staticTex;
       u.tTrail = sh.trailTex;
       u.uFarStats = sh.farStats;
@@ -846,11 +854,13 @@ export class Terrain {
               vec3 tgGrad = sign( tgDet ) * ( dFdx( gTgH ) * tgR1 + dFdy( gTgH ) * tgR2 );
               normal = normalize( abs( tgDet ) * normal - tgGrad );
             }
+            // the scanned ground's own relief (soil crumbs, stones, litter, hoof pits): a world-space tilt from the detail maps
+            normal = normalize( normal + mat3( viewMatrix ) * gTgDN );
           }`,
         );
       shader.fragmentShader = injectSafeOutput( shader.fragmentShader );
     };
-    mat.customProgramCacheKey = () => 'tallgrass-terrain-v6';
+    mat.customProgramCacheKey = () => 'tallgrass-terrain-v7';
 
     const mesh = new THREE.Mesh(geo, mat);
     mesh.castShadow = false;
@@ -901,6 +911,7 @@ export class Terrain {
     this.extHeightTex.dispose();
     for (const rt of this.macroRT) rt.dispose();
     this.detailTex.dispose();
+    this.groundTex.dispose();
     this.shadowMat.dispose();
     this.shadowQuad.dispose();
   }
@@ -1006,8 +1017,33 @@ vec3 tgAdapt(vec3 nrm, float ts){
   return mix(vec3(1.0), clamp(l / max(E, vec3(0.02)), 0.5, 1.7), dimK);
 }
 
+// ---- photo-scanned ground detail (groundtex.ts): one 2D array, layer m = material m: rg = surface slope (v = 0.5 + slope / 3), b = high-pass
+// luminance ratio of the scan (log2 ratio, v = 0.5 + 0.25 * log2). Materials: 0 litter, 1 soil, 2 stony, 3 mud, 4 ash, 5 snow.
+uniform highp sampler2DArray tGround;
+uniform float uGroundOn;
+uniform float uGroundUser;
+vec3 gTgDN = vec3(0.0);   // world-space tilt of the normal from the scans (added in normal_fragment_maps)
+// Every material is read at two incommensurate scales, each turned by its own angle, and the two fields are summed (in log space for the
+// brightness), so the pattern never repeats within sight and there are no tile seams (no hash cells to blend). Explicit gradients keep the
+// mips right inside the per-material branches. Returns the log2 ratio on the palette; sl is the world xz tilt.
+float tgGdSample(float m, vec2 xz, vec2 gdx, vec2 gdy, out vec2 sl){
+  const mat2 R1 = mat2(0.9553, 0.2955, -0.2955, 0.9553);    // 17 degrees
+  const mat2 R2 = mat2(0.4685, -0.8835, 0.8835, 0.4685);    // -62 degrees
+  const float I1 = 1.0 / 2.1, I2 = 1.0 / 5.9;
+  vec3 d1 = textureGrad(tGround, vec3(R1 * xz * I1, m), R1 * gdx * I1, R1 * gdy * I1).rgb;
+  vec3 d2 = textureGrad(tGround, vec3(R2 * xz * I2 + 0.37, m), R2 * gdx * I2, R2 * gdy * I2).rgb;
+  // (green is up the image, and the image runs down +v, so the tilt along v is minus green)
+  vec2 s1 = (d1.rg - 0.5) * 3.0, s2 = (d2.rg - 0.5) * 3.0;
+  sl = (vec2(s1.x, -s1.y) * R1 + 0.7 * (vec2(s2.x, -s2.y) * R2)) * 0.8;   // v * M = transpose(M) * v, the inverse of the rotation
+  return (d1.b + d2.b - 1.0) * 4.0 * 0.72;
+}
+
 vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
   vec2 xz = wp.xz;
+  vec2 gdx = dFdx(xz), gdy = dFdy(xz);
+  // the scanned detail fades in within about 60 m and is gone by about 90 m (far views and their cost are untouched)
+  float gFade = (1.0 - smoothstep(58.0, 92.0, dist)) * uGroundOn * uGroundUser;
+  float gMudK = 0.0;
   vec2 cuvR = xz / uWorldSize;
   vec2 cuv = clamp(cuvR, 0.0, 1.0);
   // beyond the border the valley's own data continues as a reflection (a triangle wave), so nothing stretches into streaks
@@ -1104,7 +1140,9 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
   float calm2 = 1.0 - 0.6 * smoothstep(70.0, 260.0, dist);
   float calm3 = 1.0 - 0.7 * smoothstep(120.0, 480.0, dist);
   float farCalm = calm3;
-  float streakTone = (s1 - 0.5) * 0.4 * f1 + (c2s - 0.5) * 0.7 * f2 * calm2 + (c3s - 0.5) * 0.4 * f3 * calm3 + (s4 - 0.5) * 0.12;
+  // (within about 60 m the scanned ground carries the detail, so the long combed smears that gave the near ground its blurry look are halved)
+  float nearCalm = 1.0 - 0.5 * gFade;
+  float streakTone = (s1 - 0.5) * 0.4 * f1 + ((c2s - 0.5) * 0.7 * f2 * calm2 + (c3s - 0.5) * 0.4 * f3 * calm3) * nearCalm + (s4 - 0.5) * 0.12;
   float graze = smoothstep(0.04, 0.3, max(-rayDir.y, 0.0));
   // looking straight down (map view) combed strokes read as fur or smear, so thin them out; they belong to oblique views
   float topK = smoothstep(0.7, 0.96, -rayDir.y);
@@ -1229,7 +1267,7 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
     float clLow = tgDet(vec2(xz.x * 1.1 + xz.y * 0.35, xz.y * 1.1 - xz.x * 0.35), 1.0, 2, vec2(0.23));
     float cl = clLow * 0.65 + tgDet(xz, 0.18, 3, vec2(0.0)) * 0.35;
     float tuss = smoothstep(0.2, 0.8, cl);
-    grassCol *= mix(1.0, mix(0.74, 1.12, tuss), closeK * 0.85);
+    grassCol *= mix(1.0, mix(mix(0.74, 0.84, gFade), mix(1.12, 1.08, gFade), tuss), closeK * 0.85);
     grassCol = mix(grassCol, grassCol * vec3(0.92, 0.88, 0.8) + uSoil * 0.04, (1.0 - tuss) * 0.22 * closeK * (0.4 + 0.6 * stubA));
     // fine combed blade lines inside the clumps (the blade layer carries them nearer; this keeps the ground from going flat between)
     grassCol *= 1.0 + (s1 - 0.5) * 0.22 * closeK * (1.0 - topK * 0.5);
@@ -1358,6 +1396,7 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
     float tk = clamp(trail * prox + churn * 0.7, 0.0, 1.0) * (1.0 - smoothstep(180.0, 320.0, dist)) * inS * (1.0 - 0.8 * snEff);
     col = mix(col, col * vec3(0.62, 0.54, 0.42) + uSoil * 0.1, tk * 0.5);
     gTgGrass *= 1.0 - 0.3 * tk;
+    gMudK = max(gMudK, tk * 0.8);
   }
 
   // water's edge: a thin wet line at the waterline, a faint damp band, and a narrow mud lip that is ragged and broken (some stretches of
@@ -1378,6 +1417,7 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
     // (only in patches: the rest of the bank stays dark wet mud, so a long reach of the creek is never edged in a pale line)
     vec3 mudC = mix(vec3(0.19, 0.15, 0.108), vec3(0.46, 0.37, 0.25), smoothstep(70.0, 180.0, dist) * (1.0 - riparian * 0.4) * mix(smoothstep(0.5, 0.78, lipN), 1.0, smoothstep(120.0, 260.0, dist)));
     col = mix(col, mudC * (0.8 + 0.4 * nC), mud * 0.62);
+    gMudK = max(gMudK, mud);
   }
 
   // under tree and shrub cover: cooler, darker, leaf litter
@@ -1489,6 +1529,33 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
         spark = pow(max(dot(fn, hv), 0.0), 140.0) * smoothstep(0.5, 0.15, gd) * snowCover * ts * (1.0 - smoothstep(30.0, 80.0, dist));
       }
     }
+  }
+
+  // ---- photo-scanned ground detail. The materials follow the ground state the shader already knows: litter and dry stubble under the
+  // grass, bare soil where the sward is thin or trodden, stones on steep and trampled ground, mud by the water and in churned margins,
+  // ash on burned ground, snow where it lies. Each one multiplies the palette above by its own high-pass ratio, so the colour scheme,
+  // the season and drought tints stay as they were and only the value structure and the relief come from the scans.
+  if (gFade > 0.003) {
+    float wSn = snowCover;
+    float wAs = scar * (1.0 - wSn);
+    float wMu = clamp(max(gMudK, pondW * 0.9), 0.0, 1.0);
+    float wSo = clamp(max(max(soilShow * 0.9, trodK * 0.75), max(apron, dirt * 0.5 * edgeW)) + stubA * 0.3, 0.0, 1.0);
+    float wSt = clamp(max(rock * 0.9, trodK * 0.3) + apron * 0.3, 0.0, 1.0);
+    float wSum = wSn + wAs + wMu + wSo + wSt;
+    float wNorm = 1.0 / max(wSum, 1.0);
+    wSn *= wNorm; wAs *= wNorm; wMu *= wNorm; wSo *= wNorm; wSt *= wNorm;
+    float wLi = 1.0 - (wSn + wAs + wMu + wSo + wSt);
+    float gLr = 0.0;
+    vec2 gSl = vec2(0.0);
+    vec2 sl1;
+    if (wLi > 0.02) { gLr += wLi * 0.95 * tgGdSample(0.0, xz, gdx, gdy, sl1); gSl += wLi * 1.6 * sl1; }
+    if (wSo > 0.02) { gLr += wSo * 0.62 * tgGdSample(1.0, xz, gdx, gdy, sl1); gSl += wSo * 0.9 * sl1; }
+    if (wSt > 0.02) { gLr += wSt * 0.7 * tgGdSample(2.0, xz, gdx, gdy, sl1); gSl += wSt * 1.5 * sl1; }
+    if (wMu > 0.02) { gLr += wMu * 0.6 * tgGdSample(3.0, xz, gdx, gdy, sl1); gSl += wMu * 0.8 * sl1; }
+    if (wAs > 0.02) { gLr += wAs * 0.55 * tgGdSample(4.0, xz, gdx, gdy, sl1); gSl += wAs * 2.0 * sl1; }
+    if (wSn > 0.02) { gLr += wSn * 1.0 * tgGdSample(5.0, xz, gdx, gdy, sl1); gSl += wSn * 2.0 * sl1; }
+    col *= exp2(gLr * gFade);
+    gTgDN = vec3(gSl.x, 0.0, gSl.y) * gFade * (1.0 - 0.5 * topK);
   }
 
   // bare winter ground at dusk and dawn is adapted the same way, more gently (summer keeps its golden dusk)
