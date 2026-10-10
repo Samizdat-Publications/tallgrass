@@ -3,7 +3,7 @@
 *(Updated 07:20 Saturday 2026-10-10. This file is refreshed at every milestone.)*
 
 ## 2026-10-09 to 10: the 24-hour day run (the plan is DAY-PLAN.md)
-**Play it:** https://tallgrass.stewartgregerson.workers.dev (or `npm run dev`, then http://localhost:5199/). Last deploy: 06:45 Saturday (D6), live check clean. The default world is still v10b.
+**Play it:** https://tallgrass.stewartgregerson.workers.dev (or `npm run dev`, then http://localhost:5199/). Last deploy: 08:23 Saturday (D7), live check clean. The default world is still v10b.
 
 **What you asked for:** take stock, then spend 24 hours on what gives the most: visuals and the remaining features. The ecosystem already passed every gate, so the day went to how the valley looks up close and how the animals move.
 
@@ -53,11 +53,11 @@
 1. A mule-deer-safe waterhole fix (thirst waves without the walk-off, screened over 400 or more years, because the deer cost only shows over centuries).
 2. Measure page-ready time and 100x speed on an idle machine; trim the model preload if the load is slow.
 3. Mid-range readability: species glyphs or contrast between 60 and 200 m.
-4. Deaths and takedowns with weight (in progress at the end of this run; see the last deploy line).
+4. A video round on the final build (D7 added staged deaths at any speed; the last Gemini round predates it).
 5. A Gemini round on a quiet machine with a hand-picked reel (a hunt, a herd crossing, a death), so the motion score reflects the best moments rather than random ones.
 
 ### Deploy log (all live checks clean)
-D1 19:45 golden look, snow · D2 21:35 wading, alert heads, ground detail, performance · D3 01:10 real animals, real trees, land · D4 02:45 idle life · D5 04:05 planted feet, leap · D6 06:45 night and water, round 28 fixes.
+D1 19:45 golden look, snow · D2 21:35 wading, alert heads, ground detail, performance · D3 01:10 real animals, real trees, land · D4 02:45 idle life · D5 04:05 planted feet, leap · D6 06:45 night and water, round 28 fixes · D7 08:23 deaths and takedowns at any speed, tumbling birds, animals on ice.
 
 ## 2026-10-09 night: "The long breath" (v10)
 **Play it:** https://tallgrass.stewartgregerson.workers.dev (or `npm run dev`, then http://localhost:5199/). **v10b is now the default world** (v10 adopted at 10:30, then its refinement v10b at 13:00, each after its acceptance and shocks passed; live, see the last line of this section).
