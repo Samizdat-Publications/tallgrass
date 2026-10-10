@@ -13,7 +13,7 @@
 3. **Golden hour like the concept.** Low sun is warm and readable instead of purple and muddy, the glare near the sun is gone, the rippled-dune hills are smooth.
 4. **Real trees.** Branching cottonwoods and willows with leaf clusters, bare winter skeletons and clean bark, and cheaper than the old trees in groves. `?trees3=0` shows the old ones.
 5. **Ground, water and night.** Photo-scanned ground detail up close; darker ponds and creek with reflections and muddy, trampled shores; moonlit rims that separate the herds at night.
-6. **Speed.** A performance pass took the heaviest view from 17.5 to 13.7 ms at 1440p, putting every view under the 16.7 ms budget; the later additions each measured neutral or cheaper in paired benches on a busy machine. A clean bench of the final build on an idle machine is still to do.
+6. **Speed.** A performance pass took the heaviest view from 17.5 to 13.7 ms at 1440p, putting every view under the 16.7 ms budget. A clean bench of the final build (D7) on a quiet machine Saturday 08:30 confirms it: every view under 16.7 ms at 1440p, the heaviest low golden 14.5 ms and creek midday 14.5 ms (review/wip/day/gpubench_final_d7.json).
 7. **Smaller fixes:** snow by landform, a quiet selection ring that fades, small blood stains instead of a red disc, no dotted "screen door" on animals at mid range, the follow camera keeps a chasing wolf and its prey in frame, faded panels stay legible, field-note cards read as notebook entries.
 
 ![The golden-hour look, before and after](journey/20261010-040242_still_day-golden-look.jpg)
@@ -40,7 +40,7 @@
 
 ### Blocked or cut
 - **Your C: drive was full** (333 MB free of 925 GB) at 08:00 Saturday. I cleared about 22 GB of this project's own old scratch copies (old batch checkouts and review videos; results are kept in the repo); it now has 23 GB free. The rest of the drive is outside this project and worth a look.
-- Idle-machine measurements (page-ready time, 100x speed) never happened: the CPU ran batches all night. Under that load the live page took over 3 minutes to become ready; please tell me if the live site loads slowly for you.
+- **Slow start:** on a quiet machine the live page loads in 4 to 6 s but takes 28 to 70 s to become ready (shader compiles and setup for the new animals and trees). A builder is cutting it now (see the deploy log for whether it landed).
 - Wide-view readability (telling species apart at mid range) and the noisy-looking population charts are still open.
 - Your CPU ruling (16:00, then 85% from 18:00) cost about two hours of builder speed in the evening; no work was lost.
 
@@ -51,7 +51,7 @@
 
 ### Next 5
 1. A mule-deer-safe waterhole fix (thirst waves without the walk-off, screened over 400 or more years, because the deer cost only shows over centuries).
-2. Measure page-ready time and 100x speed on an idle machine; trim the model preload if the load is slow.
+2. Measure 100x speed on an idle machine (the page-ready time was measured and is being cut).
 3. Mid-range readability: species glyphs or contrast between 60 and 200 m.
 4. A video round on the final build (D7 added staged deaths at any speed; the last Gemini round predates it).
 5. A Gemini round on a quiet machine with a hand-picked reel (a hunt, a herd crossing, a death), so the motion score reflects the best moments rather than random ones.
