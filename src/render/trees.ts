@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import type { World } from '../sim/world';
 import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 import { NOISE_GLSL, OCCLUDE_GLSL, SharedUniforms, clamp, fbm2, hash2, injectSafeOutput, injectTerrainShadow, smoothstep, vnoise2 } from './common';
+import { Trees3, TREES3_RANGE } from './trees3';
 
 /** Floats per tree in Snapshot.trees (sim/trees.ts TREE_STRIDE): x, y, height m, crown radius m, kind, stage. */
 const TREE_STRIDE = 6;
@@ -481,7 +482,7 @@ function buildThicketGeometry(detail: number, seed: number): THREE.BufferGeometr
 
 // ---------------------------------------------------------------- shader pieces
 
-function swayChunk(flutter: boolean): string {
+export function swayChunk(flutter: boolean): string {
   return /* glsl */ `
   vec4 mvPosition = vec4( transformed, 1.0 );
   #ifdef USE_INSTANCING
@@ -503,7 +504,7 @@ function swayChunk(flutter: boolean): string {
   `;
 }
 
-const WORLDPOS_GLSL = /* glsl */ `
+export const WORLDPOS_GLSL = /* glsl */ `
 vec3 tgFragWorld(){ return cameraPosition + transpose( mat3( viewMatrix ) ) * ( -vViewPosition ); }
 `;
 
@@ -842,7 +843,7 @@ const CHAR = [0.3, 0.26, 0.25]; // instance colour of a snag's bark (the bark sh
  * (the meshes keep their identity, only their instance attributes are swapped), so nothing that holds a mesh (the AO exclude list)
  * goes stale.
  */
-class Pool {
+export class Pool {
   cap: number;
   hi = 0;
   readonly free: number[] = [];
@@ -863,6 +864,10 @@ class Pool {
   private lastX = 1e9; private lastY = 1e9; private lastZ = 1e9;
   dirty = true;
   live = 0;
+  /** Instances nearer than this (squared, m) are not drawn by this pool: another layer (Trees3) draws them. */
+  nearSkip2 = 0;
+  /** A pool that is switched off draws nothing (the ?trees3 A/B toggle, Trees.setTrees3). */
+  off = false;
 
   constructor(cap: number, private crownLim: number[], private barkLim: number[]) {
     this.cap = cap;
@@ -943,6 +948,7 @@ class Pool {
       if (!(co | bo | to)) continue;
       const dx = pos[i * 3] - cam.x, dy = pos[i * 3 + 1] - cam.y, dz = pos[i * 3 + 2] - cam.z;
       const d2 = dx * dx + dy * dy + dz * dz;
+      if (this.off || d2 < this.nearSkip2) continue;
       if (co) {
         let l = 0;
         while (l < nc && d2 >= this.crownLim2[l]) l++;
@@ -973,7 +979,7 @@ class Pool {
   }
 }
 
-interface Part { pool: Pool; slot: number }
+interface Part { pool: Pool; slot: number; /** The trees3 willow twin of an old thicket instance. */ twin?: Part }
 interface Rec { id: number; spec: TreeSpec; part: Part; under: Part[]; grove: number }
 
 const ID_FAR = 1_000_000, ID_FAR_JUNIPER = 2_000_000, ID_VALLEY_JUNIPER = 3_000_000, ID_GROVE = 4_000_000, ID_NEW = 5_000_000;
@@ -992,6 +998,10 @@ export class Trees {
   private tuftsShown = true;
   private disposables: { dispose(): void }[] = [];
   private pools: Pool[] = [];
+  /** Branching cottonwoods for the near and mid range (?trees3=1, see trees3.ts); null when off. */
+  private t3: Trees3 | null = null;
+  /** trees3 willow thickets: one pool per variant, each thicket also has an instance here (twin of its lump thicket). */
+  private thick3: Pool[] = [];
   private cw: Pool[] = [];
   private jun: Pool[] = [];
   private thick: Pool[] = [];
@@ -1115,6 +1125,9 @@ export class Trees {
     // ---- pools. Capacity leaves room for dynamic growth (the sim's S13 plants and fells trees at run time)
     const cwCount = new Array(VARIANTS).fill(0);
     specs.forEach((s) => { if (s.spec.species !== 'juniper') cwCount[s.id % VARIANTS]++; });
+    // trees3 (URL toggle ?trees3=1): real branching cottonwoods inside TREES3_RANGE and willow thickets, drawn by their own pools; the lump
+    // crowns keep the far range
+    if (typeof location !== 'undefined' && /[?&]trees3=1(&|$)/.test(location.search)) this.t3 = new Trees3(this.group, this.meshes, shared, bark, depthMat, cwCount);
     const crownDetails = [2, 1, 0];
     for (let v = 0; v < VARIANTS; v++) {
       const shape = SHAPES[v % SHAPES.length];
@@ -1135,6 +1148,7 @@ export class Trees {
         pool.addMesh('bark', g, bark, `cottonwood-bark-${v}-lod${li}`, true, this.group, this.meshes, depthMat);
         if (li === barkGeos.length - 1) pool.addMesh('bark', g, bark, `cottonwood-bark-${v}-lod${li}-far`, false, this.group, this.meshes, depthMat);
       });
+      if (this.t3) pool.nearSkip2 = TREES3_RANGE * TREES3_RANGE;
       this.cw.push(pool); this.pools.push(pool);
     }
     for (let v = 0; v < 2; v++) {
@@ -1153,6 +1167,12 @@ export class Trees {
         this.disposables.push(g);
         pool.addMesh('crown', g, willowMat, `shrubs-willow-${v}-lod${li}`, false, this.group, this.meshes, depthMat);
       });
+      if (this.t3) {
+        const p3 = new Pool(640, BAND_THICKET, [48, 140]);
+        this.t3.fillWillowPool(p3, v, this.group, this.meshes);
+        this.thick3.push(p3); this.pools.push(p3);
+        pool.off = true;
+      }
       this.thick.push(pool); this.pools.push(pool);
     }
 
@@ -1225,7 +1245,8 @@ export class Trees {
     const rec = this.recs.get(id);
     if (!rec) return false;
     rec.part.pool.release(rec.part.slot);
-    for (const u of rec.under) u.pool.release(u.slot);
+    this.t3?.remove(id);
+    for (const u of rec.under) { u.pool.release(u.slot); if (u.twin) u.twin.pool.release(u.twin.slot); }
     this.recs.delete(id);
     const key = this.gridKey(rec.spec.x, rec.spec.z), cell = this.grid.get(key);
     if (cell) { const k = cell.indexOf(id); if (k >= 0) cell.splice(k, 1); }
@@ -1316,6 +1337,21 @@ export class Trees {
     };
     run(this.cw, 'tree'); run(this.jun, 'juniper'); run(this.thick, 'thicket');
     if (this.shrubPool) run([this.shrubPool], 'shrub');
+  }
+
+  /**
+   * trees3 on or off at run time (only on a build made with ?trees3=1, which holds both): the same frame can be timed or captured with the
+   * lump crowns and thickets, or with the branching trees. Returns false when this build has no trees3.
+   */
+  setTrees3(on: boolean): boolean {
+    const t3 = this.t3;
+    if (!t3) return false;
+    const skip = on ? TREES3_RANGE * TREES3_RANGE : 0;
+    for (const p of this.cw) { p.nearSkip2 = skip; p.dirty = true; }
+    for (const p of this.thick) { p.off = on; p.dirty = true; }
+    for (const p of this.thick3) { p.off = !on; p.dirty = true; }
+    t3.setActive(on);
+    return true;
   }
 
   getTree(id: number): Readonly<TreeSpec> | undefined { return this.recs.get(id)?.spec; }
@@ -1442,6 +1478,13 @@ export class Trees {
     pool.barkOn[slot] = 1;
     pool.crownOn[slot] = spec.burned ? 0 : 1;
     pool.tuftOn[slot] = spec.burned ? 0 : 1;
+    if (this.t3) {
+      this.t3.add(id, {
+        x: spec.x, y, z: spec.z, h: spec.h, r: spec.r, rot, lean, leanA, grow, sw, swz: 0.88 + hash2(id, v, 19) * 0.24, burned: !!spec.burned,
+        col: [pool.cols[slot * 3], pool.cols[slot * 3 + 1], pool.cols[slot * 3 + 2]],
+        bark: [pool.barkCols[slot * 3], pool.barkCols[slot * 3 + 1], pool.barkCols[slot * 3 + 2]],
+      });
+    }
     if (!spec.far && !spec.burned && !spec.young) this.understory(rec);
   }
 
@@ -1460,7 +1503,20 @@ export class Trees {
     pool.cols[slot * 3] = col.r; pool.cols[slot * 3 + 1] = col.g; pool.cols[slot * 3 + 2] = col.b;
     pool.pos[slot * 3] = x; pool.pos[slot * 3 + 1] = y + sy * 0.5; pool.pos[slot * 3 + 2] = z;
     pool.crownOn[slot] = 1;
-    return { pool, slot };
+    const part: Part = { pool, slot };
+    if (this.t3) {
+      // trees3 willow: the same thicket again in the new pool (leaf clusters on stems), a warm red-brown stem colour
+      const p3 = this.thick3[key % this.thick3.length], s3 = p3.alloc();
+      p3.crownMats.set(pool.crownMats.subarray(slot * 16, slot * 16 + 16), s3 * 16);
+      p3.barkMats.set(pool.crownMats.subarray(slot * 16, slot * 16 + 16), s3 * 16);
+      p3.cols.set(pool.cols.subarray(slot * 3, slot * 3 + 3), s3 * 3);
+      p3.pos.set(pool.pos.subarray(slot * 3, slot * 3 + 3), s3 * 3);
+      const bb = 1.1 + 0.3 * hash2(key, 12, 21);
+      p3.barkCols[s3 * 3] = bb * 1.3; p3.barkCols[s3 * 3 + 1] = bb * 0.8; p3.barkCols[s3 * 3 + 2] = bb * 0.5;
+      p3.crownOn[s3] = 1; p3.barkOn[s3] = 1;
+      part.twin = { pool: p3, slot: s3 };
+    }
+    return part;
   }
 
   /** Willow and shrub thickets around a valley cottonwood: more of them near water and where its neighbours crowd it. */
@@ -1569,6 +1625,7 @@ export class Trees {
   /** Re-bucket instances by distance to the camera (cheap; skips when the camera has barely moved and nothing was added or removed). */
   update(cam: THREE.Vector3, force = false): void {
     for (const p of this.pools) p.update(cam, force);
+    this.t3?.update(cam, force);
   }
 
   /**
@@ -1711,6 +1768,7 @@ void main() {`)
   }
 
   dispose(): void {
+    this.t3?.dispose();
     for (const d of this.disposables) d.dispose();
     for (const m of this.meshes) m.dispose();
   }
