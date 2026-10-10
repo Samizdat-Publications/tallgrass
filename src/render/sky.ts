@@ -21,9 +21,9 @@ interface Key {
 // Night is a documentary "day for night": silver-blue, readable, never black (see MOON_I, hemi at el <= -14).
 const KEYS: Key[] = [
   { el: -40, zen: C('#17163e'), mid: C('#2a3470'), hor: C('#5a5084'), glow: C('#c2682c'), sun: C('#000000'), sunI: 0,
-    hSky: C('#6f98dc'), hGnd: C('#2e3f66'), hI: 0.66, expo: 1.42, haze: 0.5 },
+    hSky: C('#6f98dc'), hGnd: C('#2e3f66'), hI: 0.54, expo: 1.42, haze: 0.5 },
   { el: -14, zen: C('#191a46'), mid: C('#2d3a78'), hor: C('#62588c'), glow: C('#c2682c'), sun: C('#000000'), sunI: 0,
-    hSky: C('#6f98dc'), hGnd: C('#2e3f66'), hI: 0.7, expo: 1.42, haze: 0.6 },
+    hSky: C('#6f98dc'), hGnd: C('#2e3f66'), hI: 0.58, expo: 1.42, haze: 0.6 },
   { el: -11, zen: C('#18286a'), mid: C('#384c88'), hor: C('#855a86'), glow: C('#ff7a50'), sun: C('#c8483c'), sunI: 0.1,
     hSky: C('#7088cc'), hGnd: C('#4c4050'), hI: 1.1, expo: 1.65, haze: 0.5 },
   { el: -7, zen: C('#1c326c'), mid: C('#4a5c94'), hor: C('#b07a8a'), glow: C('#ff9a60'), sun: C('#ff7038'), sunI: 0.85,
@@ -43,7 +43,7 @@ const KEYS: Key[] = [
 ];
 
 const MOON_COLOR = C('#bccdff');
-const MOON_I = 4.3;
+const MOON_I = 5.0;
 /** Starlight fill on a moonless night: intensity (about a fifth of a full moon's), colour, and the direction it comes from. */
 const STAR_I = 0.95;
 const STAR_COLOR = C('#a8bcff');

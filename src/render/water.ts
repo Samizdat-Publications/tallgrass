@@ -554,7 +554,7 @@ export class Water {
           float rise = R.y / hl;
           float grassH = 0.85 * (1.0 - 0.65 * uSnow);
           // from afar the mirrored crowns blur together and thin out, so a pond never shows round dark blots
-          float treeDen = mix(0.32, 0.9, uLeaf) * mix(1.0, 0.55, farK);
+          float treeDen = mix(0.32, 0.9, uLeaf) * mix(1.0, 0.75, farK);
           float cov = 0.0, wTree = 0.0;
           vec2 hitP = p0;
           float t = 0.7;
@@ -606,7 +606,9 @@ export class Water {
           // a long slow term pinches and swells the channel, a shorter one scallops it)
           float wanderK = smoothstep(40.0, 150.0, length(cameraPosition - vWorld));
           float wan = tgNoise2(p * 0.07 + 31.0) * 0.6 + tgNoise2(p * 0.22 + 4.0) * 0.4 - 0.5;
-          depth += wig * mix(0.1, 0.2, mA) * (1.0 - smoothstep(0.08, 0.4, abs(depth))) + wan * 0.34 * wanderK * (1.0 - smoothstep(0.1, 0.55, abs(depth)));
+          // (r-nightwater: a pond's edge is scalloped by hoof wear and slumping at every distance, not only from afar)
+          float wanderP = max(wanderK, 0.6 * (1.0 - isCreek) * (1.0 - mA));
+          depth += wig * mix(mix(0.17, 0.1, isCreek), 0.2, mA) * (1.0 - smoothstep(0.08, 0.4, abs(depth))) + wan * 0.34 * wanderP * (1.0 - smoothstep(0.1, 0.55, abs(depth)));
           if (depth < -0.55) discard;
 
           vec3 toCam = cameraPosition - vWorld;
@@ -657,13 +659,13 @@ export class Water {
             float rag = tgNoise2(p * 0.6) * 0.6 + mix(tgNoise2(p * 2.1 + 3.0), 0.5, smoothstep(40.0, 160.0, dist)) * 0.4;
             // the band never reaches the floodplain beside the creek (about 0.3 m up), so it cannot end at the mesh edge
             // in height above the water: the pond banks are gentle, so their band stays low or it smears across the grass
-            float reach = mix(0.06 + 0.08 * rag, min(0.26, (0.12 + 0.1 * rag) * (1.0 + 0.3 * riffle)), isCreek);
+            float reach = mix(0.15 + 0.17 * rag, min(0.26, (0.12 + 0.1 * rag) * (1.0 + 0.3 * riffle)), isCreek);
             reach *= 1.0 + 0.5 * rain * isCreek;
             // mid range: a wider, softer wet-mud band so the water never ends on a drawn contour
             float midC = midK * isCreek;
             reach *= 1.0 + 1.5 * midC;
             float band = 1.0 - smoothstep(0.0, reach, hA);
-            float a = pow(band, mix(mix(2.0, 1.0, farK), 1.6, midC)) * mix(mix(0.42, mix(0.4, 0.6, isCreek), max(farK, rain)), 0.5, midC) * (1.0 - dry);
+            float a = pow(band, mix(mix(2.0, 1.0, farK), 1.6, midC)) * mix(mix(mix(0.64, 0.42, isCreek), mix(0.4, 0.6, isCreek), max(farK, rain)), 0.5, midC) * (1.0 - dry);
             // R-water2: from afar the dark margin comes in runs (wet soil and overhanging grass) with open stretches between, not as
             // one even outline along the whole creek
             float runsS = smoothstep(0.38, 0.72, tgNoise2(p * 0.06 + vec2(3.0, 8.0)) * 0.6 + tgNoise2(p * 0.19 + 1.0) * 0.4);
@@ -674,6 +676,11 @@ export class Water {
             vec3 src = tgSkyBase(normalize(vec3(-V.x, max(abs(V.y), 0.05), -V.z))) * Fw * film * 0.2 * (1.0 - dry);
             // the wet band is brown mud, not a black stroke
             src += vec3(0.085, 0.065, 0.045) * INV_PI * irr * band * band * 0.6 * midC * (1.0 - dry);
+            // r-nightwater: where animals drink the shore is trampled wet mud: a brown, mottled band (a beaver pond has its own marsh look below)
+            {
+              float trampN = tgNoise2(p * 1.7 + 14.0) * 0.6 + tgNoise2(p * 5.3 + 3.0) * 0.4;
+              src += vec3(0.078, 0.057, 0.039) * (0.55 + 0.9 * trampN) * INV_PI * irr * band * band * 0.75 * (1.0 - isCreek) * (1.0 - mA) * (1.0 - dry);
+            }
             // Riparian fringe: damp ground and sedges crowd the bank, darker than the prairie, so from the drone's height the water
             // is framed by a dark line and the terrain's pale bank mud never shows as a kerb. Drawn as pure darkening, so the bank
             // keeps the terrain's own colour and lighting.
@@ -744,6 +751,8 @@ export class Water {
             // pebbles where the riffles run
             barC *= 1.0 - 0.25 * riffle * smoothstep(0.55, 0.8, n2) * w3;
             barC = mix(barC, vec3(0.9, 0.91, 0.93), clamp(uSnow * 1.2, 0.0, 1.0) * smoothstep(0.0, 0.05, barTop));
+            // (moonlit sand is grey-blue, not the tan of day)
+            barC = mix(barC, vec3(dot(barC, vec3(0.2126, 0.7152, 0.0722))) * vec3(0.85, 0.98, 1.1), 0.75 * uNight);
             vec3 src = barC * INV_PI * irr * (1.0 - 0.3 * rain);
             gl_FragColor = vec4(min(max(src, vec3(0.0)), vec3(32.0)), 1.0) * worldFade * rimFade;
             return;
@@ -791,7 +800,14 @@ export class Water {
           F = max(F, 0.35 * mirK * (1.0 - ice));
           // mid range: the mirror varies along the channel in lanes that ride the current (calm, sky-bright lanes between rough, darker
           // ones), instead of one even gloss; a modest floor keeps some sky in the water at steep camera angles
-          F = max(F, midK * isCreek * (0.03 + 0.17 * smoothstep(0.5, 0.86, fStreak)) * (1.0 - ice) * (1.0 - 0.6 * uNight));
+          F = max(F, midK * isCreek * (0.03 + 0.17 * smoothstep(0.5, 0.86, fStreak)) * (1.0 - ice) * (1.0 - 0.15 * uNight));
+          // r-nightwater: still water always holds some of the sky and the banks (a pond over a dark body reads as a mirror, not as a teal fill)
+          // (the bank and crown march below is gated on the reflectance without these floors: a steep view mirrors mostly sky, and the march is the costly part)
+          float Fgate = F;
+          F = max(F, (0.045 + 0.05 * smoothstep(0.75, 0.35, V.y)) * (1.0 - ice));
+          // under the moon the surface is a silver mirror at a graze (the dome is far brighter than the dark land around the water), so a creek
+          // reads as water at night and never as a dark road
+          F = max(F, 0.3 * uNight * smoothstep(0.7, 0.3, V.y) * (1.0 - ice));
           // a rain-roughened surface turns its micro-facets toward the viewer: the grazing mirror dulls
           F *= 1.0 - 0.4 * rain * (1.0 - ice);
           // distant cat's paws scatter the bright sky a little: they read as darker drifting patches
@@ -811,20 +827,20 @@ export class Water {
           {
             float skyL = dot(sky, vec3(0.2126, 0.7152, 0.0722));
             float blueish = clamp((sky.b - sky.r) / (skyL + 0.02), 0.0, 1.0);
-            sky = mix(sky, vec3(skyL) * vec3(0.96, 1.02, 1.06), 0.4 * midK * isCreek * (1.0 - uNight) * blueish);
+            sky = mix(sky, vec3(skyL) * vec3(0.96, 1.02, 1.06), max(0.7 * midK * isCreek, 0.45 * (1.0 - isCreek)) * (1.0 - uNight) * blueish);
           }
           // under the moon the mirrored sky is a dark grey-blue, not a bright blue stripe
           sky = mix(sky, vec3(min(sL, 1.0)) * vec3(0.8, 0.9, 1.1), 0.55 * uNight);
           // a grey rain sky is mirrored dim and flat, never as a white sheet
           sky *= 1.0 - 0.3 * uOvercast;
           sky = mix(sky, vec3(dot(sky, vec3(0.3333))), 0.5 * rain);
-          vec4 hit = F > 0.03 ? mirrorHit(p, R, vLevel, ambC, farK) : vec4(0.0);
+          vec4 hit = Fgate * (1.0 - 0.4 * rain * (1.0 - ice)) > 0.03 ? mirrorHit(p, R, vLevel, ambC, farK) : vec4(0.0);
           hit.a *= 1.0 - 0.5 * rain;
           // (a beaver pond's far bank mirrors as muted olive sedge, not the sunlit gold of the dry grass beyond: with the low sun in front that
           // golden reflection ran along the far shore as an orange rim)
           hit.rgb = mix(hit.rgb, vec3(dot(hit.rgb, vec3(0.2126, 0.7152, 0.0722))) * vec3(0.82, 1.0, 0.7) * 0.8, 0.6 * mA);
           // from the drone a stream is mostly mirrored sky: the thin strips of bank and grass in it blur into the sky's light
-          hit.a *= 1.0 - 0.6 * mirK;
+          hit.a *= 1.0 - 0.4 * mirK;
           vec3 refl = mix(sky, hit.rgb, hit.a);
           // from afar the mirror takes a deep teal cast, so the creek reads as water rather than a neutral grey strip
           refl = mix(refl, refl * vec3(0.55, 0.92, 1.2), mix(0.75 * farK, 0.22 * farK, mirK) * (1.0 - uNight));
@@ -854,7 +870,7 @@ export class Water {
             float landL = 0.06 * dot(irr, vec3(0.2126, 0.7152, 0.0722));
             // calm reaches stay darker than the land around them; the roughened, silvery reaches may come up to about its level
             // (the far mirror's floor lifts this: a silver stream may be brighter than the grass beside it, but never under the moon)
-            float capL = max(landL * mix(mix(2.4, 0.42, farK), 9.0 * (1.0 - 0.5 * uNight), mirK) * (1.0 + 1.8 * roughD), 1e-4);
+            float capL = max(landL * mix(mix(2.4, 0.42, farK), 9.0 * (1.0 - 0.5 * uNight), mirK) * (1.0 + 1.8 * roughD) * (1.0 + 1.6 * uNight), 1e-4);
             float rL = F * dot(refl, vec3(0.2126, 0.7152, 0.0722));
             refl *= rL > 1e-5 ? capL * (1.0 - exp(-rL / capL)) / rL : 1.0;
           }
@@ -868,7 +884,7 @@ export class Water {
           float cosT = sqrt(max(1.0 - sinI2 / 1.769, 0.05));
           float Ly = max(uLightDir.y, 0.0);
           float cosL = sqrt(max(1.0 - (1.0 - Ly * Ly) / 1.769, 0.05));
-          vec3 sigma = isCreek > 0.5 ? vec3(3.0, 2.3, 2.1) : vec3(1.25, 0.72, 0.62);
+          vec3 sigma = isCreek > 0.5 ? vec3(3.0, 2.3, 2.1) : vec3(1.7, 0.98, 0.82);
           // The channel is not one depth all along: the current scours pools on the outside of bends and through the wide reaches
           // and drops sand bars on the inside of bends and over the riffles. This only changes how deep the water looks.
           float optK = 1.0, barK = 0.0;
@@ -921,7 +937,8 @@ export class Water {
             vec3 Ebed = ambC * 0.7 + uLightColor * Ly * shadow * (0.85 + 0.75 * caus);
             bodyC = bedAlb * INV_PI * Ebed * Tr;
           }
-          vec3 scatC = isCreek > 0.5 ? vec3(0.03, 0.042, 0.032) : vec3(0.021, 0.043, 0.04);
+          // (r-nightwater: the pond's own light is a deep olive-slate, not a clear teal; the creek's is a little browner and darker)
+          vec3 scatC = isCreek > 0.5 ? vec3(0.025, 0.035, 0.028) : vec3(0.008, 0.018, 0.016);
           // mid range: the deep middle is a slate teal with a little life in it, not near-black
           if (isCreek > 0.5) scatC = mix(scatC, vec3(0.032, 0.05, 0.048), 0.8 * midK) * (1.0 + 0.35 * midK) * (0.62 + 0.85 * fStreak * midK + 0.38 * (1.0 - midK));
           if (isCreek > 0.5) {
@@ -947,7 +964,7 @@ export class Water {
           // the clear shallows (broken up by the lanes), so the water has a visible cross-section: dark channel, pale shoals
           if (isCreek > 0.5 && midK > 0.01) {
             float shelf = (1.0 - smoothstep(0.03, 0.34, depth)) * smoothstep(0.0, 0.06, depth) * midK;
-            vec3 shoal = vec3(0.3, 0.26, 0.17) * (0.8 + 0.5 * fStreak) * INV_PI * irrBody * 0.62;
+            vec3 shoal = vec3(0.3, 0.26, 0.17) * (0.8 + 0.5 * fStreak) * INV_PI * irrBody * 0.5;
             src = mix(src, shoal + refl * F * 0.5, shelf * 0.6 * (1.0 - 0.8 * ice));
           }
           float lipW = (1.0 - edgeA) * mix(0.5, 0.8, isCreek) * (1.0 - dry);
@@ -991,9 +1008,9 @@ export class Water {
             } else {
               dN = smoothstep(0.0, 1.0, sqrt(max(depth, 0.0) / 0.95));
             }
-            vec3 shAlb = isCreek > 0.5 ? vec3(0.52, 0.41, 0.19) : vec3(0.33, 0.37, 0.23);
-            vec3 mdAlb = isCreek > 0.5 ? vec3(0.2, 0.27, 0.095) : vec3(0.14, 0.23, 0.17);
-            vec3 dpAlb = isCreek > 0.5 ? vec3(0.05, 0.125, 0.095) : vec3(0.045, 0.13, 0.14);
+            vec3 shAlb = isCreek > 0.5 ? vec3(0.44, 0.34, 0.16) : vec3(0.3, 0.31, 0.19);
+            vec3 mdAlb = isCreek > 0.5 ? vec3(0.14, 0.2, 0.085) : vec3(0.09, 0.15, 0.115);
+            vec3 dpAlb = isCreek > 0.5 ? vec3(0.034, 0.085, 0.07) : vec3(0.026, 0.07, 0.07);
             // (a beaver pond is stained brown and olive by leaf litter)
             shAlb = mix(shAlb, vec3(0.11, 0.09, 0.05), 0.75 * mA);
             mdAlb = mix(mdAlb, vec3(0.065, 0.08, 0.042), 0.7 * mA);
@@ -1018,7 +1035,7 @@ export class Water {
             float Fv = 0.025 + 0.8 * pow(1.0 - vEff, 4.5);
             Fv = max(Fv, 0.1 * smoothstep(0.85, 0.3, vY));
             float sheen = smoothstep(0.35, 0.65, 1.0 - rough);
-            Fv *= mix(0.3, 2.3, sheen);
+            Fv *= mix(0.3, 1.9, sheen);
             Fv *= mix(0.45, 1.0, smoothstep(0.05, 0.45, dN));
             Fv *= 1.0 - 0.35 * rain - 0.25 * gust * uWind.z * (1.0 - isCreek);
             Fv = clamp(Fv, 0.0, 0.8);
@@ -1027,9 +1044,9 @@ export class Water {
             vec3 skyF = tgSkyBase(normalize(vec3(R.x, max(R.y * 0.8, 0.03), R.z)));
             float skyFL = dot(skyF, LUMW);
             skyF *= skyFL > 1.1 ? (1.1 + (skyFL - 1.1) / (1.0 + 1.6 * (skyFL - 1.1))) / skyFL : 1.0;
-            skyF = mix(skyF, vec3(skyFL) * vec3(0.84, 1.0, 1.05), clamp(0.2 + 0.55 * dimK + 0.3 * uOvercast, 0.0, 0.85));
-            skyF *= 1.0 - 0.3 * uOvercast;
-            vec3 reflF = mix(skyF, hit.rgb, hit.a * 0.7);
+            skyF = mix(skyF, vec3(skyFL) * vec3(0.84, 1.0, 1.05), clamp(0.4 + 0.45 * dimK + 0.3 * uOvercast, 0.0, 0.85));
+            skyF *= (1.0 - 0.3 * uOvercast) * 0.72;
+            vec3 reflF = mix(skyF, hit.rgb, hit.a * 0.85);
             vec3 srcF = reflF * Fv + bodyF * (1.0 - Fv) * edgeA;
             float aF = Fv + (1.0 - Fv) * edgeA;
             src = mix(src, srcF, gK);
@@ -1098,6 +1115,17 @@ export class Water {
             float fl2 = pow(max(dot(reflect(-V, fN2), uLightDir), 0.0), 420.0);
             float spot2 = (1.0 - smoothstep(0.06, 0.3, length(fract(gp2) - 0.5 - 0.3 * (gr2.yx - 0.5)))) * step(0.3, tgHash21(gi2 + 17.0));
             glint += uLightColor * fl2 * spot2 * 2.2 * glitM;
+          }
+          // r-nightwater: moonlight on moving water. Ripple facets catch the sky from every side, so under a moon (or starlight) a creek carries
+          // long silver streaks along the current and a pond a few drifting cat's paws, never one flat slate sheet (the sheet read as a road)
+          if (uNight > 0.02) {
+            vec2 sq = isCreek > 0.5 ? q : (p - uWindOff * 0.8);
+            vec2 sf = isCreek > 0.5 ? vec2(0.22, 1.7) : vec2(0.55, 0.55);
+            float sA = wNoise(sq * sf + vec2(77.0, 5.0)).x * 0.6 + wNoise(sq * sf * vec2(2.7, 2.3) + vec2(9.0, 31.0)).x * 0.4;
+            float sheen = smoothstep(0.42, 0.75, sA) * mix(0.35, 1.0, w2);
+            float moonStr = clamp(uMoonCol.g / 3.0, 0.3, 1.0);
+            float sheenK = uNight * moonStr * mix(0.5, 1.0, isCreek) * (1.0 - 0.6 * ice);
+            glint += vec3(0.30, 0.38, 0.56) * sheen * sheenK * (0.2 + 0.25 * (1.0 - V.y));
           }
           glint *= shadow * (1.0 - uOvercast * 0.8) * (1.0 - 0.8 * ice) * (1.0 - 0.7 * rain);
           glint *= smoothstep(0.02, 0.3, depth);
