@@ -635,6 +635,20 @@ const ndc = new THREE.Vector2();
 let downX = 0, downY = 0;
 const canvas = engine.renderer.domElement;
 canvas.addEventListener('pointerdown', (e) => { downX = e.clientX; downY = e.clientY; });
+// r-idle: the quiet marker of the selected or followed animal fades about 5 s after the last input; the pointer resting over the animal brings it
+// back (checked at most 8 times a second, and only while a marker exists)
+let hoverAt = 0;
+canvas.addEventListener('pointermove', (e) => {
+  if (selectedAnimal === null && animals.followedId === null) return;
+  const now = performance.now();
+  if (now - hoverAt < 125 || e.buttons !== 0) return;
+  hoverAt = now;
+  const r = canvas.getBoundingClientRect();
+  ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+  ray.setFromCamera(ndc, engine.camera);
+  const a = animals.pick(ray);
+  if (a !== null && (a === selectedAnimal || a === animals.followedId)) animals.pokeRing();
+});
 canvas.addEventListener('pointerup', (e) => {
   if (Math.hypot(e.clientX - downX, e.clientY - downY) > 5 || e.button !== 0) return; // a drag, not a click
   const r = canvas.getBoundingClientRect();

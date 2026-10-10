@@ -116,7 +116,7 @@ function make(near: boolean): MeshBuilder {
   }
   // Big upright ears, rusty on the back with a darker tip
   b.addPair({
-    part: PART.HEAD, piv: neckPiv, sides: near ? 8 : 6,
+    part: PART.HEAD, piv: neckPiv, piv2: P(0.66, 0.88, 0.065), spare: 4, sides: near ? 8 : 6, // (tag 4 + piv2: an ear, pivoting at its base: the r-idle flick)
     paint: (_p, _n, t) => [1.25 - 0.45 * t, 0.78 - 0.34 * t, 0.5 - 0.26 * t, 0.55],
     rings: pathRings([P(0.66, 0.86, 0.065), P(0.645, 0.97, 0.082), P(0.635, 1.09, 0.09)], [R(0.058, 0.022), R(0.05, 0.018), R(0.016, 0.008)], { ref: [1, 0, 0], sub: near ? 3 : 2, capStart: false, capLen: 0.5 }),
   });

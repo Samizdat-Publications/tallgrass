@@ -122,7 +122,7 @@ function make(near: boolean): MeshBuilder {
     rings: pathRings([[0.77, 1.27, 0.052], [0.82, 1.32, 0.052], [0.86, 1.36, 0.05]], [[0.014, 0.013], [0.01, 0.01], [0.003, 0.003]], { sub: near ? 4 : 2, capStart: false, capLen: 0.4 }),
   });
   b.addPair({
-    part: PART.HEAD, piv: neckPiv, sides: near ? 8 : 6, paint: [0.9, 0.85, 0.8, 1],
+    part: PART.HEAD, piv: neckPiv, piv2: [0.68, 1.1, 0.07], spare: 4, sides: near ? 8 : 6, paint: [0.9, 0.85, 0.8, 1], // (tag 4 + piv2: an ear, pivoting at its base: the r-idle flick)
     rings: pathRings([[0.68, 1.1, 0.07], [0.62, 1.16, 0.11], [0.57, 1.2, 0.14]], [[0.03, 0.012], [0.026, 0.012], [0.006, 0.006]], { ref: [1, 0, 0], sub: near ? 3 : 2, capStart: false, capLen: 0.5 }),
   });
 

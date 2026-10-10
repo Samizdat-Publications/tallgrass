@@ -92,7 +92,8 @@ function make(near: boolean): MeshBuilder {
     }
   }
   b.addPair({
-    part: PART.HEAD, piv: neckPiv, sides: near ? 8 : 6, paint: (_p, _n, t) => [mix(1, 0.15, smooth(0.0, 0.7, t)), mix(1, 0.12, smooth(0.0, 0.7, t)), mix(1, 0.1, smooth(0.0, 0.7, t)), 1],
+    part: PART.HEAD, piv: neckPiv, piv2: [0.67, 0.8, 0.075], spare: 4, sides: near ? 8 : 6, // (tag 4 + piv2: an ear, pivoting at its base: the r-idle flick)
+    paint: (_p, _n, t) => [mix(1, 0.15, smooth(0.0, 0.7, t)), mix(1, 0.12, smooth(0.0, 0.7, t)), mix(1, 0.1, smooth(0.0, 0.7, t)), 1],
     rings: pathRings([[0.67, 0.79, 0.075], [0.66, 0.85, 0.085], [0.655, 0.89, 0.09]], [[0.035, 0.022], [0.03, 0.02], [0.012, 0.008]], { ref: [1, 0, 0], sub: near ? 3 : 2, capStart: false, capLen: 0.5 }),
   });
 

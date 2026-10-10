@@ -109,7 +109,7 @@ function make(near: boolean): MeshBuilder {
   }
   // Pointed ears
   b.addPair({
-    part: PART.HEAD, piv: neckPiv, sides: near ? 8 : 6,
+    part: PART.HEAD, piv: neckPiv, piv2: [0.69, 0.88, 0.06], spare: 4, sides: near ? 8 : 6, // (tag 4 + piv2: an ear, pivoting at its base: the r-idle flick)
     paint: (_p, _n, t) => [0.7 - 0.25 * t, 0.68 - 0.25 * t, 0.65 - 0.25 * t, 1],
     rings: pathRings([[0.69, 0.87, 0.06], [0.675, 0.95, 0.07], [0.67, 1.03, 0.075]], [[0.04, 0.016], [0.034, 0.013], [0.012, 0.006]], { ref: [1, 0, 0], sub: near ? 3 : 2, capStart: false, capLen: 0.5 }),
   });
