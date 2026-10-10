@@ -230,9 +230,55 @@ for nm, a, c in arrays:
 idx_off = len(blob)
 blob += tris.astype(np.uint16).reshape(-1).tobytes()
 open(os.path.join(out_dir, sp + '.bin'), 'wb').write(blob)
+
+def paint_albedo(im, regions):
+    """Paint white markings (cfg 'paint') into the albedo: a weight per vertex from its final position and normal, rasterised through the uv
+    triangles (so the marking follows the surface). Used for the pronghorn's rump patch, belly and throat bands, which the source lacks."""
+    sm = lambda a, b, x: np.clip((x - a) / (b - a), 0, 1) ** 2 * (3 - 2 * np.clip((x - a) / (b - a), 0, 1))
+    x, y, z = pos[:, 0], pos[:, 1], pos[:, 2]
+    w = np.zeros(n)
+    for r in regions:
+        k = r['kind']
+        if k == 'rump':
+            w = np.maximum(w, sm(r['x0'], r['x1'], x) * sm(r['y0'], r['y1'], y))
+        elif k == 'belly':
+            w = np.maximum(w, sm(r['y0'], r['y1'], y) * sm(r['xa0'], r['xa1'], x) * sm(r['xb0'], r['xb1'], x) * sm(r.get('yl0', -1), r.get('yl1', -0.9), y))
+        elif k == 'band':
+            ax, ay = r['axis']; px_, py_ = r['origin']
+            t = (x - px_) * ax + (y - py_) * ay
+            under = sm(r.get('n0', 0.45), r.get('n1', 0.0), nrm[:, 1])
+            w = np.maximum(w, sm(r['t0'] - r['soft'], r['t0'], t) * sm(r['t1'] + r['soft'], r['t1'], t) * under)
+    a = np.asarray(im, np.float32) / 255.0
+    W_, H_ = im.size
+    mask = np.zeros((H_, W_), np.float32)
+    uvp = uv / WS if WP else uv
+    for tri in tris:
+        P = np.stack([uvp[tri, 0] * W_, (1 - uvp[tri, 1]) * H_], 1)
+        x0, x1 = int(np.floor(P[:, 0].min())), int(np.ceil(P[:, 0].max()))
+        y0, y1 = int(np.floor(P[:, 1].min())), int(np.ceil(P[:, 1].max()))
+        if x1 <= x0 or y1 <= y0:
+            continue
+        xs, ys = np.meshgrid(np.arange(x0, x1 + 1) + 0.5, np.arange(y0, y1 + 1) + 0.5)
+        d = (P[1, 1] - P[2, 1]) * (P[0, 0] - P[2, 0]) + (P[2, 0] - P[1, 0]) * (P[0, 1] - P[2, 1])
+        if abs(d) < 1e-9:
+            continue
+        l0 = ((P[1, 1] - P[2, 1]) * (xs - P[2, 0]) + (P[2, 0] - P[1, 0]) * (ys - P[2, 1])) / d
+        l1 = ((P[2, 1] - P[0, 1]) * (xs - P[2, 0]) + (P[0, 0] - P[2, 0]) * (ys - P[2, 1])) / d
+        l2 = 1 - l0 - l1
+        inside = (l0 >= -0.02) & (l1 >= -0.02) & (l2 >= -0.02)
+        val = l0 * w[tri[0]] + l1 * w[tri[1]] + l2 * w[tri[2]]
+        xi = np.clip(xs.astype(int), 0, W_ - 1); yi = np.clip(ys.astype(int), 0, H_ - 1)
+        cur = mask[yi, xi]
+        mask[yi, xi] = np.where(inside, np.maximum(cur, val), cur)
+    white = np.array([0.93, 0.91, 0.86], np.float32)
+    a = a * (1 - mask[..., None] * 0.92) + white * (mask[..., None] * 0.92)
+    return Image.fromarray((np.clip(a, 0, 1) * 255 + 0.5).astype(np.uint8))
+
 for kind in ('albedo', 'normal'):
     src = os.path.join(work, f'{sp}_{kind}.png')
     im = Image.open(src).convert('RGB')
+    if kind == 'albedo' and cfg.get('paint'):
+        im = paint_albedo(im, cfg['paint'])
     if kind == 'albedo' and cfg.get('grade'):
         # a mild colour grade of the baked albedo (saturation toward the luminance, a gain): tames a painted source to our coat palette
         g = cfg['grade']

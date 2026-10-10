@@ -31,10 +31,14 @@ export function a3Enabled(): boolean {
   return v === null || v !== '0';
 }
 
-/** The species a3 applies to for this page: `?a3=1` all of them, `?a3=bison,wolf` a list. */
+/** On by default; the coyote and cougar stay off until their gallop is tuned (turn them on with `?a3=all` or by name). */
+export const A3_DEFAULT = ['bison', 'wolf', 'pronghorn', 'muledeer'];
+
+/** The species a3 applies to for this page: no parameter, the default set; `?a3=1` or `all` every species with an asset; `?a3=bison,wolf` a list. */
 function wanted(): string[] {
   if (!a3Enabled()) return [];
-  const v = new URLSearchParams(location.search).get('a3') ?? '1';
+  const v = new URLSearchParams(location.search).get('a3');
+  if (v === null) return A3_DEFAULT;
   return v === '1' || v === 'all' ? A3_SPECIES : v.split(',').filter((s) => A3_SPECIES.includes(s));
 }
 
@@ -61,7 +65,8 @@ async function loadOne(key: string): Promise<void> {
   map.generateMipmaps = true;
   map.minFilter = THREE.LinearMipmapLinearFilter;
   let normalMap: THREE.Texture | null = null;
-  if (meta.normal) {
+  const flags = new URLSearchParams(location.search);
+  if (meta.normal && flags.get('a3n') !== '0') { // (?a3n=0: no normal map, a cost probe)
     normalMap = await load(base + meta.normal);
     normalMap.anisotropy = 8;
   }
