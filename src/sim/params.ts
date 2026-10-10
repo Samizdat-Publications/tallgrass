@@ -109,6 +109,9 @@ export interface Params {
    *  is the suspect for the mule deer cost of shoreSpread: it pushes bison into the woody creek cover). Thresholds 0.3 to 0.3 + 0.15 x shoreWaves.
    *  Ignored where shoreSpread is larger. 0 = off. */
   shoreWaves: number;
+  /** If > 0, shoreSpread's walk back off the bank weakens in tree and shrub cover (strength x max(0, 1 - shoreOpen x cover)), so bison leave the bank
+   *  over open ground and not into the creek-side woods the mule deer live in. 0 = off. */
+  shoreOpen: number;
   /** If > 0, personal space while grazing: a grazing herbivore keeps this multiple of the usual separation (spacing and range) from herd-mates,
    *  and its cohesion pull is divided by the same factor, so the herd spreads out over the patch (1.6 is the screened value). 0 = off (1 would match the old spacing). */
   herdSpacingGraze: number;
@@ -629,6 +632,7 @@ export function defaultParams(): Params {
     drinkSpots: 0,
     shoreSpread: 0,
     shoreWaves: 0,
+    shoreOpen: 0,
     herdSpacingGraze: 1.6, // v7c (was 0)
     herdBands: 0,
     bandSize: 30,

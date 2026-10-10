@@ -1799,7 +1799,7 @@ export class Sim implements SimLike {
     }
     // shoreSpread (round 25, bison only: mule deer lost their creek-side cover with it): a bison that has drunk its fill walks back off the bank, further than the drink-spot drift
     if (p.shoreSpread > 0 && s === Sp.Bison && state !== St.Drink && state !== St.Flee && a.hydration[i] > 0.7 && this.drinkD[c] < 12 + 18 * p.shoreSpread) {
-      const k = 0.5 + 0.4 * p.shoreSpread;
+      const k = (0.5 + 0.4 * p.shoreSpread) * (p.shoreOpen > 0 ? Math.max(0, 1 - p.shoreOpen * this.world.cover[c]) : 1);
       dvx -= this.waterGX[c] * k;
       dvy -= this.waterGY[c] * k;
     }
