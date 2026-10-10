@@ -1122,10 +1122,14 @@ export class Water {
             vec2 sq = isCreek > 0.5 ? q : (p - uWindOff * 0.8);
             vec2 sf = isCreek > 0.5 ? vec2(0.22, 1.7) : vec2(0.55, 0.55);
             float sA = wNoise(sq * sf + vec2(77.0, 5.0)).x * 0.6 + wNoise(sq * sf * vec2(2.7, 2.3) + vec2(9.0, 31.0)).x * 0.4;
-            float sheen = smoothstep(0.42, 0.75, sA) * mix(0.35, 1.0, w2);
+            // (round 32: on a pond the cat's paws were hard-edged blobs that read as a camouflage pattern. A pond takes a wide, soft
+            // ramp and a lower strength, so it is one calm sheet with a slow gradient; a creek keeps its streaks)
+            float sheen = smoothstep(mix(0.2, 0.42, isCreek), mix(1.0, 0.75, isCreek), sA) * mix(0.35, 1.0, w2);
             float moonStr = clamp(uMoonCol.g / 3.0, 0.3, 1.0);
-            float sheenK = uNight * moonStr * mix(0.5, 1.0, isCreek) * (1.0 - 0.6 * ice);
+            float sheenK = uNight * moonStr * mix(0.3, 1.0, isCreek) * (1.0 - 0.6 * ice);
             glint += vec3(0.30, 0.38, 0.56) * sheen * sheenK * (0.2 + 0.25 * (1.0 - V.y));
+            // a broad, soft moon glint on still water: one wide lobe toward the moon, not a patchwork
+            glint += uMoonCol * pow(rm, 7.0) * 0.06 * (1.0 - isCreek) * uNight * (0.3 + 0.7 * F);
           }
           glint *= shadow * (1.0 - uOvercast * 0.8) * (1.0 - 0.8 * ice) * (1.0 - 0.7 * rain);
           glint *= smoothstep(0.02, 0.3, depth);

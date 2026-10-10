@@ -1920,7 +1920,6 @@ button.tg-ent-b:hover {
   opacity: 0.74;
   transition: opacity 1.4s var(--ease);
 }
-.tg-ui.is-idle:not(.is-cinematic):not(.is-hidden) .tg-time,
 .tg-ui.is-idle:not(.is-cinematic):not(.is-hidden) .tg-ov-btn,
 .tg-ui.is-idle:not(.is-cinematic):not(.is-hidden) .tg-shutter,
 .tg-ui.is-idle:not(.is-cinematic):not(.is-hidden) .tg-topright-row .tg-leaf {
@@ -1929,6 +1928,17 @@ button.tg-ent-b:hover {
 }
 .tg-ui.is-idle:not(.is-cinematic):not(.is-hidden) .tg-tools-btn {
   opacity: 0.42;
+  transition: opacity 1.4s var(--ease);
+}
+/* r-polish32 (round 32, item 10): the playback bar went to 0.34 with the rest, and its buttons and the "1 year every 2 min" label could not be read.
+   Like the population panel it keeps a floor: the glass at 0.8, its content a little dimmer, so every control and the speed label stay legible
+   while everything else idles down. */
+.tg-ui.is-idle:not(.is-cinematic):not(.is-hidden) .tg-time {
+  opacity: 0.8;
+  transition: opacity 1.4s var(--ease);
+}
+.tg-ui.is-idle:not(.is-cinematic):not(.is-hidden) .tg-time > * {
+  opacity: 0.86;
   transition: opacity 1.4s var(--ease);
 }
 /* a first session's introduced button, and an armed tool, stay at full strength */
