@@ -1,0 +1,114 @@
+{
+ "species": "cougar",
+ "source": "scratch/a3/raw/cougar/cougar.glb",
+ "work": "scratch/a3/work/cougar",
+ "exclude_objects": [
+  "Puma_gray_Whiskers_0",
+  "Puma_gray_Claws_0"
+ ],
+ "pose": "POSE",
+ "forward": [
+  0,
+  -1,
+  0
+ ],
+ "height": 0.95,
+ "nose_x": 0.92,
+ "tris": 8500,
+ "tex": 1024,
+ "xscale": 0.91,
+ "xshift": -0.057,
+ "zshift": 0.0,
+ "xsplit": 0.0,
+ "leg_top": 0.7,
+ "leg_rx_max": 0.1,
+ "leg_rz_max": 0.075,
+ "leg_pad": 0.02,
+ "leg_fade": 0.25,
+ "knee_w": 0.07,
+ "hip_blend": 0.3,
+ "hip_blend_up": 0.08,
+ "hip_src_x": {
+  "front": 0.45,
+  "hind": -0.4
+ },
+ "rig": {
+  "front": {
+   "hip": [
+    0.38,
+    0.6
+   ],
+   "knee": [
+    0.41,
+    0.24
+   ],
+   "foot": [
+    0.4,
+    0.0
+   ]
+  },
+  "hind": {
+   "hip": [
+    -0.4,
+    0.62
+   ],
+   "knee": [
+    -0.47,
+    0.24
+   ],
+   "foot": [
+    -0.44,
+    0.0
+   ]
+  }
+ },
+ "neck": [
+  0.42,
+  0.72,
+  0.0
+ ],
+ "head_w": [
+  0.42,
+  0.68
+ ],
+ "head_x": [
+  0.62,
+  0.7
+ ],
+ "neck_low": [
+  0.45,
+  0.55,
+  0.6,
+  0.05
+ ],
+ "tail": {
+  "pivot": [
+   -0.55,
+   0.78,
+   0.0
+  ],
+  "x0": -0.55,
+  "z": 0.0,
+  "half": 0.07,
+  "ymin": 0.5,
+  "blend": 0.2,
+  "rot": 0.45
+ },
+ "coat": 0.4,
+ "coat_mid": [
+  0.45,
+  0.25,
+  0.095
+ ],
+ "ground": 0.6,
+ "ao_r": 0.05,
+ "ao_reach": 0.4,
+ "grade": {
+  "sat": 1.3,
+  "gain": [
+   1.3,
+   1.05,
+   0.8
+  ]
+ }
+}

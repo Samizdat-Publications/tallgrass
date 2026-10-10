@@ -19,7 +19,7 @@ const modes = arg('a3', '1').split(',');
 const secs = Number(arg('secs', '4'));
 const dist = Number(arg('dist', '9'));
 const [W, H] = arg('size', '1280x720').split('x').map(Number);
-const SPNUM = { bison: 0, wolf: 1 };
+const SPNUM = { bison: 0, wolf: 1, pronghorn: 3, cougar: 5, coyote: 6, muledeer: 10 };
 mkdirSync(out, { recursive: true });
 const kill = setTimeout(() => { console.error('a3clip: hard timeout'); process.exit(2); }, 25 * 60 * 1000);
 const server = await createServer({

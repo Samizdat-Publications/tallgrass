@@ -1523,10 +1523,10 @@ export class PostFX {
     const clean = 1 - 0.4 * winter;
     f.uAerial.value = 0.00014 * (0.55 + 0.7 * summer + (0.35 - 0.15 * lowK) * low) * (1 + 0.5 * over) * clean;
     f.uAerialLum.value = (0.8 + 0.6 * summer + 0.5 * dust) * (1 - 0.85 * over) * (0.7 + (0.5 - 0.2 * lowK) * low) * clean;
-    f.uHorGlow.value = (0.35 + 0.35 * summer + 0.3 * dust) * (0.4 + 0.6 * low) * (1 - 0.8 * over);
+    f.uHorGlow.value = (0.35 + 0.35 * summer + 0.3 * dust) * (0.4 + 0.6 * low) * (1 - 0.8 * over) * (1 - 0.15 * lowK);
     f.uDust.value = dust;
     f.uAerialWarm.value = (0.35 + (0.65 - 0.3 * lowK) * low) * (1 - over) * (1 - 0.5 * winter);
-    this.hazeBloom = 1 + (0.3 - 0.1 * lowK) * low * (1 - over) * (1 - night);
+    this.hazeBloom = 1 + (0.14 - 0.04 * lowK) * low * (1 - over) * (1 - night);   // (r-land: was 0.3 and 0.1, which blew the sun side out)
     f.uAerialNight.value = Math.min(1, night * 1.15);
     f.uAerialPale.value = 0.3 * lowK * low * (1 - over) * (1 - 0.6 * winter) * (1 - night);
     // god rays: need a sun above the horizon and no cloud; stronger in haze and dust and with the sun low, off at night
