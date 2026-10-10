@@ -1,0 +1,73 @@
+{
+ "args": {
+  "seeds": 20,
+  "seedBase": 1,
+  "ticks": 1440000,
+  "generations": 1000,
+  "sampleEvery": 2000,
+  "threads": 5,
+  "scenarios": [
+   "baseline"
+  ],
+  "params": {
+   "shoreSpread": 1
+  },
+  "mock": false,
+  "maxMinutes": 0,
+  "progressSec": 900,
+  "out": "C:\\Users\\stewa\\Documents\\Claude\\ecosystem-sim\\scratch\\frozen\\feaa081\\review\\stability\\v11-feaa081",
+  "argv": [
+   "--seeds",
+   "20",
+   "--generations",
+   "1000",
+   "--ticks",
+   "1440000",
+   "--sample",
+   "2000",
+   "--threads",
+   "5",
+   "--params",
+   "{\"shoreSpread\":1}",
+   "--out",
+   "review/stability/v11-feaa081",
+   "--progress-sec",
+   "900"
+  ]
+ },
+ "commit": "feaa081 (frozen copy)",
+ "node": "v24.19.0",
+ "platform": "win32 x64",
+ "startedAt": "2026-10-10T05:05:09.814Z",
+ "finishedAt": "2026-10-10T09:56:59.561Z",
+ "wallSeconds": 17509.74,
+ "stopReason": null,
+ "tasks": {
+  "total": 20,
+  "completed": 20,
+  "errors": 0,
+  "aborted": 0,
+  "skipped": 0
+ },
+ "msPerTick": 2.904351,
+ "ticksRun": 28800000,
+ "ticksPerSecWall": 1645,
+ "scenarios": {
+  "baseline": {
+   "seeds": 20,
+   "completed": 20,
+   "persistencePct": {
+    "bison": 100,
+    "wolf": 100,
+    "raven": 100,
+    "pronghorn": 100,
+    "rabbit": 100,
+    "cougar": 95,
+    "coyote": 100,
+    "prairiedog": 90,
+    "muledeer": 100
+   },
+   "maxGen": 547.4742990654206
+  }
+ }
+}
