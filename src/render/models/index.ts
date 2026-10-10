@@ -12,7 +12,7 @@ import { buildHawk } from './hawk';
 import { buildMuleDeer } from './muledeer';
 import { buildBeaver } from './beaver';
 import type { ModelDef } from './types';
-import { A3_TUNE, getA3 } from './a3';
+import { a3Tune, getA3 } from './a3';
 
 export type { ModelDef, AnimParams } from './types';
 
@@ -44,8 +44,8 @@ export function getModel(sp: number): ModelDef | null {
     // a3 spike (?a3=1): the authored mesh replaces the procedural near LOD of the species that have one
     const a3 = key !== undefined ? getA3(key) : null;
     if (a3) {
-      m.nearGeometry = a3.whiteUV && m.nearGeometry ? withAntlers(m.nearGeometry, a3.geometry, a3.whiteUV, A3_TUNE[key!]?.antlerShift ?? [0, 0, 0], A3_TUNE[key!]?.antlerScale ?? 1, m.seasonal?.antlerBase ?? [0, 0, 0]) : a3.geometry;
-      m.a3 = { map: a3.map, normalMap: a3.normalMap ?? undefined, ...A3_TUNE[key!] };
+      m.nearGeometry = a3.whiteUV && m.nearGeometry ? withAntlers(m.nearGeometry, a3.geometry, a3.whiteUV, a3Tune(key!).antlerShift ?? [0, 0, 0], a3Tune(key!).antlerScale ?? 1, m.seasonal?.antlerBase ?? [0, 0, 0]) : a3.geometry;
+      m.a3 = { map: a3.map, normalMap: a3.normalMap ?? undefined, ...a3Tune(key!) };
       tintFarTo(m, a3.avg);
     }
     cache.set(sp, m);

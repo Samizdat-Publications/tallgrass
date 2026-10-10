@@ -98,7 +98,7 @@ function lodDefines(def: ModelDef | undefined, variant: Variant): string[] {
     `#define FUR_STREAK ${f(fur?.streak ?? 0)}`, `#define FUR_MOTTLE ${f(fur?.mottle ?? 0)}`, `#define FUR_MOTTLE_SCALE ${f(fur?.mottleScale ?? 7)}`, `#define FUR_INDIV ${f(fur?.indiv ?? 0)}`,
     `#define A3SKIN ${variant === 'near' && def?.a3 ? 1 : 0}`,
     // a3 graze: the head angle multiplier, the forebody pitch down and the neck drop (m) while grazing (an authored head is shorter than the procedural one)
-    `#define A3_DN ${f(variant === 'near' ? def?.a3?.grazeK ?? 1 : 1)}`, `#define A3_PITCH ${f(variant === 'near' ? def?.a3?.grazePitch ?? 0 : 0)}`, `#define A3_DROP ${f(variant === 'near' ? def?.a3?.grazeDrop ?? 0 : 0)}`,
+    `#define A3_SPINE ${f(variant === 'near' ? def?.a3?.spineK ?? 1 : 1)}`, `#define A3_DN ${f(variant === 'near' ? def?.a3?.grazeK ?? 1 : 1)}`, `#define A3_PITCH ${f(variant === 'near' ? def?.a3?.grazePitch ?? 0 : 0)}`, `#define A3_DROP ${f(variant === 'near' ? def?.a3?.grazeDrop ?? 0 : 0)}`,
     `#define SHELL ${variant === 'near' && sh ? 1 : 0}`,
     `#define SHELL_SCALE ${f(sh?.scale ?? 30)}`, `#define SHELL_ALONG ${f(sh?.along ?? 0.5)}`, `#define SHELL_SPARSE ${f(sh?.sparse ?? 0.4)}`,
     `#define SHELL_D0 ${f(sh?.d0 ?? 30)}`, `#define SHELL_D1 ${f(sh?.d1 ?? 50)}`,
@@ -697,8 +697,8 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
   {
     // (legmath.ts bodyMotion) flexion at the gathered phase, the hips and shoulders twisting half a beat later
     float wSp = tgGW.y * SPINE_TROT + tgGW.z;
-    tgSpA = SPINE_A * wSp * cos(cyc + SPINE_PHASE);
-    tgSpR = SPINE_R * wSp * sin(cyc + SPINE_PHASE - 0.04);
+    tgSpA = SPINE_A * A3_SPINE * wSp * cos(cyc + SPINE_PHASE);
+    tgSpR = SPINE_R * A3_SPINE * wSp * sin(cyc + SPINE_PHASE - 0.04);
   }
 #endif
 #endif

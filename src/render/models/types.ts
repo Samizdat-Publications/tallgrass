@@ -283,7 +283,7 @@ export interface ModelDef {
    * a3 spike: the near LOD is an authored mesh (tools/import_animal.py + tools/label_animal.py) with an albedo and a normal map. Its leg and tail
    * vertices carry a skin blend in aPart.w (0 = follows its bone, 1 = follows the body) so the continuous skin does not tear at the hip.
    */
-  a3?: { map: THREE.Texture; normalMap?: THREE.Texture; grazeK?: number; grazePitch?: number; grazeDrop?: number; /** where the procedural antlers sit on the authored head: offset of their base (m) and a scale about it */ antlerShift?: [number, number, number]; antlerScale?: number };
+  a3?: { map: THREE.Texture; normalMap?: THREE.Texture; grazeK?: number; grazePitch?: number; grazeDrop?: number; /** where the procedural antlers sit on the authored head: offset of their base (m) and a scale about it */ antlerShift?: [number, number, number]; antlerScale?: number; /** multiplies the gallop spine flex and twist (an authored torso is longer and stiffer than the procedural loft); default 1 */ spineK?: number };
   /** Camera distance range (m) of the dithered cross-fade from the near to the far LOD. */
   lod?: { d0: number; d1: number };
   fur?: FurDef;

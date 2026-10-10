@@ -15,9 +15,11 @@ export interface A3Asset {
 }
 
 /** Per species pose tuning of the authored mesh (see ModelDef.a3): graze head angle multiplier, forebody pitch (rad) and neck drop (m). */
-export const A3_TUNE: Record<string, { grazeK?: number; grazePitch?: number; grazeDrop?: number; antlerShift?: [number, number, number]; antlerScale?: number }> = {
+export const A3_TUNE: Record<string, { grazeK?: number; grazePitch?: number; grazeDrop?: number; antlerShift?: [number, number, number]; antlerScale?: number; spineK?: number }> = {
   bison: { grazeK: 1.3, grazePitch: 0.12, grazeDrop: 0.12 },
   muledeer: { antlerShift: [0.12, 0.07, 0], antlerScale: 1.15 },
+  coyote: { spineK: 0.5 },
+  cougar: { spineK: 0.5 },
 };
 
 const assets = new Map<string, A3Asset>();
@@ -75,11 +77,22 @@ async function loadOne(key: string): Promise<void> {
 
 /** Loads the authored meshes this page asked for. A failed load is logged and that species keeps its procedural near LOD. */
 export async function preloadA3(): Promise<void> {
-  for (const key of wanted()) {
-    try {
-      await loadOne(key);
-    } catch (e) {
-      console.warn('a3: could not load', key, e);
-    }
-  }
+  // all species at once (each is a small json, a bin and two images): the page start waits for the slowest, not the sum
+  await Promise.all(
+    wanted().map(async (key) => {
+      try {
+        await loadOne(key);
+      } catch (e) {
+        console.warn('a3: could not load', key, e);
+      }
+    }),
+  );
+}
+
+/** The pose tuning of a species, with the `?a3spine=<k>` probe override (spine flex multiplier) for tuning by eye. */
+export function a3Tune(key: string): { grazeK?: number; grazePitch?: number; grazeDrop?: number; antlerShift?: [number, number, number]; antlerScale?: number; spineK?: number } {
+  const t = { ...A3_TUNE[key] };
+  const q = typeof location === 'undefined' ? null : new URLSearchParams(location.search).get('a3spine');
+  if (q !== null && Number.isFinite(Number(q))) t.spineK = Number(q);
+  return t;
 }
