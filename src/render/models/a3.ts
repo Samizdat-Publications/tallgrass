@@ -17,7 +17,8 @@ export interface A3Asset {
 /** Per species pose tuning of the authored mesh (see ModelDef.a3): graze head angle multiplier, forebody pitch (rad) and neck drop (m). */
 export const A3_TUNE: Record<string, { grazeK?: number; grazePitch?: number; grazeDrop?: number; antlerShift?: [number, number, number]; antlerScale?: number; spineK?: number }> = {
   bison: { grazeK: 1.3, grazePitch: 0.12, grazeDrop: 0.12 },
-  muledeer: { antlerShift: [0.12, 0.07, 0], antlerScale: 1.15 },
+  muledeer: { antlerShift: [0.12, 0.07, 0], antlerScale: 1.15, grazeK: 1.3, grazePitch: 0.08, grazeDrop: 0.1 },
+  pronghorn: { grazeK: 1.3, grazePitch: 0.08, grazeDrop: 0.1 },
   coyote: { spineK: 0.25 },
   cougar: { spineK: 0.2 },
 };
