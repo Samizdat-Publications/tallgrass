@@ -54,7 +54,7 @@ const VIEW_SETUPS = {
     e.storms.onThunder = null;
   }`,
 };
-const VIEW_NAMES = Object.keys(VIEW_SETUPS);
+const VIEW_NAMES = arg('views', '') ? arg('views', '').split(',').filter((n) => n in VIEW_SETUPS) : Object.keys(VIEW_SETUPS); // (--views low_golden,herd runs just those)
 const WARMUP = 6;
 const FRAMES = 40;
 
