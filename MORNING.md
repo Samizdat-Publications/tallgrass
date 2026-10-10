@@ -39,6 +39,7 @@
 - The **Chronicle hides completely** when the UI idles; the population panel stays faintly visible.
 
 ### Blocked or cut
+- **Your C: drive was full** (333 MB free of 925 GB) at 08:00 Saturday. I cleared about 22 GB of this project's own old scratch copies (old batch checkouts and review videos; results are kept in the repo); it now has 23 GB free. The rest of the drive is outside this project and worth a look.
 - Idle-machine measurements (page-ready time, 100x speed) never happened: the CPU ran batches all night. Under that load the live page took over 3 minutes to become ready; please tell me if the live site loads slowly for you.
 - Wide-view readability (telling species apart at mid range) and the noisy-looking population charts are still open.
 - Your CPU ruling (16:00, then 85% from 18:00) cost about two hours of builder speed in the evening; no work was lost.
