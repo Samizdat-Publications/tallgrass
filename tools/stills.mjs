@@ -28,7 +28,7 @@ const SETS = {
   // fixed number of ticks (so animals stand in the same places whatever the load), the light and season are held, the UI is hidden.
   // Use with --query "seed=tallgrass" (the default world). tools/look_stats.py compares lk_01 and lk_02 with the concept image.
   look: [
-    { name: 'lk_00_setup', eval: `(() => {
+    { name: 'lk_00_setup', eval: `(async () => {
       const e = window.__engine;
       window.__env = (o) => {
         window.__envO = Object.assign({ season: 1.8, weather: 0, warmth: 0.7, rain: 0, dayFrac: 0.7 }, o);
@@ -39,6 +39,7 @@ const SETS = {
       document.dispatchEvent(new KeyboardEvent('keydown', { key: 'h', bubbles: true }));
       window.__lkPick = (sp, st) => { const c = (st !== undefined ? window.__find(sp, st) : []).concat(window.__find(sp)); return c.length ? c[0] : null; };
       window.__lkFollow = (sp, st, dist, pitch) => { const id = window.__lkPick(sp, st); window.__followId(id); e.cam.setView({ distance: dist, pitchDeg: pitch }); };
+      await new Promise((r) => { let last = -1, same = 0, n = 0; const t = setInterval(() => { const sn = window.__snap && window.__snap(); const k = sn ? sn.tick : -2; if (k === last) same++; else { same = 0; last = k; } if ((same >= 5 && k >= 900) || ++n > 240) { clearInterval(t); r(); } }, 500); }); // the sim has finished the 900 stepped ticks (a loaded machine used to capture a still-stepping, snowy early world)
     })()`, wait: 6000 },
     { name: 'lk_02_golden_low', eval: "window.__cam('low')", wait: 3500 },
     { name: 'lk_03_golden_wide', eval: "window.__cam('wide')", wait: 3500 },
@@ -56,7 +57,7 @@ const SETS = {
   // env hold (day 0.28, season 1.8) that outranks every later __env() call, so lk_02 to lk_10 all share that dawn light and lk_08 to
   // lk_10 are NOT midday, night and winter. This set never calls __concept, so each step really has the light it names.
   lookreg: [
-    { name: 'rg_00_setup', eval: `(() => {
+    { name: 'rg_00_setup', eval: `(async () => {
       const e = window.__engine;
       window.__env = (o) => {
         window.__envO = Object.assign({ season: 1.8, weather: 0, warmth: 0.7, rain: 0, dayFrac: 0.7 }, o);
@@ -65,6 +66,7 @@ const SETS = {
       };
       window.__speed(0); window.__step(900); window.__followId(null); window.__env({});
       document.dispatchEvent(new KeyboardEvent('keydown', { key: 'h', bubbles: true }));
+      await new Promise((r) => { let last = -1, same = 0, n = 0; const t = setInterval(() => { const sn = window.__snap && window.__snap(); const k = sn ? sn.tick : -2; if (k === last) same++; else { same = 0; last = k; } if ((same >= 5 && k >= 900) || ++n > 240) { clearInterval(t); r(); } }, 500); }); // the sim has finished the 900 stepped ticks (a loaded machine used to capture a still-stepping, snowy early world)
     })()`, wait: 6000 },
     { name: 'rg_01_dusk_low', eval: "window.__env({ dayFrac: 0.7 }); window.__cam('low')", wait: 3500 },
     { name: 'rg_02_dusk_wide', eval: "window.__cam('wide')", wait: 3500 },
@@ -317,6 +319,7 @@ SETS.lapse = [
   { name: 'lapse_02_drone_100x', eval: "window.__speed(100)", wait: 5000 },
   { name: 'lapse_03_drone_100x_lower', eval: "window.__engine.cam.setView({ distance: 220, pitchDeg: 35 })", wait: 4000 },
 ];
+
 
 const only = arg('only', '').split(',').filter(Boolean); // --only lk_02,lk_08: just those steps (the first, the setup step, always runs)
 const steps = SETS[set] && only.length ? SETS[set].filter((s, i) => i === 0 || only.some((o) => s.name.startsWith(o))) : SETS[set];

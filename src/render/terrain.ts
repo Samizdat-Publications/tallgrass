@@ -18,6 +18,10 @@ const FAR_RES = 512;
 const EXT_CELL = 4;
 const FAR_ORIGIN = -768;
 const FAR_SIZE = 2048;
+/** r-land: the share of the small ripple (under about 25 m) taken out of the render heights, away from the creek and the ponds. */
+const LAND_RIPPLE = 0.75;
+/** r-land: the share of the far ring's 70 m and 50 m rolling octaves kept (they crumpled the mid-distance hills into dunes). */
+const LAND_FAR_ROLL = 0.4;
 
 /**
  * Render heights: the sim's creek bed profile ignores the terrain beside it, so the creek can sit above lowland
@@ -233,6 +237,25 @@ export class Terrain {
         shaped.height[j * hn + i] -= 0.97 * up * wc;
       }
     }
+    // r-land: the sim's ground carries ripples 10 to 40 m across (about a metre high). Under a low sun they read from the drone as crumpled
+    // paper or sand dunes, and the horizon shadows of every little crest stripe the hills. The rolling prairie keeps its hills (60 m and up)
+    // and the render copy of the heights loses most of the small ripple: a soft low-pass (about 22 m window) is blended in, except
+    // along the creek and round the ponds, whose shaped banks must stay exact. Everything that stands on the ground reads these heights.
+    {
+      const LKQ = LAND_RIPPLE;
+      const soft = boxBlur(shaped.height, hn, 5), fine = boxBlur(shaped.height, hn, 2);
+      const pq = world.ponds;
+      for (let j = 0; j < hn; j++) {
+        for (let i = 0; i < hn; i++) {
+          const v = j * hn + i;
+          let w = smoothstep(14, 46, shaped.creekDist[v]);
+          for (let q = 0; q < pq.length && w > 0; q += 4) w *= smoothstep(pq[q + 2] * 2.0, pq[q + 2] * 2.8, Math.hypot(i * cell - pq[q], j * cell - pq[q + 1]));
+          // (the finest band, under about 10 m, goes almost entirely; the 10 to 30 m band by LKQ)
+          const h0 = shaped.height[v];
+          shaped.height[v] = soft[v] + (fine[v] - soft[v]) * (1 - LKQ * w) + (h0 - fine[v]) * (1 - 0.92 * w);
+        }
+      }
+    }
     // trend field: a wide blur of the ground (about 110 m). The far ring continues this smooth field outward and adds the
     // mirrored high-pass detail on top, so beyond the border the terrain has the same character as inside, with no streaks.
     const blurred = boxBlur(boxBlur(shaped.height, hn, 28), hn, 28);
@@ -351,9 +374,9 @@ export class Terrain {
       const rollA = smoothstep(90, 300, d) * (1 - 0.35 * smoothstep(1600, 3600, d));
       const roll1 = fbm2(x * 0.0052 + 41.7, z * 0.0052 - 17.3, 3, 91);
       const roll2 = fbm2(x * 0.0141 - 7.9, z * 0.0141 + 22.1, 3, 97);
-      const rolling = rollA * (46 * (roll1 - 0.5) + 19 * (roll2 - 0.5) * (1 - 0.6 * smoothstep(900, 2400, d)));
+      const rolling = rollA * (46 * (roll1 - 0.5) + 19 * LAND_FAR_ROLL * (roll2 - 0.5) * (1 - 0.6 * smoothstep(900, 2400, d)));
       const far = smoothstep(150, 2600, d);
-      return inner * (1 - wallT) + rim * wallT + crest + rolling + 16 * (mid - 0.5) * midA + 9 * (near - 0.5) * nearA + far * (20 + 90 * big) + d * 0.008;
+      return inner * (1 - wallT) + rim * wallT + crest + rolling + 16 * (mid - 0.5) * midA + 9 * LAND_FAR_ROLL * (near - 0.5) * nearA + far * (20 + 90 * big) + d * 0.008;
     };
 
     for (let i = 0; i < 3; i++) {
@@ -1250,6 +1273,18 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
     float ochreK = smoothstep(60.0, 250.0, dist) * dryAmt * (1.0 - autumnK) * (1.0 - winterK) * (1.0 - uNight) * (1.0 - uDrought);
     float lumO = dot(grassCol, vec3(0.2126, 0.7152, 0.0722));
     grassCol = mix(vec3(lumO), grassCol, 1.0 + 0.2 * ochreK) * mix(vec3(1.0), vec3(1.04, 1.0, 0.86), 0.5 * ochreK);
+  }
+  // r-land: broad prairie colour at mid and far range. From the drone one ochre reads as sand; real prairie is patched by moisture and use.
+  // Swales and draws run deeper, greener gold, crests and the sunward faces go pale dry straw, grazed ground is shorter and browner, and
+  // the 100 to 400 m tint patches keep their strength with distance (the near-range fade above halves them, which flattens the far hills).
+  // Painterly and subtle: a few ALU ops, no fetches (the macro fields were already read).
+  float landK = smoothstep(100.0, 380.0, dist) * (1.0 - uNight) * (1.0 - 0.8 * winterK) * (1.0 - 0.6 * topK) * (1.0 - riparian) * (1.0 - uDrought);
+  if (landK > 0.004) {
+    float moistL = clamp(draw * 0.85 + hollowK * 0.9 + 0.5 * (1.0 - up) - 0.35 * ridgeK, 0.0, 1.0);
+    grassCol *= mix(vec3(1.0), vec3(0.83, 0.98, 0.66), moistL * 0.65 * landK);
+    grassCol *= mix(vec3(1.0), vec3(1.1, 1.06, 0.9), ridgeK * 0.7 * landK * dry);
+    grassCol *= mix(vec3(1.0), vec3(0.88, 0.8, 0.68), stubA * 0.55 * landK);
+    grassCol *= mix(vec3(1.0), tint, 0.38 * landK);
   }
   // drought: bleached pale straw (same luminance, leaning yellow, so never mauve), thinned in the belt
   if (uDrought > 0.001) grassCol = tgDroughtTint(grassCol, uDrought, riparian);
