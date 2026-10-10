@@ -528,7 +528,10 @@ const VERT = /* glsl */ `
 varying vec3 vDir;
 void main() {
   vDir = position;
-  gl_Position = projectionMatrix * vec4(mat3(viewMatrix) * position * 500.0, 1.0);
+  vec4 p = projectionMatrix * vec4(mat3(viewMatrix) * position * 500.0, 1.0);
+  // r-perf: the dome sits at the far end of the depth range and is drawn after the opaque scene, so every sky pixel the ground, trees and
+  // animals cover is rejected by the depth test before the (expensive) sky fragment shader runs
+  gl_Position = vec4(p.xy, p.w * 0.99999, p.w);
 }
 `;
 
@@ -906,13 +909,13 @@ export class Sky {
         uMeteorAim: NIGHT.meteorAim,
       },
       side: THREE.BackSide,
-      depthTest: false,
+      depthTest: true,
       depthWrite: false,
       fog: false,
     });
     this.mesh = new THREE.Mesh(geo, this.material);
     this.mesh.frustumCulled = false;
-    this.mesh.renderOrder = -1000;
+    this.mesh.renderOrder = 100000; // (last of the opaque draws, before anything transparent)
     this.mesh.name = 'sky';
   }
 

@@ -415,6 +415,12 @@ class Batch {
   capacity = 0;
   count = 0; // instances written this frame: living first, then carcasses
   alive = 0; // living instances (pickable)
+  /**
+   * r-perf per-instance cull (AnimalLayer.commit): after it, rows [0, nView) are the ones the camera can see (drawn by the camera
+   * passes), [nView, count) only cast a shadow into the view (drawn by the shadow passes), and the rest were dropped. Without the cull
+   * nView equals count.
+   */
+  nView = 0;
   mesh!: THREE.InstancedMesh;
   geometry!: THREE.BufferGeometry;
   /**
@@ -496,9 +502,11 @@ class Batch {
     };
     const aoCount = this.def.aoCount;
     mesh.onBeforeRender = (_r, _s, camera) => {
+      mesh.count = this.nView; // (the camera passes draw only what the camera can see)
       if (aoCount !== undefined && (_s as THREE.Scene).overrideMaterial) g.setDrawRange(0, aoCount); // (the AO pre-pass draws the rest pose: leave out the antlers)
       beforeRender(_r as THREE.WebGLRenderer, _s as THREE.Scene, camera);
     };
+    mesh.onBeforeShadow = () => { mesh.count = this.count; }; // (the shadow passes also draw the casters just outside the view)
     if (aoCount !== undefined) mesh.onAfterRender = () => g.setDrawRange(0, Infinity);
     this.geometry = g;
     this.mesh = mesh;
@@ -3001,8 +3009,34 @@ export class AnimalLayer {
       b.centers[k * 4 + 3] = 0; // not pickable
     }
 
+    this.markers.end();
+    this.glyphs.end();
+    this.contact.end();
+    this.updateRing();
+    if (!this.deferCommit) this.commit();
+  }
+
+  /**
+   * r-perf: the viewing camera and the light direction (toward the light), for the per-instance cull in commit(). With no camera set
+   * nothing is culled. The page sets `deferCommit` and calls commit() from the engine's pre-render hook, so the cull sees the camera
+   * exactly as it will be drawn (the director moves it after update()).
+   */
+  cullCamera: THREE.PerspectiveCamera | null = null;
+  cullLightDir: THREE.Vector3 | null = null;
+  deferCommit = false;
+  private cullOn = false;
+  private cullPV = new THREE.Matrix4();
+  private cullPlanes = new Float64Array(24);
+  private cullScratch = new Float32Array(0);
+  private cullClass = new Int8Array(0);
+  private cullPermBuf = new Int32Array(0);
+
+  /** Fill the near meshes, cull the instances nothing can see, and hand the rows to the GPU. */
+  commit(): void {
+    this.setupCullFrustum();
     for (const b of this.live) {
       const m = b.mesh;
+      this.cullBatch(b);
       if (b.nearMesh) this.fillNear(b);
       m.count = b.count;
       m.visible = b.count > 0;
@@ -3014,10 +3048,99 @@ export class AnimalLayer {
         a.needsUpdate = true;
       }
     }
-    this.markers.end();
-    this.glyphs.end();
-    this.contact.end();
-    this.updateRing();
+  }
+
+  private setupCullFrustum(): void {
+    const cam = this.cullCamera;
+    this.cullOn = cam !== null;
+    if (!cam) return;
+    cam.updateMatrixWorld();
+    this.cullPV.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse);
+    const e = this.cullPV.elements, pl = this.cullPlanes;
+    // Gribb-Hartmann: left, right, bottom, top, near, far, each normalised so a sphere test needs no division
+    const rows = [[0, 1], [0, -1], [1, 1], [1, -1], [2, 1], [2, -1]];
+    for (let i = 0; i < 6; i++) {
+      const r = rows[i][0], sg = rows[i][1];
+      let a = e[3] + sg * e[r], b = e[7] + sg * e[4 + r], c = e[11] + sg * e[8 + r], d = e[15] + sg * e[12 + r];
+      const l = Math.hypot(a, b, c) || 1;
+      a /= l; b /= l; c /= l; d /= l;
+      pl[i * 4] = a; pl[i * 4 + 1] = b; pl[i * 4 + 2] = c; pl[i * 4 + 3] = d;
+    }
+  }
+
+  /** True when a sphere (x, y, z, r) touches the camera frustum. */
+  private sphereInView(x: number, y: number, z: number, r: number): boolean {
+    const pl = this.cullPlanes;
+    for (let i = 0; i < 24; i += 4) if (pl[i] * x + pl[i + 1] * y + pl[i + 2] * z + pl[i + 3] < -r) return false;
+    return true;
+  }
+
+  /**
+   * r-perf: a quadruped batch holds every animal in the world (hundreds of bison), and each one is drawn by the camera pass, the AO
+   * pre-pass and both shadow cascades whether or not it can be seen. Stable-partition the rows into those the camera can see, those that
+   * only cast a shadow into the view (the sphere grown by the shadow's reach along the ground: body height over the tangent of the
+   * light's elevation, capped), and the rest, which are dropped. Nothing visible changes: the tests are conservative.
+   */
+  private cullBatch(b: Batch): void {
+    const n = b.count;
+    b.nView = n;
+    const pr = b.def.params;
+    if (!this.cullOn || pr.kind !== 0 || n < 8) return;
+    const te = b.mesh.instanceMatrix.array as Float32Array;
+    // (the camera as it will be drawn, not the last draw's: after a cut the size boost below must use the new distance)
+    const cp = this.cullCamera!.position, uPxK = 900 / (2 * Math.tan((this.cullCamera!.fov * Math.PI) / 360));
+    const ld = this.cullLightDir;
+    // the shadow's length per metre of height: sqrt(1 - ly^2) / ly, capped (a low sun throws long shadows, but past 80 m nothing matters)
+    const ly = ld ? ld.y / Math.max(ld.length(), 1e-6) : 0;
+    const perM = ly > 0.04 ? Math.sqrt(Math.max(0, 1 - ly * ly)) / ly : 40;
+    const baseR = Math.max(pr.length, pr.height, pr.boostLen);
+    if (this.cullClass.length < n) this.cullClass = new Int8Array(Math.max(n, this.cullClass.length * 2, 256));
+    const cls = this.cullClass;
+    let nv = 0, nc = 0;
+    for (let k = 0; k < n; k++) {
+      const o = k * 16;
+      const x = te[o + 12], y = te[o + 13], z = te[o + 14];
+      const s = Math.hypot(te[o], te[o + 1], te[o + 2]);
+      const camD = Math.hypot(x - cp.x, y - cp.y, z - cp.z);
+      const boost = legBoost(pr, s, camD, uPxK);
+      const R = baseR * s * boost * 1.3 + 1.5;
+      let c = 2;
+      if (this.sphereInView(x, y, z, R)) c = 0;
+      else if (this.sphereInView(x, y, z, R + Math.min(80, 2 * R * perM))) c = 1;
+      cls[k] = c;
+      if (c === 0) nv++;
+      else if (c === 1) nc++;
+    }
+    if (nv === n) return; // all in view: nothing to move
+    const total = nv + nc;
+    if (this.cullPermBuf.length < n) this.cullPermBuf = new Int32Array(Math.max(n, this.cullPermBuf.length * 2, 256));
+    const perm = this.cullPermBuf;
+    let a = 0, c1 = nv;
+    for (let k = 0; k < n; k++) {
+      if (cls[k] === 0) perm[a++] = k;
+      else if (cls[k] === 1) perm[c1++] = k;
+    }
+    this.permute(b.mesh.instanceMatrix.array as Float32Array, 16, perm, total);
+    this.permute(b.gait.array as Float32Array, 4, perm, total);
+    this.permute(b.look.array as Float32Array, 4, perm, total);
+    this.permute(b.fx.array as Float32Array, 4, perm, total);
+    this.permute(b.fx2.array as Float32Array, 4, perm, total);
+    this.permute(b.centers, 4, perm, total);
+    this.permute(b.ids, 1, perm, total);
+    b.count = total;
+    b.nView = nv;
+    b.alive = nv;
+  }
+
+  /** arr[i] = old arr[perm[i]] for i < total, in place (through a scratch copy of the touched rows). */
+  private permute(arr: Float32Array | Uint32Array, stride: number, perm: Int32Array, total: number): void {
+    if (this.cullScratch.length < total * stride) this.cullScratch = new Float32Array(Math.max(total * stride, this.cullScratch.length * 2, 4096));
+    const sc = this.cullScratch;
+    for (let i = 0; i < total; i++) {
+      const src = perm[i] * stride, dst = i * stride;
+      for (let j = 0; j < stride; j++) sc[dst + j] = arr[src + j];
+    }
+    for (let i = 0, m = total * stride; i < m; i++) arr[i] = sc[i];
   }
 
   /**
@@ -3039,7 +3162,8 @@ export class AnimalLayer {
       const w = l[q + 3];
       const base = w - 32 * Math.floor((Math.floor(w + 0.001)) / 32); // the flag word without the near-copy bit
       const dx = te[o + 12] - cp.x, dy = te[o + 13] - cp.y, dz = te[o + 14] - cp.z;
-      if (dx * dx + dy * dy + dz * dz > lim) { l[q + 3] = base; continue; }
+      // (r-perf: rows past nView are only shadow casters, never drawn by the camera passes, so they need no near copy)
+      if (k >= b.nView || dx * dx + dy * dy + dz * dz > lim) { l[q + 3] = base; continue; }
       l[q + 3] = base + 32;
       const r = n * 16, p = n * 4;
       for (let i = 0; i < 16; i++) ne[r + i] = te[o + i];
@@ -3132,6 +3256,7 @@ export class AnimalLayer {
     for (const b of this.live) {
       const C = b.centers;
       for (let k = 0; k < b.alive; k++) {
+        if (b.ids[k] === 0) continue; // (a carcass: not pickable)
         const c = k * 4;
         const px = C[c] - ox, py = C[c + 1] - oy, pz = C[c + 2] - oz;
         const t = px * dx + py * dy + pz * dz;

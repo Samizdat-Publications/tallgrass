@@ -73,6 +73,13 @@ const animals = new AnimalLayer(renderWorld);
 engine.scene.add(animals.object3D);
 animals.snowField = engine.snowDepth;
 animals.setGround(engine.terrain.renderHeight);
+// r-perf: instances nothing can see (not in the view, no shadow into it) are not drawn; the cull runs once per frame after the camera has settled
+if (q.get('cull') !== '0') {
+  animals.cullCamera = engine.camera;
+  animals.cullLightDir = engine.uniforms.lightDir.value;
+  animals.deferCommit = true;
+  engine.onPreRender(() => animals.commit());
+}
 animals.swimLevelAt = (x, z) => { const l = engine.water.levelAt(x, z); return l === l ? l : engine.beaverWorks.surfaceAt(x, z); }; // (the drawn surface first)
 engine.cam.preset((q.get('cam') as 'wide' | 'low' | 'top' | null) ?? 'wide', true);
 // captures pin full resolution; players get an automatic render scale that holds 60 fps
