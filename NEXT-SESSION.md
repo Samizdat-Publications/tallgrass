@@ -6,7 +6,8 @@
 - STATE 14:30 Sat (resumed 13:30 after the drive; owner ruling: run 24 h to 2026-10-11 13:30, publish at the next checkpoint). Deadline file says 2026-10-11 13:30. Weekly quota 60% at 13:50: start nothing new at 65%, stop at 90% (never extra usage).
   - DONE: r-startup merged (NaN cause = negative first-frame dt after prime; dt clamped at 0; dry frame on; debug flags gone) and D8 deployed 14:03, live check clean, live cold ready 19 to 24 s. Gemini round 30 (D8) triaged in REVIEWS.md.
   - 16:00: D9 (r-alert2), D10 (trunk checkerboard), D11 (chase camera) all live and clean. Gemini round 31 and blind round 32 triaged in REVIEWS.md. Weekly 61% at 15:45.
-  - RUNNING: builder B15 r-polish32 (scratch/wt-pol32, brief scratch/day/b15_polish32.md): bison matte coat, dark night animals, smooth moonlit pond, idle playback bar. On report: check before/after, merge, deploy D12. Then (quota permitting) B16: species readability at the overview distance (round 32 item 1).
+  - 16:30: D12 live (r-polish32 merged). Weekly 61%.
+  - RUNNING: builder B16 r-read (scratch/wt-read, brief scratch/day/b16_read.md): species readability 60 to 220 m. On report: judge the before/after (close frames must be unchanged), merge, deploy D13. Then a Gemini round 33 on D13 and a final MORNING audit; stop new work at 65% weekly.
   - CPU: throttle loop restarted (scratch/day/throttle_loop.sh now calls scratch/day/throttle.ps1). Worktree preview server for wt-start on 5198 can be killed.
   - After B14, if quota is under 65%: nothing new; final MORNING self-audit, NEXT-SESSION, and stop early by writing the time to .claude/hooks/run_until.local.txt when the quota rule says so.
 - Planned Friday afternoon at extra-high effort; executes at high effort once the owner switches. The plan: `DAY-PLAN.md` (stock-take, bang-for-buck ranking, blocks, gates, quota targets).
