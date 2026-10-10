@@ -362,3 +362,21 @@ Scores: visual 5, readability 3, life and motion 1, ecosystem 2, UI 6, keep watc
 | 5 | Fast-forward pops | defer | The reel's warm-up; lapse look exists from 30x. |
 | 6 | UI heavy | reject | Idle fade exists (8 s); the capture kept the mouse active. |
 | 7 | Flat red blood decal on snow | fix | r-idle item 4. |
+
+## Round 27 (Gemini video at 8 fps, motion reel after r-idle; 2026-10-10 02:10) -> `review/round-27-video/motion.gemini.md`
+Scores: visual 5, readability 6, life and motion 3 (round 26: 1), ecosystem 4, UI 5, keep watching 4. Frozen-animal complaint gone. Fixed next: foot sliding on walks and the leap with no anticipation (r-feet: measured paw slip 3 to 11% down to 1.4% or less; leap crouch, arc and pin). Deferred: herd clustering (sim), UI text weight, uniform time-lapse grass growth.
+
+## Round 28 (blind critic, look set and UI frames of main after a3, trees3, r-land, r-idle, r-feet, r-nightwater; 2026-10-10 05:10) -> `review/round-28/critique.md`
+Scores: visual 7, readability 5, life 6, ecosystem 6, UI 7, keep watching 6 (round 25: 6/4/4/5/2/5).
+| # | Issue | Triage | Reason / outcome |
+|---|---|---|---|
+| 1 | Pond megaherd | defer | The sim fix (shoreSpread, v11) halves bison crowding at water but halved mule deer over 1,200 years in the acceptance; needs a deer-safe version next session. |
+| 2 | Flat noisy charts, deer and dog drift | defer | Planner item; climate2 0.4 traded prairie dogs for a little more breath. |
+| 3 | Screen-door dither on animals | fix | Builder r-polish28 item 1. |
+| 4 | Wide views hard to read | defer | Species glyphs exist above about 210 m; mid-range readability is next session. |
+| 5 | Follow camera loses the chasing wolf; captions over still scenes | fix (camera) | r-polish28 item 2; captions defer. |
+| 6 | Faded panels unreadable | fix | r-polish28 item 3. |
+| 7 | Trees glow yellow-green, white bark blotches | fix | r-polish28 item 4. |
+| 8 | Near-camera junk | defer | Capture framing; near-camera fade exists. |
+| 9 | Seasons disagree | reject | lk_10 holds the season at winter while the sim is in summer (capture artifact). |
+| 10 | Bedded bison loaves; 43x label | defer / reject | Lying pose improved in r-feet era; the label is honest by design. |
