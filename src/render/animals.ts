@@ -19,6 +19,7 @@ import { getModel } from './models';
 import { PREY_FAR, findChasePrey, isChasing } from './followframes';
 import { antlerOf, deerSeason } from './models/muledeer';
 import type { DeerSeason } from './models/muledeer';
+import { ALERT_YAW_MAX } from './models/types';
 import type { AnimParams, ModelDef } from './models';
 import { MapGlyphs } from './glyphs';
 import { IK_FAR, IK_NEAR, gaitMix, gaitStride, legRigOf, slopeStrideK, stanceBodyDy, timelapseGaitSpd, timelapseHz, timelapseK } from './models/legmath';
@@ -29,7 +30,7 @@ import type { AnimalShared } from './models/shader';
 import { Dust, KillSites, Markers, SceneLit } from './models/fx';
 import { Splash } from './models/splash';
 import { CanidState, newIn, newOut } from './canids';
-import { BEH, BEH_RANGE, BisonBehaviour, newBisonIn, newBisonOut, packBisonA, packBisonB, rutK, sessionAt } from './behaviours';
+import { BEH, BEH_RANGE, BisonBehaviour, alertYawCode, newBisonIn, newBisonOut, packBisonA, packBisonB, rutK, sessionAt } from './behaviours';
 import { sunHeight } from '../audio/mix';
 import { injectTerrainShadow } from './common';
 import type { SharedUniforms } from './common';
@@ -57,9 +58,11 @@ const ALERTS: boolean[] = SPECIES.map((s) => s.key === 'bison' || s.key === 'pro
 const WATCHED: boolean[] = SPECIES.map((s) => s.key === 'wolf' || s.key === 'coyote' || s.key === 'cougar');
 /** Alert range (m), the range inside which the body turns the full half step, and the turn limits (rad): far (a glance) and near (a startled half step, 30 degrees). */
 const ALERT_R = 60, ALERT_NEAR = 25, ALERT_TURN_FAR = 0.2, ALERT_TURN_NEAR = 0.52;
+/** r-alert2: a bison inside ALERT_NEAR turns up to this far (rad) on the spot to face a wolf, coyote or cougar (the head takes the rest); a bedded animal only lifts its head, inside this range (m). */
+const ALERT_TURN_BISON = 1.2, ALERT_LIE_R = 35;
 const ALERT_CELL = 48;
 /** How far the head comes up past its neutral carriage in an alert (the head-down weight goes negative by this much: a share of the grazing pitch). */
-const ALERT_RAISE = 0.4;
+const ALERT_RAISE = 0.6;
 const RAVEN: boolean[] = SPECIES.map((s) => s.key === 'raven');
 /** Animals that swim on the water's surface where there is water (the beaver, S14). */
 const SWIMS: boolean[] = SPECIES.map((s) => s.key === 'beaver');
@@ -679,6 +682,9 @@ class Slots {
   alD = new Float32Array(this.cap).fill(1e9);
   alB = new Float32Array(this.cap);
   alS = new Float32Array(this.cap).fill(-1e9);
+  /** r-alert2: the head yaw (rad, positive to the animal's right) toward the watched predator, and its rate (a critically damped follower, so the head never snaps). */
+  aly = new Float32Array(this.cap);
+  alyv = new Float32Array(this.cap);
   fresh = new Uint8Array(this.cap);
   stamp = new Uint32Array(this.cap);
   map = new Map<number, number>();
@@ -769,6 +775,8 @@ class Slots {
     this.al = g(this.al, Float32Array);
     { const b = new Float32Array(n).fill(1e9); b.set(this.alD); this.alD = b; }
     this.alB = g(this.alB, Float32Array);
+    this.aly = g(this.aly, Float32Array);
+    this.alyv = g(this.alyv, Float32Array);
     { const b = new Float32Array(n).fill(-1e9); b.set(this.alS); this.alS = b; }
     this.fresh = g(this.fresh, Uint8Array);
     this.stamp = g(this.stamp, Uint32Array);
@@ -1182,7 +1190,7 @@ export class AnimalLayer {
         S.phase[slot] = hash01(id * 7 + 3);
         S.sick[slot] = 0;
         S.dust[slot] = 0;
-        S.snx[slot] = 0; S.snz[slot] = 0; S.snw[slot] = 0; S.wetP[slot] = 0; S.spl[slot] = 0; S.wst[slot] = 0; S.alN[slot] = 0; S.al[slot] = 0; S.alD[slot] = 1e9; S.alS[slot] = -1e9;
+        S.snx[slot] = 0; S.snz[slot] = 0; S.snw[slot] = 0; S.wetP[slot] = 0; S.spl[slot] = 0; S.wst[slot] = 0; S.alN[slot] = 0; S.al[slot] = 0; S.aly[slot] = 0; S.alyv[slot] = 0; S.alD[slot] = 1e9; S.alS[slot] = -1e9;
         S.pounce[slot] = -1;
         S.pkey[slot] = -1;
         S.pstop[slot] = STRUGGLE_END;
@@ -2267,25 +2275,31 @@ export class AnimalLayer {
 
       // r-life alert: a grazer standing about, with a moving wolf, coyote or cougar within 60 m, lifts its head (and stops chewing: the head-down
       // weight goes to 0), eases in over about 0.4 s and out over about 1.5 s after the predator has passed. Within 25 m it also turns its body up
-      // to 30 degrees toward it (the drawn heading follower makes that a slow turn on the spot, no position change); a pronghorn flares its rump
-      // patch inside 40 m. The predators are bucketed once a snapshot and each grazer looks again every 0.1 to 0.2 s.
-      let alW = 0;
+      // to 30 degrees toward it (a bison up to 70, to face it; the drawn heading follower makes that a slow turn on the spot, no position change);
+      // a pronghorn flares its rump patch inside 40 m. The predators are bucketed once a snapshot and each grazer looks again every 0.1 to 0.2 s.
+      // r-alert2: a walking grazer does the same with its head and neck only (the body keeps its way), and a bedded one inside 35 m lifts its head
+      // (it stays down: the sim decides when it rises). The head also turns toward the predator (alYaw below, the shader's head yaw).
+      let alW = 0, alWant = 0;
       if (ALERTS[sp]) {
-        const standing = alertOn && (state === St.Graze || state === St.Idle || state === St.Drink) && S.lie[slot] < 0.5;
-        if (standing && clock >= S.alN[slot]) {
+        // r-alert2: a walking animal (St.Walk, or Migrate) watches too, with its head only, and a bedded one (inside ALERT_LIE_R) lifts its head; neither turns its body
+        const lying = S.lie[slot] >= 0.5;
+        const standing = alertOn && (state === St.Graze || state === St.Idle || state === St.Drink) && !lying;
+        const watching = standing || (alertOn && (lying || state === St.Walk || state === St.Migrate));
+        if (watching && clock >= S.alN[slot]) {
           S.alN[slot] = clock + 0.1 + 0.1 * hash01(id * 5 + (Math.floor(clock * 5) & 63));
           this.alertScan(x1, z1, S, slot);
           if (S.alD[slot] < ALERT_R) S.alS[slot] = clock;
         }
-        const want = standing && clock < S.alS[slot] + 0.5 ? 1 : 0;
+        const want = watching && clock < S.alS[slot] + 0.5 && (!lying || S.alD[slot] < ALERT_LIE_R + 5) ? 1 : 0;
+        alWant = want;
         if (want > 0 || S.al[slot] > 0.002) {
           S.al[slot] += (want - S.al[slot]) * (1 - Math.exp(-dt / (want > S.al[slot] ? 0.13 : 0.55)));
           if (S.al[slot] < 0.002) S.al[slot] = 0;
         }
         alW = S.al[slot];
-        if (alW > 0.01 && S.alD[slot] < ALERT_R * 1.5) {
+        if (standing && alW > 0.01 && S.alD[slot] < ALERT_R * 1.5) {
           const near = 1 - smoothstep(ALERT_NEAR - 5, ALERT_NEAR + 5, S.alD[slot]);
-          const lim = ALERT_TURN_FAR + (ALERT_TURN_NEAR - ALERT_TURN_FAR) * near;
+          const lim = ALERT_TURN_FAR + ((BISON[sp] ? ALERT_TURN_BISON : ALERT_TURN_NEAR) - ALERT_TURN_FAR) * near;
           h += clamp(wrapPi(S.alB[slot] - h), -lim, lim) * alW;
         }
       }
@@ -2656,6 +2670,20 @@ export class AnimalLayer {
         }
       }
       const turnRate = S.hw[slot];
+      // r-alert2: the head turns to the predator it is watching: the bearing off the drawn body axis, faded out for a bearing behind the shoulders (a head
+      // cannot reach that far round, and a predator passing behind then swings it back through the front, never a flip), followed by a critically damped
+      // spring (about 0.4 s in, 0.7 s out) so it eases in and out with no step
+      let alYaw = 0;
+      if (ALERTS[sp] && (alWant > 0 || S.aly[slot] !== 0 || S.alyv[slot] !== 0)) {
+        const rel = wrapPi(S.alB[slot] - hd);
+        const yT = alWant > 0 ? clamp(rel, -ALERT_YAW_MAX, ALERT_YAW_MAX) * (1 - smoothstep(2.2, 3.0, Math.abs(rel))) : 0;
+        const om = alWant > 0 ? 9 : 5.5, sdt = Math.min(dt, 0.05);
+        const v = S.alyv[slot] + (om * om * (yT - S.aly[slot]) - 2 * om * S.alyv[slot]) * sdt;
+        S.alyv[slot] = v;
+        S.aly[slot] += v * sdt;
+        if (alWant === 0 && Math.abs(S.aly[slot]) < 0.003 && Math.abs(v) < 0.02) { S.aly[slot] = 0; S.alyv[slot] = 0; }
+        alYaw = S.aly[slot];
+      }
 
       // pose on the terrain
       const ch = Math.cos(hd), sh = Math.sin(hd);
@@ -2919,7 +2947,7 @@ export class AnimalLayer {
       const fx = b.fx.array as Float32Array;
       fx[gp] = flier ? S.tug[slot] * (1 - S.mv[slot]) : S.tug[slot]; // a raven stops pecking while it hops or walks
       fx[gp + 1] = FLIES[sp] ? alt : pr.kind === 0 ? S.bdy[slot] + (iceW > 0.5 ? ICE_FLAG : 0) : 0;
-      fx[gp + 2] = pr.behave ? packBisonB(bo) : S.hunt[slot]; // (a bison: bellow, play and spar, R8, see packBison)
+      fx[gp + 2] = pr.behave ? packBisonB(bo, alYaw !== 0 ? alertYawCode(alYaw, ALERT_YAW_MAX) : 0) : pr.alertYaw ? alYaw : S.hunt[slot]; // (a bison: bellow, play and spar, R8, see packBison; and the head yaw of an alert, r-alert2)
       if (pr.swim) S.flare[slot] += (swimT - S.flare[slot]) * (1 - Math.exp(-Math.min(dt, 0.1) * 8)); // (a swimmer's weight, eased; the slot is otherwise the pronghorn's flare)
       fx[gp + 3] = raptor ? S.stoop[slot] : pr.swim ? S.flare[slot] : pr.flare ? S.flare[slot] : pounceE; // (a raptor: the stoop; a swimmer: the swim weight; a pronghorn: the rump flare, R8)
       // aFx2: a quadruped (hold on the prey 0..1, feeding cycle phase), a raven (hop 0..1 or -1, walk phase or -1, seconds into a
@@ -2938,7 +2966,7 @@ export class AnimalLayer {
       }
       look[gp] = clamp(coat, 0, 1);
       look[gp + 1] = hash01(id);
-      look[gp + 2] = pr.behave ? packBisonA(bo) : S.crouch[slot]; // (a bison: dig, wallow, rub and the air of a hop, R8, see packBison)
+      look[gp + 2] = pr.behave ? packBisonA(bo, alYaw !== 0 ? alertYawCode(alYaw, ALERT_YAW_MAX) : 0) : S.crouch[slot]; // (a bison: dig, wallow, rub and the air of a hop, R8, see packBison)
       look[gp + 3] = (id === sel ? 1 : 0) + 2 * fadeQ + sickK;
       // pick sphere
       const c = k * 4;

@@ -88,6 +88,11 @@ export interface AnimParams {
   swim?: { sink: number; /** x of the nose, where the wake starts, and how far the wake runs back from it (model m). */ nose: number; wake: number };
   /** R8 pronghorn: aFx2.x is the rump flare weight on alarm (the white patch spreads and brightens). */
   flare?: boolean;
+  /**
+   * r-alert2 (pronghorn, mule deer): aFx.z, which a grazer has no use for (no hunting weight), is the head yaw (rad, 0 = none) of an animal watching a
+   * predator pass. A bison carries the same value in 7 bits spread over the unused top bits of its two packed floats (see packBisonA, ALERT_YAW_MAX).
+   */
+  alertYaw?: boolean;
   /** 0 quadruped, 1 hopper, 2 bird. */
   kind: 0 | 1 | 2;
   /** Height of the pivot used for body pitch. */
@@ -424,3 +429,6 @@ export const DEFAULT_PARAMS: AnimParams = {
   minPx: 9,
   boostLen: 3,
 };
+
+/** r-alert2: the head of an animal watching a predator turns at most this far (rad) off its body axis. The bison packs the yaw in 7 bits (see packBisonA). */
+export const ALERT_YAW_MAX = 1.0;
