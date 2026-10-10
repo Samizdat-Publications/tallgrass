@@ -216,7 +216,7 @@ export const OCCLUDE_GLSL = /* glsl */ `
 uniform vec3 uOccCam;
 uniform vec3 uOccFocus;
 uniform vec3 uOccParams;
-float tgOcclusionFade(vec3 wp){
+float tgOcclusionFadeR(vec3 wp, float ragK){
   // last line of defence for the camera: foliage and bark within a few metres of the lens dissolve (the camera keeps clear of the
   // crowns, see camcollide.ts, but a lump that still reaches the lens would show the hollow shell). Always on, whatever the occlusion fade does.
   float nearK = smoothstep(1.0, 3.0, length(wp - uOccCam));
@@ -228,12 +228,16 @@ float tgOcclusionFade(vec3 wp){
   vec3 q = uOccCam + ab * clamp(t, 0.0, 1.0);
   // the rim is ragged, not a round cut: each leaf-scale bit of crown (about 0.2 m cells in world space) sees the hole a little wider or
   // narrower than its neighbour, so the edge reads as foliage thinning out and not as a circular window
-  vec3 cell = floor(wp * 5.0);
-  float rag = fract(sin(dot(cell, vec3(12.9898, 78.233, 37.719))) * 43758.5453) - 0.5;
+  // (the cells shrink near the lens in powers of two, so they stay leaf-sized on screen: fixed 0.2 m cells on a trunk 2 to 5 m away showed
+  // as big checkerboard squares, Gemini round 31 item 2)
+  float cs = 5.0 * exp2(clamp(floor(log2(10.0 / max(length(wp - uOccCam), 0.5))), 0.0, 3.0));
+  vec3 cell = floor(wp * cs);
+  float rag = (fract(sin(dot(cell, vec3(12.9898, 78.233, 37.719))) * 43758.5453) - 0.5) * ragK;
   float d = length(wp - q) + rag * uOccParams.y * 0.7;
   float hole = 1.0 - smoothstep(uOccParams.x, uOccParams.y, d);
   return (1.0 - hole * between * uOccParams.z) * nearK;
 }
+float tgOcclusionFade(vec3 wp){ return tgOcclusionFadeR(wp, 1.0); }
 // How much of the porthole a fragment lies in, counting the line of sight beyond the focus too (a short way). The crown shader lifts the
 // leaves seen through the hole and along its rim out of the crown's interior darkness: left alone they read as a black disc in the canopy.
 float tgOcclusionLift(vec3 wp){

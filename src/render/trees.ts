@@ -778,7 +778,7 @@ function barkMaterial(shared: SharedUniforms): THREE.MeshStandardMaterial {
           float upk = dot( normalize( vNormal ), upV );
           float dust = smoothstep( 0.04, 0.55, uSnow ) * smoothstep( -0.05, 0.7, upk ) * ( 0.55 + 0.45 * tgNoise3( vBarkPos * 55.0 + 9.0 ) );
           diffuseColor.rgb = mix( diffuseColor.rgb, vec3( 0.82, 0.84, 0.88 ), clamp( dust * 1.15, 0.0, 0.92 ) );
-          diffuseColor.a = tgOcclusionFade( tgFragWorld() );
+          diffuseColor.a = tgOcclusionFadeR( tgFragWorld(), 0.0 ); // (bark: a clean soft edge; the ragged foliage rim read as blocks on a trunk)
         }`,
       )
       .replace(
