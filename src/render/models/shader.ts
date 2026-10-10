@@ -894,6 +894,15 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
     }
     tgRotZ(p, n, aPivot2, knee * aPart.y);
     tgRotZ(p, n, aPivot, hip);
+#if A3SKIN
+    if (lie > 0.01 && !dead) {
+      // lying: the folded lower leg is drawn in toward the knee, so an authored (continuous, un-hidden) leg tucks under the body instead of poking out
+      vec3 a3k = aPivot2;
+      vec3 a3d = vec3(0.0, 1.0, 0.0);
+      tgRotZ(a3k, a3d, aPivot, hip);
+      p = mix(p, a3k, 0.5 * lie * aPart.y);
+    }
+#endif
 #if KIND == 0
     // holding the prey: the hind legs are planted wide apart for the haul (left leg out to the left, right to the right)
     if (!front && holdW > 0.001) tgRotX(p, n, aPivot, (part == 3 ? 1.0 : -1.0) * holdW * 0.3);
