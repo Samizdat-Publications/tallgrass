@@ -392,8 +392,6 @@ export function computeAtmosphere(env: EnvLike, sm: Smoothed, u: SharedUniforms,
   mixKey(u.skyHorizon.value, (k) => k.hor, k0, k1, t);
   mixKey(u.sunGlow.value, (k) => k.glow, k0, k1, t);
   const dayness = smoothstep(-6, 8, elDeg);
-  const GL = (globalThis as unknown as { __gl?: Record<string, number> }).__gl ?? {}; // DBGLAND
-  u.sunGlow.value.multiplyScalar(GL.glow ?? 1); // DBGLAND
   // a moonless night is darker: the sky and the ambient light drop toward starlight (0 by day and under a bright moon)
   const dark = u.night.value * (1 - moon.k);
   u.skyZenith.value.multiplyScalar(1 - 0.34 * dark);
@@ -414,7 +412,6 @@ export function computeAtmosphere(env: EnvLike, sm: Smoothed, u: SharedUniforms,
     u.sunGlow.value.multiplyScalar(1 - over * 0.9);
   }
   u.sunDiskColor.value.copy(k0.sun).lerp(k1.sun, t);
-  u.sunDiskColor.value.multiplyScalar(GL.disc ?? 1); // DBGLAND
 
   // key light: sun by day, moon at night, continuous through twilight
   const sunI = lerp(k0.sunI, k1.sunI, t) * (1 - over * 0.86);

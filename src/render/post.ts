@@ -1397,7 +1397,7 @@ export class PostFX {
     g.uVignette.value = L.vignette;
     (g.uLift.value as THREE.Color).copy(L.gradeLift);
     g.uNight.value = L.gradeNight;
-    this.bloom.strength = (this.quality === 'high' ? 1 : 0.85) * L.bloom * this.hazeBloom * (((globalThis as unknown as { __gl?: Record<string, number> }).__gl ?? {}).bloom ?? 1); // DBGLAND
+    this.bloom.strength = (this.quality === 'high' ? 1 : 0.85) * L.bloom * this.hazeBloom;
   }
 
   /**
@@ -1524,7 +1524,6 @@ export class PostFX {
     f.uAerial.value = 0.00014 * (0.55 + 0.7 * summer + (0.35 - 0.15 * lowK) * low) * (1 + 0.5 * over) * clean;
     f.uAerialLum.value = (0.8 + 0.6 * summer + 0.5 * dust) * (1 - 0.85 * over) * (0.7 + (0.5 - 0.2 * lowK) * low) * clean;
     f.uHorGlow.value = (0.35 + 0.35 * summer + 0.3 * dust) * (0.4 + 0.6 * low) * (1 - 0.8 * over) * (1 - 0.15 * lowK);
-    { const G = (globalThis as unknown as { __gl?: Record<string, number> }).__gl ?? {}; f.uAerialLum.value *= G.scat ?? 1; f.uHorGlow.value *= G.hor ?? 1; } // DBGLAND
     f.uDust.value = dust;
     f.uAerialWarm.value = (0.35 + (0.65 - 0.3 * lowK) * low) * (1 - over) * (1 - 0.5 * winter);
     this.hazeBloom = 1 + (0.14 - 0.04 * lowK) * low * (1 - over) * (1 - night);   // (r-land: was 0.3 and 0.1, which blew the sun side out)

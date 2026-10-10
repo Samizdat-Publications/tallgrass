@@ -20,6 +20,8 @@ const FAR_ORIGIN = -768;
 const FAR_SIZE = 2048;
 /** r-land: the share of the small ripple (under about 25 m) taken out of the render heights, away from the creek and the ponds. */
 const LAND_RIPPLE = 0.75;
+/** r-land: the share of the far ring's 70 m and 50 m rolling octaves kept (they crumpled the mid-distance hills into dunes). */
+const LAND_FAR_ROLL = 0.4;
 
 /**
  * Render heights: the sim's creek bed profile ignores the terrain beside it, so the creek can sit above lowland
@@ -240,7 +242,7 @@ export class Terrain {
     // and the render copy of the heights loses most of the small ripple: a soft low-pass (about 22 m window) is blended in, except
     // along the creek and round the ponds, whose shaped banks must stay exact. Everything that stands on the ground reads these heights.
     {
-      const LKQ = Number(new URLSearchParams(location.search).get('landk') || LAND_RIPPLE); // DBGLAND
+      const LKQ = LAND_RIPPLE;
       const soft = boxBlur(shaped.height, hn, 5), fine = boxBlur(shaped.height, hn, 2);
       const pq = world.ponds;
       for (let j = 0; j < hn; j++) {
@@ -324,8 +326,6 @@ export class Terrain {
       return (t > 1 ? 2 - t : t) * S;
     };
     const C0 = S * 0.5, R0 = S * 0.74;
-    const GD = Number(new URLSearchParams(location.search).get('landdbg') || 0); // DBGLAND
-    const RK = Number(new URLSearchParams(location.search).get('landr') || 0.4); // DBGLAND
     this.heightFn = (x: number, z: number) => {
       const cx = clamp(x, 0, S), cz = clamp(z, 0, S);
       const dx = x - cx, dz = z - cz;
@@ -345,7 +345,6 @@ export class Terrain {
         return 1 - (1 - smoothstep(14, 46, shaped.creekDist[cj * hn + ci])) * smoothstep(0, 70, d);
       };
       let detail = detailM * creekAt(mx, mz);
-      if (GD & 4) detail = 0; // DBGLAND
       const rotW = smoothstep(70, 190, d);
       if (rotW > 0) {
         const ca = 0.62, sa = 0.78; // about 38 degrees
@@ -375,9 +374,9 @@ export class Terrain {
       const rollA = smoothstep(90, 300, d) * (1 - 0.35 * smoothstep(1600, 3600, d));
       const roll1 = fbm2(x * 0.0052 + 41.7, z * 0.0052 - 17.3, 3, 91);
       const roll2 = fbm2(x * 0.0141 - 7.9, z * 0.0141 + 22.1, 3, 97);
-      const rolling = rollA * (46 * (roll1 - 0.5) + ((GD & 1) ? 0 : 19 * RK * (roll2 - 0.5) * (1 - 0.6 * smoothstep(900, 2400, d))));
+      const rolling = rollA * (46 * (roll1 - 0.5) + 19 * LAND_FAR_ROLL * (roll2 - 0.5) * (1 - 0.6 * smoothstep(900, 2400, d)));
       const far = smoothstep(150, 2600, d);
-      return inner * (1 - wallT) + rim * wallT + crest + rolling + 16 * (mid - 0.5) * midA + ((GD & 2) ? 0 : 9 * RK * (near - 0.5) * nearA) + far * (20 + 90 * big) + d * 0.008;
+      return inner * (1 - wallT) + rim * wallT + crest + rolling + 16 * (mid - 0.5) * midA + 9 * LAND_FAR_ROLL * (near - 0.5) * nearA + far * (20 + 90 * big) + d * 0.008;
     };
 
     for (let i = 0; i < 3; i++) {
@@ -805,7 +804,6 @@ export class Terrain {
     }
     mat.onBeforeCompile = (shader) => {
       injectTerrainShadow(shader, sh);
-      shader.fragmentShader = shader.fragmentShader.replace(/directLight\.color \*= gTgShadow;/g, 'directLight.color *= (dbg(32.0) ? 1.0 : gTgShadow);'); // DBGLAND
       const u = shader.uniforms;
       u.uPonds = pondU;
       u.tPondD = { value: this.pondTex };
@@ -845,7 +843,6 @@ export class Terrain {
       u.uWet = sh.wet;
       u.uFear = sh.fearOverlay;
       u.uNight = sh.night;
-      u.uDbg = { value: 0 }; (window as unknown as { __tgDbg: unknown }).__tgDbg = u.uDbg; // DBGLAND
       u.tMacro1 = { value: this.macroRT[0].texture };
       u.tMacro2 = { value: this.macroRT[1].texture };
       u.tMacro3 = { value: this.macroRT[2].texture };
@@ -1001,8 +998,6 @@ uniform float uSnowFall;
 uniform float uWet;
 uniform float uFear;
 uniform float uNight;
-uniform float uDbg; // DBGLAND
-bool dbg(float b){ return mod(floor(uDbg / b), 2.0) > 0.5; } // DBGLAND
 varying vec3 vTgWorld;
 varying vec3 vTgNormal;
 varying float vTgCurv;
@@ -1198,7 +1193,6 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
   // looking straight down (map view) combed strokes read as fur or smear, so thin them out; they belong to oblique views
   float topK = smoothstep(0.7, 0.96, -rayDir.y);
   streakTone *= mix(1.0, 0.3, topK);
-  if (dbg(4.0)) streakTone = 0.0; // DBGLAND
   gTgH = ((s1 - 0.5) * 0.1 * f1 + (s2 - 0.5) * 0.22 * f2 * calm2 + (s3 - 0.5) * 0.55 * f3 * farCalm) * mix(0.5, 1.0, graze) * (0.4 + 0.6 * farK) * mix(1.0, 0.3, topK);
   // rolling wind waves of light and dark
   vec2 sp = vec2(dot(xz, wv), dot(xz, vec2(-wv.y, wv.x)));
@@ -1244,7 +1238,7 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
   vec3 tSg = vec3(0.84, 0.97, 0.8);
   vec3 tRu = vec3(1.0, 0.92, 0.76);
   vec3 tint = mix(mix(tOl, tSt, smoothstep(0.38, 0.62, p1)), mix(tSg, tRu, smoothstep(0.4, 0.62, p2)), smoothstep(0.35, 0.65, p3));
-  grassCol *= mix(vec3(1.0), tint, mix(0.6, 1.0, farK) * mot * (1.0 - 0.75 * winterK) * (dbg(16.0) ? 0.0 : 1.0));
+  grassCol *= mix(vec3(1.0), tint, mix(0.6, 1.0, farK) * mot * (1.0 - 0.75 * winterK));
   // broad tonal bands by aspect: sun-facing slopes pale gold, shaded slopes deeper ochre (the blade layer runs the same function)
   grassCol *= tgAspectApply(vTgAsp, dry * (1.0 - riparian) * (1.0 - uNight) * (1.0 - 0.6 * winterK));
   // sunlit ridges go pale and dry, draws and hollows go deep olive
@@ -1299,7 +1293,6 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
   // grassy stipple of olive and straw instead of a smooth dune; far copses of trees are dark dotted patches along the draws
   float grain = 0.5;
   float grW = smoothstep(35.0, 200.0, dist);
-  if (dbg(2.0)) grW = 0.0; // DBGLAND
   if (grW > 0.01) {
     float gk = log2(max(fp * 2.2, 0.35)) + 1.0;
     float gb = floor(gk);
@@ -1696,7 +1689,6 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
     col = mix(col, vec3(0.85, 0.05, 0.04), fear * uFear * 0.7);
     gTgEmis += vec3(fear * uFear * 0.35, 0.0, 0.0);
   }
-  if (dbg(1.0)) gTgH = 0.0; // DBGLAND
   return max(col, vec3(0.0));
 }
 `;

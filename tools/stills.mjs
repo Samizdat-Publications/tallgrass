@@ -277,13 +277,6 @@ SETS.lapse = [
 ];
 
 
-// r-land ablation: the golden wide view with terrain shader features switched off by bit (window.__tgDbg, a temporary debug uniform)
-SETS.landdbg = [SETS.look[0]].concat([0, 8, 6, 30].map((b) => ({ name: 'dbg_' + String(b).padStart(2, '0'), eval: `window.__cam('wide'); window.__tgDbg.value = ${b}`, wait: 3000 })));
-SETS.landgeo = [SETS.look[0], { name: 'geo', eval: "window.__cam('wide'); window.__tgDbg.value = 0", wait: 3000 }];
-const GLV = { base: {}, bl: { bloom: 0.5 }, dk: { disc: 0.4 }, gw: { glow: 0.6 }, sc: { scat: 0.6 }, all: { bloom: 0.5, disc: 0.4, glow: 0.6, scat: 0.7, hor: 0.7 } };
-SETS.landgl = [SETS.look[0]]
-  .concat(Object.entries(GLV).map(([k, v]) => ({ name: 'glw_' + k, eval: `window.__gl = ${JSON.stringify(v)}; window.__cam('wide')`, wait: 3500 })))
-  .concat(Object.entries(GLV).map(([k, v]) => ({ name: 'glc_' + k, eval: `window.__gl = ${JSON.stringify(v)}; window.__concept()`, wait: 3500 })));
 const only = arg('only', '').split(',').filter(Boolean); // --only lk_02,lk_08: just those steps (the first, the setup step, always runs)
 const steps = SETS[set] && only.length ? SETS[set].filter((s, i) => i === 0 || only.some((o) => s.name.startsWith(o))) : SETS[set];
 if (!steps) { console.error('unknown set', set); process.exit(1); }
