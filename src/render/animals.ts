@@ -213,6 +213,16 @@ const SPLASH_RANGE = 60;
 const SPLASH_BUDGET = 10;
 /** Furthest a bedded animal or a carcass in a pond is moved to reach the shore (m); further than that it stays where the sim put it. */
 const SHORE_MAX = 36;
+/**
+ * r-death: ice. The water shader freezes the margins of a pond (water shallower than about 1 m x the cold) and only the thinnest edge of the creek
+ * (about 0.1 m x the cold). An animal on water that shallow stands on the ice top, its legs planted on it, instead of wading on the bed beneath.
+ */
+const ICE_REACH_POND = 0.95;
+const ICE_REACH_CREEK = 0.09;
+/** A pond is frozen out to this many radii from its centre (the world's ponds are carved to about 1.3 radii). */
+const ICE_POND_R = 1.45;
+/** Added to aFx.y of a quadruped standing on ice (its body-height offset is far smaller): the shader reads it as "the ground is the plane of the body" and takes it off again (models/shader.ts tgIce). */
+const ICE_FLAG = 8;
 /** r-far-read: a standing or grazing animal in water deeper than WADE_DEEP (m) is drawn in the shallows instead (water no deeper than WADE_OK), never afloat in a pond's middle. */
 const WADE_DEEP = 0.6;
 const WADE_OK = 0.4;
@@ -272,6 +282,17 @@ const DRAG_SPEED = 0.85;
 
 /** How the whole fall of a carcass plays out, in seconds. */
 const FALL_TIME = 2.4;
+/**
+ * r-death: a flier that dies in the air falls under this acceleration (m/s^2, less than gravity: the wings catch the air as they fold), so a bird
+ * killed at 12 m takes about 2 s to land, tumbling, and one killed at 30 m about 3 s. Never below FALL_TIME.
+ */
+const AIR_FALL_G = 6.5;
+/** Seconds the body keeps tumbling on the ground after the air fall ends (wings folding, the last roll). */
+const AIR_SETTLE = 0.7;
+/** How much of the takedown struggle (bucking, rearing) a death with no predator close by keeps: it just buckles and goes down. */
+const QUIET_DEATH_STRUG = 0.3;
+/** Time-lapse: above this sim speed a death is not staged (the body is simply down), so a cull at 100x costs nothing. */
+const STAGE_FALL_MAX_SPEED = 30;
 /** The prey's struggle (shader.ts `strug`) ends this many seconds into its fall. */
 const STRUGGLE_END = 1.2;
 /** A predator within this many metres of a fresh kill (or arriving within it while the prey still struggles) lunges. */
@@ -372,6 +393,10 @@ interface FallInfo {
   dgz: number;
   /** R6: the antler growth weight of the deer that died here (0 for none), so its carcass keeps its antlers. */
   ant: number;
+  /** r-death: how long the whole fall lasts (s: FALL_TIME, longer for a flier that dies high up), the height it died at (m) and the strength of the struggle (1 = a takedown). */
+  ft: number;
+  alt0: number;
+  sk: number;
 }
 
 /** Where a feeding predator should stand round its carcass, and what it does there (planFeeder). */
@@ -1221,7 +1246,9 @@ export class AnimalLayer {
    */
   private trackFalls(snap: Snapshot, first: boolean): void {
     const gen = this.gen;
-    const fast = this.timeScale > 3 || first;
+    // (r-death: a death is staged at any sim speed up to the time-lapse; the fall is played in render seconds, so at 10x the body still
+    // buckles and goes down over a couple of real seconds instead of turning into a statue between two frames)
+    const fast = this.simSpeed > STAGE_FALL_MAX_SPEED || first;
     let budget = 6; // at most this many kill reactions per snapshot (a cull can drop dozens of animals at once)
     const P = this.prev ? this.prev.agents : null;
     const pn = this.prev ? this.prev.count : 0;
@@ -1237,7 +1264,7 @@ export class AnimalLayer {
           t: 1e3, age: 0, key, sp, rem: snap.carcasses[o + 2], cx, cz, crew: [], crewAt: [], slotTh: [], crewSide: [], sub: 0, th0: hash01(Math.floor(hseed * 4096) + 53) * Math.PI * 2,
           pbest: 0, pdx: 0, pdz: 0, pull: 0, pcx: 0, pcz: 0,
           h: hseed * Math.PI * 2, v: 0, vs: 1, ph: 0, pace: 0, ox: 0, oz: 0, g: gen,
-          dragger: 0, h0: 0, dux: 1, duz: 0, dlen: 0, dt0: 0, dt1: 0, dgx: 0, dgz: 0, ant: 0,
+          dragger: 0, h0: 0, dux: 1, duz: 0, dlen: 0, dt0: 0, dt1: 0, dgx: 0, dgz: 0, ant: 0, ft: FALL_TIME, alt0: 0, sk: 1,
         };
         // a deer's carcass keeps the antlers of the buck that died (a body that was already lying there: one in five is a buck)
         if (this.batches[sp]?.def.params.stot) {
@@ -1257,6 +1284,11 @@ export class AnimalLayer {
           if (bj >= 0) {
             const q = bj * AGENT_STRIDE;
             fi.h = P[q + 3]; fi.v = P[q + 4] * VIS_PER_SIM; fi.pace = fi.v;
+            if (FLIES[sp]) {
+              // it dies in the air: it falls from the height it was drawn at, however long that takes
+              fi.alt0 = Math.max(0, P[q + 9]);
+              fi.ft = Math.max(FALL_TIME, Math.sqrt((2 * fi.alt0) / AIR_FALL_G) + AIR_SETTLE);
+            }
             fi.vs = P[q + 5] * this.speciesScale[sp];
             if (this.batches[sp]?.def.params.stot) {
               const pf = P[q + 8] | 0;
@@ -1446,9 +1478,11 @@ export class AnimalLayer {
     const big = sp === Sp.Bison ? 1.6 : sp === Sp.Wolf ? 0.9 : 1;
     // a kill on wet ground, under snow or in the rain raises little or no dust
     const dryK = this.dust.dryness * this.groundDry(cx, cz);
-    const n = Math.round((sp === Sp.Bison ? 20 : 12) * dryK);
+    // (r-death: a flier that dies in the air throws up nothing at the kill; it lands later, see the carcass loop in update)
+    const aerial = FLIES[sp] && fi.alt0 > 1.5;
+    const n = aerial ? 0 : Math.round((sp === Sp.Bison ? 20 : 12) * dryK);
     // r-life: on damp ground or in the rain, where no dust is drawn, the takedown throws up a fan of mud and water instead
-    if (dryK <= 0.15) {
+    if (dryK <= 0.15 && !aerial) {
       const gy = sampleHeight(this.gh, w.hn, w.cell, cx, cz);
       this.splash.spray(cx, gy + 0.15, cz, big * 0.8, sp === Sp.Bison ? 22 : 14);
     }
@@ -1477,6 +1511,8 @@ export class AnimalLayer {
       who.push([d2, i]);
     }
     who.sort((p, q) => p[0] - q[0]);
+    // nothing hunting nearby: it did not die in a takedown, so it buckles and goes down without the bucking and rearing
+    fi.sk = who.length > 0 ? 1 : QUIET_DEATH_STRUG;
     for (const [, i] of who) this.joinTakedown(fi, snap.ids[i], this.currSlot[i], 0, A[i * AGENT_STRIDE + 1], A[i * AGENT_STRIDE + 2], A[i * AGENT_STRIDE] | 0);
   }
 
@@ -1957,6 +1993,9 @@ export class AnimalLayer {
     const lapseTarget = Math.min(1, Math.max(0, (this.simSpeed - 20) / 40));
     this.glyphLapse += (lapseTarget - this.glyphLapse) * (1 - Math.exp(-dt / 0.8));
     const glyphsOn = this.glyphs.begin(this.shared.uCamPos.value.y - sampleHeight(H, hn, cell, this.shared.uCamPos.value.x, this.shared.uCamPos.value.z), this.glyphLapse);
+    // how cold the water is (the water shader's own `cold`: the winter swing of the season and how much snow or frost lies about)
+    const winterK = smoothstep(2.45, 2.85, season) * (1 - smoothstep(3.55, 3.9, season)) * (this.tg ? this.tg.seasonKeep.value : 1);
+    const iceCold = this.tg ? winterK * (0.45 + 0.55 * Math.max(this.tg.snow.value, this.tg.frost.value)) : 0;
     const dustRate = Math.min(this.timeScale, 3);
     // time-lapse (see timelapseK in models/legmath.ts): 0 up to 3x, 1 from 8x. Drives the bound pose, the cadence and the landing dust.
     const tl = timelapseK(this.timeScale);
@@ -2469,7 +2508,7 @@ export class AnimalLayer {
           // (a cougar stands close in at the shoulder, forelegs up on it, head down on the neck)
           const side = S.pside[slot];
           const sx = cougar ? along - 0.15 : along + (ci === 0 ? 0.6 : 0);
-          const sz = side * (cougar ? 0.18 * (pp ? pp.height : 1) * pls + 0.6 : (ci === 0 ? 0.55 : 1) * (0.3 * (pp ? pp.height : 1) * pls) + (ci === 0 ? 0.8 : 1.0));
+          const sz = side * (cougar ? 0.18 * (pp ? pp.height : 1) * pls + 0.6 : (ci === 0 ? 0.55 : 1) * (0.3 * (pp ? pp.height : 1) * pls) + (ci === 0 ? 0.95 : 1.2)); // (r-death: a little further out than before, so a bucking prey's legs and a hunter's shoulder never cross)
           const pch = Math.cos(pf.h), psh = Math.sin(pf.h);
           tx = pf.cx + pch * sx - psh * sz;
           tz = pf.cz + psh * sx + pch * sz;
@@ -2528,9 +2567,21 @@ export class AnimalLayer {
       const sizeBoost = pr.kind === 0 ? legBoost(pr, vs, camD, this.shared.uPxK.value) : 1;
       // the water surface as drawn under this animal (NaN on dry land), against the terrain as drawn (this.gh): the wading depth
       const wSurf = !flier || alt <= 0.3 ? this.surfaceAt(x, z) : NaN;
+      // r-death: on frozen water it stands on the ice top (0 = not on ice .. 1 = on it)
+      let iceW = 0;
+      if (iceCold > 0.05 && wSurf === wSurf && pr.kind === 0 && !SWIMS[sp]) {
+        const dep = wSurf - g0;
+        if (dep > 0.005) {
+          let pond = false;
+          const PD = world.ponds;
+          for (let q = 0; q < PD.length; q += 4) { const dx = x - PD[q], dz = z - PD[q + 1], rr = PD[q + 2] * ICE_POND_R; if (dx * dx + dz * dz < rr * rr) { pond = true; break; } }
+          const reach = (pond ? ICE_REACH_POND : ICE_REACH_CREEK) * iceCold;
+          iceW = 1 - smoothstep(0.7 * reach, reach, dep);
+        }
+      }
       // water contact (models/splash.ts): a splash where a running animal's feet go into water, a wake ring for a wading one, near the camera only
       if (pr.kind <= 1 && !SWIMS[sp] && camD < SPLASH_RANGE && running > 0 && this.timeScale <= 6 && S.lie[slot] < 0.3 && this.splashBudget > 0) {
-        const inW = wSurf === wSurf && wSurf - g0 > 0.04;
+        const inW = wSurf === wSurf && wSurf - g0 > 0.04 && iceW < 0.5;
         const mvs = S.vis[slot];
         if (inW && mvs > 0.5) {
           // (r-life: the ripples sit on the water as drawn, and start at the feet: a few small soft rings at the foot that went in, a V either side of a
@@ -2717,7 +2768,12 @@ export class AnimalLayer {
       }
       // wading: in a water cell the animal stands on the bed while the water is shallower than its belly; in deeper
       // water it rides with the belly at the surface (a gentle bob, level pose) instead of looking like it stands on it
-      if (!swimming && (!FLIES[sp] || alt <= 0.3)) {
+      if (iceW > 0.5) {
+        // frozen water: the animal stands on the ice top, level (the shader plants the feet on the plane of the body when aFx.y carries the ice flag)
+        y += (wSurf - g0) * iceW;
+        pitch *= 1 - iceW;
+        roll *= 1 - iceW;
+      } else if (!swimming && (!FLIES[sp] || alt <= 0.3)) {
         if (wSurf === wSurf) {
           const surf = wSurf;
           const belly = pr.height * 0.36 * vs;
@@ -2754,7 +2810,7 @@ export class AnimalLayer {
         const ikK = 1 - smoothstep(IK_NEAR, IK_FAR, camD);
         let bT = 0;
         if (ikK > 0.001 && S.lie[slot] < 0.98) {
-          bT = stanceBodyDy(pr, this.rigs[sp]!, gaitMix(pr, gaitSpd, stotW, strideK), S.phase[slot], { x, y, z, ch, sh, pitch, roll, s: vs }, groundAt) * ikK * (1 - S.lie[slot]) * (1 - cnO.air) * (1 - cnO.howl) * (1 - (boOn ? bo.air : 0));
+          bT = stanceBodyDy(pr, this.rigs[sp]!, gaitMix(pr, gaitSpd, stotW, strideK), S.phase[slot], { x, y, z, ch, sh, pitch, roll, s: vs }, iceW > 0.5 ? (gx, gz) => Math.max(groundAt(gx, gz), wSurf) : groundAt) * ikK * (1 - S.lie[slot]) * (1 - cnO.air) * (1 - cnO.howl) * (1 - (boOn ? bo.air : 0));
         }
         S.bdy[slot] += (bT - S.bdy[slot]) * kBdy;
       }
@@ -2770,7 +2826,7 @@ export class AnimalLayer {
       // little wider, and grows with the distance readability boost so a herd seen from afar keeps its grounding.
       if (pr.kind <= 1 && camD < 150 && fadeQ < 8 && !swimming) {
         const cw = sampleHeight(H, hn, cell, x, z);
-        if (!(wSurf === wSurf && wSurf - cw > 0.02)) {
+        if (!(wSurf === wSurf && wSurf - cw > 0.02 && iceW < 0.5)) {
           const bl = pr.length * vs * sizeBoost;
           const bw = (0.12 * Math.max(pr.length, 1) * vs + 0.05) * sizeBoost;
           // (lying animals cast a rounder, slightly wider shadow; the blob lies at knee height: the canopy of the grass, not the soil)
@@ -2862,7 +2918,7 @@ export class AnimalLayer {
       // feeding tug (head hauls and shakes, ravens peck), altitude (a bird in flight casts no shadow), hunting weight
       const fx = b.fx.array as Float32Array;
       fx[gp] = flier ? S.tug[slot] * (1 - S.mv[slot]) : S.tug[slot]; // a raven stops pecking while it hops or walks
-      fx[gp + 1] = FLIES[sp] ? alt : pr.kind === 0 ? S.bdy[slot] : 0;
+      fx[gp + 1] = FLIES[sp] ? alt : pr.kind === 0 ? S.bdy[slot] + (iceW > 0.5 ? ICE_FLAG : 0) : 0;
       fx[gp + 2] = pr.behave ? packBisonB(bo) : S.hunt[slot]; // (a bison: bellow, play and spar, R8, see packBison)
       if (pr.swim) S.flare[slot] += (swimT - S.flare[slot]) * (1 - Math.exp(-Math.min(dt, 0.1) * 8)); // (a swimmer's weight, eased; the slot is otherwise the pronghorn's flare)
       fx[gp + 3] = raptor ? S.stoop[slot] : pr.swim ? S.flare[slot] : pr.flare ? S.flare[slot] : pounceE; // (a raptor: the stoop; a swimmer: the swim weight; a pronghorn: the rump flare, R8)
@@ -2912,7 +2968,7 @@ export class AnimalLayer {
       const x = snap.carcasses[o], z = snap.carcasses[o + 1], rem = snap.carcasses[o + 2];
       const seed = hash01((Math.floor(x * 13) * 73856093) ^ (Math.floor(z * 13) * 19349663));
       const fi = this.falls.get(Math.floor(x * 8) * 65536 + Math.floor(z * 8));
-      if (fi && fi.t < FALL_TIME + 2) fi.t += running;
+      if (fi && fi.t < fi.ft + 2) fi.t += running;
       if (fi && fi.dlen > 0) {
         // the cougar's haul: the body slides toward cover (an eased 0..dlen m, display only) and swings round to trail behind the cougar
         const u = clamp((fi.age - fi.dt0) / Math.max(fi.dt1 - fi.dt0, 0.1), 0, 1);
@@ -2922,7 +2978,21 @@ export class AnimalLayer {
         if (u > 0 && running > 0) fi.h += wrapPi(Math.atan2(fi.duz, fi.dux) - fi.h) * (1 - Math.exp(-dt * 2.2));
       }
       const h = fi ? fi.h : seed * Math.PI * 2;
-      const fall = fi ? clamp(fi.t / FALL_TIME, 0, 1) : 1;
+      const fall = fi ? clamp(fi.t / fi.ft, 0, 1) : 1;
+      // r-death: a flier killed in the air keeps falling from where it was drawn (a = the height it is at now, tAir = when it reaches the ground)
+      const aerial = fi !== undefined && fi.alt0 > 0.3 && fi.t < 1e2;
+      const tAir = aerial ? Math.sqrt((2 * fi.alt0) / AIR_FALL_G) : 0;
+      const airH = aerial ? Math.max(0, fi.alt0 - 0.5 * AIR_FALL_G * fi.t * fi.t) : 0;
+      if (aerial && fi.t >= tAir && fi.t - running < tAir && running > 0) {
+        // it hits the ground: a puff of dust (on dry ground) and a bounce is left to the settle
+        const dryL = this.dust.dryness * this.groundDry(x, z);
+        if (dryL > 0.08) {
+          for (let q = 0; q < 5; q++) {
+            const a = Math.random() * Math.PI * 2, v = 0.6 + Math.random() * 0.9;
+            this.dust.emit(x + Math.cos(a) * 0.3, sampleHeight(H, hn, cell, x, z) + 0.15, z + Math.sin(a) * 0.3, Math.cos(a) * v, 0.3 + Math.random() * 0.5, Math.sin(a) * v, 0.5 + Math.random() * 0.4, 0.6 + Math.random() * 0.5, 0.35, Math.random(), dryL);
+          }
+        }
+      }
       // the struggle: earth and dust kicked up round the animal while it fights the takedown (about the first 0.7 s)
       if (fi && fi.t > 0.05 && fi.t < 1.3 && running > 0 && Math.random() < 0.55) {
         const dryS = this.dust.dryness * this.groundDry(x, z);
@@ -2949,7 +3019,10 @@ export class AnimalLayer {
       }
       const ch = Math.cos(h), sh = Math.sin(h);
       // the animal skids on a little in the direction it was running as it goes down
-      const slide = fi && fi.t < 1e2 ? Math.min(fi.v * 0.1, 1.4) * (1 - Math.exp(-fi.t * 3.2)) : 0;
+      // (a flier that dies in the air carries its speed on through the fall, the air slowing it: it lands a few metres on)
+      const slide = fi && fi.t < 1e2
+        ? (aerial ? Math.min(fi.v * 0.7, 6) * (1 - Math.exp(-fi.t * 1.1)) : Math.min(fi.v * 0.1, 1.4) * (1 - Math.exp(-fi.t * 3.2)))
+        : 0;
       // it falls where it was drawn, and settles onto the sim's position as it goes down
       const off = fi && fi.t < 1e2 ? Math.exp(-fi.t * 4) : 0;
       let cx = x + (fi ? Math.cos(fi.h0) : ch) * slide + (fi ? fi.ox * off + fi.dgx : 0), cz = z + (fi ? Math.sin(fi.h0) : sh) * slide + (fi ? fi.oz * off + fi.dgz : 0);
@@ -2979,13 +3052,21 @@ export class AnimalLayer {
       const hR = sampleHeight(H, hn, cell, cx - sh * hw, cz + ch * hw);
       const hL = sampleHeight(H, hn, cell, cx + sh * hw, cz - ch * hw);
       const settle = fall >= 1 ? 1 : fall;
-      const pitch = Math.atan2(hF - hB, 2 * hl) + (hash01(Math.floor(seed * 4096) + 11) - 0.5) * 0.14 * settle;
-      const roll = -Math.atan2(hR - hL, 2 * hw) + (hash01(Math.floor(seed * 4096) + 29) - 0.5) * 0.16 * settle;
+      let pitch = Math.atan2(hF - hB, 2 * hl) + (hash01(Math.floor(seed * 4096) + 11) - 0.5) * 0.14 * settle;
+      let roll = -Math.atan2(hR - hL, 2 * hw) + (hash01(Math.floor(seed * 4096) + 29) - 0.5) * 0.16 * settle;
+      if (aerial && fi.t < tAir) {
+        // the tumble: the nose drops and the body spins about its length, easing out into the ground as it lands (the shader rolls it onto its side)
+        const u = fi.t / tAir, side = hash01(Math.floor(seed * 4096) + 5) > 0.5 ? 1 : -1;
+        const ease = 1 - smoothstep(0.75, 1, u);
+        pitch += (-0.8 * smoothstep(0, 0.25, u) + 0.3 * Math.sin(u * 8.5 + seed * 6)) * ease;
+        roll += side * 5.4 * u * ease;
+      }
       let cy = (hF + hB + hR + hL) * 0.25 * 0.6 + ground * 0.4 + 0.22;
       const wc = Math.min(world.n - 1, Math.max(0, Math.floor(cz / cell))) * world.n + Math.min(world.n - 1, Math.max(0, Math.floor(cx / cell)));
       if (world.water[wc]) cy = Math.max(cy, world.waterHeight[wc] - 0.3); // a carcass in a pond floats at the surface
       // while it is still going down the body is the full-size living animal, so no ground lift
       if (fall < 1) cy = (cy - 0.22) + 0.22 * fall;
+      cy += airH;
       this.writeInstance(b, cx, cy, cz, ch, sh, pitch, roll, fall < 1 && fi ? fi.vs * (1 - fall) + fall : 1);
       const k = b.count - 1;
       const gp = k * 4;
@@ -3001,12 +3082,14 @@ export class AnimalLayer {
       look[gp + 3] = 0;
       const fxc = b.fx.array as Float32Array;
       fxc[gp] = 0; fxc[gp + 1] = 0; fxc[gp + 2] = stumblePace; fxc[gp + 3] = fall;
+      look[gp + 3] = fi ? (FLIES[sp] ? 0 : fi.sk * 0.9) : 0.9; // (the struggle's strength in the fractional part, 0.9 = a full takedown: read by the shader's dead pose; the whole part stays 0 so no flags are set)
       // the flank dent of the feeding cycle: pull strength and where it pulls from, in the carcass frame
       // (a carcass has no use for the lie weight or the body-height offset, so the dent rides in those: pull in aFx.x, contact x
       // in aFx.y, contact z in aGait.w)
       fxc[gp] = fi ? fi.pull : 0; fxc[gp + 1] = fi ? fi.pcx : 0; gait[gp + 3] = fi ? fi.pcz : 0;
       const fxc2 = b.fx2.array as Float32Array;
-      fxc2[gp] = 0; fxc2[gp + 1] = 0; fxc2[gp + 2] = 0; fxc2[gp + 3] = 0;
+      // (-1 = "nothing happening": a body must not read as a raven in the middle of a wing flick or a takeoff beat)
+      fxc2[gp] = -1; fxc2[gp + 1] = -1; fxc2[gp + 2] = -1; fxc2[gp + 3] = 0;
       if (b.def.params.stot) { fxc2[gp] = fi ? fi.ant : 0; fxc2[gp + 2] = fi && fi.ant > 0 ? deerS.velvet : 0; fxc2[gp + 3] = deerS.winter; } // (a deer: its antlers and the coat of the season)
       b.ids[k] = 0;
       b.centers[k * 4 + 3] = 0; // not pickable
