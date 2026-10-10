@@ -554,12 +554,7 @@ export class Engine {
     const noop = (): void => {};
     for (const n of draws) (gl as unknown as Record<string, unknown>)[n] = noop;
     try {
-      const keep = Number(new URLSearchParams(location.search).get('dry') ?? 99); // TMPDBG
-    const ps = this.post.composer.passes; const was = ps.map((p) => p.enabled);
-    const skipI = new URLSearchParams(location.search).get('dryskip');
-    ps.forEach((p, i) => { if (i >= keep || (skipI !== null && skipI.split(',').includes(String(i)))) p.enabled = false; });
-    if (location.search.includes('dryframe')) this.post.render(0); // WIP: the dry frame leaves NaN in shared uniforms (uCloud, uOvercast, uRainbow, uHaze) on a cold start, so it is off by default
-    ps.forEach((p, i) => { p.enabled = was[i]; });
+      if (new URLSearchParams(location.search).get('dryframe') !== '0') this.post.render(0);
     } finally {
       for (const n of draws) delete (gl as unknown as Record<string, unknown>)[n];
     }
@@ -587,13 +582,12 @@ export class Engine {
   compileScene(): void {
     const r = this.renderer;
     r.setRenderTarget(this.post.scenePass.rt);
-    if (!location.search.includes('nocompile')) r.compile(this.scene, this.camera);
+    r.compile(this.scene, this.camera);
     // A shadow caster is drawn with its depth material, which three first gives the caster's own material's side (flipped), alpha map,
     // alpha test and map (WebGLShadowMap.getDepthMaterial). Do the same here, then compile that mesh with the depth material swapped in
     // (same geometry, same instancing), once per distinct combination, so the program that gets made is the one the shadow pass wants.
     const seen = new Set<string>();
-    const DBG = location.search; // TMPDBG
-    if (!DBG.includes('nodepth')) this.scene.traverse((o) => {
+    this.scene.traverse((o) => {
       const m = o as THREE.Mesh;
       const d = m.isMesh && m.castShadow ? m.customDepthMaterial : undefined;
       if (!d) return;
@@ -634,9 +628,12 @@ export class Engine {
     this.last = performance.now();
     const loop = (now: number) => {
       if (!this.running) return;
-      if (frameMs.length < 120) frameMs.push(Math.round(now - this.last));
-      this.adaptScale(now - this.last, now);
-      const dt = Math.min(0.1, (now - this.last) / 1000);
+      // (the first callback's timestamp can be older than the performance.now() in start() when the main thread was busy just before,
+      // as after prime(): a negative dt sent the eased weather state to NaN and the first frames black)
+      const ms = Math.max(0, now - this.last);
+      if (frameMs.length < 120) frameMs.push(Math.round(ms));
+      this.adaptScale(ms, now);
+      const dt = Math.min(0.1, ms / 1000);
       this.last = now;
       this.renderOnce(dt);
       this.raf = requestAnimationFrame(loop);

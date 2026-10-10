@@ -4,3 +4,8 @@
 3. BUG found: a "dry frame" (post.render with draws stubbed, to create post/GTAO programs) intermittently leaves NaN in shared uniforms (uCloud, uOvercast, uRainbow, uHaze) so the scene renders black. It is now off by default (?dryframe=1 turns it on). With it off, 3 of 3 cold runs rendered correctly, but I have NOT re-run stills or a visual check of the final default build, and the ~27 post-pass programs now compile lazily at the first frames (slower than the 12 s figure, unmeasured).
 4. Left in code to clean: TMPDBG query flags in engine.ts (nodepth, nocompile, dry=N, dryskip), debug probes in scratch/day (not committed). Deferring near-LOD animal shaders was tried and gave no gain (reverted).
 5. Next: find why uniforms go NaN (suspect a pass reading dt=0 or a first-frame division), then re-enable the dry frame or compile post quads directly; run npm test, typecheck, stills A/B vs ?prime=0.
+
+## Lead, 2026-10-10 14:05
+- NaN cause: the first rAF timestamp predates the performance.now() in Engine.start() after a busy main thread (the dry frame blocks about 1.5 s), so dt was -1.69 s on the first frame and the weather easing ran to Infinity, then NaN. Fixed by clamping dt at 0 in the loop (scratch/day/nantrap.mjs: 0 NaN writes, overcast 0).
+- Dry frame back on by default (?dryframe=0 off). Debug flags removed. tsc clean, npm test all passed (golden 77fd982c, 2fc8dc7c, 37517a14).
+- Cold ready, fresh browser each run, interleaved (busy machine): prime 44.9 and 15.1 s; ?prime=0 157.5 and 83.7 s; ?dryframe=0 21.9 and 16.9 s (scratch/day/ab_startup_1.log).
