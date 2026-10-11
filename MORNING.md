@@ -1,9 +1,9 @@
 # Good morning: Tallgrass overnight report
 
-*(Updated 01:30 Sunday 2026-10-11. This file is refreshed at every milestone.)*
+*(Updated 01:15 Sunday 2026-10-11. This file is refreshed at every milestone.)*
 
 ## 2026-10-09 to 10: the 24-hour day run (the plan is DAY-PLAN.md)
-**Play it:** https://tallgrass.stewartgregerson.workers.dev (or `npm run dev`, then http://localhost:5199/). Last deploy: 19:29 Saturday (D14, ravens), live check clean. The default world is still v10b. **This is the checkpoint to test: D14.** The run stopped at 01:30 Sunday with the weekly quota at 65%.
+**Play it:** https://tallgrass.stewartgregerson.workers.dev (or `npm run dev`, then http://localhost:5199/). Last deploy: 19:29 Saturday (D14, ravens), live check clean. The default world is still v10b. **This is the checkpoint to test: D14.** The run stopped at 01:15 Sunday with the weekly quota at 65%.
 
 **What you asked for:** take stock, then spend 24 hours on what gives the most: visuals and the remaining features. The ecosystem already passed every gate, so the day went to how the valley looks up close and how the animals move.
 

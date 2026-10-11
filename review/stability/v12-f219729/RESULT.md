@@ -22,6 +22,6 @@ Shocks, share of worlds recovered (cull70 / drought / wolfwipe):
 
 The hypothesis held in part: keeping the walk-off out of the woods cut the deer cost from -34% to -15% and kept about 70% of v11's crowding cut (400-year screen: deer +5%; the cost again shows only over centuries). But the deer still fall 15% (lower in 12 of 20 seeds), deer and herd recovery after shocks is weaker than v10b's, and a 0.54 to 0.47 near-water share would still read as a ring of bison at the pond.
 
-Decision (2026-10-11 01:20): not adopted; v10b stays the default. Both params stay off by default and are live: `?p=shoreSpread:1,shoreOpen:2` shows v12. Branch v12-adopt (cd4508c, golden 0bd8322f, a60095a5, 17bd11eb) is kept unmerged. Seeds 21-40 for v12 and v10b were still running at the decision (scratch/v12/acc_sA_21, acc_v10b_21) and are added below when done.
+Decision (2026-10-11 01:10): not adopted; v10b stays the default. Both params stay off by default and are live: `?p=shoreSpread:1,shoreOpen:2` shows v12. Branch v12-adopt (cd4508c, golden 0bd8322f, a60095a5, 17bd11eb) is kept unmerged. Seeds 21-40 for v12 and v10b were still running at the decision (scratch/v12/acc_sA_21, acc_v10b_21) and are added below when done.
 
 The waterhole ring is probably not a drinking-schedule problem: the next try should look at where bison graze between drinks (grass near water stays greenest in the dry years every review shot uses), not at how they leave the bank.
