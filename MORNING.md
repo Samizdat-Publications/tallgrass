@@ -1,9 +1,9 @@
 # Good morning: Tallgrass overnight report
 
-*(Updated 20:00 Saturday 2026-10-10. This file is refreshed at every milestone.)*
+*(Updated 01:30 Sunday 2026-10-11. This file is refreshed at every milestone.)*
 
 ## 2026-10-09 to 10: the 24-hour day run (the plan is DAY-PLAN.md)
-**Play it:** https://tallgrass.stewartgregerson.workers.dev (or `npm run dev`, then http://localhost:5199/). Last deploy: 19:29 Saturday (D14, ravens), live check clean. The default world is still v10b. The run continues to 13:30 Sunday, within the quota limits.
+**Play it:** https://tallgrass.stewartgregerson.workers.dev (or `npm run dev`, then http://localhost:5199/). Last deploy: 19:29 Saturday (D14, ravens), live check clean. The default world is still v10b. **This is the checkpoint to test: D14.** The run stopped at 01:30 Sunday with the weekly quota at 65%.
 
 **What you asked for:** take stock, then spend 24 hours on what gives the most: visuals and the remaining features. The ecosystem already passed every gate, so the day went to how the valley looks up close and how the animals move.
 
@@ -13,7 +13,7 @@
 - **Camera and trees (D10, D11):** no more checkerboard trunks near the lens; the chase camera keeps a followed wolf in the picture.
 - **Look (D12, D13):** matte bison with a dark head and a pale tan cape, dark herds at night with a thin moon rim, calm moonlit ponds, a legible playback bar; from the overview pronghorn read as tan antelope instead of white flecks, coyotes darker and smaller than wolves.
 - **Ravens (D14):** they stand beside a carcass instead of sinking into it, and the idle ones thin out from the overview so the sky no longer reads as flies.
-- **Waterhole crowding (in test, not live):** a variant that walks bison off the bank only over open ground cut the crowding by about half as much as v11 with mule deer holding (+5% instead of -34%) in a 400-year screen; its full 1,200-year acceptance is running tonight.
+- **Waterhole crowding: tried three ways, not adopted.** Staggered thirst alone does not spread the herd; a milder walk-off costs mule deer 14%; the best try (walk back off the bank only over open ground, "v12") cut the near-water share from 0.54 to 0.47 but over 1,200 years mule deer fell 15% and recovery after shocks was weaker than v10b's (review/stability/v12-f219729/RESULT.md). v10b stays. To see v12 anyway: https://tallgrass.stewartgregerson.workers.dev/?p=shoreSpread:1,shoreOpen:2
 
 ### What changed in the day run (all live)
 1. **Real animal models.** Bison, wolf, pronghorn, mule deer, coyote and cougar are authored meshes now, driven by our own animation rig (foot lock, leg IK, gaits, poses), instead of the clay shapes. Measured paw slip is under 1.4% in every gait (it was 3 to 11% when the models first went in). `?a3=0` shows the old animals.
@@ -35,7 +35,7 @@
 - **Gemini video, now at 8 frames a second** (it used to see 1 frame a second, which hides every stride): life and motion 3 (baseline Friday 15:49), 1 (round 26, frozen animals), 3 (round 27, after the idle layer), 2 (round 29, on D6: deaths that snap into a rigid pose, fixed in D7), 2 (round 30, on D8: herds that ignore a passing wolf, fixed in D9; UI 8, readability 7), 3 (round 31, on D9: ecosystem believability up from 2 to 6, keep watching 4; its blocky trunk and lost chase shot are fixed in D10 and D11).
 - Triage for every round is in REVIEWS.md.
 
-### Ecology this run (nothing adopted; v10b stays)
+### Ecology this run (nothing adopted; v10b stays; the Saturday evening waterhole tries are above)
 - **Bison herd bands (v11 first try): dropped.** Seven variants, with and without a new "bands move on to fresh grass" lever; bison fell 16 to 35% in every one.
 - **The waterhole mob (round 25 and 28's top complaint): fix built, not adopted.** A new behaviour (bison drink in waves and walk back off the bank) cut the bison crowding the water from 53% to 42% and passed every standard gate over 20 worlds x 1,200 years, but mule deer fell from 71 to 43. That would undo v10b's mule deer recovery, so it stays an off setting (`?p=shoreSpread:1` to try it). `review/stability/v11-feaa081/RESULT.md`.
 - **Stronger climate (climate2 0.4): not adopted.** A little more breath, prairie dogs -25%.
@@ -53,15 +53,15 @@
 - Your CPU ruling (16:00, then 85% from 18:00) cost about two hours of builder speed in the evening; no work was lost.
 
 ### API spend
-- Gemini: 6 video critiques at 8 fps (logged at about $0.05 each; 8 fps sends more frames, so likely $0.10 to $0.30 in all).
+- Gemini: 6 video critiques at 8 fps (no paid calls after 15:20 Saturday) (logged at about $0.05 each; 8 fps sends more frames, so likely $0.10 to $0.30 in all).
 - Sketchfab: free downloads only, no paid generation; Meshy: 0 credits used (746 left).
 - Everything is logged in ASSETS.md.
 
 ### Next 5
-1. A mule-deer-safe waterhole fix (thirst waves without the walk-off, screened over 400 or more years, because the deer cost only shows over centuries).
+1. The waterhole ring from a different angle: where bison graze between drinks (grass near water stays greenest in the dry years every review shot uses), not how they leave the bank (three tries this run, RESULT.md above).
 2. 100x runs at about 47x on this machine (471 of 1,000 ticks a second, measured Saturday 08:50 with one builder running; 1x and 10x hold): profile the sim worker and the snapshot path, or relabel the button by what it reaches.
-3. Mid-range readability: species glyphs or contrast between 60 and 200 m.
-4. A video round on the final build (D7 added staged deaths at any speed; the last Gemini round predates it).
+3. Kills inside a crowded herd are still hard to find from the overview (D13 helped in open ground): a marker or a camera hint tied to the kill toast.
+4. A clean GPU re-bench of D14 on an idle machine (the ravens A/B ran with batches going; read as +0.1 to 0.2 ms).
 5. A Gemini round on a quiet machine with a hand-picked reel (a hunt, a herd crossing, a death), so the motion score reflects the best moments rather than random ones.
 
 ### Deploy log (all live checks clean)
