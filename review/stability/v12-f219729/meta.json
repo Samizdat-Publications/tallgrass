@@ -1,0 +1,74 @@
+{
+ "args": {
+  "seeds": 20,
+  "seedBase": 1,
+  "ticks": 1440000,
+  "generations": 1000,
+  "sampleEvery": 2000,
+  "threads": 4,
+  "scenarios": [
+   "baseline"
+  ],
+  "params": {
+   "shoreSpread": 1,
+   "shoreOpen": 2
+  },
+  "mock": false,
+  "maxMinutes": 0,
+  "progressSec": 900,
+  "out": "C:\\Users\\stewa\\Documents\\Claude\\ecosystem-sim\\scratch\\v12\\acc_sA",
+  "argv": [
+   "--seeds",
+   "20",
+   "--generations",
+   "1000",
+   "--ticks",
+   "1440000",
+   "--sample",
+   "2000",
+   "--threads",
+   "4",
+   "--params",
+   "{\"shoreSpread\":1,\"shoreOpen\":2}",
+   "--out",
+   "C:/Users/stewa/Documents/Claude/ecosystem-sim/scratch/v12/acc_sA",
+   "--progress-sec",
+   "900"
+  ]
+ },
+ "commit": "f219729 (frozen copy)",
+ "node": "v24.19.0",
+ "platform": "win32 x64",
+ "startedAt": "2026-10-10T23:50:25.026Z",
+ "finishedAt": "2026-10-11T03:20:26.154Z",
+ "wallSeconds": 12601.1,
+ "stopReason": null,
+ "tasks": {
+  "total": 20,
+  "completed": 20,
+  "errors": 0,
+  "aborted": 0,
+  "skipped": 0
+ },
+ "msPerTick": 1.68419,
+ "ticksRun": 28800000,
+ "ticksPerSecWall": 2286,
+ "scenarios": {
+  "baseline": {
+   "seeds": 20,
+   "completed": 20,
+   "persistencePct": {
+    "bison": 100,
+    "wolf": 100,
+    "raven": 100,
+    "pronghorn": 100,
+    "rabbit": 100,
+    "cougar": 100,
+    "coyote": 100,
+    "prairiedog": 100,
+    "muledeer": 100
+   },
+   "maxGen": 549.7335092348285
+  }
+ }
+}
