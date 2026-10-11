@@ -1,13 +1,21 @@
 # Good morning: Tallgrass overnight report
 
-*(Updated 14:30 Saturday 2026-10-10. This file is refreshed at every milestone.)*
+*(Updated 20:00 Saturday 2026-10-10. This file is refreshed at every milestone.)*
 
 ## 2026-10-09 to 10: the 24-hour day run (the plan is DAY-PLAN.md)
 **Play it:** https://tallgrass.stewartgregerson.workers.dev (or `npm run dev`, then http://localhost:5199/). Last deploy: 19:29 Saturday (D14, ravens), live check clean. The default world is still v10b. The run continues to 13:30 Sunday, within the quota limits.
 
 **What you asked for:** take stock, then spend 24 hours on what gives the most: visuals and the remaining features. The ecosystem already passed every gate, so the day went to how the valley looks up close and how the animals move.
 
-### What changed (all live)
+### Saturday afternoon and evening (since you got back at 13:30): seven deploys, D8 to D14
+- **Faster start (D8):** cold ready 19 to 24 s on the live page (was 28 to 70 s); a black-first-frame bug found and fixed on the way.
+- **Herds notice predators (D9):** walking and bedded grazers turn their heads to a passing wolf, bison face one inside 25 m.
+- **Camera and trees (D10, D11):** no more checkerboard trunks near the lens; the chase camera keeps a followed wolf in the picture.
+- **Look (D12, D13):** matte bison with a dark head and a pale tan cape, dark herds at night with a thin moon rim, calm moonlit ponds, a legible playback bar; from the overview pronghorn read as tan antelope instead of white flecks, coyotes darker and smaller than wolves.
+- **Ravens (D14):** they stand beside a carcass instead of sinking into it, and the idle ones thin out from the overview so the sky no longer reads as flies.
+- **Waterhole crowding (in test, not live):** a variant that walks bison off the bank only over open ground cut the crowding by about half as much as v11 with mule deer holding (+5% instead of -34%) in a 400-year screen; its full 1,200-year acceptance is running tonight.
+
+### What changed in the day run (all live)
 1. **Real animal models.** Bison, wolf, pronghorn, mule deer, coyote and cougar are authored meshes now, driven by our own animation rig (foot lock, leg IK, gaits, poses), instead of the clay shapes. Measured paw slip is under 1.4% in every gait (it was 3 to 11% when the models first went in). `?a3=0` shows the old animals.
 2. **Animals that live.** They breathe, shift weight, look around and sniff, flick ears and swish tails; grazers lift their heads and turn toward a wolf that passes; predators keep worrying at a carcass; the coyote's mousing leap has a crouch, an arc and a pounce; animals wade in the creek instead of walking on top of it.
 3. **Golden hour like the concept.** Low sun is warm and readable instead of purple and muddy, the glare near the sun is gone, the rippled-dune hills are smooth.
