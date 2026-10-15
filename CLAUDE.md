@@ -81,6 +81,11 @@ Context will compact at least once during a night this long. Keep these files cu
 - **GitHub:** private repo only. Use the same owner as the owner's other projects (`Samizdat-Publications`) if `gh` has access, otherwise the personal account. Never force-push, never delete or change the visibility of any repo.
 - **Deploy:** optional. If `wrangler` is already authenticated and the build is web-based, you may deploy a preview to a `workers.dev` URL and put the link in `MORNING.md`. No custom domains.
 - **Processes:** wrap every launch of Godot, Blender, browsers, or long sims in a timeout. A hung GUI window or a frozen headless process would quietly burn the night. Prefer headless/CLI modes. Kill strays you started.
+- **Disk retention (owner ruling 2026-10-15; the folder had grown to 104 GB, almost all of it leftover worktrees and capture frames):**
+  - A worktree is a full checkout, about 1.8 GB each. Remove it as soon as its branch is merged or abandoned: `git worktree remove --force <path>`. Never keep more than 5 worktrees at once.
+  - `scratch/` holds throwaway output only. Delete capture frames, webm/mp4 takes and batch CSVs once a review round or experiment is triaged. Keep the 6 to 12 chosen stills in `review/round-NN/`, not the raw frame dumps.
+  - Run `npm run clean` (dry run) at the end of every work package and every session, then `npm run clean -- --apply`. It removes merged, clean worktrees and scratch entries older than 2 days, and keeps anything with unmerged commits or uncommitted edits, plus `scratch/_salvage/` and `scratch/KEEP*`.
+  - Don't commit raw frame dumps or full batch CSV sets into `review/`. Commit charts and a summary instead.
 - **Installs:** installing project-local dependencies (npm, pip in a venv, Godot addons, NuGet) is fine. Keep system-wide installs to what's genuinely needed (e.g. ffmpeg via winget) and log them in `ENVIRONMENT.md`.
 - **Owner's writing style:** never use em dashes in any document, UI text, or commit message the owner will read.
 

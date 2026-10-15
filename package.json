@@ -11,7 +11,8 @@
     "batch": "tsx src/headless/batch.ts",
     "capture": "node tools/capture.mjs",
     "deploy": "vite build && wrangler deploy --name tallgrass --assets ./dist --compatibility-date 2026-10-01",
-    "test": "tsx tools/run-tests.ts"
+    "test": "tsx tools/run-tests.ts",
+    "clean": "node tools/cleanup.mjs"
   },
   "repository": {
     "type": "git",
