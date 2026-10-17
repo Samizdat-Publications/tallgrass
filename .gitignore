@@ -22,3 +22,6 @@ review/**/*.mp4
 .claude/worktrees/
 # R11 bench: untracked copy of the pre-R11 trees.ts (tools/r11_bench.mjs writes it)
 src/render/_trees_v1.ts
+
+# landing page build output (site/ is the source)
+/site-dist/

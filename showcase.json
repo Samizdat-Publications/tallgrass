@@ -1,0 +1,29 @@
+{
+  "name": "Tallgrass",
+  "repo": "tallgrass",
+  "pitch": "A living prairie in the browser: bison, pronghorn, wolves and ravens in a valley that finds its own balance.",
+  "status": "in-development",
+  "version": "0.1.0",
+  "kind": "game",
+  "started": "2026-10-03",
+  "updated": "2026-10-17",
+  "tech": ["TypeScript", "Vite", "Three.js", "Playwright", "Blender", "ElevenLabs", "Gemini"],
+  "links": {
+    "landing": "https://tallgrass.pages.dev",
+    "play": "https://tallgrass.stewartgregerson.workers.dev",
+    "devlog": ""
+  },
+  "hero": {
+    "gif": "docs/media/hero.gif",
+    "poster": "site/media/hero.jpg",
+    "clip": "site/media/hero.mp4"
+  },
+  "credits": [
+    { "what": "Bison, coyote and cougar models", "who": "Brian Trepanier; Raven-Woods; 1225659838@qq.com (Sketchfab)", "licence": "CC BY 4.0" },
+    { "what": "Wolf, mule deer and pronghorn models", "who": "WildMesh 3D; FennecFyre (Sketchfab)", "licence": "CC BY-NC 4.0" },
+    { "what": "Ground textures", "who": "Poly Haven", "licence": "CC0" },
+    { "what": "Cottonwood branch generator (port)", "who": "ez-tree by Daniel Greenheck", "licence": "MIT" },
+    { "what": "Alegreya and Alegreya Sans fonts", "who": "Juan Pablo del Peral (Huerta Tipografica)", "licence": "OFL 1.1" },
+    { "what": "Sound, music and narration", "who": "Generated with ElevenLabs for this project", "licence": "" }
+  ]
+}

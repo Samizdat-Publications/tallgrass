@@ -416,3 +416,7 @@ Scores: visual 6, readability 4, life 6, ecosystem 6, UI 7, keep watching 6 (rou
 9. Doily ice ring, dithered autumn crowns, hard leaf-card edges: DEFER (minor).
 10. Idle playback bar invisible: FIX, B15. Axis labels and the hawk lane: DEFER.
 
+
+## Showcase capture (Gemini video, D14 build, for the landing page; 2026-10-17 18:37) -> `review/showcase-2026-10-17/`
+Scripted takes `tools/video.mjs` (default reel, 108 s) and `--set motion` (40 s). Reel scores: visual 6, readability 7, life 3, ecosystem 5, UI 8, keep watching 4. Motion scores: visual 6, readability 6, life 3, ecosystem 3, UI 8, keep watching 4.
+Both critiques land on the same thing: wide shots, light, the population graph and the UI work; close-up locomotion does not (feet slide, rigid run, wolves pass a herd without a visible reaction, abrupt stand-to-lie). Triage: DEFER all to the next work session (this pass only built the landing page). For the page, the clips were chosen around it: the hero and Watch clips are the documentary camera (letterbox cropped), Follow is the bison waterhole shot rather than the night wolf run.

@@ -12,7 +12,9 @@
     "capture": "node tools/capture.mjs",
     "deploy": "vite build && wrangler deploy --name tallgrass --assets ./dist --compatibility-date 2026-10-01",
     "test": "tsx tools/run-tests.ts",
-    "clean": "node tools/cleanup.mjs"
+    "clean": "node tools/cleanup.mjs",
+    "site:build": "node -e \"const fs=require('fs');fs.rmSync('site-dist',{recursive:true,force:true});fs.cpSync('site','site-dist',{recursive:true})\" && node tools/finish-site.mjs site-dist",
+    "site:deploy": "npm run site:build && npx --yes wrangler@4 pages deploy site-dist --project-name tallgrass --branch main"
   },
   "repository": {
     "type": "git",

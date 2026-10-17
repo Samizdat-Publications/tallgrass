@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tallgrass</title>
+<meta name="description" content="A living prairie you can leave running on a second monitor: bison, pronghorn, wolves and ravens, balanced by a simulation you can check.">
+<meta property="og:title" content="Tallgrass">
+<meta property="og:description" content="A living prairie ecosystem in the browser. Bison graze, wolf packs hold their ground, and the valley finds its own balance.">
+<meta property="og:image" content="media/og.jpg">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#1a1712">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231a1712'/%3E%3Cpath d='M7 25c2-6 3-11 3-17M14 25c1-5 1-9 0-14M19 25c0-5 2-9 5-13M24 25c0-3 1-6 3-8' stroke='%23e2aa4c' stroke-width='2.2' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alegreya:ital,wght@0,500;0,700;1,400;1,500&family=Alegreya+Sans:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="site.css">
+</head>
+<body>
+
+<nav class="bar" aria-label="Tallgrass">
+  <a class="mark" href="#top">Tallgrass</a>
+  <div class="links">
+    <a class="src" href="https://github.com/Samizdat-Publications/tallgrass">Source</a>
+    <a class="go" href="https://tallgrass.stewartgregerson.workers.dev">Play</a>
+  </div>
+</nav>
+
+<header class="hero" id="top">
+  <video data-inview muted loop playsinline preload="metadata" poster="media/hero.jpg" aria-label="Late summer in the valley: ravens wheel over golden grass and the bison herd grazes along a ridge.">
+    <source src="media/hero.mp4" type="video/mp4">
+  </video>
+  <div class="slate"><b>Tallgrass Valley</b><span>late summer, the documentary camera</span></div>
+  <div class="hero-text">
+    <span class="pill">In development</span>
+    <h1>Tallgrass</h1>
+    <p>A living prairie you can leave running on a second monitor. Bison graze, pronghorn browse, wolf packs hold their ground, and over the centuries the valley finds its own balance.</p>
+    <div class="cta">
+      <a class="btn btn-go" href="https://tallgrass.stewartgregerson.workers.dev">Play in your browser</a>
+      <a class="btn btn-quiet" href="https://github.com/Samizdat-Publications/tallgrass">Source on GitHub</a>
+      <small>Chrome or Edge on a desktop. Click once for sound.</small>
+    </div>
+  </div>
+</header>
+
+<main>
+  <section class="chapter" aria-labelledby="watch">
+    <figure>
+      <div class="clip">
+        <video data-inview muted loop playsinline preload="none" poster="media/watch.jpg" aria-label="The documentary camera at normal speed, from herds along the creek into the first snow.">
+          <source src="media/watch.mp4" type="video/mp4">
+        </video>
+      </div>
+      <figcaption>From the creek to the first snow: the camera picks its own shots.</figcaption>
+    </figure>
+    <div>
+      <p class="kicker">Watch</p>
+      <h2 id="watch">It films itself</h2>
+      <p>Leave it alone and a documentary camera takes over. It cuts between hunts, kills, herds and wide vistas, and a narrator speaks when something big happens: a drought settling in, a stampede, a new pack taking a range.</p>
+      <p>Seasons turn every thirty seconds at normal speed. Grass greens and cures, snow settles in the hollows and melts, and a valley year passes in two minutes.</p>
+    </div>
+  </section>
+
+  <section class="chapter flip" aria-labelledby="follow">
+    <figure>
+      <div class="clip">
+        <video data-inview muted loop playsinline preload="none" poster="media/follow.jpg" aria-label="Following a bison through its herd at a waterhole, the population panel and chronicle open.">
+          <source src="media/follow.mp4" type="video/mp4">
+        </video>
+      </div>
+      <figcaption>Riding along with one bison at a crowded waterhole.</figcaption>
+    </figure>
+    <div>
+      <p class="kicker">Follow</p>
+      <h2 id="follow">One life at a time</h2>
+      <p>Click any animal for its story: where it was born, its pack, its traits set against the founders' and the species' now, a family tree, and an In memoriam card when it dies.</p>
+      <p>Every animal carries heritable speed, size, sight, boldness, herding, coat and litter genes, and the herds change under the wolves' pressure. A naturalist's notebook keeps the moments you witnessed, dated by valley and year.</p>
+    </div>
+  </section>
+
+  <section class="chapter" aria-labelledby="poke">
+    <figure>
+      <div class="clip">
+        <video data-inview muted loop playsinline preload="none" poster="media/territories.jpg" aria-label="The wolf territory overlay at ten times speed: each pack's range tinted over the hills, shifting as packs rise and fall.">
+          <source src="media/territories.mp4" type="video/mp4">
+        </video>
+      </div>
+      <figcaption>Wolf territories: each tinted patch is one pack's range.</figcaption>
+    </figure>
+    <div>
+      <p class="kicker">Step in</p>
+      <h2 id="poke">Every change ripples</h2>
+      <p>Send rain or drought, start a fire, loose a plague, cull the herd, bring wolves back or take them away. The grass answers first, then the grazers, then the hunters and the ravens that follow them.</p>
+      <p>Challenges set you a goal in a named world, from bringing wolves home to carrying every species through the dry years.</p>
+    </div>
+  </section>
+
+  <section class="numbers" aria-labelledby="measured">
+    <div class="head">
+      <div class="intro">
+        <p class="kicker">Measured</p>
+        <h2 id="measured">A balance you can check</h2>
+        <p>The valley is a simulation first. The same rules run headless for centuries across many worlds, and the game only shows what they produce. At a hundred times speed you can watch the decades roll past with the population graph open.</p>
+      </div>
+      <figure>
+        <div class="clip">
+          <video data-inview muted loop playsinline preload="none" poster="media/years.jpg" aria-label="One hundred times speed with the population graph open: seasons flicker past while the herd lines rise and fall.">
+            <source src="media/years.mp4" type="video/mp4">
+          </video>
+        </div>
+        <figcaption>100x with the population graph open.</figcaption>
+      </figure>
+    </div>
+    <div class="chart" role="img" aria-label="Sixty valley-years of one world from an earlier balance run: bison and pronghorn rise and fall about once a decade while wolves hold steady near their average.">
+      <svg viewBox="0 0 800 270" xmlns="http://www.w3.org/2000/svg">
+        <line class="axis" x1="56" y1="236" x2="780" y2="236"/>
+        <line class="axis" x1="56" y1="20" x2="56" y2="236"/>
+        <line class="base" x1="56" y1="149.6" x2="780" y2="149.6"/>
+        <text x="48" y="240" text-anchor="end">0%</text>
+        <text x="48" y="153.6" text-anchor="end">100%</text>
+        <text x="48" y="67.2" text-anchor="end">200%</text>
+        <line class="axis" x1="52" y1="63.2" x2="56" y2="63.2"/>
+        <text x="56" y="256" text-anchor="middle">year 100</text>
+        <text x="424.1" y="256" text-anchor="middle">year 130</text>
+        <text x="780" y="256" text-anchor="end">year 159</text>
+        <polyline fill="none" stroke="var(--pronghorn)" stroke-width="2" stroke-linejoin="round" points="56.0,176.6 68.3,185.3 80.5,192.0 92.8,203.0 105.1,191.4 117.4,164.3 129.6,121.4 141.9,75.5 154.2,58.2 166.4,126.6 178.7,187.9 191.0,212.9 203.3,217.0 215.5,207.1 227.8,199.4 240.1,174.1 252.3,104.8 264.6,51.0 276.9,103.9 289.2,161.6 301.4,155.7 313.7,174.3 326.0,177.7 338.2,163.4 350.5,148.2 362.8,132.1 375.1,130.4 387.3,126.8 399.6,133.5 411.9,171.1 424.1,177.7 436.4,179.3 448.7,181.8 460.9,183.0 473.2,182.7 485.5,155.9 497.8,129.8 510.0,94.6 522.3,133.0 534.6,184.5 546.8,181.5 559.1,131.7 571.4,75.9 583.7,39.7 595.9,20.0 608.2,133.2 620.5,182.4 632.7,191.7 645.0,175.0 657.3,161.6 669.6,155.1 681.8,133.9 694.1,124.1 706.4,126.8 718.6,147.2 730.9,165.6 743.2,157.1 755.5,148.2 767.7,170.5 780.0,171.1"/>
+        <polyline fill="none" stroke="var(--bison)" stroke-width="2.6" stroke-linejoin="round" points="56.0,123.7 68.3,111.3 80.5,147.6 92.8,163.2 105.1,171.0 117.4,169.3 129.6,161.4 141.9,149.0 154.2,122.2 166.4,110.3 178.7,119.6 191.0,148.8 203.3,172.7 215.5,177.5 227.8,177.7 240.1,167.9 252.3,150.4 264.6,140.0 276.9,140.4 289.2,131.8 301.4,118.9 313.7,114.2 326.0,142.8 338.2,175.5 350.5,181.1 362.8,171.5 375.1,164.3 387.3,149.3 399.6,135.7 411.9,133.4 424.1,148.4 436.4,161.2 448.7,163.6 460.9,156.4 473.2,141.8 485.5,119.1 497.8,121.1 510.0,110.5 522.3,127.5 534.6,156.2 546.8,172.4 559.1,177.8 571.4,164.8 583.7,162.2 595.9,150.6 608.2,131.0 620.5,126.8 632.7,122.4 645.0,95.5 657.3,107.3 669.6,137.4 681.8,151.4 694.1,157.9 706.4,172.6 718.6,186.6 730.9,189.1 743.2,191.1 755.5,190.9 767.7,181.4 780.0,158.5"/>
+        <polyline fill="none" stroke="var(--wolf)" stroke-width="2.2" stroke-linejoin="round" points="56.0,156.5 68.3,144.7 80.5,135.8 92.8,135.8 105.1,144.7 117.4,147.6 129.6,156.5 141.9,162.3 154.2,152.0 166.4,156.5 178.7,144.7 191.0,146.1 203.3,144.7 215.5,150.6 227.8,155.0 240.1,159.4 252.3,159.4 264.6,138.8 276.9,153.5 289.2,153.5 301.4,143.2 313.7,147.6 326.0,150.6 338.2,153.5 350.5,155.0 362.8,156.5 375.1,147.6 387.3,152.0 399.6,138.8 411.9,144.7 424.1,156.5 436.4,141.7 448.7,153.5 460.9,156.5 473.2,162.3 485.5,153.5 497.8,152.0 510.0,135.8 522.3,138.8 534.6,144.7 546.8,149.1 559.1,153.5 571.4,150.6 583.7,150.6 595.9,144.7 608.2,141.7 620.5,144.7 632.7,150.6 645.0,150.6 657.3,147.6 669.6,149.1 681.8,162.3 694.1,147.6 706.4,144.7 718.6,144.7 730.9,152.0 743.2,150.6 755.5,152.0 767.7,153.5 780.0,153.5"/>
+        <text class="lab" x="64" y="34" style="fill: var(--bison)">bison</text>
+        <text class="lab" x="116" y="34" style="fill: var(--pronghorn)">pronghorn</text>
+        <text class="lab" x="200" y="34" style="fill: var(--wolf)">wolves</text>
+        <text x="260" y="34">each as a share of its own average, annual means, one world</text>
+      </svg>
+    </div>
+    <ul class="facts">
+      <li><b>20 worlds, 1,200 years each</b><span>The current balance ran 20 worlds headless for 1,200 valley-years. Bison lasted in all 20, and every species was present at least nine tenths of the time in 19 of them.</span></li>
+      <li><b>Booms about once a decade</b><span>Bison rise and fall on a roughly ten-year cycle, and wolf numbers track them a year behind while holding steadier than their prey.</span></li>
+      <li><b>Shocks heal</b><span>In the shock suite, bison came back in every world after a 70% cull, a drought and a wolf wipeout. Every rule change has to pass these gates before it ships.</span></li>
+    </ul>
+  </section>
+
+  <section class="field" aria-labelledby="keys">
+    <div>
+      <p class="kicker">At the controls</p>
+      <h2 id="keys">A short field card</h2>
+      <p>One valley-year is 2 minutes at 1x, 12 seconds at 10x. The world opens in late summer on a valley called Tallgrass; any other seed grows a different valley with its own history.</p>
+    </div>
+    <dl class="keys">
+      <dt><kbd>Space</kbd></dt><dd>pause</dd>
+      <dt><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd></dt><dd>speed: 1x, 10x, 100x</dd>
+      <dt><kbd>N</kbd></dt><dd>fly to the next event</dd>
+      <dt><kbd>C</kbd></dt><dd>cinematic documentary, with captions</dd>
+      <dt><kbd>H</kbd></dt><dd>ambient view, no interface</dd>
+      <dt><kbd>V</kbd></dt><dd>narrator on or off</dd>
+      <dt><kbd>G</kbd> <kbd>E</kbd></dt><dd>population graph, evolution chart</dd>
+      <dt><kbd>P</kbd></dt><dd>save a clean photo of the view</dd>
+      <dt><kbd>F</kbd></dt><dd>follow the selected animal</dd>
+    </dl>
+  </section>
+
+  <section class="making" aria-labelledby="making">
+    <p class="kicker">How it was made</p>
+    <h2 id="making">Simulation first, then the picture</h2>
+    <p>Tallgrass was built in October 2026 by Claude Code agents working through long unattended night and day runs, directed by Stewart Gregerson. Nothing on screen is hand-animated or hand-placed.</p>
+    <ol class="steps">
+      <li><h3>A deterministic valley</h3><p>The ecosystem is a TypeScript simulation that runs from a seed, with no renderer. A batch runner plays dozens of worlds for centuries and charts every species, and a golden-hash test proves each new rule is off by default until it passes.</p></li>
+      <li><h3>A Three.js renderer</h3><p>Terrain, grass, weather and day and night are drawn in WebGL from the simulation's state. Animal meshes are retargeted to a shared leg rig by a Blender script; the cottonwoods grow from a port of ez-tree.</p></li>
+      <li><h3>Blind critics</h3><p>Every look change is captured from inside the browser by script. A critic that sees only the stills and charts, and Gemini watching video, review each round; over thirty rounds, every issue was triaged fix, defer or reject.</p></li>
+      <li><h3>Generated sound</h3><p>Wind, birds, thunder, the animals' calls, the music cues and the narrator's lines were generated with ElevenLabs and mixed live by the game's audio director.</p></li>
+    </ol>
+  </section>
+
+  <section class="last" aria-labelledby="last">
+    <h2 id="last">Leave it running</h2>
+    <div class="cta">
+      <a class="btn btn-go" href="https://tallgrass.stewartgregerson.workers.dev">Play in your browser</a>
+      <a class="btn btn-quiet" href="https://github.com/Samizdat-Publications/tallgrass">Source on GitHub</a>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <p><span class="pill">In development</span></p>
+  <p>Tallgrass by Stewart Gregerson. Code MIT. Third-party models and textures keep their own licences; see the README on GitHub for the full credits.</p>
+</footer>
+
+<script src="site.js" defer></script>
+</body>
+</html>
