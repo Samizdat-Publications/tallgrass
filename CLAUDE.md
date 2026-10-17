@@ -74,7 +74,7 @@ Context will compact at least once during a night this long. Keep these files cu
 
 ## 7. Guardrails
 
-- **Stay inside this project folder.** Don't modify, move, or delete anything outside it. Don't touch other project folders. Never write to `C:\Users\stewa\OneDrive\Documents\` (dead path) or `C:\Users\stewa\OneDrive - work\` (work).
+- **Stay inside this project folder.** Don't modify, move, or delete anything outside it. Don't touch other project folders. Never write to `C:\Users\stewa\OneDrive\Documents\` (dead path) or any `C:\Users\stewa\OneDrive - *` folder (the owner's work account).
 - **API keys:** the owner keeps all of them in the `.env` files of his other projects: `C:\Users\stewa\ClaudeProjects\seked` and `C:\Users\stewa\ClaudeProjects\Noclip` (look for `.env`, `.env.local`, or similar at the root or one level down). You may *read* those files only. Never modify, move, or add anything in those folders; other sessions may be working in them. Copy just the keys you need into this project's `.env`. `.env` must be gitignored before the first commit. Never echo full keys into logs, docs, or commits (show the last 4 characters at most). If a key you want isn't there, check environment variables, then skip that service and log it.
 - **Spending:** never buy credits, upgrade plans, or add payment methods. Use paid generation APIs frugally: generate a couple, judge them, then generate more if they earn it. Log every call in `ASSETS.md`. If an API reports low credits, stop using it and log it.
 - **Licensing:** third-party assets must be CC0 or CC-BY (attribution in `CREDITS.md`). No NC/ND licenses, no ripped assets.
