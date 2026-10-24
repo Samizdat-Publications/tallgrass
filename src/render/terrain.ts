@@ -335,8 +335,9 @@ export class Terrain {
       // Detail: the ground's own high-pass detail, mirrored across the border (so it joins seamlessly) and domain-warped; farther out
       // it is swapped for a rotated, folded copy so the far valley does not look like a mirror image of the near one
       const warp = smoothstep(0, 70, d);
-      const wx = x + 34 * warp * (vnoise2(x * 0.011 + 3, z * 0.011 - 2, 17) - 0.5);
-      const wz = z + 34 * warp * (vnoise2(x * 0.011 - 8, z * 0.011 + 5, 19) - 0.5);
+      // (r-edge-v1: the warp and the swap to the rotated copy start earlier and push harder, so the valley's mirror image is not readable beyond its border from the map view)
+      const wx = x + 54 * warp * (vnoise2(x * 0.011 + 3, z * 0.011 - 2, 17) - 0.5);
+      const wz = z + 54 * warp * (vnoise2(x * 0.011 - 8, z * 0.011 + 5, 19) - 0.5);
       const mx = mirror(wx), mz = mirror(wz);
       const detailM = sampleHeight(rh, hn, cell, mx, mz) - sampleHeight(blurred, hn, cell, mx, mz);
       // the creek channel itself does not continue outside the world (it would read as a dry gully with cliff-like banks)
@@ -345,14 +346,14 @@ export class Terrain {
         return 1 - (1 - smoothstep(14, 46, shaped.creekDist[cj * hn + ci])) * smoothstep(0, 70, d);
       };
       let detail = detailM * creekAt(mx, mz);
-      const rotW = smoothstep(70, 190, d);
+      const rotW = smoothstep(35, 140, d);
       if (rotW > 0) {
         const ca = 0.62, sa = 0.78; // about 38 degrees
         const rx = fold(C0 + (wx - C0) * ca - (wz - C0) * sa + 91), rz = fold(C0 + (wx - C0) * sa + (wz - C0) * ca - 57);
         const detailR = (sampleHeight(rh, hn, cell, rx, rz) - sampleHeight(blurred, hn, cell, rx, rz)) * creekAt(rx, rz);
         detail += (detailR - detail) * rotW;
       }
-      const inner = trend + detail * (1 - smoothstep(40, 330, d));
+      const inner = trend + detail * (1 - smoothstep(110, 520, d));   // (r-edge-v1: the valley's own relief carries further out, so the border is not a change of texture from the map view)
       // basin wall, from the circle around the valley centre
       const rc = Math.max(0, Math.hypot(x - C0, z - C0) - R0);
       const big = fbm2(x * 0.0021 + 7.3, z * 0.0021 - 3.1, 4, 11);
@@ -1103,7 +1104,8 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
   float inS = 1.0 - smoothstep(0.0, 16.0, sd);
   // the snow amount here: the one global value, or (S11, uSnowOn = 1) the sim's local depth at this point plus a floor from a falling snowfall
   float snEff = uSnow;
-  if (uSnowOn > 0.5) snEff = tgSnowLocal(texture2D(uSnowTex, cuv).r, uSnowFall);
+  // (r-edge-v1: beyond the square the depth field continues as the same reflection as the other data, so the border row is not smeared outward as streaks and the snow outside lies at the valley's own coverage)
+  if (uSnowOn > 0.5) snEff = tgSnowLocal(texture2D(uSnowTex, cuvM).r, uSnowFall);
 
   // macro mottling (patch tints, dirt, dry-noise) halves from about 60 m out to 220 m: broad bands carry the far hills, not blotches
   float mot = 1.0 - 0.5 * smoothstep(60.0, 220.0, dist);
@@ -1192,6 +1194,11 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
   float graze = smoothstep(0.04, 0.3, max(-rayDir.y, 0.0));
   // looking straight down (map view) combed strokes read as fur or smear, so thin them out; they belong to oblique views
   float topK = smoothstep(0.7, 0.96, -rayDir.y);
+  // (r-edge-v1: the top-view calming above is for the playable square, where the blade layer carries the stipple; beyond it nothing does, so the
+  // far-field grain, patch colour and groves keep their strength from the map view too, which is what lets the land continue instead of going to mush)
+  float topOut = topK * (1.0 - edgeW);
+  // (and the combed stroke noise, which also steers where snow lies and where grass tips poke through, is calmed there: from the map view it is brushed streaks)
+  s2 = mix(s2, 0.5, 0.8 * topK * edgeW);
   streakTone *= mix(1.0, 0.3, topK);
   gTgH = ((s1 - 0.5) * 0.1 * f1 + (s2 - 0.5) * 0.22 * f2 * calm2 + (s3 - 0.5) * 0.55 * f3 * farCalm) * mix(0.5, 1.0, graze) * (0.4 + 0.6 * farK) * mix(1.0, 0.3, topK);
   // rolling wind waves of light and dark
@@ -1278,7 +1285,7 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
   // Swales and draws run deeper, greener gold, crests and the sunward faces go pale dry straw, grazed ground is shorter and browner, and
   // the 100 to 400 m tint patches keep their strength with distance (the near-range fade above halves them, which flattens the far hills).
   // Painterly and subtle: a few ALU ops, no fetches (the macro fields were already read).
-  float landK = smoothstep(100.0, 380.0, dist) * (1.0 - uNight) * (1.0 - 0.8 * winterK) * (1.0 - 0.6 * topK) * (1.0 - riparian) * (1.0 - uDrought);
+  float landK = smoothstep(100.0, 380.0, dist) * (1.0 - uNight) * (1.0 - 0.8 * winterK) * (1.0 - 0.6 * topOut) * (1.0 - riparian) * (1.0 - uDrought);
   if (landK > 0.004) {
     float moistL = clamp(draw * 0.85 + hollowK * 0.9 + 0.5 * (1.0 - up) - 0.35 * ridgeK, 0.0, 1.0);
     grassCol *= mix(vec3(1.0), vec3(0.83, 0.98, 0.66), moistL * 0.65 * landK);
@@ -1310,7 +1317,7 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
     // pale seed heads and dry tufts catch the sun: sparse bright flecks in the finest octave
     grassCol += grassCol * 0.5 * smoothstep(0.78, 0.95, fine) * grW * ts * (1.0 - topK) * (1.0 - winterK) * (1.0 - uNight);
   }
-  float groveAmt = smoothstep(0.62, 0.74, groveN + 0.12 * (draw - 0.2) - 0.07 * highGround) * edgeW * smoothstep(120.0, 480.0, dist) * smoothstep(0.18, 0.5, grain) * (1.0 - topK);
+  float groveAmt = smoothstep(0.62, 0.74, groveN + 0.12 * (draw - 0.2) - 0.07 * highGround) * edgeW * smoothstep(120.0, 480.0, dist) * smoothstep(0.18, 0.5, grain) * (1.0 - topOut);
   grassCol = mix(grassCol, grassCol * vec3(0.46, 0.62, 0.4), groveAmt * 0.85 * (1.0 - 0.55 * winterK));
 
   // blade-scale speckle so ground the grass layer does not cover (beyond the world edge) reads as grass, not as a smooth plane
@@ -1544,7 +1551,16 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
     // (it varies how far a drift reaches from one hollow to the next, so no two patches are the same size) and steep faces shed what
     // the flats and benches hold.
     float patchy = ((nM1 - 0.5) * 0.4 + (nM2 - 0.5) * 0.3 + (nE - 0.5) * 0.2) * 0.55;
-    float landF = (st.b - 0.5) * 2.0;
+    // (r-edge-v1: beyond the border the landform field is read where the far ground's detail is read from, the rotated and folded copy of the valley
+    // (see heightFn), so the hollows that hold snow out there are the ground's own hollows and the valley's mirror image is not readable from the map view)
+    float landS = st.b;
+    float rwL = smoothstep(35.0, 140.0, sd);
+    if (rwL > 0.001) {
+      vec2 qL = xz - 0.5 * uWorldSize;
+      vec2 rL = 0.5 * uWorldSize + vec2(qL.x * 0.62 - qL.y * 0.78 + 91.0, qL.x * 0.78 + qL.y * 0.62 - 57.0);
+      landS = mix(landS, texture2D(tStatic, 1.0 - abs(fract(rL / uWorldSize * 0.5) * 2.0 - 1.0)).b, rwL);
+    }
+    float landF = (landS - 0.5) * 2.0;
     float pot = 0.24 + flatK * 0.45 + drift * 0.1 + hollowK * 0.62 - ridgeK * 0.5 - rock * 0.5 - charAmt * 0.6 + 0.1 * gTgGrass
               + 0.3 * aspect + 0.3 * lee + patchy + 0.85 * landF - trodK * 0.5 - 0.25 * smoothstep(0.35, 0.9, slopeG);
     // The threshold starts above the highest possible potential (about 1.8), so a trace of leftover snow (the eased value never
@@ -1559,7 +1575,7 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
     float farE = 1.0 - smoothstep(160.0, 600.0, dist);
     float edgeN = (tgDet(xz, 38.0, 2, vec2(0.71)) - 0.5) * 0.34 + (tgDet(xz, 12.0, 0, vec2(0.45)) - 0.5) * 0.3;
     edgeN += (tgDet(xz, 5.0, 1, vec2(0.13)) - 0.5) * 0.24 * farE;
-    edgeN += (s2 - 0.5) * (0.3 + 0.3 * slopeW) * (1.0 - smoothstep(300.0, 1000.0, dist));
+    edgeN += (s2 - 0.5) * (0.3 + 0.3 * slopeW) * (1.0 - smoothstep(300.0, 1000.0, dist)) * (1.0 - 0.8 * topK * edgeW);   // (the combed strokes smear into streaks beyond the square from the map view)
     if (fineK > 0.01) edgeN += ((tgDet(xz, 1.5, 2, vec2(0.7)) - 0.5) * 0.5 + (tgDet(xz, 0.4, 3, vec2(0.2)) - 0.5) * 0.36) * fineK;
     float edgeW2 = mix(0.3, 0.19, smoothstep(0.2, 0.8, snEff));
     // r-land-v1: from the drone (150 to 450 m) a hard edge reads as camouflage blotches, so the ramp widens with range, most of all on its
@@ -1597,7 +1613,7 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
     col = mix(col, snowC, snowCover);
     col = mix(col, col * vec3(0.76, 0.76, 0.78), trodK * snowCover * 0.55);
     // sastrugi-like relief: soft drifts and wind-combed ripples take the light, the grass relief underneath is buried
-    gTgH = mix(gTgH, ((s2 - 0.5) * 0.1 * f2 + (s3 - 0.5) * 0.3 * f3 + (nA - 0.5) * 0.05 * lodFine) * mix(0.6, 1.0, graze), snowCover * 0.8);
+    gTgH = mix(gTgH, ((s2 - 0.5) * 0.1 * f2 + (s3 - 0.5) * 0.3 * f3 + (nA - 0.5) * 0.05 * lodFine) * mix(0.6, 1.0, graze) * (1.0 - 0.8 * topK * edgeW), snowCover * 0.8);   // (beyond the square the combed relief reads as brushed streaks from the map view)
     // drifts: long soft dunes (about 16 m across and 60 m along the wind or the fall line) a fraction of a metre high, so a deep pack
     // has a surface that takes the light in gentle bands and not a flat white fill; thin snow is level with the ground and gets none
     float duneK = smoothstep(0.55, 0.95, snowCover) * smoothstep(0.25, 0.6, sn1) * (1.0 - smoothstep(350.0, 900.0, dist)) * (1.0 - 0.6 * topK);

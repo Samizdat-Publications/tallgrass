@@ -1399,7 +1399,8 @@ export class PostFX {
     (g.uHighTint.value as THREE.Color).copy(L.gradeHighlight);
     g.uSat.value = L.gradeSat;
     g.uContrast.value = L.gradeContrast;
-    g.uVignette.value = L.vignette;
+    // (r-edge-v1: looking steeply down from high up the frame corners are land, not a lens: the vignette eases off so the map view's edge does not turn to mush)
+    g.uVignette.value = L.vignette * (1 - 0.65 * smoothstep(0.55, 0.9, this.camera.matrixWorld.elements[9]) * smoothstep(120, 400, this.camera.position.y));
     (g.uLift.value as THREE.Color).copy(L.gradeLift);
     g.uNight.value = L.gradeNight;
     this.bloom.strength = (this.quality === 'high' ? 1 : 0.85) * L.bloom * this.hazeBloom;
