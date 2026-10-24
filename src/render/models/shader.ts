@@ -2023,6 +2023,9 @@ export function makeAnimalMaterials(sp: number, def: ModelDef, shared: AnimalSha
   const isRaven = def.params.kind === 2 && !def.params.raptor;
   const lodOn = variant !== 'single';
   const hasShell = variant === 'near' && hasFur && def.fur?.shell !== undefined;
+  // a3 matte (bison): dry woolly shading of the authored coat. The albedo is pulled toward chocolate brown (the photo texture is rust and yellow), the
+  // moon rim and fill are neutral and weak (a blue rim reads as a wet sheen on a dark coat) and the direct specular is cut.
+  const a3matte = variant === 'near' && !!def.a3?.matte;
   const mangeDecl = (hasMange ? MANGE_DECL : '') + (hasMange || hasFur ? NOISE_DECL : '') + (hasFur ? FUR_DECL : '') + (lodOn ? LOD_DECL : '') + (hasShell ? SHELL_DECL : '');
   const lodDefs = lodDefines(def, variant).join('\n');
   const mangeFrag = (hasFur ? FUR_COLOR.replace(/aLookSeed/g, 'vTgSeed') : '') + (hasMange ? MANGE_FRAG : '');
@@ -2090,7 +2093,14 @@ export function makeAnimalMaterials(sp: number, def: ModelDef, shared: AnimalSha
       .replace('#include <common>', `#include <common>\n${lodDefs}\n${FADE_FRAG_DECL}\nvarying vec3 vTgColor;\nvarying float vTgSel;\nvarying float vTgFar;\nvarying float vTgMid;\nuniform vec3 uReadDark;\nuniform float uReadPale;\nuniform vec4 uReadRim;\nuniform float uRimCut;\nuniform float uGrassB;\nvarying float vTgHunt;\nuniform float uFill;\nuniform vec3 uWarm;\nuniform float uNeutral;\nuniform float uFarGain;\nuniform vec3 uRimCol;\nuniform float uRimK;\nuniform float uHuntK;\nuniform float uLow;\nuniform vec3 uAmb;\nuniform vec3 uFarTint;\nuniform float uFarMix;\nuniform float uFloor;\nuniform float uLowFill;\nvarying float vTgUp;\nuniform vec3 uTopCol;\nuniform float uTopMix;\nuniform float uSideDark;\nuniform float uNightK;${hasFur && def.far?.mute ? MUTE_DECL : ''}${mangeDecl}`)
       // Bright parts of the coat (the white bands and rump) are pulled toward a mid value as the light drops, so they
       // darken with the scene instead of glowing against the dark herds at dusk and night.
-      .replace('#include <color_fragment>', `vec3 tgC = vTgColor * mix(1.0, uFarGain, vTgFar);
+      .replace('#include <color_fragment>', `${a3matte ? `{
+          vec3 mc = diffuseColor.rgb;
+          float mL = dot(mc, vec3(0.2126, 0.7152, 0.0722));
+          mc = mix(mL * vec3(1.18, 0.97, 0.79), mc, 0.5);
+          mc *= 1.0 - 0.4 * smoothstep(0.08, 0.4, mL);
+          diffuseColor.rgb = mc;
+        }
+        ` : ''}vec3 tgC = vTgColor * mix(1.0, uFarGain, vTgFar);
         // at range the coat is pulled toward its species colour (see ModelDef.far), keeping part of its own shading
         // (in a dim scene the lift is mostly withdrawn: at dusk and in the rain a herd stays darker than the ground it is on)
         float tgDim = 1.0 - 0.7 * uLow;
@@ -2118,7 +2128,7 @@ export function makeAnimalMaterials(sp: number, def: ModelDef, shared: AnimalSha
       // sky fill: pull toward a warm neutral (so brown coats stay brown in blue shade), then boost it so the shaded side keeps form
       .replace(
         '#include <lights_fragment_end>',
-        `irradiance = mix(irradiance, vec3(dot(irradiance, vec3(0.2126, 0.7152, 0.0722))) * uWarm, uNeutral) * uFill * (1.0 - uLowFill * uLow);\n${hasFur ? 'irradiance *= vTgAO;\n' : ''}#include <lights_fragment_end>${hasFur ? FUR_LIGHT : ''}${isRaven ? RAVEN_SHEEN : ''}`,
+        `${a3matte ? 'reflectedLight.directSpecular *= 0.3;\n' : ''}irradiance = mix(irradiance, vec3(dot(irradiance, vec3(0.2126, 0.7152, 0.0722))) * uWarm, uNeutral) * uFill * (1.0 - uLowFill * uLow);\n${hasFur ? 'irradiance *= vTgAO;\n' : ''}#include <lights_fragment_end>${hasFur ? FUR_LIGHT : ''}${isRaven ? RAVEN_SHEEN : ''}`,
       )
       .replace(
         '#include <emissivemap_fragment>',
@@ -2140,8 +2150,8 @@ export function makeAnimalMaterials(sp: number, def: ModelDef, shared: AnimalSha
         // by its outline and by value, without the night looking like day.
         float tgNR = pow(1.0 - clamp(dot(normalize(vViewPosition), normal), 0.0, 1.0), 5.0);
         float tgNK = smoothstep(0.35, 0.88, uLow) * uNightK;
-        totalEmissiveRadiance += vec3(0.5, 0.62, 0.9) * 0.4 * tgNR * (0.3 + 0.7 * vTgUp) * tgNK * (0.65 + 0.75 * vTgMid) * (1.0 - 0.8 * vTgFar) * tgNL;
-        totalEmissiveRadiance += diffuseColor.rgb * vec3(0.085, 0.105, 0.17) * 0.25 * tgNK * (0.5 + 0.5 * vTgUp) * tgNL;`,
+        totalEmissiveRadiance += ${a3matte ? 'vec3(0.46, 0.46, 0.47) * 0.32' : 'vec3(0.5, 0.62, 0.9) * 0.4'} * tgNR * (0.3 + 0.7 * vTgUp) * tgNK * (0.65 + 0.75 * vTgMid) * (1.0 - 0.8 * vTgFar) * tgNL;
+        totalEmissiveRadiance += diffuseColor.rgb * ${a3matte ? 'vec3(0.15, 0.145, 0.14)' : 'vec3(0.085, 0.105, 0.17)'} * 0.25 * tgNK * (0.5 + 0.5 * vTgUp) * tgNL;`,
       );
   };
   material.customProgramCacheKey = () => `tg-animal-${sp}-${variant}-${R8_SHADER.on ? 1 : 0}${R8_SHADER.bison ? 1 : 0}${R8_SHADER.flare ? 1 : 0}`;
