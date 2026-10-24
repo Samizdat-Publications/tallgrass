@@ -242,7 +242,6 @@ worker.onmessage = (e: MessageEvent<FromWorker>) => {
   engine.megadrought = !!m.mega;
   // keep events and history from every message even if frames skip some
   pendingEvents = pendingEvents.concat(m.events);
-  for (const ev of m.events) if (ev.kind === 'blizzard') engine.noteBlizzard(ev.tick + ev.a);   // (r-weather: a natural blizzard keeps the weather's mild wind value, the renderer lays the gale over it)
   pendingHistory = pendingHistory.concat(m.history);
   // dynamic trees (S13): before setVeg, so the renderer's own fire hook is already off when the first veg frame lands
   if (m.treesVersion !== undefined) {
