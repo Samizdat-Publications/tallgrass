@@ -563,6 +563,8 @@ function describeCore(e: SimEvent, ctx?: DescribeContext): EventText {
         card: { title: `The last ${sg} is gone`, subtitle: when },
       };
     case 'introduced': {
+      // none could be set down (prairie dogs on ground that cannot hold a town, or no free creek site): say so, not "one is brought in"
+      if (e.a <= 0) return { sentence: e.sp === 7 ? 'The prairie dogs find nothing to dig into there: that ground cannot hold a town.' : `The ${pl} find nowhere to settle there.` };
       const n = Math.max(1, Math.round(e.a));
       const few = n <= 12;
       let sentence: string;
