@@ -126,6 +126,10 @@ class FogPass extends Pass {
         uBlizz: { value: 0.0 },
         uBlizzCol: { value: new THREE.Color(0.8, 0.85, 0.95) },
         uBlizzDir: { value: new THREE.Vector2(1, -0.3) },
+        // rain veil (r-spring-v1): the rain in the air past the near streak volume, as faint falling streaks across the far ground and sky
+        uRainVeil: { value: 0.0 },
+        uRainCol: { value: new THREE.Color(0.5, 0.55, 0.62) },
+        uRainDir: { value: new THREE.Vector2(0, -1) },
         uDustCol: { value: new THREE.Color(0.3, 0.2, 0.1) },
         uAerialWarm: { value: 0.0 },
         uAerialPale: { value: 0.0 },
@@ -168,6 +172,9 @@ class FogPass extends Pass {
         uniform float uBlizz;
         uniform vec3 uBlizzCol;
         uniform vec2 uBlizzDir;
+        uniform float uRainVeil;
+        uniform vec3 uRainCol;
+        uniform vec2 uRainDir;
         uniform vec3 uDustCol;
         uniform float uAerialWarm;
         uniform float uAerialPale;
@@ -221,6 +228,7 @@ class FogPass extends Pass {
               gl_FragColor.rgb = mix(c.rgb, uBlizzCol, bs);
               gl_FragColor.rgb += uBlizzCol * 0.2 * uBlizz * tgBlizzStreaks(gl_FragCoord.xy / (uTexel.y * 900.0), uBlizzDir, uTime);
             }
+            if (uRainVeil > 0.002) gl_FragColor.rgb += uRainCol * 0.12 * uRainVeil * tgBlizzStreaks(gl_FragCoord.xy / (uTexel.y * 900.0), uRainDir, uTime * 2.2);
             return;
           }
           if (d >= 0.999999) d = dNear;
@@ -389,6 +397,12 @@ class FogPass extends Pass {
             // snow streaks across the picture, a little stronger where the air is thick, a little weaker right at the lens
             float st = tgBlizzStreaks(gl_FragCoord.xy / (uTexel.y * 900.0), uBlizzDir, uTime);
             outc += uBlizzCol * st * 0.2 * uBlizz * (0.45 + 0.55 * fog);
+          }
+          if (uRainVeil > 0.002) {
+            // rain between the lens and the far ground: rain.ts draws a volume round the camera, so past it (and from a height it is all of the
+            // valley) the downpour would be missing. Thin falling streaks, stronger the farther the surface, fading in beyond about 30 m.
+            float rv = tgBlizzStreaks(gl_FragCoord.xy / (uTexel.y * 900.0), uRainDir, uTime * 2.2);
+            outc += uRainCol * rv * 0.14 * uRainVeil * smoothstep(30.0, 260.0, dist) * (0.55 + 0.45 * fog);
           }
           gl_FragColor = vec4(outc, c.a);
         }`,
@@ -1384,6 +1398,9 @@ export class PostFX {
     f.uBlizz.value = this.blizzard;
     (f.uBlizzCol.value as THREE.Color).copy(this.blizzCol);
     (f.uBlizzDir.value as THREE.Vector2).copy(this.blizzDir);
+    f.uRainVeil.value = this.rainVeil;
+    (f.uRainCol.value as THREE.Color).copy(this.rainVeilCol);
+    (f.uRainDir.value as THREE.Vector2).copy(this.rainDir);
     if (this.dustStorm > 0.002) {
       // the dust-laden air takes the (already ochre) horizon colour of the sky, a touch browner
       const hc = this.shared.skyHorizon.value;
@@ -1492,6 +1509,10 @@ export class PostFX {
   }
   private blizzCol = new THREE.Color(0.8, 0.85, 0.95);
   private blizzDir = new THREE.Vector2(1, -0.3);
+  /** r-spring-v1: the rain veil (see the fog pass): its strength 0..1, its colour and the direction the drops fall on the screen. */
+  private rainVeil = 0;
+  private readonly rainVeilCol = new THREE.Color();
+  private readonly rainDir = new THREE.Vector2(0, -1);
 
   /**
    * Falling rain (see rain.ts): `rain` is the eased 0..1 visible rain (already faded out when looking steeply down). Streaks are
@@ -1501,6 +1522,7 @@ export class PostFX {
     const ws = clamp(env.windStrength, 0, 1);
     this.rainHeavy = heavy;
     this.camAboveRain = aboveGround;
+    this.rainVeil = rain <= 0.01 ? 0 : clamp(rain, 0, 1) * (1 - 0.4 * smoothstep(110, 300, aboveGround)) * (0.7 + 0.5 * heavy);
     if (rain <= 0.01) { this.rain.update(dt, this.camera, { fall: 0, windStrength: ws, windX: 1, windZ: 0, aboveGround, color: _rainCol }); return; }
     const sh = this.shared;
     const lc = sh.lightColor.value, hz = sh.skyHorizon.value;
@@ -1509,6 +1531,14 @@ export class PostFX {
       hz.g * 0.55 + L.hemiSky.g * L.hemiIntensity * 0.45 + lc.g * 0.1,
       hz.b * 0.55 + L.hemiSky.b * L.hemiIntensity * 0.45 + lc.b * 0.1,
     ).multiplyScalar(0.85 * (1 + 0.5 * heavy));
+    {
+      // the screen direction of a falling drop: down, slanted by the wind's share along the camera's right
+      const me = this.camera.matrixWorld.elements;
+      const vw = 0.4 + 8.5 * Math.pow(ws, 1.5);
+      const sx = (Math.cos(env.windDir) * me[0] + Math.sin(env.windDir) * me[2]) * vw / 8.5;
+      this.rainDir.set(sx, -1).normalize();
+      this.rainVeilCol.copy(_rainCol).multiplyScalar(1.25);
+    }
     this.rain.update(dt, this.camera, { fall: rain, windStrength: ws, windX: Math.cos(env.windDir), windZ: Math.sin(env.windDir), aboveGround, heavy, color: _rainCol });
   }
 

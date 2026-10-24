@@ -23,7 +23,7 @@ import * as THREE from 'three';
 import type { World } from '../sim/world';
 import type { EnvState } from '../sim/types';
 import { buildSnowLand } from './snowland';
-import { COPPER_KEYS, CURE_KEYS, LAPSE_SEASON, SEED_KEYS, SEASON_GLSL, SNOW_GLSL, keyCurve, smooth01, winterK } from './season';
+import { COPPER_KEYS, CURE_KEYS, LAPSE_SEASON, SEED_KEYS, SEASON_GLSL, SNOW_GLSL, SPRING, keyCurve, smooth01, springK, winterK } from './season';
 import { CLOUD_SHADOW_GLSL, POND_GLSL, cloudShadowUniforms, makePondUniform, type SharedUniforms } from './common';
 import { STORM_GUST_GLSL, stormGustUniform } from './storms';
 
@@ -159,10 +159,13 @@ function seasonColor(keys: PalKey[], season: number, slot: number, out: THREE.Co
   _c1.setHex(b[slot + 1]);
   out.copy(_c0).lerp(_c1, e);
   const w = CLIMATE_GRADE.wet, m = CLIMATE_GRADE.mega;
-  if (w > 0 || m > 0) {
+  const green = keys === GREEN_KEYS;
+  // spring green-up (season.ts SPRING): an ordinary spring takes a share of the wet-year flush in the living palette, less in a run of dry years
+  const sp = green ? springK(keyCurve(CURE_KEYS, season)) * SPRING.flush * (1 - 0.5 * CLIMATE_GRADE.dry) : 0;
+  if (w > 0 || m > 0 || sp > 0) {
     const wk = 1 - winterK(season);
-    const green = keys === GREEN_KEYS;
-    const k = w * wk;
+    const k0 = w * wk;
+    const k = green ? k0 + (1 - k0) * sp : k0;
     if (k > 0) {
       if (green) {
         out.r *= 1 - 0.34 * k;
@@ -309,6 +312,7 @@ uniform float uBladeW;
 uniform float uCure;
 uniform float uDrought;
 uniform float uWetYr;
+uniform float uWetNow;
 uniform float uWinterK;
 uniform float uSeedFrac;
 uniform float uStubFloor;   // 1 = the short-grass stubble floor is on, 0 = off (for A/B timing)
@@ -698,6 +702,7 @@ void main() {
   // same order as the ground shader: late-summer cure floor, then the drought's push to dry, then the belt's own cap
   dry = tgCuredFloor(dry, uCure, rip);
   dry = tgWetDry(dry, uWetYr, uCure);
+  dry = tgSpringDry(dry, uCure, ridge, uWetNow);
   dry = tgDroughtDry(dry, uDrought, rip);
   dry = tgRiparianDry(dry, uCure, stub, rip);
 
@@ -927,7 +932,7 @@ void main() {
   albedo *= mix(vec3(1.0), vec3(1.07, 0.93, 0.8), ridge * dry * 0.75);
   albedo *= vAsp;   // aspect bands (vertex stage)
   // drought: bleach to pale straw at constant luminance (the ground shader's tgDroughtTint), thinned inside the belt
-  if (uDrought > 0.001) albedo = tgDroughtTint(albedo, uDrought, vRip);
+  if (uDrought > 0.001) albedo = tgDroughtTint(albedo, uDrought, vRip, uWinterK);
   albedo *= 1.0 + 0.1 * smoothstep(0.15, 0.0, abs(sideX)) - 0.12 * smoothstep(0.6, 1.0, abs(sideX));
   albedo *= mix(vec3(1.0), vec3(1.0 + 0.14 * (hue - 0.5), 1.0, 1.0 - 0.3 * (hue - 0.5)), nearK);
   albedo = mix(albedo, uStubble * (0.7 + 0.6 * bright), 0.85 * stub);

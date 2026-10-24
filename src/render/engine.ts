@@ -26,7 +26,7 @@ import { Fireflies, fireflyAmount } from './fireflies';
 import { Storms } from './storms';
 import { DroneCamera, CameraPreset } from './camera';
 import { CLIMATE_GRADE, grassTint } from './grass';
-import { CURE_KEYS, LAPSE_SEASON, LAPSE_SNOW, LAPSE_SWING, LEAF_KEYS, PACK_KEYS, keyCurve } from './season';
+import { CURE_KEYS, LAPSE_SEASON, LAPSE_SNOW, LAPSE_SWING, LEAF_KEYS, PACK_KEYS, SPRING, keyCurve, springK, winterK } from './season';
 import { SnowDepth } from './snowdepth';
 import { Flood } from './flood';
 import { DustStorm } from './dust';
@@ -186,6 +186,9 @@ export class Engine {
   private climSm = 0;
   private megaSm = 0;
   private dryLook = 0;
+  /** r-spring-v1: the share of the dry-years dust haze left after rain and winter (0..1), and the winter amount it used (lapse-damped). */
+  private dryAir = 1;
+  private winterNow = 0;
   private wetLook = 0;
   /** True while a megadrought holds (the page sets it from the worker's snapshot, or the ?clim=mega override). */
   megadrought = false;
@@ -864,11 +867,15 @@ export class Engine {
       // quiet inside |index| < 0.2 (and nearly so up to 0.3), full at 0.9; a megadrought pushes the dry look on to its limit
       this.dryLook = Math.min(1, 0.8 * smoothstep(0.2, 0.9, -this.climSm) + 0.25 * this.megaSm);
       this.wetLook = smoothstep(0.2, 0.9, this.climSm);
-      sm.dry = this.dryLook;
+      // (r-spring-v1: rain washes the dust out of the air, and a dormant winter ground has no dust to raise: the dry-years haze stands down in both)
+      const winterNow = winterK(env.season) * (1 - this.lapseSm * (1 - LAPSE_SWING));
+      this.dryAir = (1 - 0.9 * this.rainSm) * (1 - SPRING.winter * winterNow);
+      this.winterNow = winterNow;
+      sm.dry = this.dryLook * this.dryAir;
     }
-    this.post.dust = Math.max(this.dustSm, 0.85 * storm, 0.5 * this.dryLook + 0.12 * this.megaSm);
+    this.post.dust = Math.max(this.dustSm, 0.85 * storm, (0.5 * this.dryLook + 0.12 * this.megaSm) * this.dryAir);
     this.post.dustStorm = storm;
-    u.drought.value = Math.max(this.dustSm, this.dryLook);   // the same eased value drives the ground and blade shaders' straw bleach (season.ts DROUGHT); a dry run of years rides it too
+    u.drought.value = Math.max(this.dustSm, this.dryLook);   // (the ground and blade shaders' straw bleach, season.ts DROUGHT; a dry run of years rides it too; eased for the season right after applySeason below)
     CLIMATE_GRADE.wet = this.wetLook;
     CLIMATE_GRADE.dry = this.dryLook;
     CLIMATE_GRADE.mega = this.megaSm;
@@ -919,7 +926,9 @@ export class Engine {
     if (bzK > 0.002) this.applyBlizzard(bzK);
     // a downpour: the share of the rain above a light one's, so a light rain is drawn exactly as it was
     const heavyRain = smoothstep(0.62, 1.0, this.rainSm);
-    if (heavyRain > 0.002) this.applyRain(heavyRain);
+    // (r-spring-v1: any real rain, not only a downpour, cools the sky and the haze to grey-blue: a light rain under a warm morning sky read brown-olive)
+    const coolRain = smoothstep(0.1, 0.7, this.rainSm);
+    if (heavyRain > 0.002 || coolRain > 0.002) this.applyRain(heavyRain, coolRain);
     if (fast > 0) {
       // the key light's direction is the harshest part of a fast-forward: it laps the sky (and swings through the zenith where the
       // moon takes over) faster than a shadow can read. The sky and the sun disc keep their true motion; the light that casts the
@@ -935,6 +944,9 @@ export class Engine {
     const snowK = 1 - this.lapseSm * (1 - LAPSE_SNOW);
     u.seasonKeep.value = swingK;
     this.applySeason(env.season);
+    // the dry-years ground bleach eases off in spring (the prairie still greens up in a dry year, the straw comes with the cure).
+    // u.cure is the lapse-damped cure applySeason just wrote.
+    u.drought.value = Math.max(this.dustSm, this.dryLook * (1 - SPRING.drought * springK(u.cure.value)));
     const winter =smoothstep(2.4, 3.1, u.season.value) * (1 - smoothstep(3.55, 3.95, u.season.value));
     const frostTime = 1 - smoothstep(0.36, 0.5, env.dayFrac) * (1 - smoothstep(0.62, 0.74, env.dayFrac));
     const frostTarget = winter * frostTime * (1 - 0.6 * env.warmth) * swingK;
@@ -1099,13 +1111,15 @@ export class Engine {
    * sun disc and glow go out, the grade loses colour (the eye adapts a little, so it is dim and not black). Milder at night, which is
    * dark already. The haze and the streaks are in the post pass. Called right after computeAtmosphere, so it only ever lays over that frame.
    */
-  private applyRain(a: number): void {
+  private applyRain(a: number, cool = a): void {
     const u = this.uniforms, L = this.lighting, t = this.rainTmp;
     const day = smoothstep(-8, 10, L.sunElDeg);
     const k = a * (0.5 + 0.5 * day);
+    // the cool share (sky, haze and ambient colour) rides the lighter rain too; the dimming below stays with the downpour
+    const kc = Math.max(k, cool * (0.65 + 0.35 * day));
     const grey = (c: THREE.Color, dim: number): void => {
       const lum = 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b;
-      c.lerp(t.setRGB(0.92, 0.97, 1.08).multiplyScalar(lum * dim), 0.8 * k);
+      c.lerp(t.setRGB(0.92, 0.97, 1.08).multiplyScalar(lum * dim), 0.8 * kc);
     };
     grey(u.skyHorizon.value, 0.8);
     grey(u.skyMid.value, 0.7);
@@ -1114,7 +1128,7 @@ export class Engine {
     u.sunDiskColor.value.multiplyScalar(1 - 0.9 * k);
     u.lightColor.value.multiplyScalar(1 - 0.35 * k);
     L.hemiIntensity *= 1 - 0.42 * k;
-    L.hemiSky.lerp(t.setRGB(0.55, 0.62, 0.74), 0.25 * k);
+    L.hemiSky.lerp(t.setRGB(0.55, 0.62, 0.74), 0.25 * kc);
     L.exposure *= 1 + 0.08 * k;
     L.gradeSat -= 0.26 * k;
     L.gradeContrast -= 0.04 * k;
