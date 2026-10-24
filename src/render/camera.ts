@@ -14,7 +14,8 @@ const DEG = Math.PI / 180;
 const MIN_PITCH = 1.5 * DEG;
 const MAX_PITCH = 89.6 * DEG;
 const MIN_DIST = 2.5;
-const MAX_DIST = 1500;
+// the valley is 512 m across and the map view sits at 690 m: further out it shrinks to a small square in the haze
+const MAX_DIST = 900;
 /**
  * Clearance (m) the camera keeps from a crown or trunk. The near plane is 0.25 to 0.65 m at tree height, so this keeps leaves out of the lens.
  * It was 1.5 m; a video review found the camera "pushing through the canopy": at 1 to 1.5 m from the leaves a lump of foliage fills the whole

@@ -420,3 +420,44 @@ Scores: visual 6, readability 4, life 6, ecosystem 6, UI 7, keep watching 6 (rou
 ## Showcase capture (Gemini video, D14 build, for the landing page; 2026-10-17 18:37) -> `review/showcase-2026-10-17/`
 Scripted takes `tools/video.mjs` (default reel, 108 s) and `--set motion` (40 s). Reel scores: visual 6, readability 7, life 3, ecosystem 5, UI 8, keep watching 4. Motion scores: visual 6, readability 6, life 3, ecosystem 3, UI 8, keep watching 4.
 Both critiques land on the same thing: wide shots, light, the population graph and the UI work; close-up locomotion does not (feet slide, rigid run, wolves pass a herd without a visible reaction, abrupt stand-to-lie). Triage: DEFER all to the next work session (this pass only built the landing page). For the page, the clips were chosen around it: the hero and Watch clips are the documentary camera (letterbox cropped), Follow is the bison waterhole shot rather than the night wolf run.
+
+## Round 33 (fresh blind critic, stills of the pre-polish V1.0 build e7f96e3 plus the v10b overview chart; 2026-10-24 14:10) -> `review/round-33/critique.md`
+Scores: visual 6, readability 5, life 7, ecosystem 6, UI 7, keep watching 6 (round 32: 6, 4, 6, 6, 7, 6).
+1. Species unreadable at mid and wide zoom; top-map glyphs have no legend: REJECT the legend (the glyphs use the species colours of the Population panel dots, which sit on screen as the key); DEFER the distance silhouettes (open since round 25, too big for the release evening).
+2. Close-up bison read as glossy water buffalo (blue specular, forward-curving horns, weak hump): FIX, builder r-bison-v1.
+3. Ravens as flat cut-outs at close range: FIX, builder r-ravens2.
+4. Title cards and toasts for things the camera is not showing ("Eagles for the winter" over bison): DEFER. Located cards already wait for the camera (main.ts 574); seasonal arrivals have no place and read as chapter titles over the valley; field-note toasts record a moment, not a shot.
+5. Flat long-run dynamics, prairie dog and mule deer declines: REJECT for V1.0 (no sim changes tonight; v10b passed every gate; known weak spots logged since round 32).
+6. Weather lacks punch (blizzard with clear visibility): DEFER (visual upgrade after V1.0).
+7. Wide terrain reads as a diorama (banded snow, flat river): DEFER.
+8. Bison numbers rise in winter, cougars against few deer: REJECT (founder desync births and the cougar's small-game diet; sim).
+9. Population panel over the action: DEFER (first-run builder handles overlaps only).
+10. Graph axes and the "100x at 47x" note: DEFER (the 47x came from capturing under load with four agents running).
+
+## V1.0 QA sweep (live build D14, Playwright at 1920x1080 and 1366x768, 2026-10-24 14:25) -> `scratch/v1-qa/` (stills and logs, not committed)
+No page errors, no console errors, no failed requests; every button does something; no em dashes or debug text in the UI. Shader compiler warnings X3595 and X4000 only. Ready in 6 to 19 s.
+1. Title card Challenges list taller than the screen and does not scroll ("Cat country" and "Storm season" unreachable at 1366x768): FIX (blocker).
+2. The documentary camera keeps cutting while a tool is armed, so the player misses their own fire: FIX (arming a tool takes the camera).
+3. Overlays chosen from a low documentary shot show nothing; territories with no wolves say nothing: FIX (an overlay lifts the camera to an overhead view; a no-packs note).
+4. Expanded graph (G) covers the animal card's Close button and collapses the Chronicle: FIX.
+5. Animal ages on the card (biological years) contradict the family tree's valley years: DEFER (the valley calendar is compressed by design; needs a wording decision, logged for the owner).
+6. Chronicle says "The last cougar is gone" while two cougars live, then "cougars return", then "left": FIX at the text layer (a last-of-kind line only when the count is really 0).
+7. Documentary camera films empty ground, black night frames, canopy: DEFER (director tuning; partly expected at night).
+8. Fire spreads in blocky rectangles: DEFER unless cheap (sampling of the burn field).
+9. Zoom out without limit until the valley is a small square: FIX (clamp).
+10. Distemper reported as "plague": FIX (wording).
+11. Add prairie dogs on unsuitable ground wastes the click: DEFER.
+12. Photo mode overlaps the expanded graph: FIX.
+13. New valley: Start button below the fold; raptor defaults differ from the standard valley; panel covers the population numbers at 1366: FIX.
+14. Title, Field guide, Esc lands in the valley without tips; "13 of 42 witnessed" before Watch; a field-guide toast with no wolf in frame: FIX the Esc path; DEFER the rest.
+15. "The wolves come home" won with one click; dots count interventions left: DEFER (challenge balance).
+16. "Six wolves return" when 15 are present: FIX (wording).
+17. Duplicate names across scenarios and challenges: DEFER.
+18. Slate "Dry years" against Chronicle "the drought is over": DEFER (two different things: the climate regime and a drought spell).
+19. Ravens stack into a column at a kill: covered by r-ravens2 if it shows there.
+20. Pink radial dust fan: DEFER (logged since round 32).
+21. Glyphs read as debug markers at 100x; speed readout: DEFER (glyphs are the readability fix of round 23).
+22. Rain gives no feedback: covered partly by r-weather-v1; a Chronicle headline DEFER.
+23. Evolution chart "-0.0%" and grass axis: FIX if cheap.
+24. Seed chip copies the full link; V has no confirmation: FIX the V toast.
+25. Tools drawer overlaps the field-notes toast at 1366: FIX with the HUD overlap pass.

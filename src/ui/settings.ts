@@ -199,6 +199,14 @@ export class SettingsPanel extends ModalPanel {
     this.sliders[key].el.hidden = true;
   }
 
+  /** Change the picture quality from outside the panel (the game stepping down on a slow machine), saved like a choice made here. */
+  setQuality(q: QualityPreset): void {
+    if (this.s.quality === q) return;
+    this.s.quality = q;
+    this.sync();
+    this.commit('quality');
+  }
+
   private sync(): void {
     this.quality.set(this.s.quality);
     this.qualityNote.textContent = QUALITY_NOTES[this.s.quality];

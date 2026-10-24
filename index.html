@@ -5,15 +5,78 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Tallgrass</title>
     <meta name="description" content="A living tallgrass prairie: bison, pronghorn, wolves and ravens finding their own balance." />
+    <link rel="preload" as="image" href="/splash.jpg" fetchpriority="high" />
     <style>
       html, body { margin: 0; height: 100%; overflow: hidden; background: #1a1711; }
       #app { position: fixed; inset: 0; }
       #ui { position: fixed; inset: 0; pointer-events: none; }
+
+      /* The splash: a poster of the valley that paints with the first HTML, under the title card and the interface, until the
+         first real frame has been drawn (then it crossfades out and is removed: see window.__tgSplash below). No z-index on purpose: it paints after the game canvas and before the interface, by document order. Serif stack
+         without the web font, so the line never jumps when Alegreya arrives. */
+      #splash { position: fixed; inset: 0; overflow: hidden; background: #1a1711; opacity: 1; transition: opacity 0.8s ease-out; pointer-events: none; }
+      #splash.is-done { opacity: 0; }
+      #splash .sp-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; filter: saturate(0.92) brightness(0.82); }
+      #splash .sp-vig { position: absolute; inset: 0; background:
+        radial-gradient(ellipse 85% 75% at 50% 46%, rgba(16, 11, 4, 0) 30%, rgba(16, 11, 4, 0.62) 100%),
+        linear-gradient(to bottom, rgba(16, 11, 4, 0.34), rgba(16, 11, 4, 0) 30%, rgba(16, 11, 4, 0) 62%, rgba(16, 11, 4, 0.5)); }
+      #splash .sp-msg { position: absolute; left: 0; right: 0; bottom: 11vh; display: flex; flex-direction: column; align-items: center; gap: 14px;
+        font: italic 400 20px/1.2 Georgia, 'Times New Roman', serif; color: #efe6d0; letter-spacing: 0.02em;
+        text-shadow: 0 1px 12px rgba(0, 0, 0, 0.7); transition: opacity 0.6s ease-out; }
+      /* the title card carries its own "preparing" line, so the splash one steps aside while the card is up */
+      html.tg-title-up #splash .sp-msg { opacity: 0; }
+      #splash .sp-msg[hidden] { display: none; }
+      .sp-rule { position: relative; display: block; width: 132px; height: 1px; background: rgba(239, 230, 208, 0.22); overflow: hidden; }
+      .sp-rule i { position: absolute; top: 0; bottom: 0; left: 0; width: 44px; background: #d9b65c; animation: sp-glide 3.6s ease-in-out infinite; }
+      @keyframes sp-glide { 0% { transform: translateX(-44px); } 50% { transform: translateX(132px); } 100% { transform: translateX(-44px); } }
+      @media (prefers-reduced-motion: reduce) {
+        #splash { transition-duration: 0.01s; }
+        .sp-rule i { animation: none; width: 132px; opacity: 0.55; }
+      }
+
+      /* the calm cards for browsers that cannot run the game (see src/boot.ts) */
+      .sp-card { position: absolute; inset: 0; display: grid; place-items: center; padding: 24px; background: rgba(16, 11, 4, 0.58); pointer-events: auto;
+        font-family: Georgia, 'Times New Roman', serif; color: #efe6d0; opacity: 0; transition: opacity 0.6s ease-out; }
+      .sp-card.is-on { opacity: 1; }
+      .sp-card-in { max-width: 520px; text-align: center; }
+      .sp-card h1 { margin: 0; font: italic 400 clamp(44px, 12vw, 84px) / 1 Georgia, 'Times New Roman', serif; text-shadow: 0 2px 28px rgba(0, 0, 0, 0.65); }
+      .sp-card hr { width: 72px; height: 1px; border: 0; margin: 18px auto 16px; background: #d9b65c; }
+      .sp-card p { margin: 0; font-size: clamp(18px, 4.6vw, 22px); line-height: 1.4; text-shadow: 0 1px 12px rgba(0, 0, 0, 0.7); }
+      .sp-card-btns { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 26px; }
+      .sp-btn { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 0 22px; border-radius: 6px; box-sizing: border-box; cursor: pointer;
+        font: 400 17px/1 Georgia, 'Times New Roman', serif; color: #efe6d0; text-decoration: none; background: rgba(26, 23, 17, 0.62);
+        border: 1px solid rgba(240, 228, 200, 0.28); -webkit-tap-highlight-color: transparent; }
+      .sp-btn:hover { border-color: rgba(240, 228, 200, 0.5); }
+      .sp-btn.is-primary { background: #d9b65c; border-color: #d9b65c; color: #1d1809; }
+      .sp-btn.is-primary:hover { background: #e6c474; }
     </style>
   </head>
   <body>
     <div id="app"></div>
+    <div id="splash" role="status" aria-label="Preparing the valley">
+      <img class="sp-img" src="/splash.jpg" alt="" decoding="async" fetchpriority="high" />
+      <div class="sp-vig"></div>
+      <div class="sp-msg"><span class="sp-line">Preparing the valley</span><span class="sp-rule"><i></i></span></div>
+    </div>
     <div id="ui"></div>
-    <script type="module" src="/src/main.ts"></script>
+    <script>
+      // Splash control. done() crossfades the poster out (about 0.8 s) and removes it; the page's ready flag (html.tg-ready) tells the
+      // title card to drop its "preparing" line. Safe to call twice.
+      window.__tgSplash = {
+        done: function () {
+          var el = document.getElementById('splash');
+          document.documentElement.classList.add('tg-ready');
+          if (!el || el.__done) return;
+          el.__done = true;
+          document.body.classList.remove('has-splash');
+          // an automated browser (the capture tools) gets no fade, so a still never catches the poster half faded (?splash=1 keeps it for tests)
+          if (navigator.webdriver && !/[?&]splash=1/.test(location.search)) { if (el.parentNode) el.parentNode.removeChild(el); return; }
+          el.classList.add('is-done');
+          setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 950);
+        },
+      };
+      document.body.classList.add('has-splash');
+    </script>
+    <script type="module" src="/src/boot.ts"></script>
   </body>
 </html>

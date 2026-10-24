@@ -666,6 +666,8 @@ export class Engine {
 
   /** Hold 60 fps on big or high-DPI screens: the render scale steps down when frames run long and creeps back up. */
   autoScale = true;
+  /** Called once when the render scale is at its floor and frames still run long on High quality (the game drops to Medium). */
+  onStruggle: (() => void) | null = null;
   private renderScale = 1;
   private basePixelRatio = 1;
   private slowMs = 0;
@@ -678,6 +680,15 @@ export class Engine {
     if (frameMs > 19.5) { this.slowMs += frameMs; this.fastMs = 0; }
     else { this.fastMs += frameMs; this.slowMs = Math.max(0, this.slowMs - frameMs * 0.5); }
     if (now - this.lastScaleT < 3000) return;
+    // already at the lowest render scale and still slow for a good while: the picture quality itself has to come down (once)
+    if (this.slowMs > 6000 && this.renderScale <= 0.6 + 1e-3 && this.quality === 'high' && this.onStruggle) {
+      const cb = this.onStruggle;
+      this.onStruggle = null;
+      this.slowMs = 0;
+      this.lastScaleT = now;
+      cb();
+      return;
+    }
     if (this.slowMs > 2000 && this.renderScale > 0.6) {
       // remember where it struggled, so it doesn't bounce straight back up into the same wall
       this.ceilingScale = this.renderScale;

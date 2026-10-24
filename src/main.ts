@@ -506,6 +506,8 @@ const busAudio = audio as unknown as BusAudio;
 const hasBuses = typeof busAudio.setBusVolume === 'function';
 
 let autoCamEnabled = savedSettings.autoCamera;
+// a machine that is still slow at the lowest render scale steps down from High to Medium once (not when ?q= pins the quality)
+if (!q.has('q')) engine.onStruggle = () => ui.lowerQuality();
 let startNotice: { text: string; label: string; ms: number } | null = null;
 function applySetting(s: Settings, changed: keyof Settings): void {
   switch (changed) {
@@ -834,6 +836,12 @@ w.__overlay = overlay;
 w.__trails = trails;
 engine.onFrame((dt, t) => {
   if (frameMarks < 40) mark('frame' + frameMarks++);
+  // the splash poster (index.html) goes once the valley has really been drawn: this is the third frame's callback, so two frames
+  // have been rendered and presented by now (the shaders were built by prime() before the first of them)
+  if (splashFrames >= 0 && ++splashFrames >= 3) {
+    splashFrames = -1;
+    requestAnimationFrame(() => { mark('splash_done'); (window as unknown as { __tgSplash?: { done(): void } }).__tgSplash?.done(); });
+  }
   const alpha = Math.min(1, (performance.now() - lastTickChange) / Math.max(16, tickInterval));
   // legs keep pace with how fast the sim actually moves animals (capped where gaits would alias)
   animals.timeScale = speed > 0 ? Math.min(speed, 12) : 0;
@@ -925,6 +933,7 @@ engine.onFrame((dt, t) => {
   }
 });
 let frameMarks = 0;
+let splashFrames = 0;
 mark('pre_start');
 // the shader programs are built in parallel first (engine.prime), then the frames run; ?prime=0 starts at once, the way it used to
 if (q.get('prime') === '0') engine.start();

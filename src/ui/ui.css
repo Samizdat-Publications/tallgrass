@@ -2644,6 +2644,9 @@ button.tg-ent-b:hover {
 @media (max-width: 899px) {
   .tg-ui {
     --right-w: calc(250 * var(--u));
+    /* the documentary camera chip moves to its own row above the time bar here (see .tg-camwrap), so everything that stacks above
+       the bar (population, field-notes toast, chapter card, right column) lifts by the chip's height and never sits under it */
+    --stack: calc(var(--m) + var(--bar-h) + 12 * var(--u) + 40 * var(--u));
   }
   .tg-time .tg-trate,
   .tg-time .tg-tsep {
@@ -3220,6 +3223,17 @@ button.tg-ent-b:hover {
   transform: translate(-50%, 0);
   transition-delay: 0s;
 }
+/* a narrow window has no room beside the population panel for a centred toast: it sits at the right, above the overlays button */
+@media (max-width: 1019px) {
+  .tg-toast {
+    left: auto;
+    right: var(--m);
+    transform: translate(0, calc(8 * var(--u)));
+  }
+  .tg-toast.is-on {
+    transform: none;
+  }
+}
 .tg-toast-label {
   flex: none;
   font: 500 calc(12.5 * var(--u)) / 1 var(--sans);
@@ -3237,6 +3251,10 @@ button.tg-ent-b:hover {
 .tg-ui.has-pane .tg-toast {
   bottom: auto;
   top: calc(var(--m) + 8 * var(--u));
+}
+/* with the graph docked open it fills the lower middle: the toast rides just above it, the way the field-notes toast does */
+.tg-ui:has(.tg-pop.is-open):not(.has-pane) .tg-toast {
+  bottom: calc(var(--stack) + var(--pop-h, 92px) + 12 * var(--u));
 }
 
 /* ---- share and photograph buttons ------------------------------------------------------------------------------- */
@@ -3355,6 +3373,58 @@ button.tg-ent-b:hover {
 .tg-ui.is-hidden .tg-title {
   display: none;
 }
+/* "Preparing the valley": a quiet line under the buttons until the first frame of the valley has been drawn (html.tg-ready, set when
+   the splash poster in index.html goes). It keeps its room when it fades, so the buttons never move. */
+.tg-title-wait {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: calc(10 * var(--u));
+  margin: calc(28 * var(--u)) 0 0;
+  font: italic 400 calc(15 * var(--u)) / 1.2 var(--serif);
+  color: var(--paper-dim);
+  text-shadow: 0 1px 12px rgba(0, 0, 0, 0.7);
+  transition: opacity 0.6s var(--ease), visibility 0s linear 0.6s;
+}
+html.tg-ready .tg-title-wait,
+.tg-title-list:not([hidden]) ~ .tg-title-wait {
+  opacity: 0;
+  visibility: hidden;
+}
+.tg-title-wait-rule {
+  position: relative;
+  display: block;
+  width: calc(96 * var(--u));
+  height: 1px;
+  overflow: hidden;
+  background: rgba(239, 230, 208, 0.2);
+}
+.tg-title-wait-rule i {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: calc(32 * var(--u));
+  background: var(--gold);
+  animation: tg-wait-glide 3.6s ease-in-out infinite;
+}
+@keyframes tg-wait-glide {
+  0%, 100% { transform: translateX(calc(-32 * var(--u))); }
+  50% { transform: translateX(calc(96 * var(--u))); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tg-title-wait-rule i {
+    animation: none;
+    width: 100%;
+    opacity: 0.5;
+  }
+}
+/* the splash poster is up (the valley is not drawn yet): the interface chrome waits too, so nothing floats over the poster */
+body.has-splash .tg-chrome,
+body.has-splash .tg-fn-toast,
+body.has-splash .tg-tips,
+body.has-splash .tg-hint {
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
 /* while the title is up the rest of the interface waits */
 .tg-ui.has-chapter .tg-hint,
 .tg-ui.has-title .tg-chrome,
@@ -3373,12 +3443,16 @@ button.tg-ent-b:hover {
 }
 
 /* ---- first-run tips -------------------------------------------------------------------------------------------- */
+/* The card sits in the clear strip at the top centre, between the slate (and the tools) on the left and the seed row and chronicle
+   on the right. The bottom is crowded: the population panel, the time bar, the guide and field-notes toasts and the chapter cards
+   all live there. Its width gives way before it can reach either neighbour (the slate is about 250 u wide, the right column
+   --right-w), and a narrow window switches to the compact card below. */
 .tg-tips {
   position: absolute;
   left: 50%;
-  bottom: calc(var(--stack) + 14 * var(--u));
+  top: calc(var(--m) + 8 * var(--u));
   z-index: 7;
-  width: min(calc(560 * var(--u)), calc(100vw - 2 * var(--m)));
+  width: min(calc(600 * var(--u)), calc(100vw - 2 * var(--m) - 2 * (var(--right-w) + 24 * var(--u))));
   padding: calc(10 * var(--u)) calc(18 * var(--u)) calc(16 * var(--u));
   background: rgba(26, 23, 17, 0.78);
   opacity: 0;
@@ -3403,18 +3477,75 @@ button.tg-ent-b:hover {
   gap: calc(8 * var(--u));
 }
 .tg-tips-list li {
-  display: grid;
-  grid-template-columns: calc(64 * var(--u)) 1fr;
-  align-items: baseline;
-  gap: calc(12 * var(--u));
-  font: 400 calc(16 * var(--u)) / 1.3 var(--serif);
+  position: relative;
+  padding-left: calc(16 * var(--u));
+  font: 400 calc(16 * var(--u)) / 1.65 var(--serif);
 }
+.tg-tips-list li::before {
+  content: '';
+  position: absolute;
+  left: calc(2 * var(--u));
+  top: 0.82em;
+  width: calc(5 * var(--u));
+  height: calc(5 * var(--u));
+  border-radius: 50%;
+  background: var(--gold);
+  opacity: 0.8;
+}
+/* a key is a small chip inside the sentence, so every tip reads as one line of prose */
 .tg-tips-list .tg-kbd {
-  justify-self: start;
+  min-width: calc(18 * var(--u));
+  height: calc(18 * var(--u));
+  margin: 0 calc(1 * var(--u));
+  padding: 0 calc(5 * var(--u));
+  font-size: calc(12 * var(--u));
+  line-height: calc(16 * var(--u));
+  vertical-align: 0.08em;
+  background: rgba(240, 228, 200, 0.06);
 }
 .tg-tips-ok {
   pointer-events: auto;
   float: right;
+}
+/* a narrow window: a full-width strip just under the tools button, clear of the population panel below it */
+@media (max-width: 1019px) {
+  .tg-tips {
+    left: var(--m);
+    top: calc(var(--m) + 108 * var(--u));
+    width: calc(100vw - 2 * var(--m));
+    padding: calc(6 * var(--u)) calc(14 * var(--u)) calc(7 * var(--u));
+    transform: translate(0, calc(10 * var(--u)));
+  }
+  .tg-tips.is-on {
+    transform: none;
+  }
+  /* there is no room for both here: the field-notes toast waits (the note itself is already saved) */
+  .tg-ui:has(.tg-tips.is-on) .tg-fn-toast {
+    opacity: 0;
+    visibility: hidden;
+  }
+  .tg-tips .tg-menu-h {
+    padding-bottom: 0;
+    line-height: 1.2;
+  }
+  .tg-tips-list {
+    margin: 0;
+    gap: 0;
+  }
+  .tg-tips-list li {
+    font-size: calc(15 * var(--u));
+    line-height: 1.4;
+  }
+  .tg-tips-list li::before {
+    top: 0.72em;
+  }
+  .tg-tips-ok {
+    position: absolute;
+    top: calc(6 * var(--u));
+    right: calc(10 * var(--u));
+    height: calc(30 * var(--u));
+    padding: 0 calc(14 * var(--u));
+  }
 }
 .tg-ui.is-hidden .tg-tips {
   display: none;

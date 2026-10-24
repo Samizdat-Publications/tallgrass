@@ -75,6 +75,7 @@ export class TitleCard {
         h('p', { class: 'tg-title-sub', text: 'A living prairie finds its own balance.' }),
         this.main,
         this.list,
+        h('p', { class: 'tg-title-wait', 'aria-hidden': 'true' }, h('span', { text: 'Preparing the valley' }), h('span', { class: 'tg-title-wait-rule' }, h('i'))),
       ),
     );
     this.onKey = (e) => {
@@ -104,12 +105,15 @@ export class TitleCard {
     void this.el.offsetWidth;
     this.el.classList.add('is-on');
     this.watchBtn.focus({ preventScroll: true });
+    // the splash poster under the card (index.html) hands its "preparing" line over to the card's own
+    document.documentElement.classList.add('tg-title-up');
   }
 
   hide(): void {
     if (!this.open) return;
     this.open = false;
     this.el.classList.remove('is-on');
+    document.documentElement.classList.remove('tg-title-up');
     this.showList(false);
     window.setTimeout(() => {
       if (!this.open) this.el.hidden = true;
@@ -126,10 +130,12 @@ export class TitleCard {
   }
 }
 
-const TIPS: { key: string; text: string }[] = [
-  { key: 'Click', text: 'an animal to follow its life. Press F to ride along with it.' },
-  { key: '1 2 3', text: 'change the speed of time. Space pauses, N skips to the next event.' },
-  { key: 'C', text: 'documentary mode. H hides the interface for a clean view.' },
+/** One tip is a full sentence or two; a `{ k }` part is a key, drawn as a small chip inside the sentence. */
+type TipPart = string | { k: string };
+const TIPS: TipPart[][] = [
+  [{ k: 'Click' }, ' an animal to follow its life. Press ', { k: 'F' }, ' to ride along with it.'],
+  [{ k: '1' }, ', ', { k: '2' }, ' and ', { k: '3' }, ' change the speed of time. ', { k: 'Space' }, ' pauses, ', { k: 'N' }, ' skips to the next event.'],
+  [{ k: 'C' }, ' starts documentary mode. ', { k: 'H' }, ' hides the interface for a clean view.'],
 ];
 
 /** Three quiet tips after the first Watch, shown once per browser and dismissed with a click, Esc or Enter. */
@@ -146,7 +152,7 @@ export class FirstRunTips {
       h(
         'ol',
         { class: 'tg-tips-list' },
-        ...TIPS.map((t) => h('li', {}, h('kbd', { class: 'tg-kbd', text: t.key }), h('span', { text: t.text }))),
+        ...TIPS.map((parts) => h('li', {}, ...parts.map((p) => (typeof p === 'string' ? document.createTextNode(p) : h('kbd', { class: 'tg-kbd', text: p.k }))))),
       ),
       button({ class: 'tg-btn is-primary tg-tips-ok', text: 'Got it', onclick: () => this.hide() }),
     );

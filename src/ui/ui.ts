@@ -445,6 +445,13 @@ export class GameUI {
     return this.settingsPanel.value;
   }
 
+  /** The engine is still slow at its lowest render scale on High: step down to Medium (saved for next time) and say so. */
+  lowerQuality(): void {
+    if (this.settingsPanel.value.quality !== 'high') return;
+    this.settingsPanel.setQuality('medium');
+    this.notify('Picture quality is now Medium, to keep the valley smooth on this machine. Settings can change it back.', 'Picture', 7000);
+  }
+
   /** The audio module has no per-bus volume yet: grey out those sliders and say why (the master volume still works). */
   setBusesAvailable(on: boolean): void {
     if (on) return;
@@ -913,6 +920,11 @@ export class GameUI {
       if (e.kind === 'packLost' && pop) {
         const before = this.pop.popAtOrBefore(1, e.tick);
         if (before !== null) ctx = { wolvesFell: before - (pop[1] ?? 0) >= 2 };
+      }
+      // an introduction into a valley that still has that species adds animals; it is not a return
+      if (e.kind === 'introduced' && e.sp >= 0) {
+        const before = this.pop.popAtOrBefore(e.sp, e.tick - 1);
+        if (before !== null) ctx = { alreadyHere: before > 0 };
       }
       // a run of arrivals (or departures) of one species within a year reads as one growing line, not a list of near-copies
       const fk = foldKey(e);

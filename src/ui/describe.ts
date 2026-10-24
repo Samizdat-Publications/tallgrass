@@ -18,6 +18,8 @@ export interface DescribeContext {
   wolvesFell?: boolean;
   /** Shifts which phrasing is chosen (0 by default). The chronicle voice raises it to avoid saying the same thing twice in a row. */
   salt?: number;
+  /** For an introduction: true when the species was already living in the valley (so the newcomers do not "return"). */
+  alreadyHere?: boolean;
 }
 
 export interface EventText {
@@ -554,6 +556,8 @@ function describeCore(e: SimEvent, ctx?: DescribeContext): EventText {
       };
     }
     case 'extinct':
+      // cougars are wanderers that come and go over the rim: an empty valley for a season is not the end of them
+      if (e.sp === 5) return { sentence: pick(e, ['No cougar is left in the valley for now.', 'The cougars have moved on, for now.']) };
       return {
         sentence: pick(e, [`The last ${sg} is gone.`, `The last ${sg} has left the valley.`]),
         card: { title: `The last ${sg} is gone`, subtitle: when },
@@ -562,12 +566,15 @@ function describeCore(e: SimEvent, ctx?: DescribeContext): EventText {
       const n = Math.max(1, Math.round(e.a));
       const few = n <= 12;
       let sentence: string;
-      if (e.sp === 1) {
+      const more = ctx?.alreadyHere === true;
+      if (e.sp === 1 && more) {
+        sentence = `${cap(countWord(n))} more ${n === 1 ? 'wolf is' : 'wolves are'} brought into the valley${n > 1 ? ' as a new pack' : ''}.`;
+      } else if (e.sp === 1) {
         sentence = few ? `${cap(countWord(n))} ${n === 1 ? 'wolf returns' : 'wolves return'} to the valley.` : `A group of ${countWord(n)} wolves returns to the valley.`;
       } else {
         sentence = few ? `${cap(countWord(n))} ${n === 1 ? sg : pl} ${n === 1 ? 'is' : 'are'} brought into the valley.` : `A group of ${countWord(n)} ${pl} is brought into the valley.`;
       }
-      const title = e.sp === 1 ? 'Wolves return' : e.sp === 5 ? 'The cougar returns' : `${cap(pl)} arrive`;
+      const title = more ? (e.sp === 1 ? 'A new pack arrives' : `More ${pl} arrive`) : e.sp === 1 ? 'Wolves return' : e.sp === 5 ? 'The cougar returns' : `${cap(pl)} arrive`;
       return { sentence, card: { title, subtitle: when } };
     }
     case 'removed':
@@ -586,7 +593,9 @@ function describeCore(e: SimEvent, ctx?: DescribeContext): EventText {
       };
     case 'plague': {
       const n = Math.round(e.a);
-      return { sentence: `A plague is loosed among the ${pl}${n > 0 ? `, and ${countWord(n)} fall ill` : ''}.` };
+      // on the wolves and coyotes the sickness is distemper (the Distemper tool), on the grazers a plague
+      const what = e.sp === 1 || e.sp === 6 ? 'Distemper spreads' : 'A plague is loosed';
+      return { sentence: `${what} among the ${pl}${n > 0 ? `, and ${countWord(n)} fall ill` : ''}.` };
     }
     case 'rain':
       return { sentence: pick(e, ['Rain falls across the valley.', 'A soaking rain moves over the prairie.', 'Rain sweeps in, and the grass drinks.', 'Clouds gather, and the rain comes down on the valley.']) };
@@ -672,8 +681,8 @@ function describeCore(e: SimEvent, ctx?: DescribeContext): EventText {
     }
     case 'recolonized':
       return {
-        sentence: pick(e, [`${cap(pl)} are back: they find their own way into the valley.`, `After years without them, ${pl} return to the valley on their own.`]),
-        card: { title: `The ${pl} return`, subtitle: when },
+        sentence: pick(e, [`${cap(pl)} are back: they find their own way into the valley.`, `After a time without them, ${pl} return to the valley on their own.`]),
+        card: e.sp === 5 ? undefined : { title: `The ${pl} return`, subtitle: when },
       };
     case 'distemper': {
       const pups = Math.max(0, Math.round(e.a)), adults = Math.max(0, Math.round(e.b));
