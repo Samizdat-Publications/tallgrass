@@ -499,10 +499,10 @@ export class GameUI {
   }
 
   /** The field guide's check: the latest snapshot's animals against the camera focus (sim metres). Call a few times a second. */
-  observeGuide(agents: Float32Array, count: number, fx: number, fy: number): void {
+  observeGuide(agents: Float32Array, count: number, fx: number, fy: number, inView?: (x: number, y: number) => boolean): void {
     this.guide.yearNow = this.lastYear;
     this.witnessed = [];
-    this.guide.observe(agents, count, fx, fy);
+    this.guide.observe(agents, count, fx, fy, false, inView);
     const w = this.witnessed;
     // a toast only over a plain view: not under the title card or a page, not in ambient or documentary mode
     if (!w.length || this.hidden || this.cinematic || this.firstFrame || this.titleOpen || this.paneOpen || this.toast.showing || !this.guideToasts) return;

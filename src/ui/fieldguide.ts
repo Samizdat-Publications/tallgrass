@@ -160,7 +160,7 @@ interface Saved {
 export const GUIDE_KEY = 'tallgrass.fieldguide.v1';
 
 /** What the camera is looking at, for one throttled check. Pure: takes the agent array in the snapshot's layout. */
-export function scanFrame(agents: Float32Array, count: number, fx: number, fy: number, radius = WITNESS_RADIUS): { counts: Int32Array; inFrame: Set<number> } {
+export function scanFrame(agents: Float32Array, count: number, fx: number, fy: number, radius = WITNESS_RADIUS, inView?: (x: number, y: number) => boolean): { counts: Int32Array; inFrame: Set<number> } {
   const counts = new Int32Array(SPECIES.length * 16);
   const inFrame = new Set<number>();
   const r2 = radius * radius;
@@ -170,6 +170,8 @@ export function scanFrame(agents: Float32Array, count: number, fx: number, fy: n
     if (sp < 0 || sp >= SPECIES.length) continue;
     const dx = agents[o + 1] - fx, dy = agents[o + 2] - fy;
     if (dx * dx + dy * dy > r2) continue;
+    // (near the focus is not enough: an animal behind the camera or off the edge of the picture was never seen)
+    if (inView && !inView(agents[o + 1], agents[o + 2])) continue;
     inFrame.add(sp);
     const st = agents[o + 7] | 0;
     if (st >= 0 && st < 16) counts[sp * 16 + st]++;
@@ -195,8 +197,8 @@ export class FieldGuide {
   }
 
   /** Check the latest snapshot against the camera focus (sim metres). Returns the behaviours newly witnessed. */
-  observe(agents: Float32Array, count: number, fx: number, fy: number, quiet = false): Behaviour[] {
-    const { counts, inFrame } = scanFrame(agents, count, fx, fy);
+  observe(agents: Float32Array, count: number, fx: number, fy: number, quiet = false, inView?: (x: number, y: number) => boolean): Behaviour[] {
+    const { counts, inFrame } = scanFrame(agents, count, fx, fy, WITNESS_RADIUS, inView);
     this.inFrame = inFrame;
     this.matches = new Set();
     const fresh: Behaviour[] = [];

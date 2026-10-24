@@ -832,6 +832,12 @@ const sun = { dir: engine.uniforms.lightDir.value, color: engine.uniforms.lightC
 let fpsAcc = 0, fpsN = 0;
 let audioFrame = 0;
 let guideAt = 0;
+// is a sim point (a metre above the ground) inside the picture? The field guide counts only animals the camera really shows.
+const guideV = new THREE.Vector3();
+const guideInView = (x: number, y: number): boolean => {
+  guideV.set(x, engine.groundHeight(x, y) + 1, y).project(engine.camera);
+  return guideV.z < 1 && Math.abs(guideV.x) < 0.96 && Math.abs(guideV.y) < 0.92;
+};
 let nearbyCache: Nearby = { bison: 0, wolf: 0, raven: 0, pronghorn: 0, coyote: 0 };
 const camFwdV = new THREE.Vector3();
 let tensionCache: TensionSample | null = null;
@@ -910,7 +916,7 @@ engine.onFrame((dt, t) => {
     if (!skipping && pending.speed >= 0 && pending.speed <= 10 && performance.now() - guideAt > 400) {
       guideAt = performance.now();
       engine.cam.getFocus(focusV);
-      ui.observeGuide(pending.agents, pending.count, focusV.x, focusV.z);
+      ui.observeGuide(pending.agents, pending.count, focusV.x, focusV.z, guideInView);
     }
     if ((audioFrame & 3) === 0) { nearbyCache = countNearby(pending.agents, pending.count, cp.x, cp.z, 250); tensionCache = scanTension(pending.agents, pending.count, cp.x, cp.z, pending.carcasses, pending.carcassCount); }
     engine.camera.getWorldDirection(camFwdV);
