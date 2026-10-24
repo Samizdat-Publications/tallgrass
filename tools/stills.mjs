@@ -894,6 +894,50 @@ SETS.bison = [
   { name: 'bs_06_herd_low_night', eval: "window.__followId(null); window.__env({ dayFrac: 0.95 }); window.__focusHerd(); window.__engine.cam.setView({ distance: 16, pitchDeg: 4 })", wait: 4500 },
 ];
 
+// r-herd-v1: bodies of a packed herd near the camera (the display-only separation, src/render/herdsep.ts), as A/B pairs in one run: the sim is paused, so
+// the same frame is shot with the separation off (hd_NN_off, after the offsets have eased out) and on (hd_NN_on). Then the same herd at mid range
+// (80 to 150 m), where the separation is faded out and the pair must match. Same setup as the look set. --query "sep=0" keeps the separation off throughout.
+const hdPair = (n, view, wait = 3500) => [
+  { name: `hd_${n}_off`, eval: `window.__animals.herdSep = false; ${view}`, wait: 6500 },
+  { name: `hd_${n}_on`, eval: 'window.__animals.herdSep = new URLSearchParams(location.search).get("sep") !== "0"', wait: 8000 },
+];
+SETS.herd = [
+  SETS.look[0],
+  // (the first bison that the renderer has fully lying down: lie weight over 0.9; the densest bison spot: most bison within 9 m)
+  { name: 'hd_00_hooks', eval: `window.__lkLie = (dist, pitch) => { const sn = window.__snap(), S = window.__animals.slots; let id = null; for (let k = 0; k < sn.count && id === null; k++) { if (sn.agents[k * 12] !== 0 || sn.agents[k * 12 + 7] !== 8) continue; const sl = S.map.get(sn.ids[k]); if (sl !== undefined && S.lie[sl] > 0.9) { id = sn.ids[k]; window.__lyPos = [sn.agents[k * 12 + 1], sn.agents[k * 12 + 2]]; } } window.__followId(null); window.__engine.cam.setView({ x: window.__lyPos[0], y: window.__lyPos[1], distance: dist, pitchDeg: pitch }, true); }; window.__dense = (dist, pitch, snap, yaw) => { const sn = window.__snap(), A = sn.agents, P = []; for (let k = 0; k < sn.count; k++) if (A[k * 12] === 0) P.push([A[k * 12 + 1], A[k * 12 + 2]]); let best = -1, bi = 0; for (let i = 0; i < P.length; i++) { let c = 0; for (let j = 0; j < P.length; j++) if (Math.hypot(P[i][0] - P[j][0], P[i][1] - P[j][1]) < 9) c++; if (c > best) { best = c; bi = i; } } window.__followId(null); window.__engine.cam.setView(Object.assign({ x: P[bi][0], y: P[bi][1], distance: dist, pitchDeg: pitch }, yaw === undefined ? {} : { yawDeg: yaw }), snap); }`, wait: 100 },
+  ...hdPair('01', 'window.__dense(22, 8, true, 90)'),
+  ...hdPair('02', 'window.__dense(22, 8, true, 270)'),
+  ...hdPair('03', 'window.__dense(14, 10, true, 180)'),
+  ...hdPair('04', 'window.__dense(26, 62, true)'),
+  ...hdPair('05', 'window.__lkLie(9, 6)'),
+  ...hdPair('06', 'window.__followId(null); window.__focusHerd(); window.__engine.cam.setView({ distance: 80, pitchDeg: 14 }, true)'),
+  ...hdPair('07', 'window.__engine.cam.setView({ distance: 120, pitchDeg: 18 }, true)'),
+  ...hdPair('08', 'window.__engine.cam.setView({ distance: 150, pitchDeg: 22 }, true)'),
+];
+
+// r-herd-v1: a bedded bison from low and close, from the front, the side and behind (is it sunk into the ground?). Needs the hd_00_hooks step.
+SETS.lie = [
+  SETS.look[0],
+  SETS.herd[1],
+  { name: 'ly_01_front', eval: "window.__lkLie(6, 2); window.__engine.cam.setView({ yawDeg: 0 }, true)", wait: 3500 },
+  { name: 'ly_02_side', eval: "window.__engine.cam.setView({ yawDeg: 90 }, true)", wait: 2500 },
+  { name: 'ly_03_back', eval: "window.__engine.cam.setView({ yawDeg: 180 }, true)", wait: 2500 },
+  { name: 'ly_04_side_far', eval: "window.__engine.cam.setView({ yawDeg: 270, distance: 12, pitchDeg: 6 }, true)", wait: 2500 },
+];
+
+// r-herd-v1: ravens among the herd at dusk (the thin blue outlines of their wings against the dark bison): the raven nearest to the most bison, from 14 and 30 m.
+SETS.rvherd = [
+  SETS.look[0],
+  { name: 'rv_00_hooks', eval: `window.__rvPick = (altMax) => { const sn = window.__snap(), A = sn.agents; const B = [], R = []; for (let k = 0; k < sn.count; k++) { const o = k * 12; if (A[o] === 0) B.push([A[o + 1], A[o + 2]]); else if (A[o] === 2 && A[o + 9] < altMax) R.push([sn.ids[k], A[o + 1], A[o + 2]]); } let best = null, bc = -1; for (const r of R) { let c = 0; for (const b of B) if (Math.hypot(b[0] - r[1], b[1] - r[2]) < 12) c++; if (c > bc) { bc = c; best = r; } } console.log('raven pick', best && best[0], 'bison near', bc, 'ravens', R.length); window.__followId(best ? best[0] : null); }`, wait: 100 },
+  { name: 'rv_01_14m', eval: "window.__rvPick(1.5); window.__engine.cam.setView({ distance: 14, pitchDeg: 8 })", wait: 5000 },
+  { name: 'rv_02_30m', eval: "window.__engine.cam.setView({ distance: 30, pitchDeg: 10 })", wait: 3500 },
+  { name: 'rv_03_air_14m', eval: "window.__rvPick(8); window.__engine.cam.setView({ distance: 14, pitchDeg: 8 })", wait: 4500 },
+  { name: 'rv_04_dusk_golden', eval: "window.__env({ dayFrac: 0.62 })", wait: 3500 },
+  { name: 'rv_05_wdusk_20m', eval: "window.__env({ season: 3.1, dayFrac: 0.72, warmth: 0.3 }); window.__rvPick(8); window.__engine.cam.setView({ distance: 20, pitchDeg: 8 })", wait: 5000 },
+  { name: 'rv_06_wdusk_low_30m', eval: "window.__rvPick(1.5); window.__engine.cam.setView({ distance: 30, pitchDeg: 4 })", wait: 4000 },
+  { name: 'rv_07_wnight_20m', eval: "window.__env({ season: 3.1, dayFrac: 0.82, warmth: 0.2 }); window.__rvPick(8); window.__engine.cam.setView({ distance: 20, pitchDeg: 8 })", wait: 4500 },
+];
+
 const only = arg('only', '').split(',').filter(Boolean); // --only lk_02,lk_08: just those steps (the first, the setup step, always runs)
 const steps = SETS[set] && only.length ? SETS[set].filter((s, i) => i === 0 || only.some((o) => s.name.startsWith(o))) : SETS[set];
 if (!steps) { console.error('unknown set', set); process.exit(1); }

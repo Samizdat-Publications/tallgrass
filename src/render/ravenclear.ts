@@ -14,11 +14,11 @@ const smooth = (a: number, b: number, x: number): number => {
   return t * t * (3 - 2 * t);
 };
 
-/** The push (out.x, out.z, metres) that takes a raven at (x, z), alt m up, out of the n bodies in B. */
-export function ravenClear(B: Float32Array, n: number, x: number, z: number, alt: number, grounded: boolean, out: { x: number; z: number }): void {
+/** The push (out.x, out.z, metres) that takes a raven at (x, z), alt m up, out of the n bodies in B. alt0 and alt1: the height below which a bird is fully pushed and above which it passes over the back (a bison's is higher than a wolf's). */
+export function ravenClear(B: Float32Array, n: number, x: number, z: number, alt: number, grounded: boolean, out: { x: number; z: number }, alt0 = RAVEN_CLEAR_ALT0, alt1 = RAVEN_CLEAR_ALT1): void {
   out.x = 0;
   out.z = 0;
-  const wk = 1 - smooth(RAVEN_CLEAR_ALT0, RAVEN_CLEAR_ALT1, alt);
+  const wk = 1 - smooth(alt0, alt1, alt);
   if (wk <= 0) return;
   const grow = grounded ? 0 : RAVEN_WING_R;
   for (let q = 0; q < n; q++) {

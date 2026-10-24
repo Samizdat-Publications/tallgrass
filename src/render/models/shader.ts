@@ -2183,9 +2183,11 @@ uniform float uNightLift;${hasFur && def.far?.mute ? MUTE_DECL : ''}${mangeDecl}
         // Moonlight (night only, uLow near 1): a cool rim along every silhouette edge, strongest on the surfaces that face the sky,
         // plus a cool fill on the coat itself. Starker than the day lighting on purpose, so an animal reads against the dark ground
         // by its outline and by value, without the night looking like day.
+        // (r-herd-v1: a raven's wings and tail are thin blades, so nearly all of them is silhouette edge: the full blue rim drew them as thin bright blue
+        // wires at dusk, over the dark herd. A raven gets a weak, nearly neutral rim, which keeps its outline without the glow.)
         float tgNR = pow(1.0 - clamp(dot(normalize(vViewPosition), normal), 0.0, 1.0), 5.0);
         float tgNK = smoothstep(0.35, 0.88, uLow) * uNightK;
-        totalEmissiveRadiance += ${a3matte ? 'vec3(0.46, 0.46, 0.47) * 0.32' : 'vec3(0.5, 0.62, 0.9) * 0.4'} * tgNR * (0.3 + 0.7 * vTgUp) * tgNK * (0.65 + 0.75 * vTgMid) * (1.0 - 0.8 * vTgFar) * tgNL;
+        totalEmissiveRadiance += ${a3matte ? 'vec3(0.46, 0.46, 0.47) * 0.32' : isRaven ? 'vec3(0.3, 0.33, 0.4) * 0.1' : 'vec3(0.5, 0.62, 0.9) * 0.4'} * tgNR * (0.3 + 0.7 * vTgUp) * tgNK * (0.65 + 0.75 * vTgMid) * (1.0 - 0.8 * vTgFar) * tgNL;
         totalEmissiveRadiance += diffuseColor.rgb * ${a3matte ? 'vec3(0.15, 0.145, 0.14)' : 'vec3(0.085, 0.105, 0.17)'} * 0.25 * tgNK * (0.5 + 0.5 * vTgUp) * tgNL;`,
       );
   };
