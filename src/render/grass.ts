@@ -1087,8 +1087,8 @@ void main() {
   // r-life: rain on the field. Wet blades go darker and pick up a sheen (more of it where the ground is moist, the blades there stay wet longest);
   // the amount is the terrain's own wet weight, which rises with the rain and drains away over minutes after it
   float wetG = uWetNow * (1.0 - smoothstep(0.1, 0.6, uSnow)) * (0.65 + 0.55 * (1.0 - dry));
-  col *= 1.0 - 0.2 * wetG;
-  col += spec * canopy * wetG * 1.1;
+  col *= 1.0 - 0.2 * wetG - 0.08 * smoothstep(0.7, 1.0, uWetNow);
+  col += spec * canopy * wetG * (1.1 + 0.7 * smoothstep(0.7, 1.0, uWetNow));
 
   col = mix(vec3(dot(col, vec3(0.2126, 0.7152, 0.0722))), col, uSat);
   if (uDebug > 0.5) {

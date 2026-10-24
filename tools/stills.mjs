@@ -286,6 +286,47 @@ const SETS = {
     { name: 'wv_09_winter_night_wide', eval: "window.__env({ season: 3.4, dayFrac: 0.95 })", wait: 3000 },
     { name: 'wv_10_winter_night_top', eval: "window.__cam('top')", wait: 3000 },
   ],
+  // r-weather-v1: clear, rain, snow and blizzard held by __env (tick 0 so the weather easing runs on real time with the sim paused), each
+  // from a wide view, a mid view and a low view. Long waits: the eased weather (snowfall, blizzard whiteout, overcast) takes several seconds to settle.
+  weather: [
+    { name: 'wx_00_setup', eval: `(async () => {
+      const e = window.__engine;
+      window.__env = (o) => {
+        window.__envO = Object.assign({ tick: 0, season: 1.8, weather: 0, warmth: 0.7, rain: 0, dayFrac: 0.45, windDir: 0.35, windStrength: 0.3 }, o);
+        if (!window.__envHook) window.__envHook = e.onFrame(() => e.setEnv(window.__envO));
+        e.setEnv(window.__envO); e.applyEnvNow();
+      };
+      window.__speed(0); window.__step(900); window.__followId(null); window.__env({});
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'h', bubbles: true }));
+      window.__wxMid = () => { window.__focusHerd(); e.cam.setView({ distance: 85, pitchDeg: 22 }, true); };
+      window.__wxLow = () => { window.__focusHerd(); e.cam.setView({ distance: 22, pitchDeg: 9 }, true); };
+      await new Promise((r) => { let last = -1, same = 0, n = 0; const t = setInterval(() => { const sn = window.__snap && window.__snap(); const k = sn ? sn.tick : -2; if (k === last) same++; else { same = 0; last = k; } if ((same >= 5 && k >= 900) || ++n > 240) { clearInterval(t); r(); } }, 500); });
+      if (e.noteBlizzard) e.noteBlizzard(-1, true);   // (the sim's own early winter may have raised a blizzard event while it stepped; the held env has tick 0, which would keep it running)
+    })()`, wait: 4000 },
+    { name: 'wx_01_clear_day_wide', eval: "window.__env({}); window.__cam('wide')", wait: 5000 },
+    { name: 'wx_01_clear_day_mid', eval: "window.__wxMid()", wait: 2500 },
+    { name: 'wx_02_clear_night_wide', eval: "window.__env({ dayFrac: 0.95 }); window.__cam('wide')", wait: 5000 },
+    { name: 'wx_02_clear_night_mid', eval: "window.__wxMid()", wait: 2500 },
+    { name: 'wx_03_light_rain_wide', eval: "window.__env({ weather: 1, rain: 0.1, windStrength: 0.25 }); window.__cam('wide')", wait: 14000 },
+    { name: 'wx_03_light_rain_mid', eval: "window.__wxMid()", wait: 2500 },
+    { name: 'wx_03_light_rain_low', eval: "window.__wxLow()", wait: 2500 },
+    { name: 'wx_04_heavy_rain_wide', eval: "window.__env({ weather: 3, rain: 1, windStrength: 0.6 }); window.__cam('wide')", wait: 16000 },
+    { name: 'wx_04_heavy_rain_mid', eval: "window.__wxMid()", wait: 2500 },
+    { name: 'wx_04_heavy_rain_low', eval: "window.__wxLow()", wait: 2500 },
+    { name: 'wx_05_light_snow_wide', eval: "window.__env({ season: 3.4, warmth: 0.1, weather: 4, windStrength: 0.2 }); window.__cam('wide')", wait: 16000 },
+    { name: 'wx_05_light_snow_mid', eval: "window.__wxMid()", wait: 2500 },
+    { name: 'wx_05_light_snow_low', eval: "window.__wxLow()", wait: 2500 },
+    { name: 'wx_06_blizzard_day_wide', eval: "window.__env({ season: 3.4, warmth: 0.1, weather: 4, windStrength: 0.9 }); window.__cam('wide')", wait: 22000 },
+    { name: 'wx_06_blizzard_day_mid', eval: "window.__wxMid()", wait: 2500 },
+    { name: 'wx_06_blizzard_day_low', eval: "window.__wxLow()", wait: 2500 },
+    { name: 'wx_07_blizzard_night_wide', eval: "window.__env({ season: 3.4, warmth: 0.1, weather: 4, windStrength: 0.9, dayFrac: 0.95 }); window.__cam('wide')", wait: 14000 },
+    { name: 'wx_07_blizzard_night_mid', eval: "window.__wxMid()", wait: 2500 },
+    { name: 'wx_07_blizzard_night_low', eval: "window.__wxLow()", wait: 2500 },
+    { name: 'wx_08_rain_night_mid', eval: "window.__env({ weather: 3, rain: 1, windStrength: 0.6, dayFrac: 0.95 }); window.__wxMid()", wait: 16000 },
+    // a natural blizzard: the sim keeps the mild wind value and only raises the event, so the renderer must lay the gale over it itself (needs engine.noteBlizzard)
+    { name: 'wx_10_natural_blizzard_mid', eval: "window.__env({ season: 3.4, warmth: 0.1, weather: 4, windStrength: 0.45, dayFrac: 0.95 }); if (window.__engine.noteBlizzard) window.__engine.noteBlizzard(1e9); window.__wxMid()", wait: 18000 },
+    { name: 'wx_09_clear_day_wide_again', eval: "window.__engine.noteBlizzard(-1, true); window.__env({}); window.__cam('wide')", wait: 22000 },
+  ],
   // R-water2: the far-field look of the creek and ponds (wide, mid, top, graze) in each season and light, UI hidden ('h'). Same views before and after.
   water2: [
     { name: 'w2_00_setup', eval: `(() => {

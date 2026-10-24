@@ -171,6 +171,12 @@ export class Engine {
   private lastTick = 0;
   private frostSm = 0;
   private rainSm = 0;
+  /** Sim tick a sim-announced blizzard event ends (-1 = none), and the eased 0..1 share of the gale wind it lays over the weather. */
+  private blizzardUntil = -1;
+  private bzWindSm = 0;
+  private bzLastTick = 0;
+  /** Scratch colour for applyRain. */
+  private readonly rainTmp = new THREE.Color();
   private dustSm = 0;
   /**
    * Climate regimes (v10): the sim's wet and dry index as drawn, eased over a few real seconds so a time-lapse breathes instead of
@@ -510,6 +516,15 @@ export class Engine {
   }
 
   /**
+   * A blizzard event from the sim (kind 'blizzard': its tick plus its duration `a` is `untilTick`). The sim raises the event for a natural
+   * blizzard without raising the weather's wind value past its usual mild one, so the renderer lays a gale over the snowfall itself while
+   * the event runs (eased in real time, so it builds and clears smoothly at any speed).
+   */
+  noteBlizzard(untilTick: number, replace = false): void {
+    if (replace || untilTick > this.blizzardUntil) this.blizzardUntil = untilTick;
+  }
+
+  /**
    * Feed the storm cells and strikes of a sim snapshot (undefined leaves the visuals as they are; an empty array clears the cells).
    * `speed` is the sim speed multiplier: thunder arrives after distance / 343 s at 1x and at once from 10x.
    */
@@ -770,7 +785,7 @@ export class Engine {
     // 10x or 100x) instead of popping when the weather flips. Sim time comes from env.tick (10 ticks per second at 1x);
     // pages that never advance the tick (dev pages) fall back to real time. Paused sim = frozen weather state.
     const w = env.weather;
-    const overTarget = w === 3 ? 0.95 : w === 1 ? 0.8 + 0.15 * env.rain : w === 4 ? 0.4 + 0.5 * this.post.blizzard : 0; // (a blizzard closes the sky right over: a flat white overcast)
+    const overTarget = w === 3 ? 0.95 : w === 1 ? 0.8 + 0.15 * env.rain : w === 4 ? 0.55 + 0.35 * this.post.blizzard : 0; // (snow falls from a grey sky; a blizzard closes the sky right over: a flat white overcast)
     // visible rain (streaks in the grade pass): rain and storm only, building at once rather than with the sim's slow rain value
     const rainTarget = w === 3 ? 1 : w === 1 ? 0.55 + 0.45 * env.rain : 0;
     const snowTarget = w === 4 ? 1 : 0;
@@ -803,8 +818,17 @@ export class Engine {
       const kReal = floor > 0 && !this.firstFrame ? dt / floor : Infinity;
       return cur + (target - cur) * (1 - Math.exp(-Math.min(kSim, kReal)));
     };
+    const overPrev = sm.overcast, rainPrev = this.rainSm;
     sm.overcast = ease(sm.overcast, overTarget, overTarget > sm.overcast ? 60 : 160);
-    this.rainSm = ease(this.rainSm, rainTarget, rainTarget > this.rainSm ? 25 : 70);
+    // (the real-time floors keep a fast-forward, where the weather turns every few seconds, from blinking the rain, its haze and the wet look on and off)
+    this.rainSm = ease(this.rainSm, rainTarget, rainTarget > this.rainSm ? 25 : 70, rainTarget > this.rainSm ? 1.5 : 3);
+    // slew limit in real time (a full swing takes 2.5 s at the fastest): at 10x and 100x, where the weather turns every second or so, the sky,
+    // the rain and its haze follow it as a swell and not a flicker. Never binding at 1x (the eases above are slower than this).
+    if (!this.firstFrame && dt > 0) {
+      const lim = (cur: number, prev: number, rate: number): number => prev + clamp(cur - prev, -rate * dt, rate * dt);
+      sm.overcast = lim(sm.overcast, overPrev, 0.4);
+      this.rainSm = lim(this.rainSm, rainPrev, 0.4);
+    }
     if (rainTarget === 0 && this.rainSm < 0.02) this.rainSm = 0;
     this.storms.updateRainbow(this.rainSm, simTicks, w);
     // drought dust for the aerial haze (weather 2), eased slowly so the valley hazes over and clears with the dry spell
@@ -838,7 +862,11 @@ export class Engine {
     sm.snow = ease(sm.snow, snowTarget, snowTarget > sm.snow ? 320 : 220, snowTarget > sm.snow ? 7 : 9);
     sm.wet = ease(sm.wet, wetTarget, wetTarget > sm.wet ? 90 : 200);
     // R2 falling snow and dawn fog: flakes follow the weather quickly; the dawn mist reads the night just past from the env
-    this.snowfallSm = ease(this.snowfallSm, snowTarget, snowTarget > this.snowfallSm ? 20 : 45, 3);
+    {
+      const prev = this.snowfallSm;
+      this.snowfallSm = ease(this.snowfallSm, snowTarget, snowTarget > this.snowfallSm ? 20 : 45, 3);
+      if (!this.firstFrame && dt > 0) this.snowfallSm = prev + clamp(this.snowfallSm - prev, -0.4 * dt, 0.4 * dt);   // (the same real-time slew limit as the rain)
+    }
     if (snowTarget === 0 && this.snowfallSm < 0.02) this.snowfallSm = 0;
     this.post.trackNight(env, simTicks, this.rainSm);
     // the eased values only approach their targets asymptotically: snap the last trace to zero so no ghost snow or frost lingers
@@ -875,6 +903,9 @@ export class Engine {
     if (storm > 0.002) this.applyDustStorm(storm);
     const bzK = this.post.blizzard;
     if (bzK > 0.002) this.applyBlizzard(bzK);
+    // a downpour: the share of the rain above a light one's, so a light rain is drawn exactly as it was
+    const heavyRain = smoothstep(0.62, 1.0, this.rainSm);
+    if (heavyRain > 0.002) this.applyRain(heavyRain);
     if (fast > 0) {
       // the key light's direction is the harshest part of a fast-forward: it laps the sky (and swings through the zenith where the
       // moon takes over) faster than a shadow can read. The sky and the sun disc keep their true motion; the light that casts the
@@ -992,8 +1023,16 @@ export class Engine {
     this.terrain.updateShadow(this.renderer, u.lightDir.value);
     this.cloudShadow.update(this.renderer, dt, this.firstFrame);
     this.hoppers.update(dt, focus0.x, focus0.z, this.camera.position.x, camY, this.camera.position.z, camY - aboveGround, this.renderer.domElement.height, this.camera.fov);
-    this.post.updateSnow(dt, this.snowfallSm * snowK, env, aboveGround, L);
-    this.post.updateRain(dt, L.rain, env, aboveGround, L);
+    // a sim-announced blizzard lays a gale over the snowfall (see noteBlizzard); it eases in about 2 s and out about 5 s of real time
+    if (env.tick < this.bzLastTick - 1) this.blizzardUntil = -1;   // the calendar went backward (a new valley, a reload): the old event is over
+    this.bzLastTick = env.tick;
+    const bzTarget = env.weather === 4 && env.tick < this.blizzardUntil ? 1 : 0;
+    this.bzWindSm = this.firstFrame ? bzTarget : this.bzWindSm + (bzTarget - this.bzWindSm) * (1 - Math.exp(-dt / (bzTarget > this.bzWindSm ? 2 : 5)));
+    if (bzTarget === 0 && this.bzWindSm < 0.004) this.bzWindSm = 0;
+    if (env.tick >= this.blizzardUntil) this.blizzardUntil = -1;
+    const wsNow = clamp(env.windStrength, 0, 1);
+    this.post.updateSnow(dt, this.snowfallSm * snowK, env, aboveGround, L, wsNow + (Math.max(wsNow, 0.88) - wsNow) * this.bzWindSm);
+    this.post.updateRain(dt, L.rain, env, aboveGround, L, heavyRain);
     this.post.apply(L);
   }
 
@@ -1039,6 +1078,32 @@ export class Engine {
     L.exposure *= 1 + 0.1 * a;
     L.gradeSat -= 0.1 * a;
     L.gradeContrast -= 0.1 * a;
+  }
+
+  /**
+   * A downpour at strength `a` (0..1, the share of the rain above a light one's): the sky and the ambient light darken and go grey-blue, the
+   * sun disc and glow go out, the grade loses colour (the eye adapts a little, so it is dim and not black). Milder at night, which is
+   * dark already. The haze and the streaks are in the post pass. Called right after computeAtmosphere, so it only ever lays over that frame.
+   */
+  private applyRain(a: number): void {
+    const u = this.uniforms, L = this.lighting, t = this.rainTmp;
+    const day = smoothstep(-8, 10, L.sunElDeg);
+    const k = a * (0.5 + 0.5 * day);
+    const grey = (c: THREE.Color, dim: number): void => {
+      const lum = 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b;
+      c.lerp(t.setRGB(0.92, 0.97, 1.08).multiplyScalar(lum * dim), 0.8 * k);
+    };
+    grey(u.skyHorizon.value, 0.8);
+    grey(u.skyMid.value, 0.7);
+    grey(u.skyZenith.value, 0.62);
+    u.sunGlow.value.multiplyScalar(1 - 0.9 * k);
+    u.sunDiskColor.value.multiplyScalar(1 - 0.9 * k);
+    u.lightColor.value.multiplyScalar(1 - 0.35 * k);
+    L.hemiIntensity *= 1 - 0.42 * k;
+    L.hemiSky.lerp(t.setRGB(0.55, 0.62, 0.74), 0.25 * k);
+    L.exposure *= 1 + 0.08 * k;
+    L.gradeSat -= 0.26 * k;
+    L.gradeContrast -= 0.04 * k;
   }
 
   private applySeason(season: number): void {

@@ -1374,6 +1374,11 @@ export class PostFX {
     // (a ground-level whiteout: it thins with the camera's height, so the drone view still sees the valley through it)
     const bz = this.blizzard * (0.22 + 0.78 * Math.exp(-this.camAbove / 55));
     f.uHaze.value = L.hazeDensity + (Math.max(L.hazeDensity, 0.0065) - L.hazeDensity) * bz;
+    if (this.rainHeavy > 0.002) {
+      // a downpour: a grey veil that closes the far hills in (to about 400 m at ground level), thinning with the camera's height
+      const rz = this.rainHeavy * (0.3 + 0.7 * Math.exp(-this.camAboveRain / 90));
+      f.uHaze.value = Math.max(f.uHaze.value, L.hazeDensity + (Math.max(L.hazeDensity, 0.0022) - L.hazeDensity) * rz);
+    }
     f.uFogMax.value = 0.94 + 0.035 * bz + 0.03 * this.dustStorm;
     f.uDustStorm.value = this.dustStorm;
     f.uBlizz.value = this.blizzard;
@@ -1409,6 +1414,9 @@ export class PostFX {
   dustStorm = 0;
   /** Blizzard amount 0..1 (snowing with wind past 0.6), set by updateSnow. Thickens the fog. */
   blizzard = 0;
+  /** Downpour amount 0..1 (set by updateRain): thickens the haze, so a heavy rain closes the view in without hiding the near ground. */
+  rainHeavy = 0;
+  private camAboveRain = 0;
   private camAbove = 0;
   /** Dawn pool amount (envelope of the clock x calm clear night x not raining) and the bare clock envelope. */
   private dawnNow = 0;
@@ -1454,11 +1462,12 @@ export class PostFX {
   }
 
   /** Falling snow: `fall` is the eased snowfall 0..1 (0 = off, the pass is skipped), `aboveGround` the camera height in metres. */
-  updateSnow(dt: number, fall: number, env: EnvState, aboveGround: number, L: Lighting): void {
-    const ws = clamp(env.windStrength, 0, 1);
+  updateSnow(dt: number, fall: number, env: EnvState, aboveGround: number, L: Lighting, windOverride?: number): void {
+    // (windOverride: a blizzard event the sim announced lays the wind over at gale strength even when the weather's own wind value is mild)
+    const ws = clamp(windOverride ?? env.windStrength, 0, 1);
     // the whiteout comes up over a few seconds and clears over a few more (the snowfall and the wind each ease on their own, this evens out the sum)
     const bzTarget = blizzardAmount(fall, ws);
-    this.blizzard += (bzTarget - this.blizzard) * (1 - Math.exp(-Math.min(dt, 0.25) / (bzTarget > this.blizzard ? 3.5 : 6)));
+    this.blizzard += (bzTarget - this.blizzard) * (1 - Math.exp(-Math.min(dt, 0.25) / (bzTarget > this.blizzard ? 2.2 : 6)));
     if (bzTarget === 0 && this.blizzard < 0.004) this.blizzard = 0;
     this.camAbove = aboveGround;
     if (fall <= 0.01) { this.snow.update(dt, this.camera, { fall: 0, windStrength: ws, windX: 1, windZ: 0, aboveGround, color: _snowCol }); return; }
@@ -1487,8 +1496,10 @@ export class PostFX {
    * Falling rain (see rain.ts): `rain` is the eased 0..1 visible rain (already faded out when looking steeply down). Streaks are
    * lit like the air they fall through: the sky's horizon colour and the ambient, with a little of the key light catching them.
    */
-  updateRain(dt: number, rain: number, env: EnvState, aboveGround: number, L: Lighting): void {
+  updateRain(dt: number, rain: number, env: EnvState, aboveGround: number, L: Lighting, heavy = 0): void {
     const ws = clamp(env.windStrength, 0, 1);
+    this.rainHeavy = heavy;
+    this.camAboveRain = aboveGround;
     if (rain <= 0.01) { this.rain.update(dt, this.camera, { fall: 0, windStrength: ws, windX: 1, windZ: 0, aboveGround, color: _rainCol }); return; }
     const sh = this.shared;
     const lc = sh.lightColor.value, hz = sh.skyHorizon.value;
@@ -1496,8 +1507,8 @@ export class PostFX {
       hz.r * 0.55 + L.hemiSky.r * L.hemiIntensity * 0.45 + lc.r * 0.1,
       hz.g * 0.55 + L.hemiSky.g * L.hemiIntensity * 0.45 + lc.g * 0.1,
       hz.b * 0.55 + L.hemiSky.b * L.hemiIntensity * 0.45 + lc.b * 0.1,
-    ).multiplyScalar(0.85);
-    this.rain.update(dt, this.camera, { fall: rain, windStrength: ws, windX: Math.cos(env.windDir), windZ: Math.sin(env.windDir), aboveGround, color: _rainCol });
+    ).multiplyScalar(0.85 * (1 + 0.5 * heavy));
+    this.rain.update(dt, this.camera, { fall: rain, windStrength: ws, windX: Math.cos(env.windDir), windZ: Math.sin(env.windDir), aboveGround, heavy, color: _rainCol });
   }
 
   /** Bloom multiplier from the aerial pass (a little extra glow at low sun, 1 otherwise). */
