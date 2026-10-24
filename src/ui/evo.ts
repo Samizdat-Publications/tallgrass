@@ -20,7 +20,11 @@ export const HERO = [
 ];
 
 const pct = (v: number): number => (v - 1) * 100;
-export const fmtPct = (p: number): string => `${p >= 0 ? '+' : '-'}${Math.abs(p).toFixed(Math.abs(p) >= 10 ? 0 : 1)}%`;
+/** A signed percent. A change too small to show at the digits kept reads "0%", never "-0.0%". */
+export const fmtPct = (p: number): string => {
+  const r = Math.abs(p) >= 10 ? Math.round(p) : Math.round(p * 10) / 10;
+  return r === 0 ? '0%' : `${r > 0 ? '+' : '-'}${Math.abs(r).toFixed(Math.abs(r) >= 10 ? 0 : 1)}%`;
+};
 
 function hasData(d: EvoData, index: number): boolean {
   const s = d.series[index];

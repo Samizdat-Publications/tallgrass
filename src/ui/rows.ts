@@ -210,7 +210,8 @@ export function drawRows(g: CanvasRenderingContext2D, w: number, h: number, u: n
     g.stroke();
     g.font = axisFont;
     g.textAlign = 'right';
-    const fmtAxis = (v: number) => (isGrass ? v.toFixed(2).replace(/0$/, '') : fmtInt(v));
+    // grass is labelled in percent, on the same scale as the figure at the end of its line
+    const fmtAxis = (v: number) => (isGrass ? `${Math.round((v / (d.grassMax > 1.0001 ? d.grassMax : 1)) * 100)}%` : fmtInt(v));
     const tall = bottom - top >= 28 * u;
     // the row's numbers wear its colour, high at the top of the row and low at its foot, in the gutter beside the plot (never over a line)
     g.fillStyle = hexA(color, 0.92);

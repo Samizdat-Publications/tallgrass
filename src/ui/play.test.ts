@@ -58,7 +58,7 @@ const all = defaultSetup();
 for (const s of setupSpecies()) all.counts[s.id] = 7;
 all.climate = 'wetter';
 all.winters = 'harsher';
-all.open = true;
+all.open = false; // the standard valley is open, so closing it is the override
 all.calendar = 'slow';
 let threw = '';
 try {
@@ -68,7 +68,10 @@ try {
 }
 ok(threw === '', `every setup key is a real param (${threw})`);
 const ok0 = openKey();
-ok(ok0 === null || buildSetupParams(all)[ok0] === 1, 'open valley sets its param when the sim has one');
+ok(ok0 === null || buildSetupParams(all)[ok0] === 0, 'a closed valley sets the open param to 0 when the sim has one');
+ok(ok0 === null || buildSetupParams({ ...all, open: true })[ok0] === undefined, 'an open valley (the standard one) needs no override');
+ok(buildSetupParams({ ...all, raptors: false }).raptors === 0 && buildSetupParams({ ...all, raptors: true }).raptors === undefined, 'raptors off is the only raptor override');
+ok(defaultSetup().raptors === (defaultParams().raptors > 0) && defaultSetup().open === (ok0 !== null && Number((defaultParams() as unknown as Record<string, unknown>)[ok0]) > 0), 'the setup defaults match the standard valley');
 ok(ok0 !== null || buildSetupParams(all)['openPrairie'] === undefined, 'no open param yet: the toggle changes nothing');
 for (const s of setupSpecies()) {
   const r = countRange(s);

@@ -166,6 +166,8 @@ export class OverlayLayer {
   private labelRoot: HTMLElement;
   private labels: HTMLElement[] = [];
   private legend: HTMLElement;
+  /** The territory legend's note: it says so when no pack holds a range. */
+  private terrNote: HTMLElement | null = null;
   private v = new THREE.Vector3();
 
   constructor(private worldSize: number, private heightAt: (x: number, z: number) => number, shared: SharedUniforms, hosts: { labels: HTMLElement; legend: HTMLElement }) {
@@ -305,12 +307,17 @@ export class OverlayLayer {
     this.object3D.visible = this.alpha > 0.001;
     this.legend.hidden = this.shown === 'none' || this.alpha <= 0.001;
     this.legend.style.opacity = String(this.alpha);
+    if (this.shown === 'territory' && this.terrNote) {
+      const t = this.packs.length >= 4 ? OverlayLayer.NOTE_PACKS : OverlayLayer.NOTE_NONE;
+      if (this.terrNote.textContent !== t) this.terrNote.textContent = t;
+    }
     this.updateLabels(camera, canvas);
   }
 
   private renderLegend(): void {
     const L = LEGENDS[this.shown];
     this.legend.replaceChildren();
+    this.terrNote = null;
     if (!L) return;
     const title = document.createElement('div');
     title.className = 'tg-map-legend-title';
@@ -330,10 +337,14 @@ export class OverlayLayer {
     } else {
       const note = document.createElement('div');
       note.className = 'tg-map-legend-note';
-      note.textContent = 'Each outlined range is one pack\'s; the small mark is its den.';
+      note.textContent = OverlayLayer.NOTE_PACKS;
       this.legend.append(note);
+      if (this.shown === 'territory') this.terrNote = note;
     }
   }
+
+  private static readonly NOTE_PACKS = 'Each outlined range is one pack\'s; the small mark is its den.';
+  private static readonly NOTE_NONE = 'No wolf packs in the valley right now.';
 
   private updateLabels(camera: THREE.Camera, canvas: HTMLCanvasElement): void {
     const show = this.shown === 'territory' && this.alpha > 0.01;

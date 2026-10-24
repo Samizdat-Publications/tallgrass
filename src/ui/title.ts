@@ -37,6 +37,8 @@ export class TitleCard {
   readonly el: HTMLElement;
   private main: HTMLElement;
   private list: HTMLElement;
+  private inner: HTMLElement;
+  private scroller: HTMLElement;
   private watchBtn: HTMLButtonElement;
   private open = false;
   private onKey: (e: KeyboardEvent) => void;
@@ -58,26 +60,27 @@ export class TitleCard {
         h('span', { class: 'tg-sc-text' }, h('span', { class: 'tg-sc-name', text: c.name }), h('span', { class: 'tg-sc-blurb', text: c.blurb }), h('span', { class: 'tg-sc-meta', text: c.meta })),
       ),
     );
+    // the list scrolls inside its own card (the head stays put), so a short screen can still reach every challenge
+    this.scroller = h('div', { class: 'tg-title-scroll' }, ...items);
     this.list = h(
       'div',
       { class: 'tg-title-list tg-glass', hidden: true },
       h('div', { class: 'tg-title-listhead' }, h('span', { class: 'tg-menu-h', text: 'Challenges' }), button({ class: 'tg-notes-clear', text: 'Back', onclick: () => this.showList(false) })),
-      ...items,
+      this.scroller,
     );
-    this.el = h(
+    // the wheel over the list scrolls the list; it never reaches the valley's zoom behind the card
+    this.list.addEventListener('wheel', (e) => e.stopPropagation(), { passive: true });
+    this.inner = h(
       'div',
-      { class: 'tg-title', role: 'dialog', 'aria-label': 'Tallgrass', hidden: true },
-      h(
-        'div',
-        { class: 'tg-title-in' },
-        h('h1', { class: 'tg-title-name', text: 'Tallgrass' }),
-        h('div', { class: 'tg-title-rule' }),
-        h('p', { class: 'tg-title-sub', text: 'A living prairie finds its own balance.' }),
-        this.main,
-        this.list,
-        h('p', { class: 'tg-title-wait', 'aria-hidden': 'true' }, h('span', { text: 'Preparing the valley' }), h('span', { class: 'tg-title-wait-rule' }, h('i'))),
-      ),
+      { class: 'tg-title-in' },
+      h('h1', { class: 'tg-title-name', text: 'Tallgrass' }),
+      h('div', { class: 'tg-title-rule' }),
+      h('p', { class: 'tg-title-sub', text: 'A living prairie finds its own balance.' }),
+      this.main,
+      this.list,
+      h('p', { class: 'tg-title-wait', 'aria-hidden': 'true' }, h('span', { text: 'Preparing the valley' }), h('span', { class: 'tg-title-wait-rule' }, h('i'))),
     );
+    this.el = h('div', { class: 'tg-title', role: 'dialog', 'aria-label': 'Tallgrass', hidden: true }, this.inner);
     this.onKey = (e) => {
       if (!this.open || e.ctrlKey || e.metaKey || e.altKey) return;
       if (e.key === ' ' || e.key === 'Enter') {
@@ -90,6 +93,11 @@ export class TitleCard {
         e.stopImmediatePropagation();
         if (!this.list.hidden) this.showList(false);
         else this.actions.onWatch();
+      } else if (!this.list.hidden && ['ArrowDown', 'ArrowUp', 'PageDown', 'PageUp', 'Home', 'End'].includes(e.key)) {
+        // the list is a column of buttons: the arrow keys walk it (focus scrolls the item into view), Page keys jump a screenful
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        this.walkList(e.key);
       }
     };
     window.addEventListener('keydown', this.onKey, true);
@@ -127,6 +135,28 @@ export class TitleCard {
   private showList(on: boolean): void {
     this.list.hidden = !on;
     this.main.hidden = on;
+    this.inner.classList.toggle('is-list', on);
+    if (on) this.scroller.scrollTop = 0;
+    // keyboard focus follows the view: the first challenge when the list opens, the Challenges button when it closes
+    if (this.open) {
+      if (on) (this.scroller.querySelector('button') as HTMLElement | null)?.focus({ preventScroll: true });
+      else (this.main.children[1] as HTMLElement | undefined)?.focus({ preventScroll: true });
+    }
+  }
+
+  private walkList(key: string): void {
+    const items = Array.from(this.scroller.querySelectorAll<HTMLElement>('button'));
+    if (!items.length) return;
+    const cur = items.indexOf(document.activeElement as HTMLElement);
+    const page = Math.max(1, Math.floor(this.scroller.clientHeight / Math.max(1, items[0].offsetHeight)) - 1);
+    let i = cur < 0 ? 0 : cur;
+    if (key === 'ArrowDown') i = cur < 0 ? 0 : i + 1;
+    else if (key === 'ArrowUp') i = cur < 0 ? 0 : i - 1;
+    else if (key === 'PageDown') i += page;
+    else if (key === 'PageUp') i -= page;
+    else if (key === 'Home') i = 0;
+    else if (key === 'End') i = items.length - 1;
+    items[Math.max(0, Math.min(items.length - 1, i))].focus();
   }
 }
 

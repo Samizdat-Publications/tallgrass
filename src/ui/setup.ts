@@ -19,6 +19,8 @@ export interface SetupState {
   climate: Climate;
   winters: Winters;
   open: boolean;
+  /** Golden eagles and red-tailed hawks: they come and go with the seasons (the `raptors` switch), so they are one switch, not a count. */
+  raptors: boolean;
   calendar: Calendar;
 }
 
@@ -52,12 +54,19 @@ export function openKey(): string | null {
   return OPEN_KEYS.find((k) => k in p) ?? null;
 }
 
+/** Is the standard valley open? (The sim's own default for the open param, false while it has none.) */
+function defaultOpen(): boolean {
+  const k = openKey();
+  return k !== null && Number((defaultParams() as unknown as Record<string, unknown>)[k]) > 0;
+}
+
 /** The setup that reproduces the standard valley. */
 export function defaultSetup(): SetupState {
   const counts: Record<number, number> = {};
   const d = defaultParams();
   for (const s of setupSpecies()) counts[s.id] = d.species[s.id]?.initial ?? 0;
-  return { counts, climate: 'typical', winters: 'typical', open: false, calendar: 'standard' };
+  // open and raptors start as the standard valley has them (the sim's own defaults), so an untouched page gives no overrides
+  return { counts, climate: 'typical', winters: 'typical', open: defaultOpen(), raptors: d.raptors > 0, calendar: 'standard' };
 }
 
 /**
@@ -77,7 +86,8 @@ export function buildSetupParams(st: SetupState): Record<string, number> {
   }
   if (st.winters !== 'typical') out.winterDieback = +(d.winterDieback * WINTER_DIEBACK[st.winters]).toFixed(6);
   const ok = openKey();
-  if (st.open && ok) out[ok] = 1;
+  if (ok && st.open !== defaultOpen()) out[ok] = st.open ? 1 : 0;
+  if (st.raptors !== d.raptors > 0) out.raptors = st.raptors ? 1 : 0;
   const cal = CALENDAR_SCALE[st.calendar];
   if (cal !== d.calendarScale) out.calendarScale = cal;
   return out;
@@ -120,6 +130,7 @@ export class SetupPanel extends ModalPanel {
   private winters: Segmented<Winters>;
   private calendar: Segmented<Calendar>;
   private openSwitch: SwitchRow;
+  private raptorSwitch: SwitchRow;
   private seed: HTMLInputElement;
   private warn: HTMLElement;
 
@@ -127,7 +138,8 @@ export class SetupPanel extends ModalPanel {
     super({ title: 'New valley', sub: 'Choose who lives here and what the weather is like, then start a fresh valley.', cls: 'tg-setup', onClose });
 
     const list = h('div', { class: 'tg-setup-species' });
-    for (const def of setupSpecies()) {
+    // (the raptors have no starting count: they arrive with the seasons, so they get a switch below instead of a slider)
+    for (const def of setupSpecies().filter((s) => s.guild !== 'raptor')) {
       const row = this.makeRow(def);
       this.rows.set(def.id, row);
       list.append(row.row);
@@ -137,8 +149,9 @@ export class SetupPanel extends ModalPanel {
     this.winters = segmented<Winters>('Winters', CHOICE.winters, this.st.winters, (v) => (this.st.winters = v));
     this.calendar = segmented<Calendar>('Calendar', CHOICE.calendar, this.st.calendar, (v) => (this.st.calendar = v));
     const hasOpen = openKey() !== null;
-    this.openSwitch = switchRow('Open valley', 'Animals can wander in from the hills and out of the valley.', false, (on) => (this.st.open = on));
+    this.openSwitch = switchRow('Open valley', 'Animals can wander in from the hills and out of the valley.', this.st.open, (on) => (this.st.open = on));
     if (!hasOpen) this.openSwitch.setDisabled(true, 'Coming soon. For now the valley is closed.');
+    this.raptorSwitch = switchRow('Hawks and eagles', 'Red-tailed hawks nest here in summer. Golden eagles winter here when the valley is open.', this.st.raptors, (on) => (this.st.raptors = on));
 
     this.seed = h('input', {
       class: 'tg-input',
@@ -163,6 +176,7 @@ export class SetupPanel extends ModalPanel {
       h('div', { class: 'tg-setup-line' }, h('span', { class: 'tg-setup-label', text: 'Winters' }), this.winters.el),
       h('h3', { class: 'tg-pane-h', text: 'The valley' }),
       this.openSwitch.el,
+      this.raptorSwitch.el,
       h('div', { class: 'tg-setup-line' }, h('span', { class: 'tg-setup-label', text: 'Calendar' }), this.calendar.el),
       h('h3', { class: 'tg-pane-h', text: 'Seed' }),
       h('div', { class: 'tg-menu-new' }, this.seed),
@@ -227,7 +241,8 @@ export class SetupPanel extends ModalPanel {
     this.climate.set(this.st.climate);
     this.winters.set(this.st.winters);
     this.calendar.set(this.st.calendar);
-    this.openSwitch.set(false);
+    this.openSwitch.set(this.st.open);
+    this.raptorSwitch.set(this.st.raptors);
     this.seed.value = '';
     this.refresh();
   }

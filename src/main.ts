@@ -242,6 +242,7 @@ worker.onmessage = (e: MessageEvent<FromWorker>) => {
   engine.megadrought = !!m.mega;
   // keep events and history from every message even if frames skip some
   pendingEvents = pendingEvents.concat(m.events);
+  for (const ev of m.events) if (ev.kind === 'blizzard') engine.noteBlizzard(ev.tick + ev.a);   // (r-weather: a natural blizzard keeps the weather's mild wind value, the renderer lays the gale over it)
   pendingHistory = pendingHistory.concat(m.history);
   // dynamic trees (S13): before setVeg, so the renderer's own fire hook is already off when the first veg frame lands
   if (m.treesVersion !== undefined) {
@@ -361,14 +362,28 @@ function toolIntervention(tool: ToolId, x?: number, y?: number): Intervention | 
 const ui = new GameUI(document.getElementById('ui')!, {
   setSpeed: (s) => { speed = s; send({ type: 'speed', speed: s }); },
   skipToEvent: () => send({ type: 'skip' }),
-  armTool: (t) => { armed = t; ui.setArmedTool(t); host.style.cursor = t ? 'crosshair' : ''; },
-  applyTool: (t) => { const iv = toolIntervention(t); if (iv && ui.tryUseTool()) send({ type: 'apply', iv }); },
+  // arming a tool takes the camera from the documentary director (as a click on an animal does), so it does not cut away before the player sees the result
+  armTool: (t) => { armed = t; if (t) takeCamera(); ui.setArmedTool(t); host.style.cursor = t ? 'crosshair' : ''; },
+  applyTool: (t) => { const iv = toolIntervention(t); takeCamera(); if (iv && ui.tryUseTool()) send({ type: 'apply', iv }); },
   follow: (id) => { takeCamera(); startFollow(id); },
   select: (id) => select(id),
   requestLineage: (id) => send({ type: 'lineage', id }),
   requestDynasty: (pack) => send({ type: 'dynasty', pack }),
   flyTo: (x, y) => { takeCamera(); engine.cam.flyTo(x, y); },
-  setOverlay: (o: OverlayId) => { overlay.setMode(o === 'smallprey' ? 'none' : o); smallOverlay.setMode(o === 'smallprey'); },
+  setOverlay: (o: OverlayId) => {
+    overlay.setMode(o === 'smallprey' ? 'none' : o);
+    smallOverlay.setMode(o === 'smallprey');
+    // an overlay is a map: read from low down, or while the documentary camera is cutting about, it shows nothing useful. Take the camera
+    // and rise smoothly to the wide view; a player who is already high up is left where they are.
+    if (o !== 'none') {
+      const wasFilming = autoCam || cinematicOn;
+      takeCamera();
+      if (wasFilming || engine.camera.position.y < OVERLAY_MIN_CAM_Y) {
+        following = null;
+        engine.cam.preset('wide');
+      }
+    }
+  },
   setCinematic: (on) => { following = null; cinematicOn = on; autoCam = false; director.setEnabled(on); takeCamera(); lens.cinematic = on; },
   takeCamera: () => takeCamera(),
   setNarrator: (on) => { narrator.enabled = on; },
@@ -568,6 +583,8 @@ const autoCamAllowed = q.get('autocam') !== '0';
 let autoCam = false;
 let cinematicOn = false;
 let lastCamInput = performance.now();
+/** An overlay chosen with the camera lower than this (m, world height) rises to the wide view; a camera already higher stays put. */
+const OVERLAY_MIN_CAM_Y = 90;
 function takeCamera(): void {
   lastCamInput = performance.now();
   if (autoCam) { autoCam = false; if (!cinematicOn) director.setEnabled(false); }
@@ -724,6 +741,7 @@ canvas.addEventListener('pointerup', (e) => {
       const iv = toolIntervention(armed, hit.x, hit.z);
       if (iv && ui.tryUseTool()) send({ type: 'apply', iv });
     }
+    takeCamera(); // the director stays away for the usual idle spell after a tool lands, so the result is seen
     armed = null;
     ui.setArmedTool(null);
     host.style.cursor = '';
@@ -836,9 +854,12 @@ w.__overlay = overlay;
 w.__trails = trails;
 engine.onFrame((dt, t) => {
   if (frameMarks < 40) mark('frame' + frameMarks++);
-  // the splash poster (index.html) goes once the valley has really been drawn: this is the third frame's callback, so two frames
-  // have been rendered and presented by now (the shaders were built by prime() before the first of them)
-  if (splashFrames >= 0 && ++splashFrames >= 3) {
+  // the splash poster (index.html) goes once the valley has really been drawn: after three smooth frames with the herds in them
+  // (counted only once the first snapshot is in, so the herds are drawn, and only smooth frames: right after it the first frames can stall
+  // for a second each while the last textures upload, and a fade through those reads as a stutter; a slow frame starts the count again)
+  // (a machine that never manages a frame under 100 ms still loses the poster at the ready mark, a second and a half of frames in)
+  if (splashFrames >= 0 && ready) splashFrames = dt < 0.1 ? splashFrames + 1 : 0;
+  if (splashFrames >= 3 || (splashFrames >= 0 && ready && t > 1.5)) {
     splashFrames = -1;
     requestAnimationFrame(() => { mark('splash_done'); (window as unknown as { __tgSplash?: { done(): void } }).__tgSplash?.done(); });
   }
@@ -855,7 +876,7 @@ engine.onFrame((dt, t) => {
   engine.cam.getFocus(focusV);
   smallprey.update(dt, engine.camera, { x: focusV.x, z: focusV.z });
   smallOverlay.update(dt);
-  if (autoCamAllowed && autoCamEnabled && !autoCam && !cinematicOn && following === null && !ui.photo.isOpen && performance.now() - lastCamInput > 25000) {
+  if (autoCamAllowed && autoCamEnabled && !autoCam && !cinematicOn && following === null && armed === null && !ui.photo.isOpen && performance.now() - lastCamInput > 25000) {
     autoCam = true;
     director.setEnabled(true);
   }

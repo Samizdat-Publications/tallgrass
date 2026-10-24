@@ -118,6 +118,8 @@ export class GameUI {
   private firstFrame = true;
   private narrCaption: HTMLElement;
   private narratorOn = true;
+  /** The graph was expanded when photo mode opened, so it expands again when photo mode closes. */
+  private popWasOpenForPhoto = false;
   private captionText = '';
   private ambientNote: HTMLElement;
   private ambientTimer = 0;
@@ -149,6 +151,8 @@ export class GameUI {
   private toast = new Toast();
   private tips = new FirstRunTips();
   private title: TitleCard | null = null;
+  /** A page was opened from the title card: closing it (Esc, its close button, a click outside) brings the title card back. */
+  private titleReturn = false;
   private shutter: HTMLButtonElement;
   private dimBase = DIM_IDLE_MS;
   private shooting = false;
@@ -210,6 +214,7 @@ export class GameUI {
     );
     this.setupPanel = new SetupPanel(
       (seed, params) => {
+        this.titleReturn = false; // starting a valley is not closing the page: no title card on the way out
         this.setupPanel.hide();
         this.actions.startValley?.(seed, params);
       },
@@ -331,6 +336,14 @@ export class GameUI {
     this.photo.onOpenChange((open) => {
       this.ui.classList.toggle('is-photo', open);
       this.ui.classList.toggle('is-photoclean', open && this.photo.state.hideUi);
+      // the expanded graph would sit under the photo page: it shrinks while the page is open, and comes back after
+      if (open && this.pop.isExpanded) {
+        this.popWasOpenForPhoto = true;
+        this.pop.toggleExpanded();
+      } else if (!open && this.popWasOpenForPhoto) {
+        this.popWasOpenForPhoto = false;
+        if (!this.pop.isExpanded) this.pop.toggleExpanded();
+      }
       if (open) {
         this.notesPanel.hide();
         this.family.hide();
@@ -389,6 +402,7 @@ export class GameUI {
     this.followingId = f.following;
 
     this.ui.classList.toggle('has-pane', this.paneOpen);
+    if (this.titleReturn && this.title && !this.title.isOpen && !this.paneOpen) this.returnToTitle();
     for (const e of f.events) if (e.kind === 'blizzard') this.blizzardUntil = e.tick + e.a;
     if (f.sky) f.sky.blizzardPending = f.tick < this.blizzardUntil;
     this.slate.update(f.env, f.sky);
@@ -597,14 +611,26 @@ export class GameUI {
       {
         onWatch: () => this.watch(),
         onChallenge: (id) => this.actions.startChallenge(id),
-        onSetup: () => this.openPane(this.setupPanel),
-        onGuide: () => this.openPane(this.guidePanel),
+        onSetup: () => this.openFromTitle(this.setupPanel),
+        onGuide: () => this.openFromTitle(this.guidePanel),
       },
       choices,
     );
     this.ui.append(this.title.el);
     this.ui.classList.add('has-title');
     this.title.show();
+  }
+
+  /** A page opened from the title card: the card steps aside, and comes back when the page is closed. */
+  private openFromTitle(p: ModalPanel): void {
+    this.openPane(p);
+    this.titleReturn = true;
+  }
+
+  private returnToTitle(): void {
+    this.titleReturn = false;
+    this.ui.classList.add('has-title');
+    this.title?.show();
   }
 
   /** The title card's Watch: the card goes, the interface comes in, and on a first visit three tips follow. */
@@ -615,6 +641,7 @@ export class GameUI {
 
   /** Close the title card without the tips (another page is opening in its place). */
   private leaveTitle(): void {
+    this.titleReturn = false;
     if (!this.title?.isOpen) return;
     this.title.hide();
     this.ui.classList.remove('has-title');
@@ -677,7 +704,8 @@ export class GameUI {
       this.noteToast.hide();
       return;
     }
-    if (this.noteToast.showing || !this.toastQueue.length || this.chapterCard.isOn) return;
+    // (a note waits while the tools drawer is open: they share the lower left, and the note is already saved)
+    if (this.noteToast.showing || !this.toastQueue.length || this.chapterCard.isOn || this.tools.isOpen) return;
     const def = this.toastQueue.shift();
     if (def) {
       this.noteToast.show(def, now);
@@ -1169,16 +1197,20 @@ export class GameUI {
         if (!e.repeat) this.tools.toggle();
         break;
       case 'g':
-        if (!e.repeat) this.pop.toggleExpanded();
+        if (!e.repeat && !this.photo.isOpen) this.pop.toggleExpanded();
         break;
       case 'l':
         if (!e.repeat) this.pop.toggleLog();
         break;
       case 'e':
-        if (!e.repeat) this.pop.toggleEvolution();
+        if (!e.repeat && !this.photo.isOpen) this.pop.toggleEvolution();
         break;
       case 'v':
-        if (!e.repeat) this.actions.setNarrator?.(!this.narratorOn);
+        if (!e.repeat) {
+          const on = !this.narratorOn;
+          this.actions.setNarrator?.(on);
+          this.notify(on ? 'Narrator on' : 'Narrator off', '', 2200);
+        }
         break;
       case 't':
         if (!e.repeat) this.toggleFamily();

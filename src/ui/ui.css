@@ -707,7 +707,8 @@
 /* ---- chronicle ----------------------------------------------------------------------------------------------- */
 .tg-chron {
   flex: 0 1 auto;
-  min-height: 0;
+  /* never squashed below its own header: with the graph open and an animal card up, the room runs short, and the list gives way first */
+  min-height: calc(46 * var(--u));
   display: flex;
   flex-direction: column;
   padding: calc(6 * var(--u)) calc(4 * var(--u)) calc(4 * var(--u)) calc(6 * var(--u));
@@ -1343,7 +1344,13 @@ button.tg-ent-b:hover {
 
 /* ---- inspector ----------------------------------------------------------------------------------------------- */
 .tg-insp {
-  flex: none;
+  /* the card gives way when the column is short (the open graph takes the bottom): it scrolls, and Follow / Close stay in reach */
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(239, 230, 208, 0.25) transparent;
   margin-top: auto;
   padding: calc(14 * var(--u)) calc(16 * var(--u)) calc(14 * var(--u));
   display: flex;
@@ -1557,6 +1564,12 @@ button.tg-ent-b:hover {
 .tg-insp-actions {
   display: flex;
   gap: calc(8 * var(--u));
+  position: sticky;
+  bottom: calc(-14 * var(--u));
+  z-index: 1;
+  margin: 0 calc(-4 * var(--u)) calc(-14 * var(--u));
+  padding: calc(8 * var(--u)) calc(4 * var(--u)) calc(14 * var(--u));
+  background: linear-gradient(to bottom, rgba(26, 23, 17, 0), rgba(26, 23, 17, 0.97) calc(8 * var(--u)));
 }
 .tg-insp-actions .tg-btn {
   flex: 1;
@@ -2204,6 +2217,11 @@ button.tg-ent-b:hover {
 }
 .tg-ui.is-hidden .tg-fn-toast {
   display: none;
+}
+/* the tools drawer drops over the same corner: a toast that is up when it opens steps out of its way */
+.tg-ui:has(.tg-rail.is-open) .tg-fn-toast {
+  opacity: 0;
+  visibility: hidden;
 }
 
 /* ---- the narrator: its switch in the menu, and its caption in cinematic mode ------------------------------------- */
@@ -3048,6 +3066,18 @@ button.tg-ent-b:hover {
 }
 .tg-setup-foot {
   justify-content: space-between;
+  /* always in view: the page scrolls above it (the button used to sit below the fold on a short screen) */
+  position: sticky;
+  bottom: calc(-4 * var(--u));
+  z-index: 1;
+  margin-top: calc(8 * var(--u));
+  padding: calc(12 * var(--u)) 0 calc(6 * var(--u));
+  border-top: 1px solid var(--edge);
+  background: rgba(26, 23, 17, 0.98);
+}
+/* the page sits clear of the population panel at the bottom left on a narrower screen (it used to cover the numbers) */
+.tg-pane.tg-setup {
+  left: max(50%, calc(var(--m) + (440 + 14 + 240) * var(--u)));
 }
 .tg-setup-warn {
   color: var(--gold);
@@ -3296,6 +3326,8 @@ button.tg-ent-b:hover {
   inset: 0;
   z-index: 9;
   display: grid;
+  /* one definite cell (not auto-sized), so the card inside can be held to the screen height (the challenge list scrolls within it) */
+  grid-template: minmax(0, 1fr) / minmax(0, 1fr);
   place-items: center;
   pointer-events: none;
   opacity: 0;
@@ -3356,19 +3388,66 @@ button.tg-ent-b:hover {
   background: #e6c474;
 }
 .tg-title-list {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
   margin-top: calc(26 * var(--u));
   padding: calc(8 * var(--u)) calc(8 * var(--u)) calc(10 * var(--u));
   text-align: left;
   background: rgba(26, 23, 17, 0.78);
+  pointer-events: auto;
+}
+.tg-title-list[hidden] {
+  display: none;
 }
 .tg-title-listhead {
   display: flex;
+  flex: none;
   align-items: center;
   justify-content: space-between;
   padding-right: calc(8 * var(--u));
 }
+/* the challenge list scrolls inside its card, so it fits any screen height; the title above it shrinks to make room */
+.tg-title-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(239, 230, 208, 0.28) transparent;
+}
+.tg-title-in.is-list {
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  max-height: 100%;
+  padding-top: clamp(8px, 2.5vh, calc(28 * var(--u)));
+  padding-bottom: clamp(8px, 2.5vh, calc(28 * var(--u)));
+}
+.tg-title-in.is-list .tg-title-name {
+  flex: none;
+  font-size: clamp(calc(38 * var(--u)), 6vh, calc(72 * var(--u)));
+}
+.tg-title-in.is-list .tg-title-rule {
+  flex: none;
+  margin: calc(10 * var(--u)) auto calc(8 * var(--u));
+}
+.tg-title-in.is-list .tg-title-sub {
+  flex: none;
+  font-size: clamp(calc(15 * var(--u)), 2.4vh, calc(22 * var(--u)));
+}
+.tg-title-in.is-list .tg-title-wait {
+  display: none;
+}
+.tg-title-in.is-list .tg-title-list {
+  margin-top: clamp(8px, 2vh, calc(20 * var(--u)));
+}
 .tg-title-sc {
   pointer-events: auto;
+}
+.tg-title-sc:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: -2px;
 }
 .tg-ui.is-hidden .tg-title {
   display: none;
