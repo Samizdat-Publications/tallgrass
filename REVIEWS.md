@@ -484,3 +484,16 @@ Scores: visual 6, readability 5, life 7, ecosystem 6, UI 6, keep watching 6 (rou
 8. World edge: DEFER.
 9. Rocking-horse pronghorn, packed bison: DEFER.
 10. Chronicle gap, axes, foliage dither: DEFER.
+
+## Round 36 (fresh blind critic, stills of f1a8efc, the evening build; 2026-10-24 18:00) -> `review/round-36/`
+Scores: visual 6, readability 5, life 6, ecosystem 6, UI 6, keep watching 6 (round 35: 6, 5, 7, 6, 6, 6). The interface and ravens-at-rest items of round 35 dropped off; the bison close-up leads.
+1. Bison interpenetrate in a packed herd close up, one sunk to the shoulders, thin blue lines: FIX, builder r-herd-v1 (display-only separation near the camera).
+2. Text against the picture: the field-note toasts in these stills come from the capture harness running with the documentary camera off (the toast gate holds them only while filming); a megadrought title card three years late at 100x: DEFER (stale cards at fast-forward, a small UI rule).
+3. Mid-range winter dusk: salmon-pink ground, river and pond: partly FIXED tonight (r-land-v1); the pink ground goes to builder r-spring-v1.
+4. Ravens as black cut-outs, splayed primaries in flight: REJECT (fingered primaries are a real raven's flight silhouette; the folded pose on the ground is fixed tonight).
+5. Graph strips flat, no predator-prey overlay: DEFER (a combined view is a feature of its own).
+6. Long-run charts: REJECT for V1.0 (sim; as rounds 32 to 35).
+7. Spring looks like mud: FIX, builder r-spring-v1.
+8. Map glyph colours too close, no legend: DEFER.
+9. Wolf close-up: low-res ground, stretched head, half-drawn selection ring: DEFER.
+10. Small UI items (Overlays button greyed, unlabelled icons, dust spiral, territory fill strength): DEFER.
