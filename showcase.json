@@ -6,7 +6,7 @@
   "version": "1.0.0",
   "kind": "game",
   "started": "2026-10-03",
-  "updated": "2026-10-17",
+  "updated": "2026-10-24",
   "tech": ["TypeScript", "Vite", "Three.js", "Playwright", "Blender", "ElevenLabs", "Gemini"],
   "links": {
     "landing": "https://tallgrass.pages.dev",
