@@ -626,6 +626,7 @@ export class Engine {
     if (this.running) return;
     this.running = true;
     this.last = performance.now();
+    this.startedAt = this.last;
     const loop = (now: number) => {
       if (!this.running) return;
       // (the first callback's timestamp can be older than the performance.now() in start() when the main thread was busy just before,
@@ -668,6 +669,7 @@ export class Engine {
   autoScale = true;
   /** Called once when the render scale is at its floor and frames still run long on High quality (the game drops to Medium). */
   onStruggle: (() => void) | null = null;
+  private startedAt = 0;
   private renderScale = 1;
   private basePixelRatio = 1;
   private slowMs = 0;
@@ -681,7 +683,8 @@ export class Engine {
     else { this.fastMs += frameMs; this.slowMs = Math.max(0, this.slowMs - frameMs * 0.5); }
     if (now - this.lastScaleT < 3000) return;
     // already at the lowest render scale and still slow for a good while: the picture quality itself has to come down (once)
-    if (this.slowMs > 6000 && this.renderScale <= 0.6 + 1e-3 && this.quality === 'high' && this.onStruggle) {
+    // (not in the first 40 s: the opening frames upload textures and settle the herds, and are slow on any machine)
+    if (this.slowMs > 6000 && this.renderScale <= 0.6 + 1e-3 && this.quality === 'high' && this.onStruggle && now - this.startedAt > 40000) {
       const cb = this.onStruggle;
       this.onStruggle = null;
       this.slowMs = 0;
