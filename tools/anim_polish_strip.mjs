@@ -31,7 +31,7 @@ try {
   const page = await browser.newPage({ viewport: { width: 640, height: 400 } });
   page.on('pageerror', (e) => console.log('[page exception]', e.message.slice(0, 600)));
   page.on('console', (m) => { if (m.type() === 'error') console.log('[console.error]', m.text().slice(0, 600)); });
-  await page.goto(`${base}/dev/animals.html?cam=${cam}&manual=1&solo=${arg("solo", "")}&az=${az}&dist=${dist}&el=${el}`, { waitUntil: 'domcontentloaded', timeout: 400000 });
+  await page.goto(`${base}/dev/animals.html?cam=${cam}&manual=1&solo=${arg("solo", "")}&az=${az}&dist=${dist}&el=${el}${arg('q', '')}`, { waitUntil: 'domcontentloaded', timeout: 400000 });
   await page.waitForFunction(() => typeof window.__advance === 'function', null, { timeout: 400000 });
   mkdirSync(out, { recursive: true });
   for (let i = 0; i < warm; i++) await page.evaluate(() => window.__advance(1 / 60));

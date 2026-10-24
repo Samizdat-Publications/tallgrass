@@ -10,6 +10,7 @@ import { AGENT_STRIDE, CARCASS_STRIDE, F_JUVENILE, F_MALE, Sp, St, SPECIES_COUNT
 import type { Snapshot } from '../src/sim/types';
 import { AnimalLayer } from '../src/render/animals';
 import { preloadA3 } from '../src/render/models/a3';
+import { getModel } from '../src/render/models';
 
 declare global {
   interface Window {
@@ -216,7 +217,7 @@ function herdCenterAt(t: number): { x: number; y: number } {
 
 function buildScene(): void {
   // ?solo=wolf|cougar|coyote: one runner and a pack mate on the stampede circle, nothing else (clean strips of a gait)
-  const soloSp = ({ wolf: Sp.Wolf, cougar: Sp.Cougar, coyote: Sp.Coyote } as Record<string, number>)[q.get('solo') ?? ''];
+  const soloSp = ({ wolf: Sp.Wolf, cougar: Sp.Cougar, coyote: Sp.Coyote, pronghorn: Sp.Deer, muledeer: Sp.MuleDeer, bison: Sp.Bison } as Record<string, number>)[q.get('solo') ?? ''];
   if (soloSp !== undefined) {
     add(soloSp, 'chase', 0, 0, 0, { ox: 0, oy: 0, coat: 0.3, st: St.Chase });
     add(soloSp, 'chase', 0, 0, 0, { ox: -7, oy: 4, coat: 0.4, st: St.Chase });
@@ -323,6 +324,7 @@ function churn(): void {
   for (const c of carcs) c.rem = Math.max(0.05, c.rem - 0.04);
 }
 const CHURN = q.get('churn') === '1';
+const SOLO_SPD = Number(q.get('spd') ?? 0);
 
 function stepSim(dt: number, t: number): void {
   const hc = herdCenterAt(t);
@@ -382,8 +384,8 @@ function stepSim(dt: number, t: number): void {
         const px = a.ox * ct - a.oy * st, py = a.ox * st + a.oy * ct;
         a.x = stampedeCenter.x + px; a.y = stampedeCenter.y + py;
         a.h = tang + 0.08 * Math.sin(t * 1.1 + a.seed * 9);
-        a.spd = 12.5 + Math.sin(t * 0.9 + a.seed * 30);
-        a.st = St.Chase;
+        a.spd = (SOLO_SPD || 12.5) + Math.sin(t * 0.9 + a.seed * 30);
+        a.st = a.sp === Sp.Wolf || a.sp === Sp.Cougar || a.sp === Sp.Coyote ? St.Chase : St.Flee; // (?solo=pronghorn&spd=18: a prey animal's flight)
         break;
       }
       case 'circle': {
@@ -487,6 +489,11 @@ function makeSnapshot(tick: number): Snapshot {
 // ---------------------------------------------------------------------------------------------------------
 // layer and loop
 await preloadA3(); // (?a3=1: the authored near-LOD meshes)
+// ?pp=tuck:0.9,ampG:0.5 (with ?ppsp=3 for the species id, default pronghorn): overrides gait params before the layer builds its shaders, for tuning by eye
+if (q.has('pp')) {
+  const pr = getModel(Number(q.get('ppsp') ?? Sp.Deer))!.params as unknown as Record<string, number>;
+  for (const kv of q.get('pp')!.split(',')) { const [k, v] = kv.split(':'); pr[k] = Number(v); }
+}
 const layer = new AnimalLayer(world);
 scene.add(layer.object3D);
 window.__layer = layer;

@@ -250,6 +250,27 @@ const SETS = {
     { name: 'rg_13_night_wide', eval: "window.__env({ dayFrac: 0.95 }); window.__cam('wide')", wait: 4000 },
     { name: 'rg_12_rain_midday', eval: "window.__env({ weather: 1, rain: 0.6, dayFrac: 0.45 }); window.__focusHerd(); window.__engine.cam.setView({ distance: 90, pitchDeg: 24 })", wait: 5000 },
   ],
+  // r-prong: pronghorn in the tall autumn grass, one step per state (bedded, grazing, walking, fleeing), each from the follow camera at a game-like distance.
+  prong: [
+    { name: 'pr_00_setup', eval: `(async () => {
+      const e = window.__engine;
+      window.__env = (o) => {
+        window.__envO = Object.assign({ season: 2.2, weather: 0, warmth: 0.7, rain: 0, dayFrac: 0.45 }, o);
+        if (!window.__envHook) window.__envHook = e.onFrame(() => e.setEnv(window.__envO));
+        e.setEnv(window.__envO); e.applyEnvNow();
+      };
+      window.__speed(0); window.__step(900); window.__followId(null); window.__env({});
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'h', bubbles: true }));
+      window.__prPick = (st) => { const c = window.__find(3, st); return c.length ? c[0] : null; };
+      window.__prGo = (st, dist, pitch) => { const id = window.__prPick(st); console.log('prong state', st, 'id', id); window.__followId(id); e.cam.setView({ distance: dist, pitchDeg: pitch }); };
+      await new Promise((r) => { let last = -1, same = 0, n = 0; const t = setInterval(() => { const sn = window.__snap && window.__snap(); const k = sn ? sn.tick : -2; if (k === last) same++; else { same = 0; last = k; } if ((same >= 5 && k >= 900) || ++n > 240) { clearInterval(t); r(); } }, 500); });
+    })()`, wait: 6000 },
+    { name: 'pr_01_bedded_near', eval: "window.__prGo(8, 10, 14)", wait: 4000 },
+    { name: 'pr_02_bedded_mid', eval: "window.__prGo(8, 40, 22)", wait: 3500 },
+    { name: 'pr_03_graze_mid', eval: "window.__prGo(1, 40, 22)", wait: 3500 },
+    { name: 'pr_04_walk_mid', eval: "window.__prGo(2, 40, 22)", wait: 3500 },
+    { name: 'pr_05_flee_mid', eval: "window.__prGo(4, 30, 20)", wait: 3500 },
+  ],
   review: [
     { name: '01_opening_herd', eval: 'window.__speed(1); window.__focusHerd()', wait: 3500 },
     { name: '02_wolves_hunting', eval: `(() => { const c = window.__find(1, 5).concat(window.__find(1, 10)).concat(window.__find(1)); const id = c[0]; window.__select(id); window.__followId(id); window.__engine.cam.setView({ distance: 40, pitchDeg: 20 }); })()`, wait: 4000 },

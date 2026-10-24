@@ -197,9 +197,12 @@ export function buildPronghorn(): ModelDef {
       trot0: 3.0, trot1: 4.0, gal0: 8.0, gal1: 11.0,
       ampW: 0.55, ampT: 0.66, ampG: 1.0,
       dutyW: 0.62, dutyT: 0.5, dutyG: 0.36, dutyGF: 0.25, fast0: 11, fast1: 26,
-      kneeW: 0.5, kneeT: 0.8, kneeG: 1.2,
-      bobW: 0.012, bobT: 0.03, bobG: 0.08,
-      pitchT: 0.02, pitchG: 0.09,
+      kneeW: 0.5, kneeT: 0.8, kneeG: 1.4,
+      bobW: 0.012, bobT: 0.03, bobG: 0.03,
+      pitchT: 0.02, pitchG: 0.04,
+      // r-prong: a rotary gallop with the suspension gathered (all four feet folded under the body, not reaching fore and aft like a painted
+      // flying gallop), and a level, low run: the drone view's bound, arch and head pump are scaled down
+      tuck: 0.9, galCue: 0.45,
       nodW: 0.05, nodG: 0.06,
       headDown: 1.15, lookYaw: 0.6,
       tailRest: 0, tailRun: -0.4, tailSway: 0.2,

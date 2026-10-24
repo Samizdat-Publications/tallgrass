@@ -155,6 +155,7 @@ function defines(p: AnimParams, far: ModelDef['far'] | undefined, geometry: Mode
     `#define FRONT_HIP ${v2(rig.front.hip)}`, `#define FRONT_KNEE ${v2(rig.front.knee)}`, `#define FRONT_FOOT ${v2(rig.front.foot)}`,
     `#define HIND_HIP ${v2(rig.hind.hip)}`, `#define HIND_KNEE ${v2(rig.hind.knee)}`, `#define HIND_FOOT ${v2(rig.hind.foot)}`,
     `#define SPINE ${p.kind === 0 && p.spine ? 1 : 0}`, `#define SPINE_A ${f(p.spine?.flex ?? 0)}`, `#define SPINE_R ${f(p.spine?.twist ?? 0)}`, `#define SPINE_HEAD ${f(p.spine?.head ?? 0)}`,
+    `#define SWING_TUCK ${f(p.tuck ?? 0)}`, `#define GAL_CUE ${f(p.galCue ?? 1)}`,
     `#define SPINE_TROT ${f(SPINE_TROT)}`, `#define SPINE_PHASE ${f(SPINE_PHASE)}`, `#define SPINE_K ${f(SPINE_K)}`, `#define LNCOSH1 ${f(LNCOSH1)}`,
     `#define CURL ${f(p.curl ?? 0)}`, `#define CURL_ANG ${f(p.curlAng ?? 1.3)}`, `#define CURL_X0 ${f(p.curlX ?? 0.1)}`, `#define CURL_LEN ${f(p.curlLen ?? 1.1)}`,
     `#define LEG_CALM ${f(far?.calm ?? 0)}`, `#define WIDEN ${f(far?.widen ?? 0)}`,
@@ -391,13 +392,13 @@ void tgBodyFwd(inout vec3 p, inout vec3 n) {
     float bl = BODY_LEN;
     float c = tgCyc;
     // (sized so that a wolf only 20 px long still visibly bounds: the gallop lifts the whole body about 16% of its length)
-    float hop = tgGW.x * 0.03 * cos(2.0 * c) + tgGW.y * 0.08 * cos(2.0 * c) + tgGW.z * 0.16 * cos(c - 0.5);
+    float hop = tgGW.x * 0.03 * cos(2.0 * c) + tgGW.y * 0.08 * cos(2.0 * c) + tgGW.z * GAL_CUE * 0.16 * cos(c - 0.5);
     float xn = clamp(p.x / (bl * 0.55), -1.3, 1.3);
-    float arch = (tgGW.y * 0.04 + tgGW.z * 0.08) * cos(c + 1.0) * (0.35 - xn * xn);
+    float arch = (tgGW.y * 0.04 + tgGW.z * GAL_CUE * 0.08) * cos(c + 1.0) * (0.35 - xn * xn);
     float snake = (tgGW.x * 0.02 + tgGW.y * 0.036 + tgGW.z * 0.04) * sin(c + 0.3) * xn;
     p.y += bl * tgFarK * (hop + arch);
     p.z += bl * tgFarK * snake;
-    tgRotZ(p, n, vec3(0.0, COM_Y, 0.0), tgFarK * (tgGW.x * 0.03 * sin(2.0 * c + 0.5) + tgGW.y * 0.09 * sin(2.0 * c + 0.5) + tgGW.z * 0.2 * sin(c + 1.0)));
+    tgRotZ(p, n, vec3(0.0, COM_Y, 0.0), tgFarK * (tgGW.x * 0.03 * sin(2.0 * c + 0.5) + tgGW.y * 0.09 * sin(2.0 * c + 0.5) + tgGW.z * GAL_CUE * 0.2 * sin(c + 1.0)));
     // rolling from side to side with the stride (a walk sways, a trot rolls, a gallop rocks), and a little weight settling in the stance
     tgRotX(p, n, vec3(0.0, COM_Y, 0.0), tgFarK * (tgGW.x * 0.03 + tgGW.y * 0.055 + tgGW.z * 0.06) * sin(c + 0.9));
   }
@@ -861,7 +862,8 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
       // legmath.ts footPath: the foot's offset along the body from its rest position, and its swing lift
       vec2 lw = tgLegWave(ph + ofs, gBeta);
       float gk = gAmt * moveK * calmK;
-      float footX = 0.5 * gBeta * gStride * lw.x * gk;
+      // r-prong: a swinging foot is drawn in toward the hip at mid swing (legmath.ts footPath; lw.y is 0 in the stance, so a planted foot is untouched)
+      float footX = 0.5 * gBeta * gStride * lw.x * (1.0 - gN.z * SWING_TUCK * sqrt(lw.y)) * gk;
       float footLift = gLift * lw.y * gk;
       vec2 hipP = front ? FRONT_HIP : HIND_HIP;
       vec2 kneeP = front ? FRONT_KNEE : HIND_KNEE;
@@ -1204,7 +1206,7 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
     // the neck takes the tilt of the spine at its root: the head cancels most of it, so it stays near level while the body flexes under it
     ang += SPINE_HEAD * SPINE_K * tgSpA * tanh(2.0 * clamp(aPivot.x / (BODY_LEN * 0.55), -0.8, 0.8)) * (1.0 - lie);
 #endif
-    float pump = farK * (wWalk * 0.1 * sin(2.0 * cyc + 1.0) + wTrot * 0.16 * sin(2.0 * cyc + 1.0) + wGal * 0.32 * sin(cyc + 2.0));
+    float pump = farK * (wWalk * 0.1 * sin(2.0 * cyc + 1.0) + wTrot * 0.16 * sin(2.0 * cyc + 1.0) + wGal * GAL_CUE * 0.32 * sin(cyc + 2.0));
     ang += pump;
 #if KIND == 0
     ang += tgHeadK; // legmath.ts slopeResponse: on a slope the head cancels part of the body's pitch (nearer level than the body)

@@ -89,6 +89,18 @@ export interface AnimParams {
   /** R8 pronghorn: aFx2.x is the rump flare weight on alarm (the white patch spreads and brightens). */
   flare?: boolean;
   /**
+   * r-prong gathered gallop (pronghorn): how far the swinging foot of a gallop is drawn in toward the hip at mid swing (0 = the plain eased
+   * return, 1 = the foot passes straight under the hip). The foot leaves and lands exactly where the stance puts it, so a planted foot still
+   * stands still on the ground (the factor is 1 - tuck * arc, and the arc is 0 in the stance); only the legs in the air fold under the body
+   * instead of reaching fore and aft like a painted flying gallop. Unset: 0.
+   */
+  tuck?: number;
+  /**
+   * r-prong: scale of the body-wide cues of the gallop that the drone view adds (hop, arch and pitch in legmath.ts bodyFwd). 1 = a wolf's bound;
+   * a pronghorn runs level and low, so it uses less. Unset: 1.
+   */
+  galCue?: number;
+  /**
    * r-alert2 (pronghorn, mule deer): aFx.z, which a grazer has no use for (no hunting weight), is the head yaw (rad, 0 = none) of an animal watching a
    * predator pass. A bison carries the same value in 7 bits spread over the unused top bits of its two packed floats (see packBisonA, ALERT_YAW_MAX).
    */

@@ -141,6 +141,8 @@ export interface GaitMix {
   flex: number;
   /** Per-leg phase offsets FL, FR, HL, HR. */
   off: [number, number, number, number];
+  /** r-prong: how far a swinging foot is drawn in toward the hip at mid swing (AnimParams.tuck, weighted by the gallop share). */
+  tuck: number;
 }
 
 export const legLength = (p: AnimParams): number => p.legL ?? p.comY;
@@ -172,7 +174,7 @@ export function gaitMix(p: AnimParams, spd: number, stot = 0, strideK = 1): Gait
     off = off.map((o, i) => mix(o, st.off[i], stot)) as GaitMix['off'];
   }
   stride *= strideK; // slope: shorter steps uphill (see slopeResponse)
-  return { w: [wW, wT, wG], sum, n, amt: Math.min(sum, 1), beta, stride, lift, flex, off };
+  return { w: [wW, wT, wG], sum, n, amt: Math.min(sum, 1), beta, stride, lift, flex, off, tuck: n[2] * (p.tuck ?? 0) };
 }
 
 /**
@@ -214,7 +216,7 @@ export function footPath(gm: GaitMix, ph: number, i: number, calmK = 1): { footX
   const u = fract(ph + gm.off[i]);
   const [W, arc] = legWave(u, gm.beta);
   const k = gm.amt * calmK;
-  return { footX: 0.5 * gm.beta * gm.stride * W * k, lift: gm.lift * arc * k, u, stance: u < gm.beta };
+  return { footX: 0.5 * gm.beta * gm.stride * W * (1 - gm.tuck * Math.sqrt(arc)) * k, lift: gm.lift * arc * k, u, stance: u < gm.beta };
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -373,13 +375,14 @@ export function bodyFwd(p: AnimParams, m: BodyMotion, pt: [number, number, numbe
     const k1 = 1 - m.stot; // (the bounds of a stot have their own rise and fall)
     const wW = m.w[0] * k1, wT = m.w[1] * k1, wG = m.w[2] * k1;
     const c = m.cyc, bl = m.bl;
-    const hop = wW * 0.03 * Math.cos(2 * c) + wT * 0.08 * Math.cos(2 * c) + wG * 0.16 * Math.cos(c - 0.5);
+    const gc = p.galCue ?? 1;
+    const hop = wW * 0.03 * Math.cos(2 * c) + wT * 0.08 * Math.cos(2 * c) + wG * gc * 0.16 * Math.cos(c - 0.5);
     const xn = clamp(x / (bl * 0.55), -1.3, 1.3);
-    const arch = (wT * 0.04 + wG * 0.08) * Math.cos(c + 1.0) * (0.35 - xn * xn);
+    const arch = (wT * 0.04 + wG * gc * 0.08) * Math.cos(c + 1.0) * (0.35 - xn * xn);
     const snake = (wW * 0.02 + wT * 0.036 + wG * 0.04) * Math.sin(c + 0.3) * xn;
     y += bl * m.farK * (hop + arch);
     z += bl * m.farK * snake;
-    [x, y] = rotZ(x, y, 0, p.comY, m.farK * (wW * 0.03 * Math.sin(2 * c + 0.5) + wT * 0.09 * Math.sin(2 * c + 0.5) + wG * 0.2 * Math.sin(c + 1.0)));
+    [x, y] = rotZ(x, y, 0, p.comY, m.farK * (wW * 0.03 * Math.sin(2 * c + 0.5) + wT * 0.09 * Math.sin(2 * c + 0.5) + wG * gc * 0.2 * Math.sin(c + 1.0)));
     // rolling from side to side (tgRotX about (0, comY))
     const a = m.farK * (wW * 0.03 + wT * 0.055 + wG * 0.06) * Math.sin(c + 0.9);
     const cs = Math.cos(a), sn = Math.sin(a);
