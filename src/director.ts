@@ -448,6 +448,8 @@ export class Director {
     const shot = huntNow ?? evNow ?? chained ?? this.pick(f);
     // deep night, any ground shot (a chase and an event included): low, so the dark bodies stand against the moonlit sky instead of the dark grass
     if ((f.dayFrac < 0.2 || f.dayFrac > 0.82) && !shot.air && !shot.drone && shot.pitch > 9) shot.pitch = 5 + this.rand() * 4;
+    // golden hour (the low sun either side of the night): a lower camera too, for the long shadows and the backlit grass the valley looks best in
+    else if ((f.dayFrac < 0.28 || f.dayFrac > 0.72) && !shot.air && !shot.drone && shot.pitch > 13) shot.pitch = 7 + this.rand() * 6;
     const fx = this.cutFx;
     if (fx && fx.enabled) {
       // (the first shot after the player's camera is an edit too: the picture the player had falls to dark, the camera moves, the shot rises)
