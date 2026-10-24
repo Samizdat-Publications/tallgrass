@@ -216,7 +216,7 @@ export function buildWolf(): ModelDef {
       crouchDrop: 0.18, hunts: true,
       curl: 1, curlAng: 1.6, curlX: 0.14, curlLen: 0.95,
       deadDrop: 0.36, deadHipF: 0.9, deadHipH: -0.6,
-      length: 1.5, height: 0.85, ring: 1.1, minPx: 13, boostLen: 1.5,
+      length: 1.5, height: 0.85, ring: 1.75, minPx: 13, boostLen: 1.5, // (r-wolf: the marker's arcs lie at 0.57 of this, about 1 m out: clear of a 1.5 m body and its tail, so the ring reads all the way round)
     },
   };
 }

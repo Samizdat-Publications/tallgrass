@@ -110,7 +110,7 @@ function lodDefines(def: ModelDef | undefined, variant: Variant): string[] {
     `#define FUR_RIM ${f(fur?.rim ?? 0)}`,
     `#define FUR_DORSAL ${f(fur?.dorsal ?? 0)}`, `#define FUR_BELLY ${f(fur?.belly ?? 0)}`,
     `#define FUR_STREAK ${f(fur?.streak ?? 0)}`, `#define FUR_MOTTLE ${f(fur?.mottle ?? 0)}`, `#define FUR_MOTTLE_SCALE ${f(fur?.mottleScale ?? 7)}`, `#define FUR_INDIV ${f(fur?.indiv ?? 0)}`,
-    `#define A3SKIN ${variant === 'near' && def?.a3 ? 1 : 0}`,
+    `#define A3SKIN ${variant === 'near' && def?.a3 ? 1 : 0}`, `#define A3_COAT ${variant === 'near' && def?.a3?.coat ? 1 : 0}`,
     // r-feet: how much of the leg's net swing the foot is turned back by (1 = a level sole), and the foot's height range (fractions of the leg length) over which that fades out
     `#define A3_ANKLE ${f(variant === 'near' ? def?.a3?.ankle ?? 1 : 0)}`, `#define A3_FOOT_Y0 ${f(def?.a3?.footY?.[0] ?? 0.07)}`, `#define A3_FOOT_Y1 ${f(def?.a3?.footY?.[1] ?? 0.2)}`,
     // a3 graze: the head angle multiplier, the forebody pitch down and the neck drop (m) while grazing (an authored head is shorter than the procedural one)
@@ -1788,7 +1788,7 @@ void tgShade(vec3 on) {
     // and the ground under the animal gets none), fading out by the belly. Without it the feet are as bright as the back and the
     // animal looks pasted on top of the grass instead of standing in it.
     float occ = 1.0 - smoothstep(0.0, LEGL * 1.1 + 0.02, position.y);
-    col *= mix(vec3(1.0), vec3(0.5, 0.6, 0.42), occ * occ * (3.0 - 2.0 * occ) * 0.85);
+    col *= mix(vec3(1.0), vec3(0.5, 0.6, 0.42), occ * occ * (3.0 - 2.0 * occ) * (A3_COAT == 1 ? 0.6 : 0.85)); // (r-wolf: the authored wolf's tawny legs keep more of their colour)
   }
 #endif
 #if FUR
@@ -1948,6 +1948,34 @@ const FUR_COLOR = /* glsl */ `
           }
           diffuseColor.rgb *= ftone;
         }`;
+/**
+ * r-wolf: the authored wolf's coat, painted over the photo albedo from where a fragment is on the body (vTgPos: wolf units, nose at +x, ground at y 0;
+ * vTgNy: the rest normal's y). The regions: the saddle (up-facing, above the shoulders to the rump, over the neck), the legs and lower flanks (below the
+ * belly line), the underside, the muzzle and the tail tip. The grizzle is two scales of the fur noise.
+ */
+const A3_COAT_FRAG = /* glsl */ `{
+          vec3 wc = diffuseColor.rgb;
+          float wL = dot(wc, vec3(0.2126, 0.7152, 0.0722));
+          vec3 wp = vTgPos;
+          float wn = 0.6 * tgFN(wp * 34.0 + 3.0) + 0.4 * tgFN(wp * 90.0 + 11.0);
+          float wBack = smoothstep(-0.1, 0.45, vTgNy);
+          float wTrunk = smoothstep(-0.72, -0.42, wp.x) * (1.0 - smoothstep(0.46, 0.7, wp.x));
+          float wSad = wBack * wTrunk * smoothstep(0.54, 0.68, wp.y);
+          float wLow = 1.0 - smoothstep(0.3, 0.58, wp.y);
+          float wBelly = smoothstep(-0.15, -0.65, vTgNy);
+          float wFlank = wTrunk * (1.0 - wSad) * (1.0 - wBelly) * smoothstep(0.42, 0.6, wp.y);
+          float wMuz = smoothstep(0.78, 0.92, wp.x);
+          float wTip = smoothstep(-0.86, -1.0, wp.x);
+          vec3 wTawny = vec3(wL) * vec3(1.75, 1.3, 0.85);
+          vec3 wCream = vec3(wL) * vec3(1.6, 1.46, 1.24);
+          float wGr = tgFN(wp * 160.0 + 5.0);
+          wc = mix(wc, wTawny, (0.6 * wLow + 0.45 * wFlank) * (1.0 - wBelly));
+          wc = mix(wc, wCream, 0.55 * wBelly * (1.0 - wSad) + 0.3 * wMuz * (1.0 - wBack));
+          wc = mix(wc, wc * vec3(0.4, 0.37, 0.34) * (0.45 + 1.3 * wn) * (0.7 + 1.6 * smoothstep(0.5, 0.78, wGr)), 0.92 * wSad);
+          wc = mix(wc, vec3(0.03, 0.028, 0.026), 0.8 * wTip * (1.0 - wBelly));
+          diffuseColor.rgb = wc;
+        }
+        `;
 const FUR_LIGHT = /* glsl */ `
 #if FUR
         {
@@ -2052,6 +2080,9 @@ export function makeAnimalMaterials(sp: number, def: ModelDef, shared: AnimalSha
   // a3 matte (bison): dry woolly shading of the authored coat. The albedo is pulled toward chocolate brown (the photo texture is rust and yellow), the
   // moon rim and fill are neutral and weak (a blue rim reads as a wet sheen on a dark coat) and the direct specular is cut.
   const a3matte = variant === 'near' && !!def.a3?.matte;
+  // a3 coat (wolf): a grey wolf's pattern from the mesh's own regions (body space position and normal): a dark grizzled saddle over the neck, shoulders
+  // and back, tawny-buff legs and lower flanks, a cream underside and muzzle, a dark tail tip. Near LOD only (the far mesh paints its own pattern).
+  const a3coat = variant === 'near' && !!def.a3?.coat && hasFur;
   const mangeDecl = (hasMange ? MANGE_DECL : '') + (hasMange || hasFur ? NOISE_DECL : '') + (hasFur ? FUR_DECL : '') + (lodOn ? LOD_DECL : '') + (hasShell ? SHELL_DECL : '');
   const lodDefs = lodDefines(def, variant).join('\n');
   const mangeFrag = (hasFur ? FUR_COLOR.replace(/aLookSeed/g, 'vTgSeed') : '') + (hasMange ? MANGE_FRAG : '');
@@ -2130,7 +2161,7 @@ uniform float uNightLift;${hasFur && def.far?.mute ? MUTE_DECL : ''}${mangeDecl}
           mc *= 1.0 - 0.4 * smoothstep(0.08, 0.4, mL);
           diffuseColor.rgb = mc;
         }
-        ` : ''}vec3 tgC = vTgColor * mix(1.0, uFarGain, vTgFar);
+        ` : ''}${a3coat ? A3_COAT_FRAG : ''}vec3 tgC = vTgColor * mix(1.0, uFarGain, vTgFar);
         // at range the coat is pulled toward its species colour (see ModelDef.far), keeping part of its own shading
         // (in a dim scene the lift is mostly withdrawn: at dusk and in the rain a herd stays darker than the ground it is on)
         float tgDim = 1.0 - 0.7 * uLow;

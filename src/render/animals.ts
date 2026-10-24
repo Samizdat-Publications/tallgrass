@@ -3593,7 +3593,8 @@ export class AnimalLayer {
     // up close the ring is depth tested (it passes behind the legs and under the belly), with only a faint ghost drawn over everything so it
     // is never lost in the grass; from a distance, where a boosted body would swallow it, the whole ring is drawn over everything
     const op = quiet;
-    const ghost = 0.16 + 0.84 * smoothstep(45, 130, cd);
+    // (r-wolf: the faint over-everything ghost is a little stronger up close, so the arcs the tall grass hides still read all the way round)
+    const ghost = 0.3 + 0.7 * smoothstep(45, 130, cd);
     this.ringMat.uniforms.uOpacity.value = op * ghost;
     this.ringMat.uniforms.uT.value = this.ringSolidMat.uniforms.uT.value = this.timeSec;
     this.ringMat.uniforms.uLow.value = this.ringSolidMat.uniforms.uLow.value = this.shared.uLow.value;
