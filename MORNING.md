@@ -3,7 +3,7 @@
 *(Updated 16:30 Saturday 2026-10-24. This file is refreshed at every milestone.)*
 
 ## 2026-10-24: Tallgrass 1.0 (the V1.0 polish run, live and public)
-**Play it:** https://tallgrass.stewartgregerson.workers.dev · **Landing page:** https://tallgrass.pages.dev · **Hub:** https://samizdat-e0x.pages.dev · **Source:** https://github.com/Samizdat-Publications/tallgrass (or `npm run dev`, then http://localhost:5199/).
+**Release:** https://github.com/Samizdat-Publications/tallgrass/releases/tag/v1.0.0 (tagged at 3c50f63). **Play it:** https://tallgrass.stewartgregerson.workers.dev · **Landing page:** https://tallgrass.pages.dev · **Hub:** https://samizdat-e0x.pages.dev · **Source:** https://github.com/Samizdat-Publications/tallgrass (or `npm run dev`, then http://localhost:5199/).
 
 **What you asked for:** as polished as it can get for V1.0 by midnight, then public on the hub. The simulation was left alone (the default world is still v10b, golden hashes unchanged); everything went into what a stranger sees first.
 
@@ -17,6 +17,8 @@
 7. **Slow machines** step down from High to Medium picture quality once (saved, with a note), after the opening 40 s.
 8. **Wording:** distemper is no longer called plague, adding wolves to a valley that has them no longer says they "return", cougars that wander in and out no longer get "the last cougar is gone" cards, a prairie dog drop on bad ground says nothing settled.
 9. **Zoom** stops at 900 m instead of shrinking the valley to a square in the haze.
+11. **The interface gives the valley room:** the population panel is a slim strip of species counts by default (hover or click for the full panel with sparklines; your choice is remembered) and stays a strip while you follow an animal or the documentary camera films; a field-note toast waits until the camera is on the place it happened.
+12. **Ravens over a kill** come down in a loose kettle instead of a tall column, and **the documentary camera at golden hour** frames lower for the long shadows.
 10. **A full QA sweep** of the live build (both 1920x1080 and 1366x768, every menu, tool, overlay and key) found no errors and 25 rough edges; the fixes landed tonight: the challenge list scrolls (two challenges were unreachable), a tool takes the camera from the documentary director so you see your fire land, overlays rise to a map view, the graph and photo mode stop covering the animal card, New valley has its Start button always in view and hawks and eagles on by default, Esc from a title page returns to the title, and the narrator key says so.
 
 **Look at first:** the landing page hero, then Play in a fresh browser tab (the poster, the title, the tips), then the menu > About.
