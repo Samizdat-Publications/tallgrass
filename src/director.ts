@@ -446,6 +446,8 @@ export class Director {
     const chained = this.chain;
     this.chain = null;
     const shot = huntNow ?? evNow ?? chained ?? this.pick(f);
+    // deep night, any ground shot (a chase and an event included): low, so the dark bodies stand against the moonlit sky instead of the dark grass
+    if ((f.dayFrac < 0.2 || f.dayFrac > 0.82) && !shot.air && !shot.drone && shot.pitch > 9) shot.pitch = 5 + this.rand() * 4;
     const fx = this.cutFx;
     if (fx && fx.enabled) {
       // (the first shot after the player's camera is an edit too: the picture the player had falls to dark, the camera moves, the shot rises)
@@ -815,6 +817,10 @@ export class Director {
     // years flying by: nothing close, a slow high drone move over the valley
     if (cls === 'lapse') return this.droneShot(f, true);
     const cands: Shot[] = [];
+    // deep night: the herds are dark shapes on dark grass, so the shots go low and frame them against the moonlit sky (silhouettes read,
+    // a close look down at a dark body does not), and the small subjects (a dog town, a mousing coyote, a raptor) are left for daylight
+    const night = f.dayFrac < 0.2 || f.dayFrac > 0.82;
+    const lowPitch = (p: number): number => (night ? 5 + r() * 4 : p);
     // an animal running beats everything static: a chase, a stampede, pronghorn bounding, a stotting mule deer
     const motion = this.findMotion(f);
     if (motion && r() < 0.92) return motion;
@@ -827,7 +833,7 @@ export class Director {
     // the biggest herd
     if (!this.recent('herd')) {
       const herd = this.herdOf(f, Sp.Bison);
-      if (herd) cands.push({ kind: 'herd', id: null, x: herd.x, y: herd.y, dist: 52 + r() * 28, pitch: 16 + r() * 10, yaw: r() * 360, hold: 14 });
+      if (herd) cands.push({ kind: 'herd', id: null, x: herd.x, y: herd.y, dist: 52 + r() * 28, pitch: lowPitch(16 + r() * 10), yaw: r() * 360, hold: 14 });
     }
     // a wolf pack on the move (the wolf that is moving fastest, not one asleep)
     if (!this.recent('wolves')) {
@@ -838,28 +844,28 @@ export class Director {
         const sc = f.agents[o + 4] + r() * 0.8;
         if (sc > ws) { ws = sc; wk = k; }
       }
-      if (wk >= 0) cands.push({ kind: 'wolves', id: f.ids[wk], x: 0, y: 0, dist: 24 + r() * 14, pitch: 12 + r() * 8, yaw: r() * 360, hold: 16 });
+      if (wk >= 0) cands.push({ kind: 'wolves', id: f.ids[wk], x: 0, y: 0, dist: 24 + r() * 14, pitch: lowPitch(12 + r() * 8), yaw: r() * 360, hold: 16 });
     }
     // pronghorn, low and close
     if (!this.recent('pronghorn')) {
       // (follow one of the herd, close: pronghorn are a metre long and were specks from 60 m)
       const p = this.herdOf(f, Sp.Deer);
-      if (p) cands.push({ kind: 'pronghorn', id: p.id, x: 0, y: 0, dist: p.n >= 6 ? 26 + r() * 12 : 14 + r() * 8, pitch: 10 + r() * 6, yaw: r() * 360, hold: 16 });
+      if (p) cands.push({ kind: 'pronghorn', id: p.id, x: 0, y: 0, dist: p.n >= 6 ? 26 + r() * 12 : 14 + r() * 8, pitch: lowPitch(10 + r() * 6), yaw: r() * 360, hold: 16 });
     }
     // a prairie dog town with a predator near (R3): the alarm wave sweeps the town
-    if (!this.recent('town')) {
+    if (!night && !this.recent('town')) {
       const t = this.findTown(f);
       if (t) cands.push(t, t);
     }
     // a coyote standing very still, mousing: the leap
-    if (!this.recent('mousing')) {
+    if (!night && !this.recent('mousing')) {
       const m = this.findMousing(f);
       if (m) cands.push(m, m);
     }
     // a raptor mid-stoop, or soaring (R5)
-    const stoop = this.findStoop(f);
+    const stoop = night ? null : this.findStoop(f);
     if (stoop) cands.push(stoop, stoop);
-    if (!this.recent('raptor')) {
+    if (!night && !this.recent('raptor')) {
       const rp = this.findRaptor(f);
       if (rp) cands.push(rp);
     }
@@ -877,7 +883,7 @@ export class Director {
     if (!this.recent('vista') && cls === 'real') {
       // a vista still has life in it: the valley seen from behind a herd
       const h = this.biggestHerd(f, Sp.Bison) ?? [this.worldSize / 2, this.worldSize / 2];
-      cands.push({ kind: 'vista', id: null, x: h[0], y: h[1], dist: 230 + r() * 90, pitch: 14 + r() * 8, yaw: r() * 360, hold: 18 });
+      cands.push({ kind: 'vista', id: null, x: h[0], y: h[1], dist: 230 + r() * 90, pitch: lowPitch(14 + r() * 8), yaw: r() * 360, hold: 18 });
     }
     if (motion) cands.push(motion);
     return cands[Math.floor(r() * cands.length)] ?? (cls === 'real' ? { kind: 'vista', id: null, x: this.worldSize / 2, y: this.worldSize / 2, dist: 380, pitch: 20, yaw: 0, hold: 20 } : this.droneShot(f, false));
