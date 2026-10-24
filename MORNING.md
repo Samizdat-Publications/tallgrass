@@ -1,6 +1,51 @@
 # Good morning: Tallgrass overnight report
 
-*(Updated 01:15 Sunday 2026-10-11. This file is refreshed at every milestone.)*
+*(Updated 16:30 Saturday 2026-10-24. This file is refreshed at every milestone.)*
+
+## 2026-10-24: Tallgrass 1.0 (the V1.0 polish run, live and public)
+**Play it:** https://tallgrass.stewartgregerson.workers.dev · **Landing page:** https://tallgrass.pages.dev · **Hub:** https://samizdat-e0x.pages.dev · **Source:** https://github.com/Samizdat-Publications/tallgrass (or `npm run dev`, then http://localhost:5199/).
+
+**What you asked for:** as polished as it can get for V1.0 by midnight, then public on the hub. The simulation was left alone (the default world is still v10b, golden hashes unchanged); everything went into what a stranger sees first.
+
+### What changed (all live)
+1. **A first visit that never shows a blank page.** A poster of the valley and "Preparing the valley" paint with the HTML, the title card sits over it while the shaders compile, and it fades into the live valley once the herds are drawn. The three tips are full sentences and no longer cover the population panel. Phones get a calm "made for a desktop" card with a link to the landing page and a Try anyway button; browsers without WebGL2 get a plain explanation instead of a broken page.
+2. **About Tallgrass** in the menu: version, a paragraph, links to the landing page and the source, and every third-party credit with its licence.
+3. **Ravens that read as ravens** up close: black with a faint blue sheen, fingered wing tips, a wedge tail, a heavy bill, and they keep clear of a feeding wolf.
+4. **Bison that read as bison** up close: matte chocolate coats instead of glossy rust, short upturned horns instead of cattle horns, a higher hump.
+5. **The documentary camera at night** frames the herds low against the moonlit sky instead of looking down at dark grass, and leaves dog towns and raptors for daylight.
+6. **Fire** spreads with a ragged burning edge instead of the simulation grid's rectangles; **hoof dust** is tan and billows instead of pink comb spokes.
+7. **Slow machines** step down from High to Medium picture quality once (saved, with a note), after the opening 40 s.
+8. **Wording:** distemper is no longer called plague, adding wolves to a valley that has them no longer says they "return", cougars that wander in and out no longer get "the last cougar is gone" cards, a prairie dog drop on bad ground says nothing settled.
+9. **Zoom** stops at 900 m instead of shrinking the valley to a square in the haze.
+10. **A full QA sweep** of the live build (both 1920x1080 and 1366x768, every menu, tool, overlay and key) found no errors and 25 rough edges; the fixes landed tonight: the challenge list scrolls (two challenges were unreachable), a tool takes the camera from the documentary director so you see your fire land, overlays rise to a map view, the graph and photo mode stop covering the animal card, New valley has its Start button always in view and hawks and eagles on by default, Esc from a title page returns to the title, and the narrator key says so.
+
+**Look at first:** the landing page hero, then Play in a fresh browser tab (the poster, the title, the tips), then the menu > About.
+
+![The new landing hero frame: wolves running the herd at golden hour](site/media/og-v1.jpg)
+![Pronghorn under the autumn cottonwoods, from the release build](docs/media/valley.jpg)
+![Following one bison, its card open](docs/media/follow.jpg)
+![Ravens at a kill with the new close-up model (round 35)](review/round-35/03_ravens_kill.jpg)
+![A downpour (round 35)](review/round-35/08_dawn.jpg)
+![The documentary camera in the first snow](docs/media/watch.jpg)
+
+### Reviews this run
+- **Blind critic, stills:** round 33 (before the polish) visual 6, readability 5, life 7, ecosystem 6, UI 7, keep watching 6; round 35 (release candidate) 6, 5, 7, 6, 6, 6. Its close-up items from round 33 (glossy bison, grey-paddle ravens) are gone from the list; it now leads with the interface covering the action (being fixed: a compact population strip) and with field-note toasts that do not match the shot.
+- **Gemini video:** round 34 (108 s reel) life 3, keep watching 4, the same sliding-feet note as every video round (measured slip is under 1.4%); its one concrete item, a Chronicle repeating the same blizzard line, is fixed. The new landing hero was checked by Gemini too; its one fair point (bedded bison overlapping into a dark blob in a snow shot) dropped that shot from the cut.
+- **QA sweep:** 25 issues, triaged item by item in REVIEWS.md; no console or page errors.
+- **GPU:** the V1.0 build is the same or faster than the pre-V1 build in every view (A, B, B, A at 1440p); the weather changes are within noise.
+- Triage for everything is in REVIEWS.md (rounds 33, 34, QA, 35).
+
+### Decisions you might want to overrule
+- **Ages:** an animal's card gives its age in that species' own years (a bison's life mapped onto a real bison's), while the family tree dates births in valley years, so a 10-year-old bull can be born in year 2 of a year-6 valley. Left as is; the fix is a wording choice (say "bison years", or show valley years on the card).
+- **Licences:** the wolf, pronghorn and mule deer models are CC BY-NC (non-commercial), as ruled before. Fine for a free public game; resolve before anything commercial.
+- **100x** still reaches about 45 to 60x on this machine (the time bar says so honestly). A real speed-up has to keep the golden hashes bit-identical; the profile is flat (no line over 3%), so it is a project of its own.
+
+### Next 5
+1. The interface at the overview: the compact population strip lands tonight; next, keep the followed animal or the filmed event in the clear centre.
+2. Snow edges and the river at drone range (round 33 and 35 item 7): softer snow by slope and a river with highlights.
+3. A night rule is in; next, the director should prefer sky and silhouettes at dusk too, and skip canopy shots.
+4. 100x reaches about 50x: a bit-identical speed-up of the herd scan is its own project (the profile is flat).
+5. The ages wording (card in species years, tree in valley years): pick one.
 
 ## 2026-10-09 to 10: the 24-hour day run (the plan is DAY-PLAN.md)
 **Play it:** https://tallgrass.stewartgregerson.workers.dev (or `npm run dev`, then http://localhost:5199/). Last deploy: 19:29 Saturday (D14, ravens), live check clean. The default world is still v10b. **This is the checkpoint to test: D14.** The run stopped at 01:15 Sunday with the weekly quota at 65%.
