@@ -1504,7 +1504,9 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
     charAmt = scar;
     // flames: only cells that are burning right now (value 1.0) glow, flickering; the glow spills a little onto the ground around them
     float flick = 0.55 + 0.45 * tgNoise2(xz * 1.3 + uTime * 1.7) + 0.25 * tgNoise2(xz * 4.1 - uTime * 2.9);
-    float burningNow = smoothstep(0.9, 0.99, burn);
+    // (the burning cells are a grid: the threshold is broken up by noise at two scales, so the flame front is a ragged line, not rectangles)
+    float bN = burn + (rag - 0.5) * 0.34 + (tgNoise2(xz * 0.31 + 11.0) - 0.5) * 0.22;
+    float burningNow = smoothstep(0.9, 0.99, bN);
     ember = smoothstep(0.86, 1.0, bR) * burningNow * flick;
     emberHalo = burningNow * (0.4 + 0.6 * flick);
     // smouldering: for a while after the flames pass (ash value 0.68 to 0.78) scattered embers still glow in the char and fade out
