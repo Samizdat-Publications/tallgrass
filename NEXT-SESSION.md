@@ -2,6 +2,13 @@
 
 **Updated:** 2026-10-04 afternoon, at the end of the v2 planning session. v1 is finished and live; v2 starts now. The plan is `V2-PLAN.md`.
 
+## V1.0 polish run 2026-10-24 (deadline 23:59, then public on the hub)
+- Goal (owner 13:50): as polished as possible for V1.0, then status v1 on the landing page, README, showcase.json, GitHub topic and release, game redeploy and hub redeploy (Github Hub/site: node ../kit/tools/models.mjs projects.json, then node build.mjs, diff against live, then deploy).
+- Done in the working tree, uncommitted: CREDITS.md rewritten to match what ships; landing pill v1.0 and absolute og image; package.json, lock and showcase.json 1.0.0 / v1; README badge v1.0. Release notes draft: scratch/v1-release-notes.md.
+- Running: builder on first-run polish in the main checkout (splash over a poster while shaders compile, tips card sentences and placement, phone and no-WebGL2 cards, HUD overlaps at 1280x720 and 1366x768); builder r-about (worktree scratch/wt-about: About and credits panel in the menu); builder r-ravens2 (worktree scratch/wt-ravens: close-up ravens); QA sweep of the live build (report to come, stills in scratch/v1-qa); blind critic round 33 (baseline stills from frozen HEAD, review/round-33).
+- Known: landing hero clip has burned-in documentary captions at the bottom (0 to 7 s) that collide with the CTA text; recapture without captions or crop. Game index.html has no og tags (add after the first-run builder finishes).
+- Frozen capture worktree: scratch/wt-cap (detached HEAD e7f96e3); remove when done.
+
 ## Day run 2026-10-09 ~15:30 to 2026-10-10 ~15:30: READ DAY-PLAN.md FIRST
 - STATE 14:30 Sat (resumed 13:30 after the drive; owner ruling: run 24 h to 2026-10-11 13:30, publish at the next checkpoint). Deadline file says 2026-10-11 13:30. Weekly quota 60% at 13:50: start nothing new at 65%, stop at 90% (never extra usage).
   - DONE: r-startup merged (NaN cause = negative first-frame dt after prime; dt clamped at 0; dry frame on; debug flags gone) and D8 deployed 14:03, live check clean, live cold ready 19 to 24 s. Gemini round 30 (D8) triaged in REVIEWS.md.

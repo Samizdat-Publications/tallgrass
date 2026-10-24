@@ -49,6 +49,7 @@ video, img { display: block; width: 100%; height: auto; }
 
 .pill { display: inline-flex; align-items: center; gap: 7px; padding: 3px 11px; border-radius: 999px; font-size: 13px; font-weight: 700; letter-spacing: 0.02em; border: 1px solid currentColor; white-space: nowrap; }
 .pill::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: #e2aa4c; box-shadow: 0 0 0 3px rgba(226, 170, 76, 0.25); }
+.pill-v1::before { background: #3fb950; box-shadow: 0 0 0 3px rgba(63, 185, 80, 0.25); }
 
 /* ---------------------------------------------------------------- hero */
 .hero { position: relative; color: #f4ecd8; background: #1a1712; min-height: min(100svh, 860px); display: grid; overflow: hidden; }

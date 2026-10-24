@@ -1,6 +1,6 @@
 # Tallgrass
 
-![Status: in development](https://img.shields.io/badge/status-in%20development-d29922)
+![Status: v1.0](https://img.shields.io/badge/status-v1.0-2ea043)
 
 A living prairie in the browser: bison, pronghorn, wolves and ravens in a valley that finds its own balance.
 
