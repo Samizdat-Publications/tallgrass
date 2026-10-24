@@ -1,0 +1,420 @@
+{
+  "mode": "ab",
+  "date": "2026-10-24T19:43:32.813Z",
+  "size": "2560x1440",
+  "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 5070 Ti Laptop GPU (0x00002F58) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+  "A": "C:\\Users\\stewa\\Documents\\Claude\\ecosystem-sim\\scratch\\wt-benchA",
+  "B": "C:\\Users\\stewa\\Documents\\Claude\\ecosystem-sim\\scratch\\wt-benchB",
+  "order": [
+    "A1",
+    "B1",
+    "B2",
+    "A2"
+  ],
+  "deltas": {
+    "low_golden": {
+      "medianDeltaMs": 0.898,
+      "medianDeltas": [
+        2.398,
+        -0.602
+      ],
+      "medianDeltaPct": 4.53,
+      "p90DeltaMs": -0.095,
+      "p90Deltas": [
+        1.072,
+        -1.261
+      ],
+      "agree": false
+    },
+    "rain_mid": {
+      "medianDeltaMs": 0.147,
+      "medianDeltas": [
+        0.971,
+        -0.677
+      ],
+      "medianDeltaPct": 0.82,
+      "p90DeltaMs": 0.721,
+      "p90Deltas": [
+        3.107,
+        -1.665
+      ],
+      "agree": true
+    },
+    "rain_low": {
+      "medianDeltaMs": -1.138,
+      "medianDeltas": [
+        -0.039,
+        -2.236
+      ],
+      "medianDeltaPct": -5.48,
+      "p90DeltaMs": 0.611,
+      "p90Deltas": [
+        1.102,
+        0.12
+      ],
+      "agree": false
+    },
+    "blizzard": {
+      "medianDeltaMs": 0.69,
+      "medianDeltas": [
+        0.415,
+        0.965
+      ],
+      "medianDeltaPct": 4.5,
+      "p90DeltaMs": 1.496,
+      "p90Deltas": [
+        1.265,
+        1.728
+      ],
+      "agree": true
+    },
+    "night": {
+      "medianDeltaMs": 0.41,
+      "medianDeltas": [
+        1.434,
+        -0.614
+      ],
+      "medianDeltaPct": 2.39,
+      "p90DeltaMs": 0.76,
+      "p90Deltas": [
+        2.782,
+        -1.262
+      ],
+      "agree": false
+    }
+  },
+  "raw": {
+    "A1": {
+      "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 5070 Ti Laptop GPU (0x00002F58) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+      "views": {
+        "wide_golden": {
+          "median": 15.051,
+          "p90": 17.756,
+          "n": 40,
+          "disjoint": false
+        },
+        "low_golden": {
+          "median": 19.13,
+          "p90": 22.097,
+          "n": 40,
+          "disjoint": false
+        },
+        "herd": {
+          "median": 14.126,
+          "p90": 17.553,
+          "n": 40,
+          "disjoint": false
+        },
+        "top": {
+          "median": 13.587,
+          "p90": 15.291,
+          "n": 40,
+          "disjoint": false
+        },
+        "winter": {
+          "median": 14.538,
+          "p90": 16.203,
+          "n": 40,
+          "disjoint": false
+        },
+        "night": {
+          "median": 16.833,
+          "p90": 19.017,
+          "n": 40,
+          "disjoint": false
+        },
+        "blizzard": {
+          "median": 15.145,
+          "p90": 16.638,
+          "n": 40,
+          "disjoint": false
+        },
+        "storm": {
+          "median": 15.322,
+          "p90": 17.561,
+          "n": 40,
+          "disjoint": false
+        },
+        "rain_mid": {
+          "median": 17.736,
+          "p90": 19.693,
+          "n": 40,
+          "disjoint": false
+        },
+        "rain_low": {
+          "median": 20.355,
+          "p90": 22.886,
+          "n": 40,
+          "disjoint": false
+        },
+        "pond_midday": {
+          "median": 17.184,
+          "p90": 20.142,
+          "n": 40,
+          "disjoint": false
+        },
+        "creek_midday": {
+          "median": 19.654,
+          "p90": 22.384,
+          "n": 40,
+          "disjoint": false
+        },
+        "pond_night": {
+          "median": 20.606,
+          "p90": 21.803,
+          "n": 40,
+          "disjoint": false
+        }
+      }
+    },
+    "B1": {
+      "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 5070 Ti Laptop GPU (0x00002F58) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+      "views": {
+        "wide_golden": {
+          "median": 17.617,
+          "p90": 19.527,
+          "n": 40,
+          "disjoint": false
+        },
+        "low_golden": {
+          "median": 21.528,
+          "p90": 23.169,
+          "n": 40,
+          "disjoint": false
+        },
+        "herd": {
+          "median": 15.44,
+          "p90": 17.369,
+          "n": 40,
+          "disjoint": false
+        },
+        "top": {
+          "median": 14.771,
+          "p90": 16.722,
+          "n": 40,
+          "disjoint": false
+        },
+        "winter": {
+          "median": 15.135,
+          "p90": 17.495,
+          "n": 40,
+          "disjoint": false
+        },
+        "night": {
+          "median": 18.267,
+          "p90": 21.799,
+          "n": 40,
+          "disjoint": false
+        },
+        "blizzard": {
+          "median": 15.56,
+          "p90": 17.903,
+          "n": 40,
+          "disjoint": false
+        },
+        "storm": {
+          "median": 15.477,
+          "p90": 19.064,
+          "n": 40,
+          "disjoint": false
+        },
+        "rain_mid": {
+          "median": 18.707,
+          "p90": 22.8,
+          "n": 40,
+          "disjoint": false
+        },
+        "rain_low": {
+          "median": 20.316,
+          "p90": 23.988,
+          "n": 40,
+          "disjoint": false
+        },
+        "pond_midday": {
+          "median": 19.075,
+          "p90": 21.324,
+          "n": 40,
+          "disjoint": false
+        },
+        "creek_midday": {
+          "median": 20.665,
+          "p90": 24.678,
+          "n": 40,
+          "disjoint": false
+        },
+        "pond_night": {
+          "median": 21.371,
+          "p90": 23.556,
+          "n": 40,
+          "disjoint": false
+        }
+      }
+    },
+    "B2": {
+      "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 5070 Ti Laptop GPU (0x00002F58) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+      "views": {
+        "wide_golden": {
+          "median": 15.619,
+          "p90": 17.9,
+          "n": 40,
+          "disjoint": false
+        },
+        "low_golden": {
+          "median": 19.92,
+          "p90": 21.947,
+          "n": 40,
+          "disjoint": false
+        },
+        "herd": {
+          "median": 13.547,
+          "p90": 16.238,
+          "n": 40,
+          "disjoint": false
+        },
+        "top": {
+          "median": 13.705,
+          "p90": 15.425,
+          "n": 40,
+          "disjoint": false
+        },
+        "winter": {
+          "median": 16.149,
+          "p90": 16.91,
+          "n": 40,
+          "disjoint": false
+        },
+        "night": {
+          "median": 16.899,
+          "p90": 18.849,
+          "n": 40,
+          "disjoint": false
+        },
+        "blizzard": {
+          "median": 16.51,
+          "p90": 18.925,
+          "n": 40,
+          "disjoint": false
+        },
+        "storm": {
+          "median": 16.231,
+          "p90": 18.418,
+          "n": 40,
+          "disjoint": false
+        },
+        "rain_mid": {
+          "median": 17.437,
+          "p90": 19.517,
+          "n": 40,
+          "disjoint": false
+        },
+        "rain_low": {
+          "median": 18.959,
+          "p90": 23.703,
+          "n": 40,
+          "disjoint": false
+        },
+        "pond_midday": {
+          "median": 15.887,
+          "p90": 20.232,
+          "n": 40,
+          "disjoint": false
+        },
+        "creek_midday": {
+          "median": 13.075,
+          "p90": 13.244,
+          "n": 40,
+          "disjoint": false
+        },
+        "pond_night": {
+          "median": 21.231,
+          "p90": 23.523,
+          "n": 40,
+          "disjoint": false
+        }
+      }
+    },
+    "A2": {
+      "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 5070 Ti Laptop GPU (0x00002F58) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+      "views": {
+        "wide_golden": {
+          "median": 15.868,
+          "p90": 18.901,
+          "n": 40,
+          "disjoint": false
+        },
+        "low_golden": {
+          "median": 20.522,
+          "p90": 23.208,
+          "n": 40,
+          "disjoint": false
+        },
+        "herd": {
+          "median": 14.005,
+          "p90": 15.804,
+          "n": 40,
+          "disjoint": false
+        },
+        "top": {
+          "median": 13.229,
+          "p90": 15.351,
+          "n": 40,
+          "disjoint": false
+        },
+        "winter": {
+          "median": 15.273,
+          "p90": 16.788,
+          "n": 40,
+          "disjoint": false
+        },
+        "night": {
+          "median": 17.513,
+          "p90": 20.111,
+          "n": 40,
+          "disjoint": false
+        },
+        "blizzard": {
+          "median": 15.545,
+          "p90": 17.197,
+          "n": 40,
+          "disjoint": false
+        },
+        "storm": {
+          "median": 16.386,
+          "p90": 18.918,
+          "n": 40,
+          "disjoint": false
+        },
+        "rain_mid": {
+          "median": 18.114,
+          "p90": 21.182,
+          "n": 40,
+          "disjoint": false
+        },
+        "rain_low": {
+          "median": 21.195,
+          "p90": 23.583,
+          "n": 40,
+          "disjoint": false
+        },
+        "pond_midday": {
+          "median": 19.254,
+          "p90": 21.164,
+          "n": 40,
+          "disjoint": false
+        },
+        "creek_midday": {
+          "median": 20.423,
+          "p90": 22.965,
+          "n": 40,
+          "disjoint": false
+        },
+        "pond_night": {
+          "median": 20.697,
+          "p90": 22.794,
+          "n": 40,
+          "disjoint": false
+        }
+      }
+    }
+  }
+}
