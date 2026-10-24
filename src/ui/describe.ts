@@ -211,6 +211,12 @@ export function countWord(n: number): string {
   const r = Math.round(n);
   return r >= 0 && r < NUMBER_WORDS.length ? NUMBER_WORDS[r] : r.toLocaleString('en-US');
 }
+const ORDINAL_WORDS = ['zeroth', 'first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh', 'eighth', 'ninth', 'tenth'];
+/** "second", "third" ... in running prose, "11th" past ten. */
+function ordinalWord(n: number): string {
+  const r = Math.round(n);
+  return r >= 0 && r < ORDINAL_WORDS.length ? ORDINAL_WORDS[r] : `${r}th`;
+}
 const cap = (s: string): string => (s ? s[0].toUpperCase() + s.slice(1) : s);
 
 /** Rough compass word for a position in the valley, or '' when the position is unknown (0,0) or central. */
@@ -870,6 +876,8 @@ export function fmtInt(n: number): string {
  */
 export function foldKey(e: SimEvent): string | null {
   if (e.kind === 'immigrated' || e.kind === 'emigrated') return `${e.kind}:${e.sp}`;
+  // a stormy winter brings blizzard after blizzard: one line that grows, not the same sentence three times (Gemini round 34)
+  if (e.kind === 'blizzard') return 'blizzard';
   return null;
 }
 
@@ -881,6 +889,14 @@ export function describeFolded(e: SimEvent, total: number, runs: number): string
   const known = e.sp >= 0 && e.sp < PLURAL.length;
   const pl = known ? PLURAL[e.sp] : 'animals';
   const t = fmtInt(total);
+  if (e.kind === 'blizzard') {
+    const n = countWord(runs);
+    return pick(e, [
+      `Blizzard after blizzard: ${n} have swept the valley this winter.`,
+      `Another blizzard, the ${ordinalWord(runs)} this winter, drives the snow across the prairie.`,
+      `The storms keep coming: ${n} blizzards so far this winter.`,
+    ], runs);
+  }
   if (e.kind === 'emigrated') {
     return pick(e, [
       `More ${pl} leave the valley: ${t} this year.`,

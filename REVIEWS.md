@@ -461,3 +461,13 @@ No page errors, no console errors, no failed requests; every button does somethi
 23. Evolution chart "-0.0%" and grass axis: FIX if cheap.
 24. Seed chip copies the full link; V has no confirmation: FIX the V toast.
 25. Tools drawer overlaps the field-notes toast at 1366: FIX with the HUD overlap pass.
+
+## Round 34 (Gemini video, standard 108 s reel of main 47306be with the V1.0 merges; 2026-10-24 15:19) -> `review/round-34-video/reel.gemini.md`
+Scores: visual 6, readability 7, life 3, ecosystem 5, UI 7, keep watching 4 (round 31: life 3, keep watching 4).
+1. Sliding locomotion on the bison crossing the river: DEFER (measured foot slip is under 1.4% in every gait since r-feet; the reel is Playwright video at a low frame rate and the wading legs are under water; the same note has come back every video round, so a hand-picked high-frame-rate reel is the next check, not more rig work).
+2. Wolves at a carcass in a generic loop: DEFER (feeding tug and worrying exist; the reel's shot is short).
+3. Mechanical eagle flap, tight raven circles: DEFER.
+4. Opaque panels at fast-forward: REJECT (the reel opens the expanded graph on purpose; idle dimming and H already hide the interface).
+5. No splash or trails: REJECT (splashes and wake rings exist since v9; snow trails exist).
+6. Jarring cuts in the first 15 s: DEFER.
+7. The Chronicle repeats "The wind rises and a blizzard closes over the valley": FIX, repeat blizzards in a year now fold into one growing line.
