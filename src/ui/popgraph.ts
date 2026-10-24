@@ -10,6 +10,16 @@ import { fillSolidRuns, hexA, strokeWithGaps } from './chartutil';
 import { drawRows, rowsPlot } from './rows';
 import { HERO, drawEvolution, evoTipRows, fmtPct, latest, type EvoData } from './evo';
 import { TRAIT_COUNT } from './traits';
+import { readJson, writeJson } from './store';
+
+/** The player's choice between the slim strip and the full panel, remembered between visits (compact unless they pinned the full panel). */
+const POP_MODE_KEY = 'tallgrass.popmode.v1';
+/** How long the pointer rests on the strip before the full panel opens in place, and how long it can stray before it closes again (ms). */
+const HOVER_OPEN_MS = 140;
+const HOVER_CLOSE_MS = 240;
+/** Names for the strip, where the full name would crowd it. */
+const STRIP_NAMES: Record<string, string> = { eagle: 'Eagle', hawk: 'Hawk' };
+const stripName = (sp: number): string => STRIP_NAMES[SPECIES_KEYS[sp] ?? ''] ?? SPECIES_NAMES[sp];
 
 export interface Marker {
   tick: number;
@@ -24,6 +34,10 @@ interface Cell {
   count: HTMLElement;
   canvas: HTMLCanvasElement;
   lastText: string;
+  /** This species in the slim strip: its chip and the count on it. */
+  chip: HTMLElement;
+  chipN: HTMLElement;
+  lastChip: string;
   /** Set while a visiting species is out of the valley for its season: the card reads "away for the summer" instead of a zero. */
   away: AwayState;
   /** The count as shown: eases toward the real count while the sim runs fast. */
@@ -84,6 +98,18 @@ export class PopGraph {
 
   // view state
   private expanded = false;
+  /**
+   * The panel is a slim strip of species chips by default. Resting the pointer on it opens the full panel (sparklines) in place; a click
+   * pins it open (saved), and a click on a pinned panel puts it back. While the player follows an animal or the documentary camera films
+   * (forcedCompact) it stays a strip whatever was chosen, and the choice is back afterwards.
+   */
+  private pinned = readJson<{ mode?: string }>(POP_MODE_KEY, {}).mode === 'full';
+  private hovering = false;
+  /** A click on the open panel closed it: the pointer must leave before resting on it opens it again. */
+  private hoverSuppressed = false;
+  private forcedCompact = false;
+  private compact = true;
+  private hoverTimer = 0;
   /** Linear by default; L puts each row on a log scale. */
   private log = false;
   private on: boolean[] = Array.from({ length: SPECIES_COUNT }, () => true);
@@ -99,6 +125,8 @@ export class PopGraph {
 
   // dom
   private cellsEl: HTMLElement;
+  private stripEl: HTMLButtonElement;
+  private titleEl: HTMLElement;
   private chartWrap: HTMLElement;
   private chart: HTMLCanvasElement;
   private tip: HTMLElement;
@@ -158,10 +186,29 @@ export class PopGraph {
       this.evoLegendText.push(t);
       this.evoLegend.append(h('span', { class: 'tg-chip', style: `--c:var(--sp-${hh.sp})` }, h('i', { class: 'tg-dot' }), hh.name, t));
     }
+    // the title doubles as the pin: a click keeps the full panel open (or puts the strip back)
+    this.titleEl = h('span', {
+      class: 'tg-pop-title',
+      text: 'Population',
+      role: 'button',
+      tabindex: '0',
+      'aria-pressed': String(this.pinned),
+      title: 'Keep the full panel open, or go back to the strip',
+      onclick: () => this.togglePinned(),
+      onkeydown: (e: KeyboardEvent) => {
+        if (e.key === 'Enter') { e.preventDefault(); this.togglePinned(); }
+      },
+    });
+    this.stripEl = button({
+      class: 'tg-strip',
+      'aria-expanded': 'false',
+      'aria-label': 'Population by species. Open the full panel',
+      onclick: () => this.togglePinned(),
+    });
     const head = h(
       'div',
       { class: 'tg-pop-head' },
-      h('span', { class: 'tg-pop-title', text: 'Population' }),
+      this.titleEl,
       tabs,
       this.sub,
       this.climKey,
@@ -177,7 +224,20 @@ export class PopGraph {
     this.chart.addEventListener('pointermove', (e) => this.onHover(e));
     this.chart.addEventListener('pointerleave', () => this.onHover(null));
 
-    this.el = h('section', { class: 'tg-pop tg-glass tg-leaf', 'aria-label': 'Population', 'data-rows': '1', 'data-view': 'pop' }, head, this.chipsEl, this.cellsEl, this.chartWrap);
+    this.el = h('section', { class: 'tg-pop tg-glass tg-leaf', 'aria-label': 'Population', 'data-rows': '1', 'data-view': 'pop' }, head, this.chipsEl, this.cellsEl, this.chartWrap, this.stripEl);
+    // resting a mouse on the strip opens the full panel in place; leaving closes it (a touch tap is a click, which pins)
+    this.el.addEventListener('pointerenter', (e) => {
+      if (e.pointerType !== 'mouse') return;
+      window.clearTimeout(this.hoverTimer);
+      if (this.hovering || this.hoverSuppressed || this.expanded) return;
+      this.hoverTimer = window.setTimeout(() => this.setHovering(true), HOVER_OPEN_MS);
+    });
+    this.el.addEventListener('pointerleave', () => {
+      window.clearTimeout(this.hoverTimer);
+      this.hoverSuppressed = false;
+      if (this.hovering) this.hoverTimer = window.setTimeout(() => this.setHovering(false), HOVER_CLOSE_MS);
+    });
+    this.applyMode();
 
     this.ro = new ResizeObserver(() => {
       this.unit = unitPx(this.el);
@@ -191,6 +251,62 @@ export class PopGraph {
   destroy(): void {
     this.ro.disconnect();
     cancelAnimationFrame(this.hoverRaf);
+    window.clearTimeout(this.hoverTimer);
+  }
+
+  // ---- strip or full panel ------------------------------------------------------------------------------------
+
+  /** True while the slim strip is showing (not the full panel, not the expanded graph). */
+  get isCompact(): boolean {
+    return this.compact;
+  }
+
+  /** The player is following an animal, or the documentary camera is filming: the panel is a strip, whatever they chose. */
+  setForcedCompact(on: boolean): void {
+    if (on === this.forcedCompact) return;
+    this.forcedCompact = on;
+    this.applyMode();
+  }
+
+  private setHovering(on: boolean): void {
+    if (on === this.hovering) return;
+    this.hovering = on;
+    this.applyMode();
+  }
+
+  /** A click on the strip or the title: pin the full panel open, or put the strip back. Ignored while the camera keeps it a strip. */
+  private togglePinned(): void {
+    if (this.forcedCompact || this.expanded) return;
+    window.clearTimeout(this.hoverTimer);
+    if (this.pinned || this.hovering) {
+      this.pinned = false;
+      this.hovering = false;
+      this.hoverSuppressed = true;
+    } else {
+      this.pinned = true;
+    }
+    writeJson(POP_MODE_KEY, { mode: this.pinned ? 'full' : 'compact' });
+    this.titleEl.setAttribute('aria-pressed', String(this.pinned));
+    this.applyMode();
+  }
+
+  /** Work out which of the strip, the full panel and the expanded graph shows, and set it. */
+  private applyMode(): void {
+    const full = !this.forcedCompact && (this.pinned || (this.hovering && !this.hoverSuppressed));
+    const compact = !this.expanded && !full;
+    if (compact === this.compact && this.el.classList.contains('is-compact') === compact) return;
+    const focused = this.el.contains(document.activeElement) ? (document.activeElement as HTMLElement) : null;
+    this.compact = compact;
+    this.el.classList.toggle('is-compact', compact);
+    this.stripEl.setAttribute('aria-expanded', String(!compact));
+    if (!compact) {
+      // the sparklines were not drawn while the strip showed: draw them now
+      this.dirty = true;
+      this.lastDraw = 0;
+    }
+    // keyboard focus on the part that just went away moves to its counterpart
+    if (focused === this.stripEl && !compact) this.titleEl.focus();
+    else if (focused === this.titleEl && compact) this.stripEl.focus();
   }
 
   // ---- data --------------------------------------------------------------------------------------------------
@@ -335,6 +451,11 @@ export class PopGraph {
     this.expandBtn.setAttribute('aria-label', label);
     this.expandBtn.title = `${label} (G)`;
     this.expandBtn.innerHTML = icon(this.expanded ? 'shrink' : 'expand', 16);
+    if (this.expanded) {
+      window.clearTimeout(this.hoverTimer);
+      this.hovering = false;
+    }
+    this.applyMode();
     this.onHover(null);
     this.dirty = true;
     this.lastDraw = 0;
@@ -354,6 +475,7 @@ export class PopGraph {
     this.visible = vis;
     this.cells = [];
     this.cellsEl.replaceChildren();
+    this.stripEl.replaceChildren();
     for (const sp of vis) {
       const count = h('span', { class: 'tg-cell-n' });
       const canvas = h('canvas', { class: 'tg-spark', 'aria-hidden': 'true' });
@@ -363,7 +485,10 @@ export class PopGraph {
         h('div', { class: 'tg-cell-top' }, h('span', { class: 'tg-cell-name' }, h('i', { class: 'tg-dot' }), SPECIES_NAMES[sp]), count),
         canvas,
       );
-      const cell: Cell = { sp, el, count, canvas, lastText: '', away: null, shown: this.pops[sp][this.pops[sp].length - 1] ?? 0, yMin: 0, yMax: 0, hover: false, tip: '' };
+      const chipN = h('span', { class: 'tg-pc-n' });
+      const chip = h('span', { class: 'tg-pc', style: `--c:var(--sp-${sp})`, title: SPECIES_NAMES[sp] }, h('i', { class: 'tg-dot' }), h('span', { class: 'tg-pc-name', text: stripName(sp) }), chipN);
+      this.stripEl.append(chip);
+      const cell: Cell = { sp, el, count, canvas, lastText: '', chip, chipN, lastChip: '', away: null, shown: this.pops[sp][this.pops[sp].length - 1] ?? 0, yMin: 0, yMax: 0, hover: false, tip: '' };
       el.addEventListener('pointerenter', () => { cell.hover = true; this.dirty = true; this.lastDraw = 0; });
       el.addEventListener('pointerleave', () => { cell.hover = false; this.dirty = true; this.lastDraw = 0; });
       this.cells.push(cell);
@@ -437,9 +562,18 @@ export class PopGraph {
           c.el.classList.toggle('is-away', !!away);
           if (!this.expanded) this.dirty = true;
         }
+        // the same count on the strip (a visitor reads "away" or "soon" there: the full words do not fit a chip)
+        const ct = away ? (away === 'away' ? 'away' : 'soon') : fmtInt(v);
+        if (ct !== c.lastChip) {
+          c.lastChip = ct;
+          c.chipN.textContent = ct;
+          c.chip.classList.toggle('is-gone', v === 0 && !away);
+          c.chip.classList.toggle('is-away', !!away);
+        }
       }
     }
-    if (this.dirty && now - this.lastDraw >= cfg.draw) {
+    // (nothing is drawn while the strip shows: it is only text. applyMode marks the panel dirty when the sparklines come back.)
+    if (this.dirty && !this.compact && now - this.lastDraw >= cfg.draw) {
       this.lastDraw = now;
       this.dirty = false;
       this.draw();

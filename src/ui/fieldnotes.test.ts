@@ -148,6 +148,18 @@ ok(earnedBy([], {}, { memorial: false, challengeWon: true }).join() === 'challen
   ok(denied.earn('outbreak', 2) && denied.count === 1, 'works when storage throws');
 }
 
+// a note earned at a place hands the place to onEarn (the documentary camera's toast waits for it); one earned without a place does not
+{
+  g.window = { localStorage: fakeStorage() };
+  const placed = new FieldNotes();
+  const got: Array<{ id: string; at?: { x: number; y: number } }> = [];
+  placed.onEarn = (def, _e, at) => got.push({ id: def.id, at });
+  new NoteTracker(placed).update(frame({ events: [ev('fire', { x: 120, y: -40 })] }), { memorial: false, challengeWon: false });
+  ok(got.length === 1 && got[0].id === 'fire' && got[0].at?.x === 120 && got[0].at?.y === -40, 'a fire note carries the fire\'s place');
+  placed.earn('winter', 1);
+  ok(got.length === 2 && got[1].id === 'winter' && got[1].at === undefined, 'a note with no place carries none');
+}
+
 if (failures) {
   console.error(`${failures} of ${checks} checks failed`);
   process.exit(1);

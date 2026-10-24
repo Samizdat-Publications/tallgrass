@@ -17,7 +17,7 @@ import type { Challenge } from '../challenges';
 import { ChapterCard, cardDuration } from './chapter';
 import { ChallengeRun } from './challenge';
 import { GoalCard } from './goal';
-import { FieldNotes, NoteTracker } from './fieldnotes';
+import { FieldNotes, NoteTracker, type NotePlace } from './fieldnotes';
 import { NOTE_TOTAL as NOTE_COUNT, trackR3 } from './fieldnotes_r3';
 import { NotesPanel, NoteToast } from './notespanel';
 import { ResultCard } from './result';
@@ -59,6 +59,8 @@ const CARD_COOLDOWN_MS = 8000;
 const CARD_HOLD_MS = 20000;
 /** A card held back because the documentary camera is not on its event waits this long for the camera to get there, then is dropped. */
 const GATE_HOLD_MS = 14000;
+/** A field-notes toast for a place waits this long for the documentary camera to be on it, then is dropped (the note is saved either way). */
+const NOTE_GATE_HOLD_MS = 12000;
 /** Events the graph marks with a line (the rest would only add noise). */
 const MARK_KINDS = new Set(['drought', 'droughtEnd', 'outbreak', 'stampede', 'extinct', 'introduced', 'removed', 'culled', 'fire', 'plague', 'megadrought']);
 /** A quiet hint about H and C appears once after this long with no input (a second monitor, a lazy afternoon). */
@@ -110,7 +112,8 @@ export class GameUI {
   private tracker: NoteTracker;
   private notesPanel: NotesPanel;
   private noteToast = new NoteToast();
-  private toastQueue: { id: string; title: string; hint: string }[] = [];
+  /** Notes waiting for their toast. A note earned at a place (sim metres) also waits for the documentary camera to be on it (see flushToast). */
+  private toastQueue: { id: string; title: string; hint: string; at?: NotePlace; since: number }[] = [];
   private lastToastAt = -1e9;
   private lastYear = 1;
   private popRo: ResizeObserver;
@@ -254,7 +257,7 @@ export class GameUI {
       this.top.setNotesCount(this.fieldNotes.count, NOTE_COUNT);
       this.notesPanel.refresh();
     };
-    this.fieldNotes.onEarn = (def) => this.toastNote(def);
+    this.fieldNotes.onEarn = (def, _e, at) => this.toastNote(def, at);
 
     this.goal = new GoalCard(() => this.tryAgain());
     this.result = new ResultCard(
@@ -417,6 +420,8 @@ export class GameUI {
     }
     if (f.history.length || f.events.length) this.addDecadeLines(f.history, f.events);
     if (f.events.length) this.handleEvents(f.events, now, f.tick, f.pop);
+    // following an animal, or the documentary camera filming: the population panel is a slim strip, whatever the player chose
+    this.pop.setForcedCompact(f.following !== null || !!f.autoCamera || this.cinematic);
     this.pop.update(now, f.pop, f.speed);
     this.inspector.update(f.selected, f.following, f.story, f.storyId, f.selecting ?? null);
     if (f.selected) this.family.noteDetail(f.selected);
@@ -688,12 +693,12 @@ export class GameUI {
    * A note was just earned. Show a quiet toast, unless the interface is hidden (earn silently) or time is flying (only
    * the first of a burst gets a toast; the rest are ticked silently).
    */
-  private toastNote(def: { id: string; title: string; hint: string }): void {
+  private toastNote(def: { id: string; title: string; hint: string }, at?: NotePlace): void {
     if (this.hidden || this.cinematic || this.firstFrame) return;
     const now = performance.now();
     const fast = this.speed >= 100 || this.speed < 0;
     if (fast && (this.noteToast.showing || now - this.lastToastAt < 8000)) return;
-    if (this.toastQueue.length < 3) this.toastQueue.push(def);
+    if (this.toastQueue.length < 3) this.toastQueue.push({ ...def, at, since: now });
   }
 
   /** Shows the next waiting toast when nothing is in the way: not over a chapter card, not in ambient or cinematic view. */
@@ -705,12 +710,23 @@ export class GameUI {
       return;
     }
     // (a note waits while the tools drawer is open: they share the lower left, and the note is already saved)
-    if (this.noteToast.showing || !this.toastQueue.length || this.chapterCard.isOn || this.tools.isOpen) return;
-    const def = this.toastQueue.shift();
-    if (def) {
-      this.noteToast.show(def, now);
-      this.lastToastAt = now;
+    // (a note earned at a place waits while the documentary camera films something else, so the toast never names a moment the screen
+    // does not show; it goes after NOTE_GATE_HOLD_MS if the camera never gets there. The note itself was recorded when it was earned.)
+    for (let i = this.toastQueue.length - 1; i >= 0; i--) {
+      if (now - this.toastQueue[i].since > NOTE_GATE_HOLD_MS && this.noteBlocked(this.toastQueue[i].at)) this.toastQueue.splice(i, 1);
     }
+    if (this.noteToast.showing || !this.toastQueue.length || this.chapterCard.isOn || this.tools.isOpen) return;
+    const next = this.toastQueue.findIndex((q) => !this.noteBlocked(q.at));
+    if (next < 0) return;
+    const def = this.toastQueue.splice(next, 1)[0];
+    this.noteToast.show(def, now);
+    this.lastToastAt = now;
+  }
+
+  /** True while the camera gate says the documentary camera is not on this place (a note with no place is never held). */
+  private noteBlocked(at?: NotePlace): boolean {
+    if (!this.cardGate || !at || (at.x === 0 && at.y === 0)) return false;
+    return !this.cardGate(at.x, at.y, 'note');
   }
 
   private stepChallenge(f: UIFrame): void {

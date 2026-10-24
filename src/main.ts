@@ -142,7 +142,7 @@ audio.onWolfCall = (c) => animals.startWolfChorus(c.x, c.z, c.seconds);
 audio.bellowSite = () => animals.bellowSite();
 audio.onBellowCall = (c) => animals.startBellow(c.x, c.z, c.seconds);
 // field note: a mousing leap close to the camera
-animals.onMousingLeap = () => { ui.fieldNotes.earn('mousingLeap', ui.fieldNotes.yearNow); };
+animals.onMousingLeap = (x, z) => { ui.fieldNotes.earn('mousingLeap', ui.fieldNotes.yearNow, { x, y: z }); };
 // R5 raptors: a hawk's scream or an eagle's call (and the scream of a stoop beginning), placed where the bird is (height above the ground)
 animals.onRaptorCall = (sp, scream, x, y, z) => { audio.onRaptor(sp === Sp.Hawk ? 'hawk' : 'eagle', scream, x, Math.max(0.5, y - engine.groundHeight(x, z)), z); };
 // R4 strikes -> R3 thunder player (delay is distance / 343 m/s at 1x, 0 at 10x and up)
@@ -312,7 +312,7 @@ smallprey.onBark = (kind, x, y, z) => {
   audio.onSmallPrey(kind, x, y, z);
   if (kind === 'alarm') director.markWhere('alarm', x, z); // where the wave began, for the documentary camera if a note is earned from it
   // field note: an alarm wave sweeping a town the camera is near
-  if (kind === 'alarm' && Math.hypot(x - engine.camera.position.x, z - engine.camera.position.z) < 200) ui.fieldNotes.earn('alarmWave', ui.fieldNotes.yearNow);
+  if (kind === 'alarm' && Math.hypot(x - engine.camera.position.x, z - engine.camera.position.z) < 200) ui.fieldNotes.earn('alarmWave', ui.fieldNotes.yearNow, { x, y: z });
 };
 engine.scene.add(smallprey.object3D);
 engine.excludeFromAO(smallprey.object3D);
@@ -1017,7 +1017,7 @@ w.__narrator = narrator;
 // the documentary camera goes to a field note as it is earned (a kill, a stampede, an alarm wave, pups...), unless the player has the camera
 {
   const toast = ui.fieldNotes.onEarn;
-  ui.fieldNotes.onEarn = (def, e) => { toast(def, e); director.noteEarned(def.id); };
+  ui.fieldNotes.onEarn = (def, e, at) => { toast(def, e, at); director.noteEarned(def.id); };
 }
 // dev hook: window.__fieldnotes.debugEarn('fire') ticks a field note as if it had just happened
 w.__fieldnotes = ui.fieldNotes;

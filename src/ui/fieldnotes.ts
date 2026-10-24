@@ -37,6 +37,12 @@ export const NOTES: NoteDef[] = [
 ];
 export const NOTE_COUNT = NOTES.length;
 
+/** Where a note's moment happened (sim metres), when it has a place: the documentary camera's toast for it waits until the camera is there. */
+export interface NotePlace {
+  x: number;
+  y: number;
+}
+
 export interface Earned {
   /** The valley year it was earned in (the number the slate showed). */
   year: number;
@@ -52,7 +58,7 @@ export class FieldNotes {
   /** The valley year now, kept up to date by the game, for notes ticked from the console. */
   yearNow = 1;
   /** Called each time a note is earned for the first time. */
-  onEarn: (def: NoteDef, e: Earned) => void = () => {};
+  onEarn: (def: NoteDef, e: Earned, at?: NotePlace) => void = () => {};
   /** Called whenever the count changes (earned or cleared), for the menu entry. */
   onChange: () => void = () => {};
 
@@ -72,15 +78,15 @@ export class FieldNotes {
     return this.earned.get(id);
   }
 
-  /** Tick a note. Returns true when it is new. Unknown ids are ignored. */
-  earn(id: string, year: number): boolean {
+  /** Tick a note. Returns true when it is new. Unknown ids are ignored. `at` is where it happened, if it has a place (the toast waits for the camera). */
+  earn(id: string, year: number, at?: NotePlace): boolean {
     const def = NOTES.find((n) => n.id === id);
     if (!def || this.earned.has(id)) return false;
     const e: Earned = { year: Math.max(1, Math.round(year)), at: Date.now() };
     this.earned.set(id, e);
     this.save();
     this.onChange();
-    this.onEarn(def, e);
+    this.onEarn(def, e, at);
     return true;
   }
 
@@ -170,25 +176,26 @@ export class NoteTracker {
   update(f: TrackerFrame, ctx: TrackerContext): void {
     const n = this.notes;
     const year = f.env.year + 1; // the number the slate shows
-    const earn = (id: string): void => void n.earn(id, year);
+    const earn = (id: string, at?: NotePlace): void => void n.earn(id, year, at);
+    const where = (e: SimEvent): NotePlace => ({ x: e.x, y: e.y });
 
     // a pack founded and lost within a blink is a dispersal that never took (the chronicle skips it too)
     const flash = new Set<number>();
     for (const e of f.events) if (e.kind === 'packLost' && e.b < FLASH_PACK_TICKS) flash.add(e.a);
     for (const e of f.events) {
       switch (e.kind) {
-        case 'firstKill': earn('firstKill'); break;
-        case 'stampede': if (e.a >= 100) earn('stampede100'); break;
-        case 'packFounded': if (!flash.has(e.a)) earn('packFounded'); break;
-        case 'packLost': if (!flash.has(e.a)) earn('packLost'); break;
+        case 'firstKill': earn('firstKill', where(e)); break;
+        case 'stampede': if (e.a >= 100) earn('stampede100', where(e)); break;
+        case 'packFounded': if (!flash.has(e.a)) earn('packFounded', where(e)); break;
+        case 'packLost': if (!flash.has(e.a)) earn('packLost', where(e)); break;
         case 'drought': earn('drought'); break;
         case 'droughtEnd': earn('droughtBreaks'); break;
-        case 'outbreak': earn('outbreak'); break;
+        case 'outbreak': earn('outbreak', where(e)); break;
         case 'fire':
-          earn('fire');
+          earn('fire', where(e));
           if (this.fireTick === null) this.fireTick = e.tick;
           break;
-        case 'elder': earn('elder'); break;
+        case 'elder': earn('elder', where(e)); break;
         case 'introduced': if (e.sp === SP_WOLF) earn('wolvesReturn'); break;
         default: break;
       }

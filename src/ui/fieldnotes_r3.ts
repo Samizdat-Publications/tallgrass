@@ -8,7 +8,7 @@
 // the cases of trackR3 to NoteTracker.update and change the count the tests expect (18 to 26).
 import type { SimEvent } from '../sim/sim';
 import { NOTES } from './fieldnotes';
-import type { FieldNotes, NoteDef } from './fieldnotes';
+import type { FieldNotes, NoteDef, NotePlace } from './fieldnotes';
 
 export const NOTES_R3: NoteDef[] = [
   { id: 'coyotePups', title: 'Pups in the grass', hint: 'Wait for a coyote den to have its first litter.' },
@@ -33,15 +33,16 @@ const SP_PRONGHORN = 3;
 /** Tick the notes that come from sim events. Call with each frame's events (the same list NoteTracker.update gets). */
 export function trackR3(notes: FieldNotes, events: SimEvent[], year: number): void {
   for (const e of events) {
+    const at: NotePlace = { x: e.x, y: e.y }; // (0, 0) means the event has no place: its toast is never held for the camera
     switch (e.kind) {
-      case 'coyotePups': notes.earn('coyotePups', year); break;
-      case 'sylvaticPlague': notes.earn('townPlague', year); break;
+      case 'coyotePups': notes.earn('coyotePups', year, at); break;
+      case 'sylvaticPlague': notes.earn('townPlague', year, at); break;
       case 'immigrated':
-        if (e.sp === SP_WOLF) notes.earn('wolvesOwn', year);
-        else if (e.sp === SP_PRONGHORN) notes.earn('pronghornMigration', year);
+        if (e.sp === SP_WOLF) notes.earn('wolvesOwn', year, at);
+        else if (e.sp === SP_PRONGHORN) notes.earn('pronghornMigration', year, at);
         break;
-      case 'emigrated': if (e.sp === SP_PRONGHORN) notes.earn('pronghornMigration', year); break;
-      case 'mange': notes.earn('mangeSeen', year); break;
+      case 'emigrated': if (e.sp === SP_PRONGHORN) notes.earn('pronghornMigration', year, at); break;
+      case 'mange': notes.earn('mangeSeen', year, at); break;
       case 'hareBoom': notes.earn('hareBoom', year); break;
       default: break;
     }

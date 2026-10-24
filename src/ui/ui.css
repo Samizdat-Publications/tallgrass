@@ -477,6 +477,10 @@
 .tg-ui:has(.tg-pop.is-open) {
   --pop-h: calc(300 * var(--u));
 }
+/* the slim strip (the default): one to three short rows of chips */
+.tg-ui:has(.tg-pop.is-compact) {
+  --pop-h: calc(30 * var(--u));
+}
 .tg-tools-btn {
   display: inline-flex;
   align-items: center;
@@ -994,6 +998,85 @@ button.tg-ent-b:hover {
 @media (max-width: 899px) {
   .tg-pop.is-open {
     width: calc(100vw - 2 * var(--m));
+  }
+}
+/* The slim strip. Every species stays readable (a dot, a short name, the count) but there is no sparkline, so the panel is about a third
+   of its old height and the animals behind it stay in view. It is never wider than the full panel, so the full panel opens over exactly
+   the ground the strip held (the pointer stays on it) and closes back into the strip. */
+.tg-ui .tg-pop.is-compact {
+  width: fit-content;
+  max-width: min(calc(440 * var(--u)), calc(100vw - 2 * var(--m)));
+  height: auto;
+  padding: calc(3 * var(--u)) calc(11 * var(--u));
+}
+.tg-strip {
+  display: none;
+}
+.tg-pop.is-compact .tg-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: calc(13 * var(--u));
+  row-gap: calc(1 * var(--u));
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  animation: tg-strip-in 0.2s var(--ease) both;
+}
+.tg-pop.is-compact .tg-pop-head,
+.tg-pop.is-compact .tg-pop-chips,
+.tg-pop.is-compact .tg-cells,
+.tg-pop.is-compact .tg-chart-wrap {
+  display: none;
+}
+.tg-pc {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(5 * var(--u));
+  min-height: calc(18 * var(--u));
+  white-space: nowrap;
+  font-size: calc(12 * var(--u));
+  color: var(--paper-dim);
+  font-weight: 500;
+  transition: opacity 0.2s;
+}
+.tg-pc .tg-dot {
+  width: calc(6 * var(--u));
+  height: calc(6 * var(--u));
+  background: var(--c);
+}
+.tg-pc-n {
+  font: 700 calc(13 * var(--u)) / 1 var(--sans);
+  font-variant-numeric: lining-nums tabular-nums;
+  color: var(--paper);
+}
+.tg-pc.is-gone {
+  opacity: 0.55;
+}
+.tg-pc.is-away .tg-pc-n {
+  font: italic 400 calc(12 * var(--u)) / 1 var(--serif);
+  color: var(--paper-dim);
+}
+.tg-pop.is-fast .tg-pc-n {
+  opacity: 0.9;
+}
+.tg-pop.is-lapse .tg-pc-n {
+  opacity: 0.78;
+}
+.tg-pop-title[role='button'] {
+  cursor: pointer;
+}
+@keyframes tg-strip-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
   }
 }
 .tg-pop-head {
@@ -2587,8 +2670,8 @@ button.tg-ent-b:hover {
   visibility: hidden;
   isolation: isolate;
 }
-.tg-chapter.is-on {
-  visibility: visible;
+.tg-chapter.is-on {
+  visibility: visible;
 }
 /* The card keeps clear of the population panel (bottom left): symmetric side room equal to the panel's width plus its margin, so the
    words stay centred and never run under it. */
@@ -2691,6 +2774,10 @@ button.tg-ent-b:hover {
   }
   .tg-pop {
     width: min(calc(440 * var(--u)), calc(100vw - 2 * var(--m) - 150 * var(--u)));
+  }
+  .tg-ui .tg-pop.is-compact {
+    width: fit-content;
+    max-width: min(calc(440 * var(--u)), calc(100vw - 2 * var(--m) - 150 * var(--u)));
   }
 }
 @media (max-width: 899px) {
