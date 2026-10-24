@@ -55,7 +55,7 @@ interface CrownBuild {
  * the crown's own sphere; the AO term is dark where lobes meet (and in the core, and under the skirt) and bright on lobe crests,
  * which is what makes a cottonwood read as a billowing mass instead of a pile of balls.
  */
-function buildCrown(seed: number, detail: number, shape: TreeShape, keep = 1): CrownBuild {
+function buildCrown(seed: number, detail: number, shape: TreeShape, keep = 1, minLumps = 8): CrownBuild {
   const rng = mulberry32(seed * 7919 + 13);
   const cy0 = shape.cy, cyR = shape.cyR;
   interface Lobe { c: THREE.Vector3; r: number; id: number; n: number; core: boolean }
@@ -116,7 +116,7 @@ function buildCrown(seed: number, detail: number, shape: TreeShape, keep = 1): C
   // in the shadow pass too)
   if (keep < 1) {
     lumps.sort((a, b) => b.rad - a.rad);
-    lumps.length = Math.max(8, Math.ceil(lumps.length * keep));
+    lumps.length = Math.max(minLumps, Math.ceil(lumps.length * keep));
     for (const L of lumps) L.rho *= 0.95 / Math.sqrt(keep);
   }
 
@@ -1083,6 +1083,41 @@ export class Trees {
         farCount++;
       }
     }
+    // r-edge-v1: the ring just beyond the square (the land the map view and the wide views look out over) carries its own denser groves along
+    // the draws, so the valley's border fades into more prairie with its own wooded low ground instead of into bare ground. The same draw
+    // field as above, a lower bar, a firmer pull toward low ground, and a thinning toward the outer edge of the ring (the sparse far scatter
+    // above takes over from there). Each tree is the same far tree (lump crown at range, same seasons), so nothing new is drawn.
+    {
+      const NEAR_R = 460, NEAR_MAX = 650;
+      let nearCount = 0;
+      for (let k = 0; k < 90000 && nearCount < NEAR_MAX; k++) {
+        const x = -NEAR_R + hash2(k, 1, 73) * (S + 2 * NEAR_R);
+        const z = -NEAR_R + hash2(k, 2, 73) * (S + 2 * NEAR_R);
+        const ox = Math.max(-x, x - S, 0), oz = Math.max(-z, z - S, 0);
+        const d = Math.hypot(ox, oz);
+        if (d < 30 || d > NEAR_R) continue;
+        const draw = 1 - Math.abs(2 * fbm2(x * 0.0046 + 9.1, z * 0.0046 - 4.3, 3, 7) - 1);
+        const draw2 = 1 - Math.abs(2 * fbm2(x * 0.0093 - 2.7, z * 0.0093 + 6.6, 3, 19) - 1);
+        const patch = fbm2(x * 0.0125 + 3, z * 0.0125 - 9, 3, 5);
+        const dens = (smoothstep(0.5, 0.8, draw) * 0.7 + smoothstep(0.62, 0.86, draw2) * 0.5 + smoothstep(0.6, 0.76, patch) * 0.35) * (1 - 0.55 * smoothstep(300, NEAR_R, d)) * smoothstep(30, 60, d);
+        if (hash2(k, 3, 73) > dens * 0.85) continue;
+        const h0 = heightAt(x, z);
+        const sl = Math.hypot(heightAt(x + 14, z) - heightAt(x - 14, z), heightAt(x, z + 14) - heightAt(x, z - 14)) / 28;
+        if (sl > 0.46) continue;
+        const avg = 0.25 * (heightAt(x + 40, z) + heightAt(x - 40, z) + heightAt(x, z + 40) + heightAt(x, z - 40));
+        if (h0 > avg + 2 && hash2(k, 8, 73) < 0.8) continue;
+        const lone = hash2(k, 9, 73) < 0.14;
+        const nTrees = lone ? 1 : 3 + Math.floor(Math.pow(hash2(k, 6, 73), 1.3) * 8);
+        const rad = 6 + hash2(k, 7, 73) * 16;
+        for (let m = 0; m < nTrees && nearCount < NEAR_MAX; m++) {
+          const a = hash2(k, 10 + m, 73) * Math.PI * 2, rr = Math.sqrt(hash2(k, 40 + m, 73)) * rad * (lone ? 0 : 1);
+          const px = x + Math.cos(a) * rr, pz = z + Math.sin(a) * rr;
+          const h = 8 + Math.pow(hash2(k, 70 + m, 73), 1.3) * 15;
+          specs.push({ id: ID_FAR + 5000 + nearCount, spec: { x: px, z: pz, h, r: h * (0.34 + hash2(k, 90 + m, 73) * 0.26), far: true } });
+          nearCount++;
+        }
+      }
+    }
     // Junipers (eastern red cedar) keep to ridges and uplands: dark conical groups on the bluffs, never in the draws. Far ones beyond
     // the rim, and a few small stands in the valley on dry ridge ground away from water and away from the cottonwoods.
     {
@@ -1143,7 +1178,12 @@ export class Trees {
         const crown = buildCrown(v + 1, detail, shape, CROWN_KEEP[li]);
         this.disposables.push(crown.geo);
         pool.addMesh('crown', crown.geo, foliageMat, `cottonwood-crown-${v}-lod${li}`, true, this.group, this.meshes, depthMat);
-        if (li === crownDetails.length - 1) pool.addMesh('crown', crown.geo, foliageMat, `cottonwood-crown-${v}-lod${li}-far`, false, this.group, this.meshes, depthMat);
+        if (li === crownDetails.length - 1) {
+          // (r-edge-v1: past 400 m a crown is a few big bumps seen from a few pixels away; a fifth of the lumps is enough and there are many more far trees now)
+          const farCrown = buildCrown(v + 1, 0, shape, 0.2, 5);
+          this.disposables.push(farCrown.geo);
+          pool.addMesh('crown', farCrown.geo, foliageMat, `cottonwood-crown-${v}-lod${li}-far`, false, this.group, this.meshes, depthMat);
+        }
       });
       const tips: number[] = [];
       const barkGeos = [buildTreeBark(v + 1, 4, shape, tips), buildTreeBark(v + 1, 2, shape), buildTreeBark(v + 1, 1, shape)];

@@ -307,6 +307,38 @@ const SETS = {
     { name: 'wv_09_winter_night_wide', eval: "window.__env({ season: 3.4, dayFrac: 0.95 })", wait: 3000 },
     { name: 'wv_10_winter_night_top', eval: "window.__cam('top')", wait: 3000 },
   ],
+  // r-edge-v1: what lies beyond the playable square. Map views at 690 m and 900 m in summer, autumn and winter, a wide and a mid view, and low
+  // views standing at the valley edge looking outward (east, north). The winter shots use the lying-snow env (tick 0, weather 4, long wait).
+  edge: [
+    { name: 'ed_00_setup', eval: `(async () => {
+      const e = window.__engine;
+      window.__env = (o) => {
+        window.__envO = Object.assign({ season: 1.3, weather: 0, warmth: 0.7, rain: 0, dayFrac: 0.45 }, o);
+        if (!window.__envHook) window.__envHook = e.onFrame(() => e.setEnv(window.__envO));
+        e.setEnv(window.__envO); e.applyEnvNow();
+      };
+      window.__top = (d) => { window.__cam('top'); e.cam.setView({ distance: d }, true); };
+      window.__edgeLook = (x, y, dist, pitch, yaw) => e.cam.setView({ x, y, distance: dist, pitchDeg: pitch, yawDeg: yaw, h: undefined }, true);
+      // (the sim is stepped to tick 900 and then held, so before and after captures see the same animals and the same weather)
+      window.__speed(0); window.__step(900); window.__followId(null); window.__env({ season: 1.3, dayFrac: 0.45 }); window.__cam('wide');
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'h', bubbles: true }));
+      await new Promise((r) => { let last = -1, same = 0, n = 0; const t = setInterval(() => { const sn = window.__snap && window.__snap(); const k = sn ? sn.tick : -2; if (k === last) same++; else { same = 0; last = k; } if ((same >= 5 && k >= 900) || ++n > 240) { clearInterval(t); r(); } }, 500); });
+      if (e.noteBlizzard) e.noteBlizzard(-1, true);
+    })()`, wait: 3500 },
+    { name: 'ed_01_summer_top690', eval: "window.__top(690)", wait: 3000 },
+    { name: 'ed_02_summer_top900', eval: "window.__top(900)", wait: 3000 },
+    { name: 'ed_03_summer_wide', eval: "window.__env({ season: 1.3, dayFrac: 0.62 }); window.__cam('wide')", wait: 3000 },
+    { name: 'ed_04_summer_mid', eval: "window.__engine.cam.setView({ distance: 170, pitchDeg: 26 }, true)", wait: 3000 },
+    { name: 'ed_05_summer_edge_east', eval: "window.__env({ season: 1.3, dayFrac: 0.45 }); window.__edgeLook(540, 256, 90, 7, -90)", wait: 3000 },
+    { name: 'ed_06_summer_edge_north', eval: "window.__edgeLook(256, -40, 110, 9, 0)", wait: 3000 },
+    { name: 'ed_07_autumn_top900', eval: "window.__env({ season: 2.4, dayFrac: 0.45 }); window.__top(900)", wait: 3000 },
+    { name: 'ed_08_autumn_wide', eval: "window.__env({ season: 2.4, dayFrac: 0.45 }); window.__cam('wide')", wait: 3000 },
+    { name: 'ed_09_autumn_edge_east', eval: "window.__edgeLook(540, 256, 90, 7, -90)", wait: 3000 },
+    { name: 'ed_10_winter_top690', eval: "if (window.__engine.noteBlizzard) window.__engine.noteBlizzard(-1, true); window.__env({ tick: 0, season: 3.4, weather: 4, warmth: 0.1, windDir: 0.35, windStrength: 0.2, dayFrac: 0.45 }); window.__top(690)", wait: 22000 },
+    { name: 'ed_11_winter_top900', eval: "window.__top(900)", wait: 3000 },
+    { name: 'ed_12_winter_wide', eval: "window.__cam('wide')", wait: 3000 },
+    { name: 'ed_13_winter_edge_east', eval: "window.__edgeLook(540, 256, 90, 7, -90)", wait: 3000 },
+  ],
   // r-weather-v1: clear, rain, snow and blizzard held by __env (tick 0 so the weather easing runs on real time with the sim paused), each
   // from a wide view, a mid view and a low view. Long waits: the eased weather (snowfall, blizzard whiteout, overcast) takes several seconds to settle.
   weather: [
