@@ -480,7 +480,7 @@ Scores: visual 6, readability 5, life 7, ecosystem 6, UI 6, keep watching 6 (rou
 4. Ravens as cutouts, too large: REJECT for now (r-ravens2 added the sheen and fingered primaries; the near birds are close to the lens in that framing).
 5. Ravens outnumber bison: REJECT (sim, v10b; ravens breed to the carrion supply by design since v9).
 6. Flat charts: REJECT for V1.0 (no sim changes tonight; as rounds 32 and 33).
-7. Snow, river, rain: rain FIXED in r-weather-v1 (08 is the new downpour); snow edges and the river DEFER.
+7. Snow, river, rain: rain FIXED in r-weather-v1 (08 is the new downpour); snow edges and the creek FIXED in r-land-v1 (snow feathers into a dusting with range, greyer winter ground at range, the far creek lifts to the sky with a pale ice rim; scratch/v1-land sheets).
 8. World edge: DEFER.
 9. Rocking-horse pronghorn, packed bison: DEFER.
 10. Chronicle gap, axes, foliage dither: DEFER.
