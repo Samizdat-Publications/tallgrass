@@ -2667,6 +2667,19 @@ export class AnimalLayer {
         x += this.rvOut.x;
         z += this.rvOut.z;
       }
+      // ravens dropping onto a kill come down in a loose kettle, not a stack: the sim brings every bird to the carcass point and lets it
+      // sink there, which drew a tall column of birds over one spot (QA, round 35). Over a kill site a flying raven is set out on a ring
+      // that widens with its height and turns slowly, and faces along it (display only; a bird on the ground is untouched).
+      if (flier && !raptor && !groundedBird && alt > 0.8) {
+        const kw = this.ravenGather(x, z) * smoothstep(0.8, 4, alt);
+        if (kw > 0.001) {
+          const ph = hash01(id * 7 + 3) * Math.PI * 2 + this.clock * 0.45;
+          const rr = Math.min(7, 1.5 + alt * 0.45) * kw;
+          x += Math.cos(ph) * rr;
+          z += Math.sin(ph) * rr;
+          h += wrapPi(ph + Math.PI / 2 - h) * kw;
+        }
+      }
 
       // Ravens at a carcass: a two-footed hop (wings flicked) or a few walking steps between pecks (the plan sets the moves; the
       // feet follow the distance drawn), and a takeoff starts with a deep downstroke flare.
