@@ -1229,6 +1229,7 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
   float dry = clamp(uCure + (0.55 - moist) * 1.1 + stubA * 0.55 + 0.3 * up + ((nB - 0.5) * 0.24 + (nM2 - 0.5) * 0.26 - 0.2 * (nM1 - 0.5)) * mot - mix(0.5, 0.3, edgeW) * draw * (0.4 + 0.6 * (1.0 - uCure)), 0.0, 1.0);
   dry = tgCuredFloor(dry, uCure, riparian);     // late summer: the uplands cure to gold, green is left to the belt and the swales
   dry = tgWetDry(dry, uWetYr, uCure);            // wet years: the growing season stays greener
+  dry = tgSpringDry(dry, uCure, up, uWet);       // spring green-up: moist and wet ground greens first, ridges last
   dry = tgDroughtDry(dry, uDrought, riparian);  // drought: dry grass everywhere but a thinned belt
   dry = tgRiparianDry(dry, uCure, stubA, riparian);
   vec3 grassCol = mix(uGrassGreen, uGrassDry, dry) * vec3(1.0 + 0.08 * up * dry, 1.0 - 0.07 * up * dry, 1.0 - 0.16 * up * dry);
@@ -1294,7 +1295,16 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
     grassCol *= mix(vec3(1.0), tint, 0.38 * landK);
   }
   // drought: bleached pale straw (same luminance, leaning yellow, so never mauve), thinned in the belt
-  if (uDrought > 0.001) grassCol = tgDroughtTint(grassCol, uDrought, riparian);
+  if (uDrought > 0.001) grassCol = tgDroughtTint(grassCol, uDrought, riparian, winterK);
+  // r-spring-v1: winter dusk. Bare ground between the snow patches is dormant straw; under the low sun's orange and a pink sky it came out
+  // salmon. Toward dusk and dawn the winter straw is pulled to a cooler, duller grey-straw (at the same brightness), so the light still warms it
+  // but never makes it pink. Midday winter, and every other season, are untouched.
+  {
+    float coolK = winterK * (1.0 - smoothstep(0.1, 0.65, uLightDir.y)) * (1.0 - uNight);
+    float lumW = dot(grassCol, vec3(0.2126, 0.7152, 0.0722));
+    coolK *= 1.0 - smoothstep(-0.02, 0.1, (grassCol.g - grassCol.r) / max(lumW, 1e-3));   // (living green, the belt and the swales, keeps its colour: only straw is cooled)
+    grassCol = mix(grassCol, vec3(lumW) * vec3(0.95, 1.0, 1.02), 0.5 * coolK);
+  }
 
   // distance grain: tufts and clumps whose size follows the pixel footprint (two to eight pixels across), so a far hill keeps a
   // grassy stipple of olive and straw instead of a smooth dune; far copses of trees are dark dotted patches along the draws
@@ -1701,11 +1711,22 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
   // sheen that reads as snow or mist: keep the far ground rough so it never goes whiter than dry grass
   gTgRough = mix(mix(0.95, 0.66, uWet) - 0.14 * smoothstep(0.7, 1.0, uWet), 1.0, smoothstep(90.0, 420.0, dist) * (0.4 + 0.6 * uWet));
 
+  // r-spring-v1: a wet sheen. Rain-soaked ground reflects the grey sky where the view grazes it: a cool, pale lift in the hollows and flats,
+  // broken into patches so it reads as wet ground and standing films of water, never as a mist or a coat of snow (it is dim, cool, and off over
+  // snow and at night). Only rain turns it on, and a light rain gives a light sheen.
+  vec3 wetSheen = vec3(0.0);
+  if (uWet > 0.05) {
+    float fres = pow(1.0 - clamp(-rayDir.y, 0.0, 1.0), 4.0);
+    float film = smoothstep(0.3, 0.72, tgNoise2(xz * 0.085 + vec2(11.3, 4.7)) * 0.6 + tgNoise2(xz * 0.31 + vec2(2.9, 17.1)) * 0.4 + 0.35 * hollowK + 0.25 * draw);
+    float sheen = smoothstep(0.1, 0.9, uWet) * fres * (0.2 + 0.8 * film) * (1.0 - snowCover) * (1.0 - 0.85 * uNight) * (1.0 - rock) * (1.0 - smoothstep(120.0, 380.0, dist));
+    wetSheen = vec3(0.4, 0.48, 0.6) * sheen * 0.1;
+  }
+
   // looking toward a low sun makes standing grass glow: forward scattering through the blades
   float fwd = max(dot(rayDir, uLightDir), 0.0);
   float lowSun = 1.0 - smoothstep(0.1, 0.65, uLightDir.y);
   float glow = pow(fwd, 3.0) * (0.35 + 0.65 * lowSun) * gTgGrass * (1.0 - rock) * (1.0 - snowCover) * ts * (1.0 - uWet);
-  gTgEmis = col * uLightColor * glow * 0.1;
+  gTgEmis = col * uLightColor * glow * 0.1 + wetSheen;
   gTgEmis += vec3(3.4, 0.95, 0.15) * ember + vec3(1.1, 0.22, 0.03) * emberHalo * 0.4 + vec3(1.6, 0.34, 0.05) * smolder;
   gTgEmis += uLightColor * (spark * 2.2);
   // snow scatters the sky light into its own shade: a faint cool glow so shadowed snow stays white-blue and never goes grey or beige

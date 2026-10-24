@@ -7,7 +7,9 @@ import * as THREE from 'three';
 import { Pass } from 'three/addons/postprocessing/Pass.js';
 import { clamp, smoothstep } from './common';
 
-const MAX_DROPS = 36000;
+const MAX_DROPS = 56000;
+/** The pool a downpour fills at the ground; the rest of MAX_DROPS is the extra a camera well above the ground gets (r-spring-v1). */
+const HEAVY_DROPS = 36000;
 /** Drops in play at full intensity when the rain is light (the pool the original rain used); a downpour (heavy = 1) fills the whole pool. */
 const LIGHT_DROPS = 26000;
 
@@ -162,21 +164,30 @@ export class Rain {
     const vw = 0.4 + 8.5 * Math.pow(ws, 1.5);
     (u.uWindV.value as THREE.Vector2).set(p.windX * vw, p.windZ * vw);
     u.uFall.value = 8.2 + 1.2 * fall + 1.6 * hv;
-    u.uShutter.value = 0.017 * (1 + 0.3 * hv);
     // the volume is small near the ground and widens with altitude
     // (a downpour packs the same drops, and more of them, into a smaller volume: several times as many streaks near the lens)
-    u.uBox.value = clamp(24 + 0.3 * p.aboveGround, 24, 64) * (1 - 0.32 * hv);
+    // (r-spring-v1: from a drone or herd-framing height the old volume ended well short of the ground, so the rain was a few ticks of white near the
+    // lens. The box now widens faster with altitude, and the drops, their streaks and the visibility range scale with it, so a streak looks the
+    // size and brightness it did at the ground: the rain fills the air from 40 to 100 m up. At the ground (k = 1) nothing changes.)
+    const boxOld = clamp(24 + 0.3 * p.aboveGround, 24, 64);
+    const boxNew = clamp(24 + 0.55 * p.aboveGround, 24, 110);
+    const k = boxNew / boxOld;
+    u.uBox.value = boxNew * (1 - 0.32 * hv);
+    u.uShutter.value = 0.017 * (1 + 0.3 * hv) * k;
     u.uT.value = this.clock;
     (u.uCam.value as THREE.Vector3).copy(camera.position);
     u.uPx.value = 2 * Math.tan(THREE.MathUtils.degToRad(camera.fov) * 0.5) / Math.max(1, (u.uRes.value as THREE.Vector2).y);
-    u.uDrop.value = 0.0036 * (1 + 0.3 * hv);
+    u.uDrop.value = 0.0036 * (1 + 0.3 * hv) * Math.sqrt(k);
     // how many drops of the pool are in play: a drizzle thins the volume, a downpour fills it
-    this.geo.instanceCount = Math.round((LIGHT_DROPS + (MAX_DROPS - LIGHT_DROPS) * hv) * clamp(fall, 0, 1));
+    // (r-spring-v1: from 10 to 45 m up the same streaks sit farther off in a wider volume, so up to 80% more of them are in play: the drone and herd
+    // views see rain, not a few ticks of white)
+    const altK = smoothstep(10, 45, p.aboveGround);
+    this.geo.instanceCount = Math.min(MAX_DROPS, Math.round((LIGHT_DROPS + (HEAVY_DROPS - LIGHT_DROPS) * hv) * clamp(fall, 0, 1) * (1 + 0.8 * altK)));
     // the visibility range: rain in the air dims what is far, more so in a downpour
-    u.uExt.value = 0.008 + 0.014 * fall + 0.006 * hv;
+    u.uExt.value = (0.008 + 0.014 * fall + 0.006 * hv) / k;
     (u.uColor.value as THREE.Color).copy(p.color);
     // (r-life: softer and more transparent: the round 23 and 24 critics read the old streaks as white dashes; the soft falloff is wider and the alpha lower)
-    u.uAlpha.value = 0.17 + 0.1 * fall + 0.17 * hv;
+    u.uAlpha.value = (0.2 + 0.1 * fall + 0.17 * hv) * (1 + 0.4 * altK);
   }
 
   dispose(): void { this.geo.dispose(); this.material.dispose(); }

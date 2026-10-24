@@ -101,13 +101,31 @@ export const ASPECT = { sun: [1.14, 1.08, 0.82], shade: [0.86, 0.76, 0.5], base:
  * Drought ground (weather 2, eased by the engine as `drought` 0..1): grass is forced toward dry, bleached to a pale straw that keeps
  * the same luminance and leans yellow (r above g above b, so never mauve or pink), and the riparian belt shrinks by `rip`.
  */
-export const DROUGHT = { dry: 0.92, rip: 0.5, ripKeep: 0.6, straw: [1.28, 1.0, 0.52], lift: 1.1, amount: 0.62, dust: [0.5, 0.4, 0.26], soil: 0.7 } as const;
+export const DROUGHT = { dry: 0.92, rip: 0.5, ripKeep: 0.6, straw: [1.28, 1.0, 0.52], lift: 1.1, amount: 0.62, dust: [0.5, 0.4, 0.26], soil: 0.7, winterStraw: [1.0, 0.97, 0.9], winterCool: 0.9 } as const;
 
 /**
  * Wet years (climate regimes): the share of the dryness of the growing season that a fully wet run takes away (upland ridges and thin
  * spots stay green longer). It fades to nothing as the prairie cures, so the cured gold still arrives on time.
  */
 export const WET = { dry: 0.5 } as const;
+
+/**
+ * Spring green-up (r-spring-v1). A prairie greens in spring and stays green into early summer: while the cure is low, the sward is drawn
+ * greener than its stubble and moisture alone say. The share runs on the cure curve (full below `from`, gone by `to`, so from about
+ * season 1.1 the cure takes over and the cured gold of late summer and autumn, and the winter straw, are exactly as they were).
+ *   dry     the share of the dryness a fully moist spot loses at full spring
+ *   ridge   how much of that a dry upland ridge does not get (up = 1 keeps 1 - ridge of the effect)
+ *   rain    extra greening while the ground is wet (wetNow 0..1: the rain, and the minutes after it)
+ *   flush   the share of the wet-year green (grass.ts seasonColor) the living palette takes in an ordinary spring
+ *   drought the share of a dry-years look the spring takes away (the cool-season grasses still green up in a dry year; the straw comes later)
+ *   winter  the share of the dry-years dust haze winter takes away (a dormant, frozen ground raises no dust; the haze only tinted the low sun's light brown-pink)
+ */
+export const SPRING = { from: 0.14, to: 0.5, dry: 0.64, ridge: 0.5, rain: 0.35, flush: 0.8, drought: 0.5, winter: 0.85 } as const;
+
+/** Spring weight 0..1 for a cure value (the GLSL twin is `tgSpringK`). */
+export function springK(cure: number): number {
+  return 1 - smooth01((cure - SPRING.from) / (SPRING.to - SPRING.from));
+}
 
 /**
  * Snow settling, shared by the blade layer (and free for the ground shader to call): the same threshold and edge ramp terrain.ts uses
@@ -144,10 +162,12 @@ function glf(x: number): string {
  *   tgRiparian(edge, cure, winterK)       belt strength: edge falloff x cure fade x winter fade
  *   tgRiparianDry(dry, cure, stub, rip)   dryness inside the belt (capped low, a little drier with cure and stubble)
  *   tgCuredFloor(dry, cure, rip)          late-summer pull of non-riparian ground toward fully dry
+ *   tgSpringK(cure)                       spring green-up weight 0..1 (1 while the cure is low, 0 once it takes over)
+ *   tgSpringDry(dry, cure, up, wetNow)    spring: moist ground and wet ground lose dryness (ridges less so)
  *   tgDroughtRip(rip, drought)            the belt shrinks in a drought
  *   tgDroughtDry(dry, drought, rip)       drought forces dry grass (less so inside the belt)
  *   tgWetDry(dry, wet, cure)              wet years: green lasts longer through the growing season (wet 0..1, off as the cure arrives)
- *   tgDroughtTint(color, drought, rip)    bleach to pale straw at constant luminance
+ *   tgDroughtTint(color, drought, rip, winterK)  bleach to pale straw at constant luminance (a neutral cool straw under winter)
  *   tgDroughtSoil(soil, drought)          dusty tan ground
  *   tgAspectBand(nrm, L)                 pale gold on sun-facing slopes, deeper ochre on shaded ones (vertex stage: rgb multiplier, a strength)
  *   tgAspectApply(band, amt)             the colour multiplier for a pixel of dryness amt
@@ -166,6 +186,13 @@ float tgRiparianDry(float dry, float cure, float stub, float rip) {
 float tgCuredFloor(float dry, float cure, float rip) {
   return max(dry, cure * smoothstep(${glf(UPLAND.from)}, ${glf(UPLAND.to)}, cure) * ${glf(UPLAND.floor)} * (1.0 - rip));
 }
+float tgSpringK(float cure) {
+  return 1.0 - smoothstep(${glf(SPRING.from)}, ${glf(SPRING.to)}, cure);
+}
+float tgSpringDry(float dry, float cure, float up, float wetNow) {
+  float k = tgSpringK(cure) * (1.0 - ${glf(SPRING.ridge)} * up) * (1.0 + ${glf(SPRING.rain)} * wetNow);
+  return dry * (1.0 - min(${glf(SPRING.dry)} * k, 0.9));
+}
 float tgDroughtRip(float rip, float drought) {
   return rip * (1.0 - ${glf(DROUGHT.rip)} * drought);
 }
@@ -175,9 +202,12 @@ float tgDroughtDry(float dry, float drought, float rip) {
 float tgWetDry(float dry, float wet, float cure) {
   return dry * (1.0 - ${glf(WET.dry)} * wet * (1.0 - cure));
 }
-vec3 tgDroughtTint(vec3 c, float drought, float rip) {
+vec3 tgDroughtTint(vec3 c, float drought, float rip, float winterK) {
   float lum = dot(c, vec3(0.2126, 0.7152, 0.0722));
-  vec3 straw = vec3(lum * ${glf(DROUGHT.lift)}) * vec3(${DROUGHT.straw.map(glf).join(', ')});
+  // (winter: the dormant ground is dull straw already, so the bleach goes to a neutral, slightly cool straw and not the yellow-orange of a summer drought,
+  // which a low winter sun turned salmon)
+  vec3 strawC = mix(vec3(${DROUGHT.straw.map(glf).join(', ')}), vec3(${DROUGHT.winterStraw.map(glf).join(', ')}), ${glf(DROUGHT.winterCool)} * winterK);
+  vec3 straw = vec3(lum * ${glf(DROUGHT.lift)}) * strawC;
   return mix(c, straw, ${glf(DROUGHT.amount)} * drought * (1.0 - ${glf(DROUGHT.ripKeep)} * rip));
 }
 vec3 tgDroughtSoil(vec3 soil, float drought) {

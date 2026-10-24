@@ -938,6 +938,57 @@ SETS.rvherd = [
   { name: 'rv_07_wnight_20m', eval: "window.__env({ season: 3.1, dayFrac: 0.82, warmth: 0.2 }); window.__rvPick(8); window.__engine.cam.setView({ distance: 20, pitchDeg: 8 })", wait: 4500 },
 ];
 
+// r-spring-v1: the green-up check. Held env (tick 0, sim paused at tick 900), each season wide (the default wide view) and mid (the herd from 90 m).
+// Spring dry and spring in rain run in the Dry years regime (climate -0.75), the way the default world's first years do; the ordinary and wet-year
+// springs, early and late summer, autumn golden hour and winter dusk are the comparison frames (the cured gold and winter straw must not move).
+SETS.seasons = [
+  { name: 'sp_00_setup', eval: `(async () => {
+    const e = window.__engine;
+    window.__env = (o) => {
+      window.__envO = Object.assign({ tick: 0, season: 1.8, weather: 0, warmth: 0.7, rain: 0, dayFrac: 0.4, windDir: 0.35, windStrength: 0.3 }, o);
+      if (!window.__envHook) window.__envHook = e.onFrame(() => e.setEnv(window.__envO));
+      e.setEnv(window.__envO); e.applyEnvNow();
+    };
+    window.__speed(0); window.__step(900); window.__followId(null); window.__env({});
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'h', bubbles: true }));
+    window.__spMid = () => { window.__focusHerd(); e.cam.setView({ distance: 90, pitchDeg: 24 }, true); };
+    window.__spLow = () => { window.__focusHerd(); e.cam.setView({ distance: 26, pitchDeg: 10 }, true); };
+    await new Promise((r) => { let last = -1, same = 0, n = 0; const t = setInterval(() => { const sn = window.__snap && window.__snap(); const k = sn ? sn.tick : -2; if (k === last) same++; else { same = 0; last = k; } if ((same >= 5 && k >= 900) || ++n > 240) { clearInterval(t); r(); } }, 500); });
+    if (e.noteBlizzard) e.noteBlizzard(-1, true);
+  })()`, wait: 4000 },
+  { name: 'sp_01_spring_dry_wide', eval: "window.__env({ season: 0.5, climate: -0.75 }); window.__cam('wide')", wait: 5000 },
+  { name: 'sp_01_spring_dry_mid', eval: "window.__spMid()", wait: 2500 },
+  { name: 'sp_02_spring_ordinary_wide', eval: "window.__env({ season: 0.5 }); window.__cam('wide')", wait: 4000 },
+  { name: 'sp_02_spring_ordinary_mid', eval: "window.__spMid()", wait: 2500 },
+  { name: 'sp_03_spring_wetyears_wide', eval: "window.__env({ season: 0.5, climate: 0.7 }); window.__cam('wide')", wait: 4000 },
+  { name: 'sp_03_spring_wetyears_mid', eval: "window.__spMid()", wait: 2500 },
+  { name: 'sp_04_early_summer_dry_wide', eval: "window.__env({ season: 1.1, climate: -0.75 }); window.__cam('wide')", wait: 4000 },
+  { name: 'sp_04_early_summer_dry_mid', eval: "window.__spMid()", wait: 2500 },
+  { name: 'sp_05_early_summer_wide', eval: "window.__env({ season: 1.2 }); window.__cam('wide')", wait: 4000 },
+  { name: 'sp_05_early_summer_mid', eval: "window.__spMid()", wait: 2500 },
+  { name: 'sp_06_late_summer_wide', eval: "window.__env({ season: 1.75 }); window.__cam('wide')", wait: 4000 },
+  { name: 'sp_06_late_summer_mid', eval: "window.__spMid()", wait: 2500 },
+  { name: 'sp_07_autumn_golden_wide', eval: "window.__env({ season: 2.4, dayFrac: 0.7 }); window.__cam('wide')", wait: 4000 },
+  { name: 'sp_07_autumn_golden_mid', eval: "window.__spMid()", wait: 2500 },
+  { name: 'sp_08_winter_dusk_wide', eval: "window.__env({ season: 3.3, dayFrac: 0.7 }); window.__cam('wide')", wait: 4000 },
+  { name: 'sp_08_winter_dusk_mid', eval: "window.__spMid()", wait: 2500 },
+  { name: 'sp_09_rain_spring_dry_mid', eval: "window.__env({ season: 0.5, climate: -0.75, weather: 1, rain: 0.5 }); window.__spMid()", wait: 9000 },
+  { name: 'sp_09_rain_spring_dry_wide', eval: "window.__cam('wide')", wait: 3000 },
+  { name: 'sp_09_rain_spring_dry_low', eval: "window.__spLow()", wait: 2500 },
+  { name: 'sp_10_downpour_spring_mid', eval: "window.__env({ season: 0.5, climate: -0.75, weather: 3, rain: 1, windStrength: 0.6 }); window.__spMid()", wait: 12000 },
+  { name: 'sp_10_downpour_spring_low', eval: "window.__spLow()", wait: 2500 },
+  { name: 'sp_11_rain_summer_mid', eval: "window.__env({ season: 1.2, weather: 1, rain: 0.5 }); window.__spMid()", wait: 9000 },
+  // the Dry years winter dusk of round 36 (snow on ground the colour of salmon): early winter, dusk, with and without the falling snow
+  { name: 'sp_12_winter_dusk_dry_wide', eval: "window.__env({ season: 3.2, dayFrac: 0.7, climate: -0.75, warmth: 0.1 }); window.__cam('wide')", wait: 5000 },
+  { name: 'sp_12_winter_dusk_dry_mid', eval: "window.__spMid()", wait: 2500 },
+  { name: 'sp_13_winter_dusk_snow_dry_wide', eval: "window.__env({ season: 3.2, dayFrac: 0.7, climate: -0.75, warmth: 0.1, weather: 4, windStrength: 0.2 }); window.__cam('wide')", wait: 9000 },
+  { name: 'sp_13_winter_dusk_snow_dry_mid', eval: "window.__spMid()", wait: 2500 },
+  { name: 'sp_16_winter_sunset_snow_dry_wide', eval: "window.__env({ season: 3.1, dayFrac: 0.77, climate: -0.75, warmth: 0.1, weather: 4, windStrength: 0.2 }); window.__cam('wide')", wait: 9000 },
+  { name: 'sp_16_winter_sunset_snow_dry_mid', eval: "window.__spMid()", wait: 2500 },
+  { name: 'sp_14_autumn_golden_dry_wide', eval: "window.__env({ season: 2.4, dayFrac: 0.7, climate: -0.75 }); window.__cam('wide')", wait: 4000 },
+  { name: 'sp_15_spring_morning_mid_far', eval: "window.__env({ season: 0.3, dayFrac: 0.3 }); window.__focusHerd(); window.__engine.cam.setView({ distance: 170, pitchDeg: 26 }, true)", wait: 4000 },
+];
+
 const only = arg('only', '').split(',').filter(Boolean); // --only lk_02,lk_08: just those steps (the first, the setup step, always runs)
 const steps = SETS[set] && only.length ? SETS[set].filter((s, i) => i === 0 || only.some((o) => s.name.startsWith(o))) : SETS[set];
 if (!steps) { console.error('unknown set', set); process.exit(1); }
