@@ -442,7 +442,7 @@ No page errors, no console errors, no failed requests; every button does somethi
 4. Expanded graph (G) covers the animal card's Close button and collapses the Chronicle: FIX.
 5. Animal ages on the card (biological years) contradict the family tree's valley years: DEFER (the valley calendar is compressed by design; needs a wording decision, logged for the owner).
 6. Chronicle says "The last cougar is gone" while two cougars live, then "cougars return", then "left": FIX at the text layer (a last-of-kind line only when the count is really 0).
-7. Documentary camera films empty ground, black night frames, canopy: DEFER (director tuning; partly expected at night).
+7. Documentary camera films empty ground, black night frames, canopy: FIX for night (the director never read the light: at deep night every ground shot now goes low against the moonlit sky and the small subjects wait for daylight; 18 night frames in scratch/v1-night/ before and after); canopy and empty-ground framing DEFER.
 8. Fire spreads in blocky rectangles: DEFER unless cheap (sampling of the burn field).
 9. Zoom out without limit until the valley is a small square: FIX (clamp).
 10. Distemper reported as "plague": FIX (wording).
