@@ -17,7 +17,7 @@ Tallgrass is an ecosystem you can leave running on a second monitor. Grass green
 | | |
 |---|---|
 | ![Autumn: pronghorn run under the cottonwoods along the creek](docs/media/valley.jpg) | ![The documentary camera on the herd in the first snow](docs/media/watch.jpg) |
-| ![Following one bison at a crowded waterhole](docs/media/follow.jpg) | ![Wolf territories tinted over the hills](docs/media/territories.jpg) |
+| ![Following one bison under the cottonwoods, its card open](docs/media/follow.jpg) | ![Wolf territories tinted over the hills](docs/media/territories.jpg) |
 
 ## How it was made
 

@@ -3,7 +3,7 @@
 // recordVideo, which encodes at a low bitrate; the frames are then assembled at a constant frame rate with ffmpeg.
 // Headless Chromium on the real GPU, never an OS screen grab.
 //
-// Usage: node tools/showcase_take.mjs --out scratch/take1 [--seconds 120] [--size 1920x1080] [--query "seed=tallgrass"] [--fps 30]
+// Usage: node tools/showcase_take.mjs --out scratch/take1 [--seconds 120] [--size 1920x1080] [--query "seed=tallgrass"] [--fps 30] [--keys c,h] [--eval js]
 // Writes <out>/frames/*.jpg, <out>/take.mp4 (H.264, CRF 18) and <out>/contact.jpg (one frame every 5 s, labelled by time).
 import { chromium } from 'playwright';
 import { createServer } from 'vite';
@@ -18,11 +18,15 @@ const seconds = Number(arg('seconds', '120'));
 const fps = Number(arg('fps', '30'));
 const query = arg('query', '');
 const [W, H] = arg('size', '1920x1080').split('x').map(Number);
+// --keys "c,h" (default): documentary camera on, interface hidden. --keys "" with --eval "<js>" films a scripted view instead
+// (for example following one animal with its card open: --keys "" --eval "...__followId(id); __select(id)").
+const keys = arg('keys', 'c,h').split(',').filter(Boolean);
+const evalJs = arg('eval', '');
 const loadTimeout = 240000;
 
 rmSync(out, { recursive: true, force: true });
 mkdirSync(out + '/frames', { recursive: true });
-const kill = setTimeout(() => { console.error('showcase_take: hard timeout'); process.exit(2); }, (seconds + 420) * 1000);
+const kill = setTimeout(() => { console.error('showcase_take: hard timeout'); process.exit(2); }, (seconds + 900) * 1000);
 const server = await createServer({ configFile: resolve('vite.config.ts'), server: { port: 5300 + Math.floor(Math.random() * 600), strictPort: false, hmr: false }, logLevel: 'error' });
 await server.listen();
 const base = server.resolvedUrls.local[0].replace(/\/$/, '');
@@ -36,9 +40,8 @@ try {
   await page.waitForFunction(() => window.__ready === true, null, { timeout: loadTimeout });
   await page.waitForTimeout(1500);
   // documentary camera on (cinematic mode), then hide the whole interface, captions and title cards included
-  await page.keyboard.press('c');
-  await page.waitForTimeout(400);
-  await page.keyboard.press('h');
+  for (const k of keys) { await page.keyboard.press(k); await page.waitForTimeout(400); }
+  if (evalJs) await page.evaluate(evalJs);
   await page.waitForTimeout(3000);
 
   const cdp = await page.context().newCDPSession(page);
