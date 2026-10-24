@@ -48,6 +48,28 @@ for (let i = 0; i < pos.count; i++) {
 }
 ok(badPiv === 0, `every wing vertex carries its own side's elbow pivot (${badPiv} do not)`);
 
+// The primaries' tags (aPart.w): the shader closes the fan of a folded wing from them. Whole part = feather number + 1, fraction = half the angle the
+// blade leans back from the hand axis. The shader rebuilds each root as (-0.015 - 0.019 k, 0.178, +-(0.4 + 0.012 k)): the nearest vertex of the
+// feather to that point must be its root, and the lean must match the feather's own direction.
+const tagged = new Map<number, number[]>();
+for (let i = 0; i < pos.count; i++) {
+  const w = part.getW(i);
+  if (part.getX(i) !== PART.WINGR || w < 0.5) continue;
+  const k = Math.floor(w) - 1;
+  if (!tagged.has(k)) tagged.set(k, []);
+  tagged.get(k)!.push(i);
+}
+ok(tagged.size === 7, `seven tagged primaries on the right wing (${tagged.size})`);
+for (const [k, idx] of tagged) {
+  const rx = -0.015 - 0.019 * k, rz = 0.4 + 0.012 * k;
+  let dRoot = 1e9;
+  for (const i of idx) dRoot = Math.min(dRoot, Math.hypot(pos.getX(i) - rx, pos.getZ(i) - rz));
+  ok(dRoot < 0.03, `primary ${k}: its root is where the shader expects it (${dRoot.toFixed(3)} m off)`);
+  const w = part.getW(idx[0]);
+  const lean = (w - Math.floor(w)) * 2;
+  ok(lean >= 0 && lean < 1.5, `primary ${k}: lean ${lean.toFixed(2)} rad is a sane fan angle`);
+}
+
 if (failures > 0) {
   console.error(failures + ' ravenwings test(s) failed');
   process.exit(1);

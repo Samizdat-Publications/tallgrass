@@ -36,6 +36,13 @@ const MARGIN = 0.12;
 // the takeoff flare and the mixes are left out: wings up are seen end on from above and the two wings are legitimately a little out of phase there.
 const SYM_BY_KIND = { stand: 0.55, peck: 0.55, walk: 0.55, glide: 0.55, blend: 0.55, hop: 0.55, flutter: 0.5 };
 const symMinOf = (name) => SYM_BY_KIND[name.split(' ')[0]] ?? 0;
+// A folded wing (r-fold) lies flat along the flank, inside the +-0.12 m strip the symmetry measure leaves out, so for a tucked bird the measure has nothing to
+// compare. A pose whose whole top view stays within TUCK_W of the body axis counts as tucked: the symmetry test is skipped for it, and the standing poses
+// (stand, peck, walk) must be tucked (a wing or a fan of primaries sticking out sideways fails). A wing that does not fold (one hand never bending) sticks
+// out far beyond TUCK_W, so it fails the tucked test for a standing bird and the symmetry test for the mixes. Measured: standing poses 0.09 to 0.18 m (the pecking head swings out).
+const TUCK_W = 0.2;
+const SYM_FROM = 0.3; // the symmetry measure applies only to a bird whose top view reaches farther than this from the axis
+const MUST_TUCK = new Set(['stand', 'peck', 'walk']);
 if (!existsSync(resolve(dir, 'index.html'))) throw new Error('no index.html in ' + dir);
 const req = createRequire(resolve(dir, 'package.json'));
 const vite = await import(pathToFileURL(req.resolve('vite')).href);
@@ -225,7 +232,7 @@ try {
     throw new Error('gallery done');
   }
 
-  const res = await page.evaluate(({ P, views, limit, limitH, wantSheet }) => {
+  const res = await page.evaluate(({ P, views, limit, limitH, wantSheet, TUCK_W, SYM_FROM, MUST_TUCK }) => {
     const { shoot, proj, dims } = window.__lab;
     const { w, h, cy } = dims;
     const cv = window.__lab.e.renderer.domElement;
@@ -264,14 +271,38 @@ try {
             if (a && c) inter++;
             if (a || c) uni++;
           }
-          sym = uni ? inter / uni : 1;
+          sym = uni >= 150 ? inter / uni : 1; // (a few stray pixels beyond the strip, a head turned or a wing tip just out, are nothing to compare)
         }
         const sc = pose.sc ?? 1; // (everything is measured in model metres: the instance scale is divided out)
+        let latPx = 0; // sideways reach from the body axis (the top view's horizontal) of the bird itself: the pixels joined to the body centre (the dust motes drifting round it are not)
+        if (v.name === 'top') {
+          const seen = new Uint8Array(w * h), stack = [];
+          const sx0 = Math.round(o[0]), sy0 = Math.round(o[1]);
+          let start = -1;
+          for (let r = 0; r < 12 && start < 0; r++) for (let yy = sy0 - r; yy <= sy0 + r && start < 0; yy++) for (let xx = sx0 - r; xx <= sx0 + r; xx++) if (mask[yy * w + xx]) { start = yy * w + xx; break; }
+          if (start >= 0) {
+            stack.push(start); seen[start] = 1;
+            while (stack.length) {
+              const q = stack.pop(), qx = q % w, qy = (q - qx) / w;
+              latPx = Math.max(latPx, Math.abs(qx - o[0]));
+              for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+                const nx = qx + dx, ny = qy + dy;
+                if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+                const ni = ny * w + nx;
+                if (mask[ni] && !seen[ni]) { seen[ni] = 1; stack.push(ni); }
+              }
+            }
+          }
+        }
+        const lat = latPx / ppm / sc;
+        const tucked = v.name === 'top' && lat <= TUCK_W;
+        if (v.name === 'top' && lat <= SYM_FROM) sym = 1; // (a bird that is folded, or only a little open, has no wing out to compare; a twisting body fools the measure)
         const reach = rmax / ppm / sc; // metres from the body centre's projection (top view: the horizontal radius)
         const hx = Math.max(Math.abs(x0 - o[0]), Math.abs(x1 - o[0])) / ppm / sc; // horizontal reach in the side and front views
         const height = (y1 - y0) / ppm / sc;
         let bad = null;
         if (n === 0) bad = 'no pixels';
+        else if (v.name === 'top' && MUST_TUCK.includes(pose.name.split(' ')[0]) && !tucked) bad = 'a standing wing sticks out sideways: ' + lat.toFixed(2) + ' m from the axis > ' + TUCK_W;
         else if (v.name === 'top' && sym < (pose.symMin ?? 0)) bad = 'wings differ: left/right silhouette overlap ' + sym.toFixed(2) + ' < ' + pose.symMin;
         else if (v.name === 'top' && reach > limit) bad = 'top radius ' + reach.toFixed(2) + ' > ' + limit.toFixed(2);
         else if ((v.name === 'side' || v.name === 'front') && hx > limit) bad = v.name + ' reach ' + hx.toFixed(2) + ' > ' + limit.toFixed(2);
@@ -308,7 +339,7 @@ try {
       sheetPng = sc.toDataURL('image/png');
     }
     return { results, sheetPng, w, h };
-  }, { P, views, limit, limitH, wantSheet });
+  }, { P, views, limit, limitH, wantSheet, TUCK_W, SYM_FROM, MUST_TUCK: [...MUST_TUCK] });
 
   const bad = res.results.filter((r) => r.bad);
   const worstTop = res.results.filter((r) => r.view === 'top').sort((a, b) => b.reach - a.reach)[0];

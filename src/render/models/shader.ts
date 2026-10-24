@@ -162,7 +162,10 @@ function defines(p: AnimParams, far: ModelDef['far'] | undefined, geometry: Mode
     `#define FLAP_HZ ${f(p.flapHz)}`,
     ...raptorDefines(p),
     // r-ravens: a folded wing hangs this far (rad) against the flank, and the takeoff leap (model units, lasting RV_LEAP_T s: matches TAKEOFF_LEAP in animals.ts)
-    '#define RV_TUCK 0.4', '#define RV_FOLD_CMP 0.45', '#define RV_LEAP 0.3', '#define RV_LEAP_T 0.7',
+    '#define RV_TUCK 0.4', '#define RV_FOLD_CMP 0.5', '#define RV_LEAP 0.3', '#define RV_LEAP_T 0.7',
+    // r-fold: a folded raven wing is swung back along the flank (rad), its chord squeezed to (1 - RV_CHORD) of the open one about x = RV_CHORD_X, and the
+    // roots of the seven primaries drawn together by RV_STACK of their spacing, so the hand closes into one stack of feathers lying over the tail
+    '#define RV_SWING 1.5', '#define RV_CHORD 0.6', '#define RV_CHORD_X 0.03', '#define RV_STACK 0.85', '#define RV_DROOP 0.14',
     `#define MIN_PX ${f(p.minPx)}`,
     `#define FAR_NEAR ${f(far?.d0 ?? 140)}`, `#define FAR_FAR ${f(far?.d1 ?? 400)}`,
     `#define ANIM_NEAR 20.0`, `#define ANIM_FAR 110.0`,
@@ -1503,13 +1506,34 @@ void tgAnimate(inout vec3 p, inout vec3 n) {
     inner = mix(inner, 0.0, fold);
 #endif
     float w1 = aPart.y;
-    if (fold > 0.001) {
-      // outer wing folds back on itself, whole wing sweeps along the body
-      tgRotY(p, n, aPivot2, right * 2.4 * fold * w1);
 #if KIND == 2
-      if (!dead) p.z = aPivot.z + (p.z - aPivot.z) * (1.0 - RV_FOLD_CMP * fold); // (r-ravens: a folded wing is much shorter than the open one: its tips reach the tail, not past it)
+    if (!dead) outer = mix(outer, 0.0, fold); // (a folded wing keeps no glide trim at the elbow: that pivot is no longer where the elbow is)
 #endif
-      tgRotY(p, n, aPivot, -right * 1.3 * fold);
+    if (fold > 0.001) {
+#if KIND == 2
+      if (!dead) {
+        // r-fold: the wing lies flat along the flank, one compact blade. First each primary turns about its root until it points along the hand
+        // (the fan closes: its tag in aPart.w is its number + 1 and, as a fraction, half the angle it leans back, see raven.ts) and the roots draw
+        // together; then the whole wing is squeezed across (a folded chord is narrow), shortened (the tips reach about two thirds down the tail)
+        // and swung back about the shoulder. A killed raven keeps the old pose below.
+        float wk = aPart.w;
+        if (wk > 0.5) {
+          float kk = floor(wk) - 1.0;
+          vec3 rt = vec3(-0.015 - 0.019 * kk, 0.178, right * (0.4 + 0.012 * kk)); // (the root of primary kk, as built in raven.ts)
+          tgRotY(p, n, rt, right * (wk - floor(wk)) * 2.0 * fold);
+          p.x += 0.019 * kk * RV_STACK * fold;
+        }
+        p.x = RV_CHORD_X + (p.x - RV_CHORD_X) * (1.0 - RV_CHORD * fold);
+        p.z = aPivot.z + (p.z - aPivot.z) * (1.0 - RV_FOLD_CMP * fold);
+        tgRotY(p, n, aPivot, -right * RV_SWING * fold);
+        tgRotZ(p, n, aPivot, RV_DROOP * fold); // (the tips settle onto the base of the tail)
+      } else
+#endif
+      {
+        // outer wing folds back on itself, whole wing sweeps along the body
+        tgRotY(p, n, aPivot2, right * 2.4 * fold * w1);
+        tgRotY(p, n, aPivot, -right * 1.3 * fold);
+      }
     }
     tgRotX(p, n, aPivot2, -right * outer * w1);
     tgRotX(p, n, aPivot, -right * inner);

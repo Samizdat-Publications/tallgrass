@@ -840,6 +840,9 @@ SETS.ravenlook = [
   { name: 'rl_n_far200', eval: "window.__rvSky(200, 28)", wait: 3000 },
 ];
 
+// r-ravenfold: the standing ravens of the ravens set only (the setup, then the 2.4 m views of one standing bird and the low views at the kill): the folded wings
+SETS.ravenfold = SETS.ravens.filter((s) => /^rv_(00_setup|p[1-4]|f1|f2|g[1-4])$/.test(s.name));
+
 // v10: species glyphs at time-lapse speed (glyphs.ts GLYPH_LAPSE_*): the same drone view at 1x (no glyphs below 210 m) and at 100x
 SETS.lapse = [
   { name: 'lapse_01_drone_1x', eval: "window.__speed(1); window.__focusHerd(); window.__engine.cam.setView({ distance: 300, pitchDeg: 40 })", wait: 4000 },

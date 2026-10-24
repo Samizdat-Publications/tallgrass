@@ -104,9 +104,12 @@ export function buildRaven(): ModelDef {
     const rx = -0.015 - 0.019 * k, rz = 0.4 + 0.012 * k;
     const tx = -0.045 - 0.049 * k - 0.004 * k * k * 0.3, tz = tipZ[k];
     const ty = 0.186 + 0.004 * k;
+    // The feather's tag (aPart.w), read by the shader to close the fan when the wing is folded: whole part = its number + 1 (0 .. 6, root at
+    // RV_ROOT in shader.ts), fraction = half the angle (rad) its blade leans back from the hand axis (+z), so each can be turned flat along it.
+    const lean = Math.atan2(rx - tx, tz - rz);
     b.addPair(
       {
-        part: PART.WINGR, piv: wPiv, piv2: wElbow, sides: 4, paint: feather, w1: wingW1,
+        part: PART.WINGR, piv: wPiv, piv2: wElbow, sides: 4, paint: feather, w1: wingW1, spare: k + 1 + lean * 0.5,
         rings: pathRings(
           [[rx, 0.178, rz], [(rx + tx) * 0.5 - 0.004, 0.18 + 0.001 * k, (rz + tz) * 0.5], [tx, ty, tz]],
           [[0.005, 0.026], [0.004, 0.021], [0.003, 0.011]],
