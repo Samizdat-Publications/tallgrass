@@ -720,6 +720,17 @@ SETS.lapse = [
 ];
 
 
+// r-bison-v1: the near bison (the authored a3 mesh) at the three lights, close, from a low camera: coat, horns, hump, grounding. Same setup as the look set.
+SETS.bison = [
+  SETS.look[0],
+  { name: 'bs_01_graze_low_golden', eval: "window.__lkFollow(0, 1, 7, 4)", wait: 4000 },
+  { name: 'bs_02_graze_golden_mid', eval: "window.__lkFollow(0, 1, 12, 10)", wait: 3500 },
+  { name: 'bs_03_herd_low_golden', eval: "window.__followId(null); window.__focusHerd(); window.__engine.cam.setView({ distance: 16, pitchDeg: 4 })", wait: 4000 },
+  { name: 'bs_04_herd_low_midday', eval: "window.__env({ dayFrac: 0.45 })", wait: 4000 },
+  { name: 'bs_05_graze_midday', eval: "window.__lkFollow(0, 1, 9, 8)", wait: 3500 },
+  { name: 'bs_06_herd_low_night', eval: "window.__followId(null); window.__env({ dayFrac: 0.95 }); window.__focusHerd(); window.__engine.cam.setView({ distance: 16, pitchDeg: 4 })", wait: 4500 },
+];
+
 const only = arg('only', '').split(',').filter(Boolean); // --only lk_02,lk_08: just those steps (the first, the setup step, always runs)
 const steps = SETS[set] && only.length ? SETS[set].filter((s, i) => i === 0 || only.some((o) => s.name.startsWith(o))) : SETS[set];
 if (!steps) { console.error('unknown set', set); process.exit(1); }
