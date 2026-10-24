@@ -9,6 +9,7 @@
 // still on the ground at any sim rate or frame rate (the stride is the one the foot path uses, see models/legmath.ts gaitMix).
 // Within 45 m of the camera the legs also read the ground under each foot (two-bone IK in the vertex shader) and the body
 // height follows the mean height of the stance feet (stanceBodyDy below, eased here because a shader keeps no state).
+import { ravenClear } from './ravenclear';
 import * as THREE from 'three';
 import { AGENT_STRIDE, CARCASS_STRIDE, F_ALPHA, F_INFECTED, F_JUVENILE, F_MALE, F_MIGRANT, F_STOT, SPECIES_COUNT, Sp, St } from '../sim/types';
 import type { Snapshot } from '../sim/types';
@@ -984,6 +985,12 @@ export class AnimalLayer {
   private hotPrev = new Float32Array(128);
   private hotN = 0;
   private hotPrevN = 0;
+  /** r-ravens2: the feeding predators of this frame and the last (x, z, cos h, sin h, half length, half width): ravens keep clear of them. */
+  private bodyCur = new Float32Array(64 * 6);
+  private bodyPrev = new Float32Array(64 * 6);
+  private bodyN = 0;
+  private bodyPrevN = 0;
+  private rvOut = { x: 0, z: 0 };
   /** Slots of the animals that left the snapshot this time (id to slot), so a body that just died can keep its gait phase. */
   private goneSlot = new Map<number, number>();
   private tmpV = new THREE.Vector3();
@@ -2126,6 +2133,11 @@ export class AnimalLayer {
       this.hotCur = t;
       this.hotPrevN = this.hotN;
       this.hotN = 0;
+      const tb = this.bodyPrev;
+      this.bodyPrev = this.bodyCur;
+      this.bodyCur = tb;
+      this.bodyPrevN = this.bodyN;
+      this.bodyN = 0;
     }
 
     for (const b of this.live) {
@@ -2642,6 +2654,18 @@ export class AnimalLayer {
         this.hotCur[this.hotN * 2] = x;
         this.hotCur[this.hotN * 2 + 1] = z;
         this.hotN++;
+      }
+      // r-ravens2: a predator feeding keeps its body clear of the ravens; a raven (flying or standing) is moved out of any such body (last frame's)
+      if (hunter && state === St.Eat && this.bodyN < 63) {
+        const bl = (this.batches[sp]?.def.params.length ?? 1.5) * this.speciesScale[sp] * sc, bq = this.bodyN * 6;
+        this.bodyCur[bq] = x; this.bodyCur[bq + 1] = z; this.bodyCur[bq + 2] = Math.cos(h); this.bodyCur[bq + 3] = Math.sin(h);
+        this.bodyCur[bq + 4] = bl * 0.5 + 0.5; this.bodyCur[bq + 5] = bl * 0.3 + 0.4;
+        this.bodyN++;
+      }
+      if (flier && !raptor && this.bodyPrevN > 0) {
+        ravenClear(this.bodyPrev, this.bodyPrevN, x, z, alt, groundedBird, this.rvOut);
+        x += this.rvOut.x;
+        z += this.rvOut.z;
       }
 
       // Ravens at a carcass: a two-footed hop (wings flicked) or a few walking steps between pecks (the plan sets the moves; the

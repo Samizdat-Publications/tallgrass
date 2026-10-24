@@ -712,6 +712,38 @@ SETS.ravens = [
   { name: 'rv_f8', eval: "", wait: 700 },
 ];
 
+// r-ravens2: a close look at a raven's form: one flying bird followed at 5 to 14 m from the side, below and above (the sim is held: the wings still beat),
+// then the carcass with the wolves and the ravens flying over them, and the overview marks. Reuses the setup of the ravens set.
+SETS.ravenlook = [
+  SETS.ravens[0],
+  { name: 'rl_a_side', eval: "window.__speed(0); (() => { const r = window.__find(2, 9); window.__select(null); window.__followId(r[0]); window.__engine.cam.setView({ distance: 7, pitchDeg: 4, yawDeg: 90 }, true); })()", wait: 2200 },
+  { name: 'rl_b_front', eval: "window.__engine.cam.setView({ distance: 7, pitchDeg: 6, yawDeg: 0 }, true)", wait: 1500 },
+  { name: 'rl_c_below', eval: "window.__engine.cam.setView({ distance: 9, pitchDeg: -25, yawDeg: 60 }, true)", wait: 1500 },
+  { name: 'rl_d_above', eval: "window.__engine.cam.setView({ distance: 9, pitchDeg: 40, yawDeg: 120 }, true)", wait: 1500 },
+  { name: 'rl_e_back', eval: "window.__engine.cam.setView({ distance: 12, pitchDeg: 10, yawDeg: 200 }, true)", wait: 1500 },
+  { name: 'rl_f_mid', eval: "window.__engine.cam.setView({ distance: 20, pitchDeg: 12, yawDeg: 70 }, true)", wait: 1500 },
+  { name: 'rl_g_ground', eval: "(() => { const r = window.__find(2, 6); window.__followId(r[0]); window.__engine.cam.setView({ distance: 3, pitchDeg: 8, yawDeg: 60 }, true); })()", wait: 2000 },
+  { name: 'rl_h_kill12', eval: "window.__speed(1); window.__rvRig(12, 24)", wait: 3000 },
+  { name: 'rl_i_kill12b', eval: "", wait: 1500 },
+  { name: 'rl_j_kill12c', eval: "", wait: 1500 },
+  { name: 'rl_k_kill18', eval: "window.__rvRig(18, 20)", wait: 2500 },
+  { name: 'rl_l_kill18b', eval: "", wait: 1500 },
+  // wolves feeding at a kill with ravens round them: follow the feeder from 9 m and 5 m (1x, so the ravens fly in and land)
+  { name: 'rl_w0', eval: `(async () => {
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    const scan = () => { const sn = window.__snap(), A = sn.agents, n = sn.count; const W = [], R = []; for (let j = 0; j < n; j++) { const o = j * 12; if (A[o] === 1 && A[o + 7] === 6) W.push(sn.ids[j]); if (A[o] === 2) R.push([A[o + 1], A[o + 2]]); } let best = null, bs = 0; for (const id of W) { const j = sn.ids.indexOf(id), o = j * 12; let c = 0; for (const q of R) if (Math.hypot(q[0] - A[o + 1], q[1] - A[o + 2]) < 12) c++; if (c >= bs) { bs = c; best = id; } } return best === null ? null : { id: best, ravens: bs, wolves: W.length }; };
+    window.__speed(0); let f = scan(), tries = 0;
+    while ((!f || f.ravens < 2) && tries++ < 260) { window.__step(30); await wait(500); f = scan(); }
+    if (f) { const sn = window.__snap(), j = sn.ids.indexOf(f.id); window.__rvWolf = { x: sn.agents[j * 12 + 1], y: sn.agents[j * 12 + 2] }; } console.error('wolf feeders', tries, JSON.stringify(f));
+  })()`, wait: 500 },
+  { name: 'rl_w1', eval: "window.__speed(0); window.__select(null); window.__rvPin = window.__rvWolf; console.error('rig', JSON.stringify(window.__rvRig(9, 26)))", wait: 3000 },
+  { name: 'rl_w2', eval: "window.__rvRig(6, 18)", wait: 3000 },
+  { name: 'rl_w3', eval: "window.__rvRig(14, 32)", wait: 3000 },
+  { name: 'rl_w4', eval: "window.__rvRig(5, 8)", wait: 3000 },
+  { name: 'rl_m_far', eval: "window.__speed(0); window.__rvSky(120, 24)", wait: 3000 },
+  { name: 'rl_n_far200', eval: "window.__rvSky(200, 28)", wait: 3000 },
+];
+
 // v10: species glyphs at time-lapse speed (glyphs.ts GLYPH_LAPSE_*): the same drone view at 1x (no glyphs below 210 m) and at 100x
 SETS.lapse = [
   { name: 'lapse_01_drone_1x', eval: "window.__speed(1); window.__focusHerd(); window.__engine.cam.setView({ distance: 300, pitchDeg: 40 })", wait: 4000 },
