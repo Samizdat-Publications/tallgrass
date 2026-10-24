@@ -94,6 +94,7 @@
 | 10-10 15:18 | Gemini `gemini-3.1-pro-preview` | blind video critique of motion.mp4 (29842 KB) | 1 call | ~$0.05 |
 | 10-17 18:37 | Gemini `gemini-3.1-pro-preview` | blind video critique of reel.mp4 (58633 KB) | 1 call | ~$0.05 |
 | 10-17 18:38 | Gemini `gemini-3.1-pro-preview` | blind video critique of motion.mp4 (28679 KB) | 1 call | ~$0.05 |
+| 10-24 15:19 | Gemini `gemini-3.1-pro-preview` | blind video critique of reel.mp4 (60047 KB) | 1 call | ~$0.05 |
 
 ## Downloaded third-party assets
 | Asset | Source | License | Used in |
@@ -154,3 +155,5 @@ Rollout: Sketchfab free downloads only, no Meshy credits spent.
 
 ### r-ground (2026-10-09): scanned ground detail
 Six Poly Haven 1K scans (CC0) downloaded through the public API (`api.polyhaven.com/files/<id>`, Diffuse and nor_gl, jpg), no paid calls: `withered_grass`, `brown_mud_dry`, `grass_path_2`, `brown_mud_03`, `burned_ground_01`, `snow_02`. Reduced by `tools/build_ground_textures.py` (source scans kept out of the repo) to 12 small jpgs, about 2.5 MB, in `public/textures/ground/`. Sources and licenses are in `CREDITS.md`.
+
+- 2026-10-24 Gemini video critique, round 34 (reel 108 s, 8 fps sampling, gemini-3.1-pro-preview): 1 call, about $0.10.
