@@ -10,6 +10,7 @@
 // Within 45 m of the camera the legs also read the ground under each foot (two-bone IK in the vertex shader) and the body
 // height follows the mean height of the stance feet (stanceBodyDy below, eased here because a shader keeps no state).
 import { ravenClear } from './ravenclear';
+import { HerdSep } from './herdsep';
 import * as THREE from 'three';
 import { AGENT_STRIDE, CARCASS_STRIDE, F_ALPHA, F_INFECTED, F_JUVENILE, F_MALE, F_MIGRANT, F_STOT, SPECIES_COUNT, Sp, St } from '../sim/types';
 import type { Snapshot } from '../sim/types';
@@ -53,6 +54,12 @@ const RAPTOR: boolean[] = SPECIES.map((s) => s.guild === 'raptor');
 const CANID: boolean[] = SPECIES.map((s) => s.key === 'wolf' || s.key === 'coyote');
 /** R8: the bison (wallow, rub, spar, bellow, snow dig, calf play: render/behaviours.ts), the pronghorn (rump flare) and the ravens (rolls in the air). */
 const BISON: boolean[] = SPECIES.map((s) => s.key === 'bison');
+/** r-herd-v1: the large quadrupeds whose drawn bodies are kept from passing through each other near the camera (herdsep.ts). */
+const SEPARATE: boolean[] = SPECIES.map((s) => s.key === 'bison' || s.key === 'pronghorn' || s.key === 'muledeer' || s.key === 'wolf');
+/** Animals within SEP_IN m of the camera (ground distance) are relaxed against each other; the push is full inside SEP_FULL and gone at SEP_OUT. */
+const SEP_IN = 62, SEP_FULL = 30, SEP_OUT = 45;
+/** How fast a separation offset may build (m/s of sideways shuffle: a standing animal, a bedded one) and its easing time (s). */
+const SEP_SPEED = 1.1, SEP_SPEED_LIE = 0.35, SEP_TAU = 0.8;
 const PRONGHORN: boolean[] = SPECIES.map((s) => s.key === 'pronghorn');
 /** r-life alert: grazers that lift their heads and turn to a moving predator, and the predators they watch (a resting or feeding one is ignored). */
 const ALERTS: boolean[] = SPECIES.map((s) => s.key === 'bison' || s.key === 'pronghorn' || s.key === 'muledeer');
@@ -710,7 +717,13 @@ class Slots {
   /** r-alert2: the head yaw (rad, positive to the animal's right) toward the watched predator, and its rate (a critically damped follower, so the head never snaps). */
   aly = new Float32Array(this.cap);
   alyv = new Float32Array(this.cap);
-  fresh = new Uint8Array(this.cap);
+  /** r-herd-v1: the eased separation offset drawn now (m), the offset the relaxation asks for (before the distance fade), and the frame that asked (0 = never). */
+  sepx = new Float32Array(this.cap);
+  sepz = new Float32Array(this.cap);
+  sptx = new Float32Array(this.cap);
+  sptz = new Float32Array(this.cap);
+  sepf = new Uint32Array(this.cap);
+  fresh =new Uint8Array(this.cap);
   stamp = new Uint32Array(this.cap);
   map = new Map<number, number>();
   free: number[] = [];
@@ -802,6 +815,11 @@ class Slots {
     this.alB = g(this.alB, Float32Array);
     this.aly = g(this.aly, Float32Array);
     this.alyv = g(this.alyv, Float32Array);
+    this.sepx = g(this.sepx, Float32Array);
+    this.sepz = g(this.sepz, Float32Array);
+    this.sptx = g(this.sptx, Float32Array);
+    this.sptz = g(this.sptz, Float32Array);
+    this.sepf = g(this.sepf, Uint32Array);
     { const b = new Float32Array(n).fill(-1e9); b.set(this.alS); this.alS = b; }
     this.fresh = g(this.fresh, Uint8Array);
     this.stamp = g(this.stamp, Uint32Array);
@@ -991,6 +1009,14 @@ export class AnimalLayer {
   private bodyN = 0;
   private bodyPrevN = 0;
   private rvOut = { x: 0, z: 0 };
+  /** r-herd-v1: the near herd animals' bodies for the separation, and a frame counter that stamps the slots the last relaxation covered. */
+  private hsep = new HerdSep(384);
+  /** The near bison as ravenClear bodies (x, z, cos h, sin h, half length, half width): ravens low over the herd go round the bodies, not through them. */
+  private herdBody = new Float32Array(384 * 6);
+  private herdBodyN = 0;
+  /** Off for an A/B in a capture (window.__animals.herdSep = false): the offsets then ease back out. */
+  herdSep = true;
+  private sepFrame = 0;
   /** Slots of the animals that left the snapshot this time (id to slot), so a body that just died can keep its gait phase. */
   private goneSlot = new Map<number, number>();
   private tmpV = new THREE.Vector3();
@@ -1222,6 +1248,7 @@ export class AnimalLayer {
         S.sick[slot] = 0;
         S.dust[slot] = 0;
         S.snx[slot] = 0; S.snz[slot] = 0; S.snw[slot] = 0; S.wetP[slot] = 0; S.spl[slot] = 0; S.wst[slot] = 0; S.alN[slot] = 0; S.al[slot] = 0; S.aly[slot] = 0; S.alyv[slot] = 0; S.alD[slot] = 1e9; S.alS[slot] = -1e9;
+        S.sepx[slot] = 0; S.sepz[slot] = 0; S.sptx[slot] = 0; S.sptz[slot] = 0; S.sepf[slot] = 0;
         S.pounce[slot] = -1;
         S.pkey[slot] = -1;
         S.pstop[slot] = STRUGGLE_END;
@@ -2140,6 +2167,50 @@ export class AnimalLayer {
       this.bodyN = 0;
     }
 
+    // r-herd-v1: the herd animals within SEP_IN m of the camera are relaxed against each other (herdsep.ts) on where they were drawn last frame less
+    // their own separation offset, so the target never feeds back on itself. The result is only a target: each animal eases toward it below
+    // (rate limited, faded out between SEP_FULL and SEP_OUT m), and nothing here touches the sim.
+    const sepCam = this.shared.uCamPos.value;
+    const scx = sepCam.x, scz = sepCam.z;
+    this.sepFrame++;
+    {
+      const hs = this.hsep;
+      hs.begin();
+      this.herdBodyN = 0;
+      if (this.timeScale <= 6) {
+        const nS = snap.count;
+        for (let i = 0; i < nS && hs.n < hs.cap; i++) {
+          const o = i * AGENT_STRIDE;
+          const sp = A[o] | 0;
+          if (sp < 0 || sp >= SPECIES_COUNT || !SEPARATE[sp]) continue;
+          const slot = this.currSlot[i];
+          if (S.fresh[slot]) continue;
+          if ((HUNTER[sp] && (A[o + 7] | 0) === St.Eat) || S.pounce[slot] >= 0) continue; // (a wolf at a carcass has its own slot round it)
+          const dx = S.px[slot] - scx, dz = S.pz[slot] - scz;
+          if (dx * dx + dz * dz > SEP_IN * SEP_IN) continue;
+          const pr = this.batches[sp]?.def.params;
+          if (!pr) continue;
+          const L = pr.length * A[o + 5] * this.speciesScale[sp], lie = S.lie[slot];
+          // (the ellipse is the trunk from rump to shoulder and a little of the neck: its centre sits a little ahead of the model origin)
+          const hh = S.hs[slot], ch = Math.cos(hh), sh = Math.sin(hh);
+          if (this.herdSep) hs.add(slot, S.px[slot] - S.sepx[slot] + ch * 0.06 * L, S.pz[slot] - S.sepz[slot] + sh * 0.06 * L, hh, 0.46 * L, (0.16 + 0.04 * lie) * L);
+          if (BISON[sp] && this.herdBodyN < 384) {
+            // (where it is drawn: ravens go round the body as it stands, a little wider than the trunk for the head and the horns)
+            const q = this.herdBodyN++ * 6, B = this.herdBody;
+            B[q] = S.px[slot] + ch * 0.06 * L; B[q + 1] = S.pz[slot] + sh * 0.06 * L; B[q + 2] = ch; B[q + 3] = sh;
+            B[q + 4] = 0.46 * L + 0.25; B[q + 5] = (0.16 + 0.04 * lie) * L + 0.2;
+          }
+        }
+        hs.solve(5);
+        for (let k = 0; k < hs.n; k++) {
+          const slot = hs.tag[k];
+          S.sptx[slot] = hs.ox[k];
+          S.sptz[slot] = hs.oz[k];
+          S.sepf[slot] = this.sepFrame;
+        }
+      }
+    }
+
     for (const b of this.live) {
       b.count = 0;
       b.alive = 0;
@@ -2189,7 +2260,7 @@ export class AnimalLayer {
         const om = 22 * Math.min(12, Math.max(1, this.timeScale));
         // (an animal on the weight follower below springs from where this smoothing left it last frame, not from where the follower drew it)
         const own = ACCEL[sp] > 0 && S.wset[slot] === 1;
-        const ax = (own ? S.wtx[slot] : S.px[slot] - S.fox[slot] - this.cn.appliedX(slot) - S.snx[slot]) - x, az = (own ? S.wtz[slot] : S.pz[slot] - S.foz[slot] - this.cn.appliedZ(slot) - S.snz[slot]) - z;
+        const ax = (own ? S.wtx[slot] : S.px[slot] - S.fox[slot] - this.cn.appliedX(slot) - S.snx[slot] - S.sepx[slot]) - x, az = (own ? S.wtz[slot] : S.pz[slot] - S.foz[slot] - this.cn.appliedZ(slot) - S.snz[slot] - S.sepz[slot]) - z;
         if (ax * ax + az * az < 900) {
           const bx = S.svx[slot] + om * ax, bz = S.svz[slot] + om * az;
           const e = Math.exp(-om * dt);
@@ -2435,6 +2506,21 @@ export class AnimalLayer {
         x += S.snx[slot];
         z += S.snz[slot];
       }
+      // r-herd-v1: the herd animals' bodies are kept from passing through each other near the camera: ease toward the relaxed offset (a slow shuffle, a bedded
+      // animal slower still), faded out with distance, so a far view and the sim are as they were. The follower above takes the offset out again.
+      if (SEPARATE[sp]) {
+        const near = S.sepf[slot] === this.sepFrame;
+        const fade = near ? 1 - smoothstep(SEP_FULL, SEP_OUT, Math.hypot(x - scx, z - scz)) : 0;
+        const ex = S.sptx[slot] * fade - S.sepx[slot], ez = S.sptz[slot] * fade - S.sepz[slot];
+        const el = Math.hypot(ex, ez);
+        if (el > 1e-4 && dt > 0) {
+          const st = Math.min(el * (1 - Math.exp(-dt / SEP_TAU)), (S.lie[slot] > 0.5 ? SEP_SPEED_LIE : SEP_SPEED) * dt);
+          S.sepx[slot] += (ex / el) * st;
+          S.sepz[slot] += (ez / el) * st;
+        }
+        x += S.sepx[slot];
+        z += S.sepz[slot];
+      }
       // the terrain under the drawn position: the leg cycle runs on the distance along the ground, and the pose below uses it
       const g0 = sampleHeight(H, hn, cell, x, z);
 
@@ -2664,6 +2750,12 @@ export class AnimalLayer {
       }
       if (flier && !raptor && this.bodyPrevN > 0) {
         ravenClear(this.bodyPrev, this.bodyPrevN, x, z, alt, groundedBird, this.rvOut);
+        x += this.rvOut.x;
+        z += this.rvOut.z;
+      }
+      // r-herd-v1: ... and out of the near bison too (a bison's hump stands 1.85 m: a bird passes over its back from about 3.4 m)
+      if (flier && !raptor && this.herdBodyN > 0 && alt < 3.4) {
+        ravenClear(this.herdBody, this.herdBodyN, x, z, alt, groundedBird, this.rvOut, 2.2, 3.4);
         x += this.rvOut.x;
         z += this.rvOut.z;
       }
