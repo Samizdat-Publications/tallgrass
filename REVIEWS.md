@@ -471,3 +471,16 @@ Scores: visual 6, readability 7, life 3, ecosystem 5, UI 7, keep watching 4 (rou
 5. No splash or trails: REJECT (splashes and wake rings exist since v9; snow trails exist).
 6. Jarring cuts in the first 15 s: DEFER.
 7. The Chronicle repeats "The wind rises and a blizzard closes over the valley": FIX, repeat blizzards in a year now fold into one growing line.
+
+## Round 35 (fresh blind critic, stills of the release candidate bc6a051 plus the v10b chart; 2026-10-24 16:12) -> `review/round-35/critique.md`
+Scores: visual 6, readability 5, life 7, ecosystem 6, UI 6, keep watching 6 (round 33: 6, 5, 7, 6, 7, 6). The close-up items of round 33 (glossy bison, grey-paddle ravens) are gone from the list; the critic now leads with layout.
+1. HUD covers the action: FIX, builder r-declutter (compact population strip by default, compact while following or filming).
+2. Field-note toasts that do not match the shot: FIX in the same pass (the toast waits until the documentary camera is on the place, as located narration already does).
+3. Species at wide zoom, map legend: DEFER (r-farread-v1 just darkened the herds; the glyphs already use the panel colours).
+4. Ravens as cutouts, too large: REJECT for now (r-ravens2 added the sheen and fingered primaries; the near birds are close to the lens in that framing).
+5. Ravens outnumber bison: REJECT (sim, v10b; ravens breed to the carrion supply by design since v9).
+6. Flat charts: REJECT for V1.0 (no sim changes tonight; as rounds 32 and 33).
+7. Snow, river, rain: rain FIXED in r-weather-v1 (08 is the new downpour); snow edges and the river DEFER.
+8. World edge: DEFER.
+9. Rocking-horse pronghorn, packed bison: DEFER.
+10. Chronicle gap, axes, foliage dither: DEFER.
