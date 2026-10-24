@@ -84,7 +84,9 @@ export function buildRaven(): ModelDef {
   // Wings: a broad arm (the secondaries) lofted from the shoulder, then the hand: seven long primaries fanned apart so the tip is slotted.
   const wPiv: V3 = [0.04, 0.17, 0.05];
   const wElbow: V3 = [0.0, 0.175, 0.3];
-  const wingW1 = (p: V3) => smooth(0.25, 0.4, p[2]);
+  // (the builder hands the weight function the MIRRORED position, so the left wing arrives with z < 0: the weight must read |z|, or the left hand
+  // never bends at the elbow and a folded left wing stays a long straight blade while the right one tucks in)
+  const wingW1 = (p: V3) => smooth(0.25, 0.4, Math.abs(p[2]));
   b.addPair(
     {
       part: PART.WINGR, piv: wPiv, piv2: wElbow, sides: 8, paint: feather, w1: wingW1,

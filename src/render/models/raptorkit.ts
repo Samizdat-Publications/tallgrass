@@ -28,7 +28,8 @@ export interface WingSpec {
 
 /** The two wings of a raptor: the blade (arm and hand) and its primaries. */
 export function addRaptorWings(b: MeshBuilder, s: WingSpec): void {
-  const wingW1 = (p: V3): number => smooth(s.bend[0], s.bend[1], p[2]);
+  // (the builder hands the weight the MIRRORED position: the left arm has z < 0, so the weight reads |z| or that arm never bends at the wrist)
+  const wingW1 = (p: V3): number => smooth(s.bend[0], s.bend[1], Math.abs(p[2]));
   b.addPair(
     {
       part: PART.WINGR, piv: s.shoulder, piv2: s.wrist, sides: 8, paint: s.paint, w1: wingW1,
