@@ -39,6 +39,7 @@ import { button, h, unitPx } from './dom';
 import { icon } from './icons';
 import { FamilyPanel } from './familytree';
 import { Inspector } from './inspector';
+import { AboutPanel } from './about';
 import { TopRight, challengeInfo } from './menu';
 import { PopGraph, type Marker } from './popgraph';
 import { Slate } from './slate';
@@ -138,6 +139,7 @@ export class GameUI {
   /** Rare sightings: the journal page (Menu > Rare sightings) and the store main.ts's RareSightings records into. */
   readonly rareStore = new RareStore({ reset: rareMode(location.search) === 'reset' });
   private rarePanel: RarePanel;
+  private aboutPanel: AboutPanel;
   /** Family tree (R12): a docked page the inspector opens (T). Not a modal: the world stays clickable around it. */
   private family: FamilyPanel;
   /** Photo mode (R15): the P key opens it. The game wires its callbacks (lens, freeze, save). */
@@ -198,6 +200,7 @@ export class GameUI {
       onGuide: () => this.openPane(this.guidePanel),
       onShare: () => this.actions.share?.(),
       onRare: () => this.openPane(this.rarePanel),
+      onAbout: () => this.openPane(this.aboutPanel),
     });
     this.settingsPanel = new SettingsPanel(
       loadSettings(),
@@ -214,6 +217,7 @@ export class GameUI {
     );
     this.guidePanel = new GuidePanel(this.guide, this.photos, () => void this.takePhoto(), () => this.guidePanel.hide());
     this.rarePanel = new RarePanel(this.rareStore, () => rareMode(location.search) === 'all', () => this.rarePanel.hide());
+    this.aboutPanel = new AboutPanel(() => this.aboutPanel.hide());
     this.top.setRareCount(this.rareStore.count, SIGHTING_COUNT);
     this.rareStore.onChange = () => {
       this.top.setRareCount(this.rareStore.count, SIGHTING_COUNT);
@@ -306,6 +310,7 @@ export class GameUI {
       this.setupPanel.el,
       this.guidePanel.el,
       this.rarePanel.el,
+      this.aboutPanel.el,
       this.family.el,
       this.photo.el,
       this.toast.el,
@@ -505,7 +510,7 @@ export class GameUI {
   openPane(p: ModalPanel | null, which: 'notes' | null = null): void {
     this.leaveTitle();
     this.family.hide();
-    for (const q of [this.settingsPanel, this.setupPanel, this.guidePanel, this.rarePanel]) if (q !== p) q.hide();
+    for (const q of [this.settingsPanel, this.setupPanel, this.guidePanel, this.rarePanel, this.aboutPanel]) if (q !== p) q.hide();
     if (which === 'notes') {
       this.notesPanel.show();
     } else {
@@ -515,7 +520,7 @@ export class GameUI {
   }
 
   private get paneOpen(): boolean {
-    return this.settingsPanel.isOpen || this.setupPanel.isOpen || this.guidePanel.isOpen || this.rarePanel.isOpen;
+    return this.settingsPanel.isOpen || this.setupPanel.isOpen || this.guidePanel.isOpen || this.rarePanel.isOpen || this.aboutPanel.isOpen;
   }
 
   private closePanes(): void {
@@ -523,6 +528,7 @@ export class GameUI {
     this.setupPanel.hide();
     this.guidePanel.hide();
     this.rarePanel.hide();
+    this.aboutPanel.hide();
   }
 
   private onSettingsChange(s: Settings, changed: keyof Settings): void {
@@ -840,6 +846,7 @@ export class GameUI {
     this.settingsPanel.destroy();
     this.setupPanel.destroy();
     this.guidePanel.destroy();
+    this.aboutPanel.destroy();
     this.family.destroy();
     this.title?.destroy();
     this.tips.destroy();

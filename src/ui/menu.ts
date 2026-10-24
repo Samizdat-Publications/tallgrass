@@ -69,6 +69,8 @@ export interface TopRightPages {
   onShare(): void;
   /** Rare sightings: the journal of rare moments that unlock while the valley runs at 1x. */
   onRare?(): void;
+  /** About Tallgrass: the version, the credits and the project links. */
+  onAbout?(): void;
 }
 
 export class TopRight {
@@ -239,6 +241,7 @@ export class TopRight {
       ),
       h('h2', { class: 'tg-menu-h', text: 'Keys' }),
       keys,
+      pageRow('About Tallgrass', 'Version, credits and where to find the project.', 'chevronRight', () => this.pages.onAbout?.()),
     );
 
     this.el = h('div', { class: 'tg-topright' }, h('div', { class: 'tg-topright-row' }, this.seedBtn, this.shareBtn, this.ambientBtn, this.menuBtn), this.menu);

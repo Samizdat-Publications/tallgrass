@@ -1,0 +1,81 @@
+/* About Tallgrass: the credits page. Shares the pane shape (ui.css .tg-pane); only the body is its own. */
+.tg-pane.tg-about {
+  width: min(calc(560 * var(--u)), calc(100vw - 2 * var(--m)));
+}
+.tg-about .tg-pane-body:focus {
+  outline: none;
+}
+.tg-about .tg-pane-body:focus-visible {
+  outline: 1px solid rgba(239, 230, 208, 0.3);
+  outline-offset: calc(-1 * var(--u));
+  border-radius: calc(4 * var(--u));
+}
+.tg-about-lede {
+  margin: calc(6 * var(--u)) 0 calc(10 * var(--u));
+  font: 400 calc(17 * var(--u)) / 1.4 var(--serif);
+}
+.tg-about-by {
+  margin: 0 0 calc(12 * var(--u));
+  font: italic 400 calc(15.5 * var(--u)) / 1.3 var(--serif);
+  color: var(--paper-dim);
+}
+.tg-about-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: calc(8 * var(--u));
+  margin-bottom: calc(6 * var(--u));
+}
+.tg-about-links .tg-btn {
+  color: var(--paper);
+  text-decoration: none;
+}
+.tg-about-credits {
+  list-style: none;
+  margin: calc(4 * var(--u)) 0 0;
+  padding: 0;
+  display: grid;
+  gap: calc(7 * var(--u));
+}
+.tg-about-credit {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  column-gap: calc(12 * var(--u));
+  row-gap: calc(1 * var(--u));
+  font: 400 calc(14.5 * var(--u)) / 1.25 var(--sans);
+}
+.tg-about-credit-name {
+  grid-column: 1 / -1;
+  color: var(--paper);
+  font-weight: 500;
+}
+a.tg-about-credit-name {
+  text-decoration: underline;
+  text-decoration-color: rgba(239, 230, 208, 0.3);
+  text-underline-offset: calc(2 * var(--u));
+}
+a.tg-about-credit-name:hover {
+  text-decoration-color: currentColor;
+}
+a.tg-about-credit-name:focus-visible,
+.tg-about-links .tg-btn:focus-visible {
+  outline: 2px solid var(--paper);
+  outline-offset: calc(2 * var(--u));
+  border-radius: calc(3 * var(--u));
+}
+.tg-about-credit-by,
+.tg-about-credit-lic {
+  color: var(--paper-dim);
+}
+.tg-about-credit-by {
+  grid-column: 1;
+}
+.tg-about-credit-lic {
+  grid-column: 2;
+  text-align: right;
+  white-space: nowrap;
+}
+.tg-about-foot {
+  margin: calc(14 * var(--u)) 0 calc(4 * var(--u));
+  font: italic 400 calc(14.5 * var(--u)) / 1.3 var(--serif);
+  color: var(--paper-dim);
+}
