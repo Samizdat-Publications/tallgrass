@@ -1035,6 +1035,9 @@ export class GameUI {
   private showCard(c: { title: string; subtitle: string; rank: number; tick: number }): void {
     const cur = this.lastTick;
     let subtitle: string | undefined = c.subtitle;
+    // a card more than a valley-year late (held behind others at fast-forward) is history, not news: drop it rather than announce
+    // a drought three years after it began, next to a toast that says it has broken (round 36)
+    if (cur - c.tick > YEAR_TICKS) { this.queued = null; return; }
     if (!sameSeasonName(c.tick, cur)) {
       this.queued = null;
       if (c.rank < 4) return;
