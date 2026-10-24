@@ -781,7 +781,9 @@ export class Water {
           float iceReach = 0.0;
           if (cold > 0.02) {
             float iN = tgNoise2(p * 0.23 + 5.0) * 0.6 + tgNoise2(p * 0.9 + 1.0) * 0.4;
-            float reach = cold * mix(1.25, 0.17 * (1.2 - 0.8 * riffle), isCreek);
+            // (r-land-v1: from the drone the shore ice of the creek is a few pixels wide at best, so its rim widens with range and reads as a
+            // pale edge along the channel, not as a dark ribbon framed by nothing)
+            float reach = cold * mix(1.25, 0.17 * (1.2 - 0.8 * riffle) * (1.0 + 0.7 * farK), isCreek);
             iceReach = reach;
             ice = smoothstep(0.03, -0.03, depth - reach + (iN - 0.5) * mix(0.35, 0.12, isCreek) * cold) * smoothstep(0.02, 0.12, cold);
             N = normalize(mix(N, vec3(0.0, 1.0, 0.0), ice));
@@ -1046,6 +1048,11 @@ export class Water {
             skyF *= skyFL > 1.1 ? (1.1 + (skyFL - 1.1) / (1.0 + 1.6 * (skyFL - 1.1))) / skyFL : 1.0;
             skyF = mix(skyF, vec3(skyFL) * vec3(0.84, 1.0, 1.05), clamp(0.4 + 0.45 * dimK + 0.3 * uOvercast, 0.0, 0.85));
             skyF *= (1.0 - 0.3 * uOvercast) * 0.72;
+            // r-land-v1: under an open sky a stream seen from the drone lifts toward the sky it mirrors (a grazing view always reflects more),
+            // so it reads as a pale blue-grey ribbon of water and not as a dark asphalt strip
+            float skyOpenF = farK * (1.0 - uOvercast) * (1.0 - uNight);
+            skyF *= 1.0 + skyOpenF * (0.4 + 0.8 * dimK);
+            Fv += skyOpenF * (0.11 + 0.1 * dimK) * (0.55 + 0.45 * sheen) * (1.0 - 0.5 * smoothstep(0.7, 0.25, vY));
             vec3 reflF = mix(skyF, hit.rgb, hit.a * 0.85);
             vec3 srcF = reflF * Fv + bodyF * (1.0 - Fv) * edgeA;
             float aF = Fv + (1.0 - Fv) * edgeA;
@@ -1162,6 +1169,8 @@ export class Water {
             vec3 iceAlb = mix(vec3(0.07, 0.09, 0.11), vec3(0.3, 0.34, 0.38), clamp(frosty * 0.8 + uFrost * 0.25, 0.0, 1.0));
             // patches of the rim along the shore are frosted paler where it froze first
             iceAlb = mix(iceAlb, vec3(0.4, 0.44, 0.48), (1.0 - smoothstep(0.0, 0.12, depth)) * 0.5 * frosty);
+            // (r-land-v1: from afar the rim is pale blue-grey frost, lighter toward the bank)
+            iceAlb = mix(iceAlb, vec3(0.52, 0.58, 0.64), farK * isCreek * (0.45 + 0.4 * (1.0 - smoothstep(0.0, 0.25, depth))));
             float cr = abs(tgNoise2(p * 0.55 + 2.0) - 0.5);
             iceAlb *= 1.0 - 0.22 * (1.0 - smoothstep(0.0, 0.018, cr)) * w3;
             float sn = smoothstep(0.08, 0.5, uSnow + (tgNoise2(p * 0.4 + 6.0) - 0.5) * 0.35);

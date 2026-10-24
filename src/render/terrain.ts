@@ -1345,7 +1345,10 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
 
   // winter ground is dull grey-brown straw under the snow, not warm sand
   float lumW = dot(grassCol, vec3(0.2126, 0.7152, 0.0722));
-  grassCol = mix(grassCol, vec3(lumW) * vec3(1.0, 0.94, 0.86) * 0.9, 0.38 * winterK);
+  // (r-land-v1: from the drone the bare ground between snow patches goes greyer and a little paler, so the patches meet it at a lower
+  // contrast and the orange-and-white banding fades; close up it is as it was)
+  float winFar = smoothstep(50.0, 300.0, dist) * winterK;
+  grassCol = mix(grassCol, vec3(lumW) * mix(vec3(1.0, 0.94, 0.86), vec3(0.97, 0.95, 0.92), winFar) * mix(0.9, 1.06, winFar), 0.38 * winterK + 0.32 * winFar);
 
   // short grass: a little of the soil shows through, darker and earthier, never light sand
   float soilShow = smoothstep(0.1, 0.0, bio + (nC - 0.5) * 0.05) + dirt * 0.25 * edgeW;
@@ -1559,7 +1562,11 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
     edgeN += (s2 - 0.5) * (0.3 + 0.3 * slopeW) * (1.0 - smoothstep(300.0, 1000.0, dist));
     if (fineK > 0.01) edgeN += ((tgDet(xz, 1.5, 2, vec2(0.7)) - 0.5) * 0.5 + (tgDet(xz, 0.4, 3, vec2(0.2)) - 0.5) * 0.36) * fineK;
     float edgeW2 = mix(0.3, 0.19, smoothstep(0.2, 0.8, snEff));
-    float snowAmt = smoothstep(Tsn - 0.2 - edgeW2, Tsn + 0.06 + edgeW2, pot + edgeN) * smoothstep(0.05, 0.16, snEff);
+    // r-land-v1: from the drone (150 to 450 m) a hard edge reads as camouflage blotches, so the ramp widens with range, most of all on its
+    // thin side: a patch feathers out into a dusting (grass tone showing through at 30 to 60% white) instead of ending on a cut line,
+    // while the deep cores of a drift still reach full white. Under about 40 m it is exactly the old edge.
+    float farS = smoothstep(40.0, 320.0, dist);
+    float snowAmt = smoothstep(Tsn - 0.2 - edgeW2 * (1.0 + 1.5 * farS), Tsn + 0.06 + edgeW2 * (1.0 + 1.1 * farS), pot + edgeN - 0.03 * farS) * smoothstep(0.05, 0.16, snEff);
     // Where the pack thins (the fringe of a patch, the windward flank) it is not a decal: ground, grass tips and flecks of soil come
     // through in a ragged speckle that is finest near the camera and a few metres wide from the drone.
     float fringe = 4.0 * snowAmt * (1.0 - snowAmt);
