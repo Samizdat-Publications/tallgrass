@@ -1815,6 +1815,21 @@ export function animationShaderParts(def: ModelDef, variant?: 'near'): { defs: s
   return { defs: defines(def.params, def.far, def.geometry) + '\n' + seasonDefines(def), decl: COMMON_DECL };
 }
 
+/**
+ * r-ravens2: the raven's specular, recoloured to a blue-violet sheen and capped (a raven is black, never grey or white): the luminance of whatever three
+ * reflected is kept (up to RV_SHEEN_MAX) and given the sheen colour, so a lit wing top and back glint blue and the belly and the undersides stay black.
+ * It is strongest on surfaces that face up toward the light and fades on the ones facing down.
+ */
+const RAVEN_SHEEN = /* glsl */ `
+  {
+    vec3 tgSp = reflectedLight.directSpecular + reflectedLight.indirectSpecular;
+    float tgSl = dot(tgSp, vec3(0.2126, 0.7152, 0.0722));
+    float tgUp = 0.25 + 0.75 * clamp(dot(normal, normalize((viewMatrix * vec4(0.0, 1.0, 0.0, 0.0)).xyz)) * 0.5 + 0.5, 0.0, 1.0);
+    tgSl = min(tgSl, 0.4) * tgUp;
+    reflectedLight.directSpecular = vec3(0.0);
+    reflectedLight.indirectSpecular = vec3(0.15, 0.18, 0.3) * tgSl * 0.6;
+  }`;
+
 /** Value noise shared by mange and fur (fragment side), and the position varying. */
 const NOISE_DECL = /* glsl */ `
 varying vec3 vTgPos;
@@ -2003,6 +2018,9 @@ export function makeAnimalMaterials(sp: number, def: ModelDef, shared: AnimalSha
   // R3 mange (canids only): the fragment stage mottles the coat with dark bare skin in patches, more of it with severity (vTgMg).
   const hasMange = def.params.hunts === true && def.params.kind === 0;
   const hasFur = def.fur !== undefined && def.params.kind === 0;
+  // r-ravens2: a raven's feathers are black with a blue-violet sheen. Three's specular on a glossy dark surface goes pale grey at grazing angles and under a
+  // bright sky (the grey wing undersides and belly of the round 33 stills), so its specular is recoloured and capped here, for the raven's program only.
+  const isRaven = def.params.kind === 2 && !def.params.raptor;
   const lodOn = variant !== 'single';
   const hasShell = variant === 'near' && hasFur && def.fur?.shell !== undefined;
   const mangeDecl = (hasMange ? MANGE_DECL : '') + (hasMange || hasFur ? NOISE_DECL : '') + (hasFur ? FUR_DECL : '') + (lodOn ? LOD_DECL : '') + (hasShell ? SHELL_DECL : '');
@@ -2100,7 +2118,7 @@ export function makeAnimalMaterials(sp: number, def: ModelDef, shared: AnimalSha
       // sky fill: pull toward a warm neutral (so brown coats stay brown in blue shade), then boost it so the shaded side keeps form
       .replace(
         '#include <lights_fragment_end>',
-        `irradiance = mix(irradiance, vec3(dot(irradiance, vec3(0.2126, 0.7152, 0.0722))) * uWarm, uNeutral) * uFill * (1.0 - uLowFill * uLow);\n${hasFur ? 'irradiance *= vTgAO;\n' : ''}#include <lights_fragment_end>${hasFur ? FUR_LIGHT : ''}`,
+        `irradiance = mix(irradiance, vec3(dot(irradiance, vec3(0.2126, 0.7152, 0.0722))) * uWarm, uNeutral) * uFill * (1.0 - uLowFill * uLow);\n${hasFur ? 'irradiance *= vTgAO;\n' : ''}#include <lights_fragment_end>${hasFur ? FUR_LIGHT : ''}${isRaven ? RAVEN_SHEEN : ''}`,
       )
       .replace(
         '#include <emissivemap_fragment>',
