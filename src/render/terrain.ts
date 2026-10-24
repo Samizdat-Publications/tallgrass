@@ -1673,9 +1673,10 @@ vec3 tgGround(vec3 wp, vec3 nrm, float dist, vec3 rayDir, float ts){
 
   // rain darkens and glosses the ground
   col *= mix(1.0, 0.74, uWet * (1.0 - snowCover));
+  col *= 1.0 - 0.12 * smoothstep(0.7, 1.0, uWet) * (1.0 - snowCover);   // a downpour soaks it darker still (a light rain is as it was)
   // wet ground is darker and a little glossier near the camera, but a low sun on a wet slope at grazing angles reflects as a pale
   // sheen that reads as snow or mist: keep the far ground rough so it never goes whiter than dry grass
-  gTgRough = mix(mix(0.95, 0.66, uWet), 1.0, smoothstep(90.0, 420.0, dist) * (0.4 + 0.6 * uWet));
+  gTgRough = mix(mix(0.95, 0.66, uWet) - 0.14 * smoothstep(0.7, 1.0, uWet), 1.0, smoothstep(90.0, 420.0, dist) * (0.4 + 0.6 * uWet));
 
   // looking toward a low sun makes standing grass glow: forward scattering through the blades
   float fwd = max(dot(rayDir, uLightDir), 0.0);

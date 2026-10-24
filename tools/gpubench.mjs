@@ -53,6 +53,9 @@ const VIEW_SETUPS = {
     e.storms.debugStrike(f.x + fx * 230 + rx * -150, f.z + fz * 230 + rz * -150, false);
     e.storms.onThunder = null;
   }`,
+  // r-weather-v1: a downpour from a mid and a low view (rainSm snaps to its target on applyEnvNow, so the haze, the streaks, the dark light and the wet ground are all on)
+  rain_mid: `() => { Object.assign(e.env, { dayFrac: 0.45, season: 1.8, weather: 3, rain: 1, windStrength: 0.6, windDir: 0.35 }); e.applyEnvNow(); window.__focusHerd(); e.cam.setView({ distance: 85, pitchDeg: 22 }, true); }`,
+  rain_low: `() => { Object.assign(e.env, { dayFrac: 0.45, season: 1.8, weather: 3, rain: 1, windStrength: 0.6, windDir: 0.35 }); e.applyEnvNow(); window.__focusHerd(); e.cam.setView({ distance: 22, pitchDeg: 9 }, true); }`,
   // r-nightwater: the water close up (a pond and the creek at midday, a pond under the moon)
   pond_midday: `() => { Object.assign(e.env, { dayFrac: 0.45, season: 1.3, weather: 0 }); e.applyEnvNow(); const w = e.world; e.cam.setView({ x: w.ponds[0], y: w.ponds[1], distance: 60, pitchDeg: 30, yawDeg: 40 }, true); }`,
   creek_midday: `() => { Object.assign(e.env, { dayFrac: 0.45, season: 1.3, weather: 0 }); e.applyEnvNow(); const w = e.world, k = Math.floor(w.creek.length / 2 * 0.6); e.cam.setView({ x: w.creek[2 * k], y: w.creek[2 * k + 1], distance: 80, pitchDeg: 28, yawDeg: 40 }, true); }`,

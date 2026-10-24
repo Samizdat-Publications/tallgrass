@@ -7,7 +7,9 @@ import * as THREE from 'three';
 import { Pass } from 'three/addons/postprocessing/Pass.js';
 import { clamp, smoothstep } from './common';
 
-const MAX_DROPS = 26000;
+const MAX_DROPS = 36000;
+/** Drops in play at full intensity when the rain is light (the pool the original rain used); a downpour (heavy = 1) fills the whole pool. */
+const LIGHT_DROPS = 26000;
 
 export interface RainParams {
   /** 0..1 eased rain intensity (0 = not raining). */
@@ -19,6 +21,8 @@ export interface RainParams {
   windZ: number;
   /** Camera height above the ground (m). */
   aboveGround: number;
+  /** 0..1 downpour amount (0 = a light rain, which is drawn exactly as before): denser, longer, brighter streaks in a tighter volume. */
+  heavy?: number;
   /** Linear streak colour (already lit by the current sky and ambient). */
   color: THREE.Color;
 }
@@ -153,24 +157,26 @@ export class Rain {
     this.clock += dt;
     const u = this.material.uniforms;
     const ws = clamp(p.windStrength, 0, 1);
+    const hv = clamp(p.heavy ?? 0, 0, 1);
     // wind slants the fall: a light rain is nearly vertical, a gale lays it over
     const vw = 0.4 + 8.5 * Math.pow(ws, 1.5);
     (u.uWindV.value as THREE.Vector2).set(p.windX * vw, p.windZ * vw);
-    u.uFall.value = 8.2 + 1.2 * fall;
-    u.uShutter.value = 0.017;
+    u.uFall.value = 8.2 + 1.2 * fall + 1.6 * hv;
+    u.uShutter.value = 0.017 * (1 + 0.3 * hv);
     // the volume is small near the ground and widens with altitude
-    u.uBox.value = clamp(24 + 0.3 * p.aboveGround, 24, 64);
+    // (a downpour packs the same drops, and more of them, into a smaller volume: several times as many streaks near the lens)
+    u.uBox.value = clamp(24 + 0.3 * p.aboveGround, 24, 64) * (1 - 0.32 * hv);
     u.uT.value = this.clock;
     (u.uCam.value as THREE.Vector3).copy(camera.position);
     u.uPx.value = 2 * Math.tan(THREE.MathUtils.degToRad(camera.fov) * 0.5) / Math.max(1, (u.uRes.value as THREE.Vector2).y);
-    u.uDrop.value = 0.0036;
+    u.uDrop.value = 0.0036 * (1 + 0.3 * hv);
     // how many drops of the pool are in play: a drizzle thins the volume, a downpour fills it
-    this.geo.instanceCount = Math.round(MAX_DROPS * clamp(fall, 0, 1));
+    this.geo.instanceCount = Math.round((LIGHT_DROPS + (MAX_DROPS - LIGHT_DROPS) * hv) * clamp(fall, 0, 1));
     // the visibility range: rain in the air dims what is far, more so in a downpour
-    u.uExt.value = 0.008 + 0.014 * fall;
+    u.uExt.value = 0.008 + 0.014 * fall + 0.006 * hv;
     (u.uColor.value as THREE.Color).copy(p.color);
     // (r-life: softer and more transparent: the round 23 and 24 critics read the old streaks as white dashes; the soft falloff is wider and the alpha lower)
-    u.uAlpha.value = 0.17 + 0.1 * fall;
+    u.uAlpha.value = 0.17 + 0.1 * fall + 0.17 * hv;
   }
 
   dispose(): void { this.geo.dispose(); this.material.dispose(); }
