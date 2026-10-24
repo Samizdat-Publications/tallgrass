@@ -140,6 +140,10 @@ export class Dust {
           float drag = 1.0 - 0.45 * u;
           vec3 pos = aP.xyz + aV.xyz * age * drag;
           pos.y += 0.3 * age * (1.0 - 0.6 * u);
+          // each puff also drifts a little sideways on its own, more as it ages, so the trail behind a running animal billows into a
+          // cloud instead of staying a straight streak (a fleeing herd's trails read as comb spokes from above: QA, round 32)
+          float sa = aQ.y * 37.7;
+          pos.xz += vec2(cos(sa), sin(sa)) * (0.35 + 0.5 * fract(aQ.y * 13.1)) * age * (0.4 + 0.6 * u);
           float size = aV.w * (0.6 + 0.95 * pow(u, 0.6));
           size *= clamp(distance(cameraPosition, pos) / 130.0, 1.0, 2.4); // stay readable from the wide view
           vec4 mv = viewMatrix * vec4(pos, 1.0);
@@ -169,7 +173,10 @@ export class Dust {
           if (a * vAlpha < 0.002) discard;
           // lit like the ground under it: ambient everywhere, the sun only where the hills leave the ground in the light
           float vis = uHasShadow > 0.5 ? texture2D(tShadow, clamp(vPos.xz / uWorld, 0.0, 1.0)).r : 1.0;
-          vec3 col = uAlbedo * (uAmb + uSun * vis) * 1.45 * (0.9 + 0.2 * (1.0 - r)); // 1.45: airborne fines catch the light a little better than the ground under them
+          // (the sky ambient is taken as its brightness with a faint warm tint: its colour, a blue or violet sky at golden hour, turned the
+          // khaki dust mauve and pink against the cured grass)
+          vec3 amb = vec3(dot(uAmb, vec3(0.2126, 0.7152, 0.0722))) * vec3(1.03, 1.0, 0.95);
+          vec3 col = uAlbedo * (amb + uSun * vis) * 1.45 * (0.9 + 0.2 * (1.0 - r)); // 1.45: airborne fines catch the light a little better than the ground under them
           gl_FragColor = vec4(col, a * vAlpha);
         }`,
     });
