@@ -35,7 +35,7 @@ const BAND_FROM = 0.2;
 const BAND_TO = 0.9;
 
 /** The climate band behind the rows: one column of pixels per x, the colour of whatever the index was at that moment. */
-function drawClimateBand(g: CanvasRenderingContext2D, d: RowsData, P: { l: number; r: number; t: number; b: number }, t0: number, t1: number): void {
+export function drawClimateBand(g: CanvasRenderingContext2D, d: Pick<RowsData, 'ticks' | 'climate' | 'mega'>, P: { l: number; r: number; t: number; b: number }, t0: number, t1: number): void {
   const clim = d.climate;
   if (!clim) return;
   const n = d.ticks.length;

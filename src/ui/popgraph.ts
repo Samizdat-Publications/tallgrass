@@ -8,6 +8,7 @@ import { icon } from './icons';
 import { PAPER_DIM, SANS, SPECIES_COLORS } from './palette';
 import { fillSolidRuns, hexA, strokeWithGaps } from './chartutil';
 import { drawRows, rowsPlot } from './rows';
+import { drawPair, pairX } from './pairchart';
 import { HERO, drawEvolution, evoTipRows, fmtPct, latest, type EvoData } from './evo';
 import { TRAIT_COUNT } from './traits';
 import { readJson, writeJson } from './store';
@@ -20,6 +21,13 @@ const HOVER_CLOSE_MS = 240;
 /** Names for the strip, where the full name would crowd it. */
 const STRIP_NAMES: Record<string, string> = { eagle: 'Eagle', hawk: 'Hawk' };
 const stripName = (sp: number): string => STRIP_NAMES[SPECIES_KEYS[sp] ?? ''] ?? SPECIES_NAMES[sp];
+
+/** The views of the expanded graph: every species in its own row, two species on one chart (the Pair view), and the evolution charts. */
+type GraphView = 'pop' | 'pair' | 'evo';
+const VIEW_ORDER: GraphView[] = ['pop', 'pair', 'evo'];
+const VIEW_LABEL: Record<GraphView, string> = { pop: 'Population', pair: 'Pair', evo: 'Evolution' };
+/** The Pair view opens on the bison and the wolves: the lag of the hunters behind the herd is the first thing it should show. */
+const PAIR_DEFAULT: [string, string] = ['bison', 'wolf'];
 
 export interface Marker {
   tick: number;
@@ -94,7 +102,10 @@ export class PopGraph {
   private markers: Marker[] = [];
   /** Mean heritable traits per history row, one array per trait (see traits.ts). NaN when absent. */
   private traitSeries: number[][] = Array.from({ length: TRAIT_COUNT }, () => []);
-  private view: 'pop' | 'evo' = 'pop';
+  private view: GraphView = 'pop';
+  /** The two species of the Pair view: the left axis and the right axis. */
+  private pairA = Math.max(0, SPECIES_KEYS.indexOf(PAIR_DEFAULT[0]));
+  private pairB = Math.max(0, SPECIES_KEYS.indexOf(PAIR_DEFAULT[1]));
 
   // view state
   private expanded = false;
@@ -135,7 +146,10 @@ export class PopGraph {
   private expandBtn: HTMLButtonElement;
   private sub: HTMLElement;
   private climKey: HTMLElement;
-  private tabBtns: Record<'pop' | 'evo', HTMLButtonElement>;
+  private tabBtns: Record<GraphView, HTMLButtonElement>;
+  private pairEl: HTMLElement;
+  private pairSel: [HTMLSelectElement, HTMLSelectElement];
+  private pairDots: [HTMLElement, HTMLElement];
   private evoLegend: HTMLElement;
   private evoLegendText: HTMLElement[] = [];
   private ro: ResizeObserver;
@@ -160,25 +174,45 @@ export class PopGraph {
       html: icon('expand', 16),
       onclick: () => this.toggleExpanded(),
     });
-    const mkTab = (v: 'pop' | 'evo', label: string) =>
+    const mkTab = (v: GraphView) =>
       button({
         class: 'tg-tab',
         role: 'tab',
         'aria-selected': String(v === 'pop'),
         tabindex: v === 'pop' ? '0' : '-1',
-        text: label,
+        text: VIEW_LABEL[v],
         onclick: () => this.setView(v),
         onkeydown: (e: KeyboardEvent) => {
           if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
             e.preventDefault();
-            const next = v === 'pop' ? 'evo' : 'pop';
+            const at = VIEW_ORDER.indexOf(v);
+            const next = VIEW_ORDER[(at + (e.key === 'ArrowRight' ? 1 : VIEW_ORDER.length - 1)) % VIEW_ORDER.length];
             this.setView(next);
             this.tabBtns[next].focus();
           }
         },
       });
-    this.tabBtns = { pop: mkTab('pop', 'Population'), evo: mkTab('evo', 'Evolution') };
-    const tabs = h('div', { class: 'tg-tabs', role: 'tablist', 'aria-label': 'Graph view' }, this.tabBtns.pop, this.tabBtns.evo);
+    this.tabBtns = { pop: mkTab('pop'), pair: mkTab('pair'), evo: mkTab('evo') };
+    const tabs = h('div', { class: 'tg-tabs', role: 'tablist', 'aria-label': 'Graph view' }, this.tabBtns.pop, this.tabBtns.pair, this.tabBtns.evo);
+    // the Pair view's two pickers: each species wears its own colour, the first on the left axis and the second on the right
+    const mkSel = (which: 0 | 1) => {
+      const sel = h('select', {
+        class: 'tg-pair-sel',
+        'aria-label': which === 0 ? 'Species on the left axis' : 'Species on the right axis',
+        onchange: () => this.pickPair(which, Number(sel.value)),
+      });
+      return sel;
+    };
+    this.pairSel = [mkSel(0), mkSel(1)];
+    this.pairDots = [h('i', { class: 'tg-dot' }), h('i', { class: 'tg-dot' })];
+    this.pairEl = h(
+      'div',
+      { class: 'tg-pair-pick', role: 'group', 'aria-label': 'The two species to compare' },
+      h('label', { class: 'tg-pair-one' }, this.pairDots[0], this.pairSel[0]),
+      h('span', { class: 'tg-pair-vs', text: 'against' }),
+      h('label', { class: 'tg-pair-one' }, this.pairDots[1], this.pairSel[1]),
+      h('span', { class: 'tg-pair-note', text: 'each on its own scale' }),
+    );
     // legend for the evolution view: who is faster than the founders, right now
     this.evoLegend = h('div', { class: 'tg-pop-chips tg-evo-legend', 'aria-label': 'Mean speed against the founders' });
     for (const hh of HERO) {
@@ -210,6 +244,7 @@ export class PopGraph {
       { class: 'tg-pop-head' },
       this.titleEl,
       tabs,
+      this.pairEl,
       this.sub,
       this.climKey,
       this.evoLegend,
@@ -409,14 +444,21 @@ export class PopGraph {
   }
 
   /** Switch between the population chart and the evolution view of the expanded graph. */
-  setView(v: 'pop' | 'evo'): void {
+  setView(v: GraphView): void {
     this.view = v;
     this.el.dataset.view = v;
-    for (const k of ['pop', 'evo'] as const) {
+    for (const k of VIEW_ORDER) {
       this.tabBtns[k].setAttribute('aria-selected', String(k === v));
       this.tabBtns[k].tabIndex = k === v ? 0 : -1;
     }
-    this.chart.setAttribute('aria-label', v === 'evo' ? 'Mean speed, size and coat of each species over time, against the founders' : 'Population of each species over time');
+    this.chart.setAttribute(
+      'aria-label',
+      v === 'evo'
+        ? 'Mean speed, size and coat of each species over time, against the founders'
+        : v === 'pair'
+          ? `${SPECIES_NAMES[this.pairA]} on the left axis and ${SPECIES_NAMES[this.pairB]} on the right axis over time, each on its own scale`
+          : 'Population of each species over time',
+    );
     this.tip.classList.remove('is-on');
     this.dirty = true;
     this.lastDraw = 0;
@@ -461,6 +503,44 @@ export class PopGraph {
     this.lastDraw = 0;
   }
 
+  /** Fill the two pickers of the Pair view with the species that have a card, and settle on a valid pair. */
+  private fillPair(): void {
+    const vis = this.visible;
+    if (!vis.length) return;
+    if (!vis.includes(this.pairA)) this.pairA = vis[0];
+    if (!vis.includes(this.pairB) || this.pairB === this.pairA) this.pairB = vis.find((s) => s !== this.pairA) ?? this.pairA;
+    this.pairSel.forEach((sel, which) => {
+      const cur = which === 0 ? this.pairA : this.pairB;
+      sel.replaceChildren(...vis.map((sp) => h('option', { value: String(sp), text: SPECIES_NAMES[sp] })));
+      sel.value = String(cur);
+    });
+    this.paintPair();
+  }
+
+  private paintPair(): void {
+    [this.pairA, this.pairB].forEach((sp, i) => {
+      this.pairSel[i].style.color = SPECIES_COLORS[sp];
+      this.pairDots[i].style.background = SPECIES_COLORS[sp];
+      if (this.pairSel[i].value !== String(sp)) this.pairSel[i].value = String(sp);
+    });
+  }
+
+  /** The player picked a species for one axis. Picking the other axis's species swaps the two, so a pair is always two different species. */
+  private pickPair(which: 0 | 1, sp: number): void {
+    if (!Number.isFinite(sp)) return;
+    if (which === 0) {
+      if (sp === this.pairB) this.pairB = this.pairA;
+      this.pairA = sp;
+    } else {
+      if (sp === this.pairA) this.pairA = this.pairB;
+      this.pairB = sp;
+    }
+    this.paintPair();
+    if (this.view === 'pair') this.setView('pair');
+    this.dirty = true;
+    this.lastDraw = 0;
+  }
+
   toggleLog(): void {
     this.log = !this.log;
     this.logBtn.setAttribute('aria-pressed', String(this.log));
@@ -500,6 +580,7 @@ export class PopGraph {
     this.el.dataset.count = String(vis.length);
     this.el.dataset.rows = String(Math.max(1, Math.ceil(vis.length / cols)));
 
+    this.fillPair();
     // species chips for the expanded chart
     this.chipsEl.replaceChildren();
     for (const sp of vis) {
@@ -754,7 +835,47 @@ export class PopGraph {
 
   private drawExpanded(): void {
     if (this.view === 'evo') this.drawEvo();
+    else if (this.view === 'pair') this.drawPairView();
     else this.drawChart(this.hoverX);
+  }
+
+  /** The Pair view: two species on one chart, each on its own axis (pairchart.ts), with the tip reading both at the pointer. */
+  private drawPairView(): void {
+    const f = this.fit(this.chart);
+    if (!f) return;
+    const { g, w, h: ht } = f;
+    const u = this.unit || 1;
+    const n = this.ticks.length;
+    if (n < 2) {
+      g.font = `500 ${12 * u}px ${SANS}`;
+      g.textBaseline = 'middle';
+      g.fillStyle = PAPER_DIM;
+      g.textAlign = 'center';
+      g.fillText('The graph fills in as time passes.', w / 2, ht / 2);
+      this.tip.classList.remove('is-on');
+      return;
+    }
+    const idx = drawPair(g, w, ht, u, { ticks: this.ticks, pops: this.pops, a: this.pairA, b: this.pairB, markers: this.markers, climate: this.climateAny ? this.climate : undefined, mega: this.climateAny ? this.mega : undefined }, this.hoverX);
+    this.chart.style.cursor = 'crosshair';
+    if (idx < 0) {
+      this.tip.classList.remove('is-on');
+      return;
+    }
+    const t = this.ticks[idx];
+    const rows: HTMLElement[] = [h('div', { class: 'tg-tip-h', text: `Year ${yearOfTick(t)}, ${seasonPhraseAt(t)}` })];
+    for (const sp of [this.pairA, this.pairB]) {
+      const v = this.pops[sp][idx];
+      const gone = v === 0 && awayState(sp, seasonOfTick(t), 0, true) !== null;
+      rows.push(h('div', { class: 'tg-tip-r', style: `--c:var(--sp-${sp})` }, h('i', { class: 'tg-dot' }), h('span', { text: SPECIES_NAMES[sp] }), gone ? h('b', { class: 'is-away', text: 'away' }) : h('b', { text: fmtInt(v) })));
+    }
+    this.tip.replaceChildren(...rows);
+    this.tip.classList.remove('is-cols');
+    this.tip.classList.add('is-on');
+    const x = pairX(w, u, t, this.ticks);
+    const tw = this.tip.offsetWidth;
+    const left = x + 14 * u + tw > w ? x - 14 * u - tw : x + 14 * u;
+    this.tip.style.left = `${Math.max(0, left)}px`;
+    this.tip.style.top = `${30 * u}px`;
   }
 
   private drawEvo(): void {

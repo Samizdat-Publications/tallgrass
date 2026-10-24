@@ -3653,6 +3653,8 @@ export class AnimalLayer {
     if (id === null) this.halo.visible = false;
   }
   get followedId(): number | null { return this._followedId; }
+  /** 0..1: how far the map glyphs are faded in this frame (the map legend in the HUD follows it). */
+  get glyphFade(): number { return this.glyphs.fade; }
 
   /** Interpolated world position of an animal (three.js coordinates, on the terrain or at its flight altitude). */
   getPosition(id: number, out: THREE.Vector3): boolean {

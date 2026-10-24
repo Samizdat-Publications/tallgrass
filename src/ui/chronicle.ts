@@ -25,6 +25,8 @@ const FIRST_NODES = 150;
 const MORE_NODES = 250;
 /** A year with more entries than this folds its smaller events away. */
 export const FOLD_OVER = 4;
+/** Entries arriving closer together than this (ms) are a stream, and appear without the fade. */
+const STREAM_MS = 2500;
 
 export class Chronicle {
   readonly el: HTMLElement;
@@ -49,6 +51,8 @@ export class Chronicle {
   /** The first batch after a (re)start is history, not news: it never counts as unread. */
   private quietNext = true;
   private trimRaf = 0;
+  /** When entries last arrived (performance.now), to tell a stream of them from a single event. */
+  private lastAddAt = -1e9;
   private ro: ResizeObserver;
 
   constructor(private flyTo: (x: number, y: number) => void) {
@@ -128,6 +132,11 @@ export class Chronicle {
   /** Add entries oldest-first. `animate` is false for a bulk fill. */
   add(items: ChronicleEntry[], animate = true): void {
     if (!items.length) return;
+    // a stream of entries (the graph open at 10x or 100x) is not animated: the list is rebuilt each time, and a fade that restarts every
+    // second leaves the newest line dim for good
+    const now = performance.now();
+    if (now - this.lastAddAt < STREAM_MS) animate = false;
+    this.lastAddAt = now;
     for (const it of items) {
       this.entries.push(it);
       this.seq.set(it, this.seqNext++);

@@ -78,6 +78,8 @@ export interface UIFrame {
   caption?: string | null;
   /** What the renderer is showing right now (eased precipitation, dust, flood), for the status line. */
   sky?: SkyView;
+  /** 0..1: how far the species marks of the map view are faded in (0 below the map heights); the map legend fades with it. */
+  glyphFade?: number;
 }
 
 /**

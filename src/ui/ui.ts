@@ -42,6 +42,7 @@ import { Inspector } from './inspector';
 import { AboutPanel } from './about';
 import { TopRight, challengeInfo } from './menu';
 import { PopGraph, type Marker } from './popgraph';
+import { GlyphLegend } from './glyphlegend';
 import { Slate } from './slate';
 import { applySpeciesVars } from './palette';
 import { TimeBar } from './timebar';
@@ -96,6 +97,7 @@ export class GameUI {
   private tools: ToolRail;
   private time: TimeBar;
   private pop = new PopGraph();
+  private glyphLegend = new GlyphLegend();
   private chron: Chronicle;
   private inspector: Inspector;
   private top: TopRight;
@@ -246,8 +248,9 @@ export class GameUI {
     this.shutter = button(
       {
         class: 'tg-shutter tg-glass tg-leaf',
-        'aria-label': 'Photograph',
-        title: 'Photograph: keep a picture of this view in the field guide',
+        'aria-label': 'Photograph this view: keep a picture of it in the field guide',
+        'data-tip': 'Photograph this view (for the field guide)',
+        'data-tip-at': 'right',
         html: icon('camera', 20),
         onclick: () => void this.takePhoto(),
       },
@@ -274,7 +277,7 @@ export class GameUI {
     });
     this.popRo.observe(this.pop.el);
 
-    const right = h('div', { class: 'tg-right' }, this.top.el, this.chron.el, this.inspector.el);
+    const right = h('div', { class: 'tg-right' }, this.top.el, this.chron.el, this.inspector.el, this.glyphLegend.el);
     // a quiet chip beside the time controls while the documentary camera is driving; a click takes the camera back
     this.camChip = button(
       {
@@ -423,6 +426,7 @@ export class GameUI {
     // following an animal, or the documentary camera filming: the population panel is a slim strip, whatever the player chose
     this.pop.setForcedCompact(f.following !== null || !!f.autoCamera || this.cinematic);
     this.pop.update(now, f.pop, f.speed);
+    this.glyphLegend.update(f.glyphFade ?? 0, f.pop);
     this.inspector.update(f.selected, f.following, f.story, f.storyId, f.selecting ?? null);
     if (f.selected) this.family.noteDetail(f.selected);
     this.family.frame(f.tick, f.selected ? f.selected.id : null);

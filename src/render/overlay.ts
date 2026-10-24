@@ -31,10 +31,12 @@ const LEGENDS: Record<OverlayMode, { title: string; lo: string; hi: string; ramp
 const VERT = /* glsl */ `
 varying vec2 vXZ;
 varying vec3 vNormal;
+varying float vDist;
 void main() {
   vec4 wp = modelMatrix * vec4(position, 1.0);
   vXZ = wp.xz;
   vNormal = normal;
+  vDist = length(cameraPosition - wp.xyz);
   gl_Position = projectionMatrix * viewMatrix * wp;
 }`;
 
@@ -54,6 +56,7 @@ uniform vec3 uLightDir;
 uniform vec3 uLightCol;
 varying vec2 vXZ;
 varying vec3 vNormal;
+varying float vDist;
 
 // straight-alpha "over": the old form mixed from black at low alpha, which darkened the tint twice (the output is blended again) and washed every range out
 vec4 over(vec4 dst, vec3 c, float a) {
@@ -88,6 +91,9 @@ void main() {
   } else if (uMode == 3) {
     // how the ground is lit here: the tint is a stain on the land, so it shades with the slopes and dims with the light
     // (kept off black, or a night range would vanish)
+    // the tint (the wash, the hatch and the rim, not the outline, the den or the labels) thins out near the camera, where it filled the
+    // foreground and drowned the animals (round 36); from the far map views (about 400 m and more) it is as it was
+    float nearFill = mix(0.2, 1.0, smoothstep(60.0, 420.0, vDist));
     float lum = dot(uLightCol, vec3(0.3, 0.55, 0.15));
     float lit = clamp(0.52 + 0.48 * max(dot(normalize(vNormal), uLightDir), 0.0) * min(1.0, lum * 0.8), 0.52, 1.0);
     for (int i = 0; i < ${MAX_PACKS}; i++) {
@@ -122,7 +128,7 @@ void main() {
       vec3 pc = mix(uPackCol[i], vec3(dot(uPackCol[i], vec3(0.3, 0.55, 0.15))), 0.2);
       vec3 base = pc * lit;
       vec3 bright = mix(pc, vec3(1.0), 0.18);
-      col = over(col, base, clamp(wash + inside * hatch * 0.1 * mott + rim * 0.1, 0.0, 0.4));
+      col = over(col, base, clamp(wash + inside * hatch * 0.1 * mott + rim * 0.1, 0.0, 0.4) * nearFill);
       // a clear border that follows the range's own outline, a little broken along its length, never a drawn circle
       // it tapers: a slow swell along the outline thins it in places and fattens it a little in others
       float swell = smoothstep(0.15, 0.85, vnoise(dir * 2.6 + fi * 4.7));

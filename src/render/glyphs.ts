@@ -22,6 +22,24 @@ const DIAMOND: Record<string, boolean> = { raven: true, eagle: true, hawk: true 
 /** Opacity per species: the many small ones (ravens) sit back a little so the herds and the packs lead. */
 const ALPHA: Record<string, number> = { raven: 0.7, hawk: 0.85, eagle: 0.9, beaver: 0.8 };
 
+/**
+ * The mark's colour per species key where it differs from the species' panel colour (round 36: on the map the wolf's blue read as the
+ * pronghorn's teal and the hawk's green as the grass, so the hunters did not stand apart from the herds). The hunters take a red-orange
+ * family in steps (wolf crimson, cougar vermilion, coyote amber) that no herbivore uses; the golden eagle, whose panel red would now sit
+ * on the wolf's, goes pale gold. The population strip and the rest of the panel keep the registry colours; the map legend reads these.
+ */
+export const GLYPH_COLOR: Record<string, string> = {
+  wolf: '#E8322B', cougar: '#FF6A2A', coyote: '#FFB43A', eagle: '#F3E3A4',
+};
+/** The mark's colour for a species: its glyph override, or its registry (panel) colour. */
+export function glyphColor(sp: { key: string; color: string }): string {
+  return GLYPH_COLOR[sp.key] ?? sp.color;
+}
+/** Whether a species' mark is a diamond (a flier) rather than a chevron, for the map legend's chips. */
+export function glyphIsDiamond(key: string): boolean {
+  return !!DIAMOND[key];
+}
+
 const CAP0 = 2048;
 
 export class MapGlyphs {
@@ -49,7 +67,7 @@ export class MapGlyphs {
   /** `uLow`: the animal layer's night amount (0 day .. 1 night), which takes the marks down a little in the dark. */
   constructor(uLow: { value: number }) {
     this.uLow = uLow;
-    this.col = SPECIES.map((s) => { const c = new THREE.Color(s.color); return [c.r, c.g, c.b] as [number, number, number]; });
+    this.col = SPECIES.map((s) => { const c = new THREE.Color(glyphColor(s)); return [c.r, c.g, c.b] as [number, number, number]; });
     this.size = SPECIES.map((s) => SIZE_PX[s.key] ?? 7);
     this.shape = SPECIES.map((s) => (DIAMOND[s.key] ? 1 : 0));
     this.alpha = SPECIES.map((s) => ALPHA[s.key] ?? 1);

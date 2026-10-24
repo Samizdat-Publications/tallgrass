@@ -923,14 +923,15 @@ button.tg-ent-b:hover {
 .tg-ent.is-new {
   animation: tg-ent-in 0.34s var(--ease);
 }
+/* r-ui36 (round 36): a new entry fades up from a dim start, and does not slide. It started at opacity 0 and 6 units high, so with the graph
+   open at a fast pace (an entry or two every second, the list rebuilt each time) the top of the list was blank under the year header, and the
+   chronicle measured the foot of the list against entries that were not yet in their place, which left half a sentence showing. */
 @keyframes tg-ent-in {
   from {
-    opacity: 0;
-    transform: translateY(calc(-6 * var(--u)));
+    opacity: 0.35;
   }
   to {
     opacity: 1;
-    transform: none;
   }
 }
 
@@ -976,6 +977,10 @@ button.tg-ent-b:hover {
 /* the evolution view stacks a hero chart over four small ones, and its tooltip lists every line: a little taller */
 .tg-pop.is-open[data-view='evo'] {
   height: min(calc(330 * var(--u)), 44vh);
+}
+/* the Pair view is one chart with two axes: a little taller than the plain dock, so the lag of one line behind the other reads */
+.tg-pop.is-open[data-view='pair'] {
+  height: min(calc(300 * var(--u)), 40vh);
 }
 /* the population view also carries a legend strip of species names (one row, or two on a narrow screen) */
 .tg-pop.is-open[data-view='pop'] {
@@ -1177,8 +1182,75 @@ button.tg-ent-b:hover {
   font-size: calc(11.5 * var(--u));
   color: var(--c);
 }
-.tg-pop.is-open[data-view='evo'] .tg-pop-log {
+.tg-pop.is-open[data-view='evo'] .tg-pop-log,
+.tg-pop.is-open[data-view='pair'] .tg-pop-log {
   display: none;
+}
+/* the Pair view's pickers: two species on one chart, each wearing its own colour (the first reads against the left axis, the second the right) */
+.tg-pair-pick {
+  display: none;
+}
+.tg-pop.is-open[data-view='pair'] .tg-pair-pick {
+  display: flex;
+  align-items: center;
+  gap: calc(8 * var(--u));
+  margin-left: calc(2 * var(--u));
+}
+.tg-pair-one {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: calc(6 * var(--u));
+  height: calc(24 * var(--u));
+  padding: 0 calc(22 * var(--u)) 0 calc(9 * var(--u));
+  border-radius: 999px;
+  border: 1px solid var(--edge-hi);
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+.tg-pair-one:hover {
+  background: rgba(240, 228, 200, 0.08);
+}
+.tg-pair-one::after {
+  content: '';
+  position: absolute;
+  right: calc(9 * var(--u));
+  top: 50%;
+  width: calc(5 * var(--u));
+  height: calc(5 * var(--u));
+  margin-top: calc(-4 * var(--u));
+  border-right: 1.5px solid var(--paper-dim);
+  border-bottom: 1.5px solid var(--paper-dim);
+  transform: rotate(45deg);
+  pointer-events: none;
+}
+.tg-pair-sel {
+  appearance: none;
+  -webkit-appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--paper);
+  font: 600 calc(13 * var(--u)) / 1 var(--sans);
+  padding: 0;
+  cursor: pointer;
+}
+.tg-pair-sel option {
+  background: #1a1711;
+  color: var(--paper);
+}
+.tg-pair-vs {
+  font: italic 400 calc(14 * var(--u)) / 1 var(--serif);
+  color: var(--paper-dim);
+}
+.tg-pair-note {
+  margin-left: calc(6 * var(--u));
+  font-size: calc(12 * var(--u));
+  color: var(--paper-dim);
+}
+@media (max-width: 1100px) {
+  .tg-pair-note {
+    display: none;
+  }
 }
 .tg-tabs {
   display: none;
@@ -2016,7 +2088,6 @@ button.tg-ent-b:hover {
   opacity: 0.74;
   transition: opacity 1.4s var(--ease);
 }
-.tg-ui.is-idle:not(.is-cinematic):not(.is-hidden) .tg-ov-btn,
 .tg-ui.is-idle:not(.is-cinematic):not(.is-hidden) .tg-shutter,
 .tg-ui.is-idle:not(.is-cinematic):not(.is-hidden) .tg-topright-row .tg-leaf {
   opacity: 0.34;
@@ -2034,6 +2105,16 @@ button.tg-ent-b:hover {
   transition: opacity 1.4s var(--ease);
 }
 .tg-ui.is-idle:not(.is-cinematic):not(.is-hidden) .tg-time > * {
+  opacity: 0.86;
+  transition: opacity 1.4s var(--ease);
+}
+/* r-ui36 (round 36, item 3): the Overlays button sat at 0.34 with the corner icons and read as a disabled control beside the time bar.
+   It is a control the player uses, so it keeps the time bar's floor: the glass at 0.8 and its words a little dimmer. */
+.tg-ui.is-idle:not(.is-cinematic):not(.is-hidden) .tg-ov-btn {
+  opacity: 0.8;
+  transition: opacity 1.4s var(--ease);
+}
+.tg-ui.is-idle:not(.is-cinematic):not(.is-hidden) .tg-ov-btn > * {
   opacity: 0.86;
   transition: opacity 1.4s var(--ease);
 }
@@ -2917,6 +2998,113 @@ button.tg-ent-b:hover {
     left: auto;
     right: 0;
   }
+}
+
+/* ---- the map's species legend: a chip in each mark's colour and shape, for the species in the valley, fading with the marks (round 36) ---- */
+.tg-glegend {
+  flex: none;
+  align-self: flex-end;
+  margin-top: auto;
+  max-width: 100%;
+  padding: calc(7 * var(--u)) calc(11 * var(--u)) calc(8 * var(--u));
+  border-radius: calc(10 * var(--u));
+  background: rgba(26, 23, 17, 0.62);
+  -webkit-backdrop-filter: blur(calc(12 * var(--u))) saturate(1.1) brightness(var(--glass-dim));
+  backdrop-filter: blur(calc(12 * var(--u))) saturate(1.1) brightness(var(--glass-dim));
+  border: 1px solid var(--edge);
+  opacity: var(--gl, 0);
+  pointer-events: none;
+}
+.tg-gl-title {
+  margin-bottom: calc(4 * var(--u));
+  font: italic 400 calc(13 * var(--u)) / 1.1 var(--serif);
+  color: var(--paper-dim);
+}
+.tg-gl-list {
+  display: grid;
+  grid-auto-flow: column;
+  grid-template-rows: repeat(5, auto);
+  column-gap: calc(14 * var(--u));
+  row-gap: calc(1 * var(--u));
+}
+.tg-gl-row {
+  display: flex;
+  align-items: center;
+  gap: calc(7 * var(--u));
+  font-size: calc(12.5 * var(--u));
+  line-height: 1.45;
+  white-space: nowrap;
+  color: var(--paper);
+}
+.tg-gl-chip {
+  flex: none;
+  width: calc(10 * var(--u));
+  height: calc(10 * var(--u));
+  background: var(--c);
+  /* the chevron the map draws, its back notched */
+  clip-path: polygon(50% 0, 100% 100%, 50% 74%, 0 100%);
+}
+.tg-gl-chip.is-diamond {
+  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+}
+/* it keeps out of the way of the overlay legends and the open drawers and cards: the graph, a selected animal, the overlay menu */
+.tg-ui:has(.tg-pop.is-open) .tg-glegend,
+.tg-ui:has(.tg-insp:not([hidden])) .tg-glegend,
+.tg-ui:has(.tg-overlay.is-open) .tg-glegend {
+  visibility: hidden;
+}
+@media (max-width: 1500px) {
+  .tg-ui:has(.tg-map-legend:not([hidden])) .tg-glegend {
+    visibility: hidden;
+  }
+}
+@media (max-width: 899px) {
+  .tg-glegend {
+    display: none;
+  }
+}
+
+/* ---- a visible tip for a button that is only an icon: the same dark card as the graph's tip, shown on hover and on keyboard focus ---- */
+.tg-topright-row [data-tip] {
+  position: relative;
+}
+[data-tip]::after {
+  content: attr(data-tip);
+  position: absolute;
+  top: calc(100% + 8 * var(--u));
+  right: 0;
+  padding: calc(5 * var(--u)) calc(9 * var(--u));
+  border-radius: calc(8 * var(--u));
+  background: rgba(18, 15, 10, 0.92);
+  border: 1px solid var(--edge-hi);
+  color: var(--paper);
+  font: 500 calc(13 * var(--u)) / 1.2 var(--sans);
+  white-space: nowrap;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translateY(calc(-3 * var(--u)));
+  transition: opacity 0.14s var(--ease), transform 0.14s var(--ease), visibility 0s linear 0.14s;
+  z-index: 8;
+}
+[data-tip]:hover::after,
+[data-tip]:focus-visible::after {
+  opacity: 1;
+  visibility: visible;
+  transform: none;
+  transition-delay: 0.35s, 0.35s, 0.35s;
+}
+/* bottom-left button: the tip opens to its right, clear of the population strip above it */
+[data-tip][data-tip-at='right']::after {
+  top: 50%;
+  right: auto;
+  left: calc(100% + 8 * var(--u));
+  margin-top: calc(-14 * var(--u));
+  transform: translateX(calc(-3 * var(--u)));
+}
+[data-tip][data-tip-at='right']:hover::after,
+[data-tip][data-tip-at='right']:focus-visible::after {
+  transform: none;
 }
 
 /* ====================================================================================================================

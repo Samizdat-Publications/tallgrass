@@ -906,7 +906,7 @@ engine.onFrame((dt, t) => {
       selecting: selectedAnimal !== null && pending.selected?.id !== selectedAnimal && !pending.selectedGone ? animals.getSpecies(selectedAnimal) : null,
       speed: pending.speed, ticksPerSec: pending.ticksPerSec, seed: seedStr,
       scenario: scenario.id, slots: popSlots, following, story: pending.story, storyId: pending.storyId,
-      packs: pending.packs.length / 4, autoCamera: autoCam, narrator: narrator.enabled, caption: narrator.caption, sky: (engine.skyNow(skyView), skyView),
+      packs: pending.packs.length / 4, autoCamera: autoCam, narrator: narrator.enabled, caption: narrator.caption, sky: (engine.skyNow(skyView), skyView), glyphFade: animals.glyphFade,
     });
     if (pending.selectedGone && following !== null) { following = null; engine.cam.follow(null); }
     const cp = engine.camera.position; // three x = sim x, three z = sim y

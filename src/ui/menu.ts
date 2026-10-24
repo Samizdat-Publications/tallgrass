@@ -110,7 +110,7 @@ export class TopRight {
     this.seedName = h('span', { class: 'tg-seed-name' });
     this.seedIcon = h('span', { class: 'tg-seed-ic', html: icon('copy', 14) });
     this.seedBtn = button(
-      { class: 'tg-seed tg-glass tg-leaf', title: 'Copy the seed so you can share this world', onclick: () => this.copySeed() },
+      { class: 'tg-seed tg-glass tg-leaf', 'data-tip': 'Copy the seed so you can share this world', onclick: () => this.copySeed() },
       this.seedName,
       h('span', { class: 'tg-seed-label', text: 'Seed' }),
       this.seedText,
@@ -118,15 +118,15 @@ export class TopRight {
     );
     this.shareBtn = button({
       class: 'tg-ambientbtn tg-sharebtn tg-glass tg-leaf',
-      'aria-label': 'Copy a link to this valley',
-      title: 'Share: copy a link that reopens this valley, with everything you have done in it',
+      'aria-label': 'Share: copy a link that reopens this valley, with everything you have done in it',
+      'data-tip': 'Share: copy a link to this valley',
       html: icon('share', 20),
       onclick: () => this.pages.onShare(),
     });
     this.ambientBtn = button({
       class: 'tg-ambientbtn tg-glass tg-leaf',
-      'aria-label': 'Hide the interface',
-      title: 'Ambient view: hide the interface (H). Any key or click brings it back.',
+      'aria-label': 'Ambient view: hide the interface (H). Any key or click brings it back.',
+      'data-tip': 'Hide the interface (H)',
       html: icon('eyeoff', 20),
       onclick: () => this.onAmbient(),
     });
@@ -134,8 +134,8 @@ export class TopRight {
       class: 'tg-menubtn tg-glass tg-leaf',
       'aria-haspopup': 'dialog',
       'aria-expanded': 'false',
-      'aria-label': 'Menu',
-      title: 'Menu',
+      'aria-label': 'Menu: new valley, settings, field guide and more',
+      'data-tip': 'Menu',
       html: icon('menu', 20),
       onclick: () => this.toggle(),
     });
@@ -302,7 +302,7 @@ export class TopRight {
       this.seedBtn.classList.remove('is-copied');
       this.seedIcon.innerHTML = icon('copy', 14);
       setText(this.seedText, seed);
-      this.seedBtn.title = `Copy the seed (${seed}) so you can share this world`;
+      this.seedBtn.setAttribute('data-tip', `Copy the seed (${seed}) so you can share this world`);
       const n = namedSeed(seed);
       setText(this.seedName, n ? n.name : '');
       this.seedBtn.classList.toggle('has-name', !!n);
