@@ -327,6 +327,40 @@ const SETS = {
     { name: 'wx_10_natural_blizzard_mid', eval: "window.__env({ season: 3.4, warmth: 0.1, weather: 4, windStrength: 0.45, dayFrac: 0.95 }); if (window.__engine.noteBlizzard) window.__engine.noteBlizzard(1e9); window.__wxMid()", wait: 18000 },
     { name: 'wx_09_clear_day_wide_again', eval: "window.__engine.noteBlizzard(-1, true); window.__env({}); window.__cam('wide')", wait: 22000 },
   ],
+  // r-land-v1: snow lying on the ground (it fell for a while, then the sky clears) seen from the drone (150 to 450 m), a mid view and a
+  // close view, plus the creek and a pond in winter from afar. Same views before and after a change to the snow or the water.
+  landsnow: [
+    { name: 'ls_00_setup', eval: `(async () => {
+      const e = window.__engine, w = e.world;
+      window.__env = (o) => {
+        window.__envO = Object.assign({ tick: 0, season: 3.4, weather: 4, warmth: 0.1, rain: 0, dayFrac: 0.45, windDir: 0.35, windStrength: 0.2 }, o);
+        if (!window.__envHook) window.__envHook = e.onFrame(() => e.setEnv(window.__envO));
+        e.setEnv(window.__envO); e.applyEnvNow();
+      };
+      window.__wv = (t, dist, pitch, rel) => {
+        let x, y;
+        if (typeof t === 'string') { const q = Number(t.slice(1)) * 4; x = w.ponds[q]; y = w.ponds[q + 1]; }
+        else { const n = w.creek.length / 2, k = Math.min(n - 2, Math.max(0, Math.floor(n * t))); x = w.creek[2 * k]; y = w.creek[2 * k + 1]; }
+        const L = e.uniforms.lightDir.value;
+        const az = Math.atan2(L.x, L.z) * 180 / Math.PI;
+        e.cam.setView({ x, y, distance: dist, pitchDeg: pitch, yawDeg: az + 180 + rel }, true);
+      };
+      window.__speed(0); window.__step(900); window.__followId(null); window.__env({});
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'h', bubbles: true }));
+      await new Promise((r) => { let last = -1, same = 0, n = 0; const t = setInterval(() => { const sn = window.__snap && window.__snap(); const k = sn ? sn.tick : -2; if (k === last) same++; else { same = 0; last = k; } if ((same >= 5 && k >= 900) || ++n > 240) { clearInterval(t); r(); } }, 500); });
+      if (e.noteBlizzard) e.noteBlizzard(-1, true);
+      window.__cam('wide');
+    })()`, wait: 20000 },
+    { name: 'ls_01_snow_wide', eval: "window.__env({ dayFrac: 0.45 }); window.__cam('wide')", wait: 6000 },
+    { name: 'ls_02_snow_mid', eval: "window.__focusHerd(); window.__engine.cam.setView({ distance: 170, pitchDeg: 26 }, true)", wait: 3000 },
+    { name: 'ls_03_snow_top', eval: "window.__cam('top')", wait: 3000 },
+    { name: 'ls_04_dusk_wide', eval: "window.__env({ dayFrac: 0.7 }); window.__cam('wide')", wait: 4000 },
+    { name: 'ls_05_creek_far', eval: "window.__env({ dayFrac: 0.45 }); window.__wv(0.45, 300, 26, 40)", wait: 4000 },
+    { name: 'ls_06_creek_mid', eval: "window.__wv(0.45, 150, 22, 50)", wait: 3000 },
+    { name: 'ls_07_pond_far', eval: "window.__wv('p1', 260, 28, 30)", wait: 3000 },
+    { name: 'ls_08_close', eval: "window.__focusHerd(); window.__engine.cam.setView({ distance: 22, pitchDeg: 9 }, true)", wait: 3000 },
+    { name: 'ls_09_mid85', eval: "window.__focusHerd(); window.__engine.cam.setView({ distance: 85, pitchDeg: 22 }, true)", wait: 3000 },
+  ],
   // R-water2: the far-field look of the creek and ponds (wide, mid, top, graze) in each season and light, UI hidden ('h'). Same views before and after.
   water2: [
     { name: 'w2_00_setup', eval: `(() => {
