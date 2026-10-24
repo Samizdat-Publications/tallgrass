@@ -250,10 +250,12 @@ export function buildBison(): ModelDef {
     // herd in shade or at dusk stays a value above the shadows
     // R-readable: guild value separation and edge lift at the default distances (see ModelDef.read)
     read: { rim: [0.92, 0.86, 0.74, 0.4] },
-    far: { gain: 1, rim: 0, hunt: 0, rimCol: [1, 0.8, 0.5], d0: 40, d1: 220, tint: [0.14, 0.095, 0.068], mix: 0.42, floor: 0.2,
-    // r-far-read: a dark oval with a lighter tawny back and shoulder hump (the coat's own paler forequarters show through, less of the
-    // flat tint), darker flanks, so each animal in a herd is its own shape (a dark carpet otherwise)
-    top: [0.44, 0.33, 0.22], topMix: 0.78, side: 0.7, calm: 0.3, widen: 0.3 },
+    // r-farread-v1: from 32 m the coat goes to the darkest thing on the prairie (a near-black chocolate with no rust in it, full by 105 m), so a herd
+    // is a dark mass at 60 to 200 m in any light; the paler back stripe is kept faint so each animal is still its own oval
+    far: { gain: 0.85, rim: 0, hunt: 0, rimCol: [1, 0.8, 0.5], d0: 32, d1: 105, tint: [0.034, 0.029, 0.026], mix: 0.8, floor: 0.05, nightLift: 4,
+    // r-far-read: a dark oval with a slightly paler back and shoulder hump (a cool-brown, never tawny), darker flanks, so each animal in a
+    // herd is its own shape (a black carpet otherwise)
+    top: [0.105, 0.088, 0.072], topMix: 0.55, side: 0.45, calm: 0.3, widen: 0.3 },
     params: {
       ...DEFAULT_PARAMS,
       kind: 0,

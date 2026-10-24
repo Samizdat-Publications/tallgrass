@@ -374,6 +374,13 @@ export interface ModelDef {
      * the lift turns the whole animal pale and it reads as a chalk fleck; a dark bison keeps it, since the lift is what separates it from the shadow.
      */
     rimCut?: number;
+    /**
+     * r-farread-v1: how much the coat darkens along the silhouette at range (0..1 at the very edge, riding the far ramp, so zero up close). A tan or grey animal
+     * on grass of the same value gets a dark edge and reads as a shape, not a fleck. Not used at night (the moon rim does that job).
+     */
+    edge?: number;
+    /** r-farread-v1: the far tint and top colours are scaled by 1 + nightLift at night (uLow 1), so a coat darkened for the day does not vanish in the moonlight. Default 0. */
+    nightLift?: number;
   };
   /**
    * R-readable: value separation at the default distances (about 6 m and out, full by 40 m), by guild, against the season's grass. A
