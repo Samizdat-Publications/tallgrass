@@ -1,9 +1,9 @@
 # Good morning: Tallgrass overnight report
 
-*(Updated 23:15 Saturday 2026-10-24. This file is refreshed at every milestone.)*
+*(Updated 23:10 Saturday 2026-10-24. This file is refreshed at every milestone.)*
 
 ## 2026-10-24: Tallgrass 1.0 (the V1.0 polish run, live and public)
-**Releases:** [v1.0.0](https://github.com/Samizdat-Publications/tallgrass/releases/tag/v1.0.0) (16:55), [v1.0.1](https://github.com/Samizdat-Publications/tallgrass/releases/tag/v1.0.1) (19:00), [v1.0.2](https://github.com/Samizdat-Publications/tallgrass/releases/tag/v1.0.2) (21:40), [v1.0.3](https://github.com/Samizdat-Publications/tallgrass/releases/tag/v1.0.3) (22:10), [v1.0.4](https://github.com/Samizdat-Publications/tallgrass/releases/tag/v1.0.4) (22:30: ravens spiral onto a kill, the ?sunhold=1 trial), [v1.0.5](https://github.com/Samizdat-Publications/tallgrass/releases/tag/v1.0.5) (23:15, live now: the round 40 fixes). **Play it:** https://tallgrass.stewartgregerson.workers.dev · **Landing page:** https://tallgrass.pages.dev · **Hub:** https://samizdat-e0x.pages.dev · **Source:** https://github.com/Samizdat-Publications/tallgrass (or `npm run dev`, then http://localhost:5199/).
+**Releases:** [v1.0.0](https://github.com/Samizdat-Publications/tallgrass/releases/tag/v1.0.0) (16:55), [v1.0.1](https://github.com/Samizdat-Publications/tallgrass/releases/tag/v1.0.1) (19:00), [v1.0.2](https://github.com/Samizdat-Publications/tallgrass/releases/tag/v1.0.2) (21:40), [v1.0.3](https://github.com/Samizdat-Publications/tallgrass/releases/tag/v1.0.3) (22:10), [v1.0.4](https://github.com/Samizdat-Publications/tallgrass/releases/tag/v1.0.4) (22:30: ravens spiral onto a kill, the ?sunhold=1 trial), [v1.0.5](https://github.com/Samizdat-Publications/tallgrass/releases/tag/v1.0.5) (23:08, live now: the round 40 fixes). **Play it:** https://tallgrass.stewartgregerson.workers.dev · **Landing page:** https://tallgrass.pages.dev · **Hub:** https://samizdat-e0x.pages.dev · **Source:** https://github.com/Samizdat-Publications/tallgrass (or `npm run dev`, then http://localhost:5199/).
 
 **What you asked for:** as polished as it can get for V1.0 by midnight, then public on the hub. The simulation was left alone (the default world is still v10b, golden hashes unchanged); everything went into what a stranger sees first.
 
