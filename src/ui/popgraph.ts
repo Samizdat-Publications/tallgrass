@@ -435,6 +435,12 @@ export class PopGraph {
     return i >= 0 ? (this.pops[sp]?.[i] ?? null) : null;
   }
 
+  /** Whether a megadrought held at the history row at or before `tick` (null before the first row). */
+  megaAtOrBefore(tick: number): boolean | null {
+    const i = this.lowerBound(tick + 1) - 1;
+    return i >= 0 ? !!this.mega[i] : null;
+  }
+
   get isExpanded(): boolean {
     return this.expanded;
   }

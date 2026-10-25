@@ -981,6 +981,8 @@ export class GameUI {
         const before = this.pop.popAtOrBefore(e.sp, e.tick - 1);
         if (before !== null) ctx = { alreadyHere: before > 0 };
       }
+      // a season's drought that ends inside a megadrought does not end the drought the header names
+      if (e.kind === 'droughtEnd' && this.pop.megaAtOrBefore(e.tick)) ctx = { megaHolds: true };
       // a run of arrivals (or departures) of one species within a year reads as one growing line, not a list of near-copies
       const fk = foldKey(e);
       const open = fk ? this.folds.get(fk) : undefined;

@@ -21,7 +21,7 @@ export const NOTES: NoteDef[] = [
   { id: 'packFounded', title: 'A new pack takes a range', hint: 'A pair of wolves strikes out and founds a pack.' },
   { id: 'packLost', title: 'A pack falls apart', hint: 'A pack that held a range breaks up.' },
   { id: 'drought', title: 'A drought settles in', hint: 'The rains fail. Wait for it, or call one.' },
-  { id: 'droughtBreaks', title: 'The drought breaks', hint: 'Watch a drought run its course.' },
+  { id: 'droughtBreaks', title: 'A dry spell breaks', hint: 'Watch a drought run its course.' }, // (not "The drought breaks": a season's dry spell can end inside a megadrought, round 40)
   { id: 'outbreak', title: 'Sickness in the herd', hint: 'Disease takes hold where the animals crowd.' },
   { id: 'fire', title: 'Fire on the prairie', hint: 'Lightning, or a fire of your own.' },
   { id: 'greenUp', title: 'The burn greens up', hint: 'Watch a burned patch regrow, a year after a fire.' },

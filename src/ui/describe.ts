@@ -20,6 +20,8 @@ export interface DescribeContext {
   salt?: number;
   /** For an introduction: true when the species was already living in the valley (so the newcomers do not "return"). */
   alreadyHere?: boolean;
+  /** For the end of a drought: true when a megadrought still holds (a season's drought can break inside the long one). */
+  megaHolds?: boolean;
 }
 
 export interface EventText {
@@ -490,6 +492,8 @@ function describeCore(e: SimEvent, ctx?: DescribeContext): EventText {
       };
     }
     case 'droughtEnd':
+      // (round 40: "The drought breaks" under a header that still says Megadrought read as a contradiction)
+      if (ctx?.megaHolds) return { sentence: pick(e, ['The dry spell eases for a season, but the megadrought holds.', 'A little rain comes back, though the long drought is not over.', 'The worst of this dry spell passes; the megadrought goes on.']) };
       return { sentence: pick(e, ['The drought breaks.', 'The dry spell ends at last.', 'The drought lets go of the valley.', 'The rains come back, and the drought is over.']) };
     case 'climateWet': {
       const afterDry = e.b < 0;
