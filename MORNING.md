@@ -42,6 +42,7 @@
 
 ### Decisions you might want to overrule
 - **Ages:** an animal's card gives its age in that species' own years (a bison's life mapped onto a real bison's), while the family tree dates births in valley years, so a 10-year-old bull can be born in year 2 of a year-6 valley. Left as is; the fix is a wording choice (say "bison years", or show valley years on the card).
+- **The biggest open question, motion (Gemini rounds 34 and 38):** even on a smooth 30 fps take Gemini scores "life and motion" 2 to 3, saying the animals slide while the light sweeps in time-lapse. At 1x a valley day lasts 80 s, so shadows race across the land while legs walk at real speed, and that mismatch may be most of what reads as sliding (measured foot slip is under 1.4%). Options: a slower day at 1x (light only, the sim calendar unchanged), or hold the sun steadier while the documentary camera films. Your call; I did not change it tonight.
 - **Licences:** the wolf, pronghorn and mule deer models are CC BY-NC (non-commercial), as ruled before. Fine for a free public game; resolve before anything commercial.
 - **100x** still reaches about 45 to 60x on this machine (the time bar says so honestly). A real speed-up has to keep the golden hashes bit-identical; the profile is flat (no line over 3%), so it is a project of its own.
 
