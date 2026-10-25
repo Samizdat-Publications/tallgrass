@@ -369,10 +369,11 @@ export class OverlayLayer {
       const x = this.packs[i * 4], z = this.packs[i * 4 + 1], size = this.packs[i * 4 + 3];
       this.v.set(x, this.heightAt(x, z) + 9, z).project(camera);
       if (this.v.z > 1 || Math.abs(this.v.x) > 1.1 || Math.abs(this.v.y) > 1.1) { el.style.display = 'none'; continue; }
-      const py = ((1 - this.v.y) / 2) * h;
-      // (a den near the foot of the screen would put its label under the time bar and the population strip, round 37: it is left out there;
-      // a hide, not a fade, because the label's frosted backdrop stays visible as a pale box at partial opacity)
-      if (py > h - 130) { el.style.display = 'none'; continue; }
+      // (a den near the foot of the screen would put its label under the time bar and the population strip, round 37: the label is lifted
+      // to just above them while the den is on screen, so the pack keeps its name, round 40; a den below the screen's edge has none)
+      let py = ((1 - this.v.y) / 2) * h;
+      if (py > h) { el.style.display = 'none'; continue; }
+      py = Math.min(py, h - 150);
       el.style.display = '';
       el.style.opacity = String(this.alpha);
       el.style.transform = `translate(${((this.v.x + 1) / 2) * w}px, ${py}px) translate(-50%, calc(-100% - 10px))`;
