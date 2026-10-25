@@ -535,7 +535,7 @@ Scores: visual 7, readability 5, life 7, ecosystem 6, UI 7, keep watching 6 (rou
 2. Flat long-run chart: DEFER (sim; a planned pass with the stability suite, MORNING Next 5 item 5).
 3. Graph lanes flatten crashes: DEFER (the Pair view is the first step; taller lanes for a chosen few next).
 4. Winter terrain like a heightmap, purple tint: DEFER (r-land-v1 and r-spring-v1 tonight; the territory fill is the purple in 11).
-5. Text against the picture: DEFER. Most of it is the stills' instant cuts (a field-guide toast from the last shot lingers 3 s into the next); "Year 8" at the top of the Chronicle at year 9 is right (no year-9 entry yet). The Megadrought label against "The drought breaks" needs a look.
+5. Text against the picture: DEFER. Most of it is the stills' instant cuts (a field-guide toast from the last shot lingers 3 s into the next); "Year 8" at the top of the Chronicle at year 9 is right (no year-9 entry yet). The Megadrought label against "The drought breaks": FIX, 0241542 (a season's dry spell that ends inside a megadrought now says the megadrought holds, and the field note is titled "A dry spell breaks").
 6. Ravens flat black, too close: DEFER (rebuilt tonight; a nearest-distance cap for birds is next).
 7. Bison pass through each other close up: DEFER (display separation landed tonight; it thins with distance).
 8. Water inconsistent: DEFER.
