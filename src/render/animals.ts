@@ -867,7 +867,7 @@ export class AnimalLayer {
     this.wadeCache.clear();
   }
   /** Per species visual size multiplier by species id (readability boost for small animals: wolf 1.35 (the concept art wolves read at ~0.65 of a bison), raven 1.7 (circling ravens are the "kill here" tell), rabbit 1.2, cougar 1.05). */
-  readonly speciesScale: number[] = byId({ bison: 1, wolf: 1.35, raven: 1.7, pronghorn: 1, rabbit: 1.2, cougar: 1.05, coyote: 1.35, eagle: 1.7, hawk: 1.6, muledeer: 1.05, beaver: 1.25 }, () => 1);
+  readonly speciesScale: number[] = byId({ bison: 1, wolf: 1.35, raven: 1.7, pronghorn: 1, rabbit: 1.2, cougar: 1.05, coyote: 1.35, eagle: 2.0, hawk: 1.6, muledeer: 1.05, beaver: 1.25 }, () => 1);
   /**
    * The season (0 early spring .. 4) the deer's antlers and coat follow; null: the snapshot's own. A capture hook (the engine's rendered
    * season is separate, and a still of a rutting buck in autumn must not wait for the valley year to come round).
