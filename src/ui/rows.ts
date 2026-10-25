@@ -33,7 +33,7 @@ export interface RowsData {
 }
 
 /** A crash needs at least this fall from its peak, and a peak of at least this many animals, to be labelled in its lane. */
-const CRASH_MIN_FRAC = 0.35;
+const CRASH_MIN_FRAC = 0.45; // (0.35 also labelled the seasonal swings of ravens and cougars, which are not crashes)
 const CRASH_MIN_PEAK = 5;
 
 /** The largest peak-to-trough fall in a series (peak first, then trough), or null when none clears the thresholds. */
@@ -290,7 +290,8 @@ export function drawRows(g: CanvasRenderingContext2D, w: number, h: number, u: n
     }
 
     // the worst crash in view: a ring on the trough and its size in the lane's colour, set where no line runs and clear of the end value
-    if (!isGrass) {
+    // (not for a visitor: an eagle's or a hawk's count rises and falls with its own comings and goings)
+    if (!isGrass && !away) {
       const crash = biggestCrash(vals, isAway);
       if (crash) {
         const cx = X(d.ticks[crash.trough]), cy = Y(vals[crash.trough]);
