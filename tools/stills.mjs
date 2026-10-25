@@ -989,6 +989,21 @@ SETS.seasons = [
   { name: 'sp_15_spring_morning_mid_far', eval: "window.__env({ season: 0.3, dayFrac: 0.3 }); window.__focusHerd(); window.__engine.cam.setView({ distance: 170, pitchDeg: 26 }, true)", wait: 4000 },
 ];
 
+// r-fartint-v1: the far band (120 and 170 m) in the lights where the species ran together (round 37): clear midday, winter dusk on snow, a heavy
+// rain and the dawn mist. Same fixed-tick rig as SETS.read (a wolf with bison and pronghorn round it), the sim held, the env held by __env.
+// Run with --png for the crop sheet (tools/fartint_sheet.mjs).
+SETS.fartint = [
+  Object.assign({}, SETS.read[0], { name: 'fi_00_setup', wait: 5000 }),
+  { name: 'fi_a_clear_120', eval: "window.__env({ dayFrac: 0.45 }); window.__rdRig(120, 26)", wait: 4500 },
+  { name: 'fi_a_clear_170', eval: "window.__rdRig(170, 28)", wait: 3500 },
+  { name: 'fi_b_dusksnow_120', eval: "window.__env({ season: 3.4, dayFrac: 0.7, warmth: 0.1 }); window.__rdRig(120, 26)", wait: 9000 },
+  { name: 'fi_b_dusksnow_170', eval: "window.__rdRig(170, 28)", wait: 3500 },
+  { name: 'fi_c_heavyrain_120', eval: "window.__env({ weather: 3, rain: 1, windStrength: 0.6, dayFrac: 0.45 }); window.__rdRig(120, 26)", wait: 16000 },
+  { name: 'fi_c_heavyrain_170', eval: "window.__rdRig(170, 28)", wait: 3500 },
+  { name: 'fi_d_dawnfog_120', eval: "window.__env({ dayFrac: 0.27, weather: 0, rain: 0, windStrength: 0.05 }); window.__rdRig(120, 26)", wait: 12000 },
+  { name: 'fi_d_dawnfog_170', eval: "window.__rdRig(170, 28)", wait: 3500 },
+];
+
 const only = arg('only', '').split(',').filter(Boolean); // --only lk_02,lk_08: just those steps (the first, the setup step, always runs)
 const steps = SETS[set] && only.length ? SETS[set].filter((s, i) => i === 0 || only.some((o) => s.name.startsWith(o))) : SETS[set];
 if (!steps) { console.error('unknown set', set); process.exit(1); }

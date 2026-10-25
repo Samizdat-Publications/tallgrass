@@ -930,19 +930,23 @@ export class AnimalLayer {
   /** The non-null batches, for loops over every drawn species. */
   private live: Batch[] = [];
   private uTime = { value: 0 };
-  private shared: AnimalShared & { uTL: { value: number }; uNightK: { value: number }; uGrassB: { value: number } } = {
+  private shared: AnimalShared & { uTL: { value: number }; uNightK: { value: number }; uGrassB: { value: number }; uFogK: { value: number }; uSnowK: { value: number } } = {
     uTime: this.uTime, uCamPos: { value: new THREE.Vector3(256, 400, 256) }, uPxK: { value: 900 / (2 * Math.tan((45 * Math.PI) / 360)) },
     tHeight: { value: null }, uCell: { value: 1 }, uHN: { value: 2 },
     uLow: { value: 0 },
     uTL: { value: 0 },
     uNightK: { value: 1 },
     uGrassB: { value: 0.8 },
+    uFogK: { value: 0 },
+    uSnowK: { value: 0 },
     uAmb: { value: new THREE.Vector3(0.6, 0.55, 0.45) },
     probe: (scene, exposure) => {
       this.lit.probe(scene);
       this.bindTerrainShadow(scene);
       const v = this.lit.value;
       this.shared.uAmb.value.copy(v);
+      // r-fartint-v1: the visible rain and the snow on the ground, for the far coat (ModelDef.far.fogDark and snowDark)
+      if (this.tg) { this.shared.uFogK.value = clamp(this.tg.rain.value * 1.2, 0, 1); this.shared.uSnowK.value = clamp(this.tg.snow.value * 2.5, 0, 1); }
       // dark scene: little light reaches the animals, or the camera has opened up (exposure rises at dusk and night, which is
       // what makes bright coat areas glow against the dark ground)
       this.shared.uLow.value = Math.max(1 - clamp((v.x + v.y + v.z) / 3 / 0.7, 0, 1), smoothstep(1.05, 1.5, exposure));
