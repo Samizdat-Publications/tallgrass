@@ -36,9 +36,10 @@ export function buildEagle(): ModelDef {
   });
   // head and neck: the hackles of the nape and the back of the neck are golden
   const neckPiv: V3 = [0.19, 0.34, 0];
+  // (r-eagle-v1: the golden hackle covers the whole crown, nape and sides of the neck, nearly independent of the coat, so it reads as a pale head at 30 m)
   const head: PaintFn = (p, n) => {
-    const nape = smooth(0.0, 0.35, n[1] + 0.15) * (1 - smooth(0.2, 0.245, p[0]));
-    return [mix1(1, gold[0] * 1.5, nape), mix1(1, gold[1] * 1.5, nape), mix1(1, gold[2] * 1.5, nape), 1 - 0.6 * nape];
+    const nape = smooth(-0.25, 0.2, n[1] + 0.2) * (1 - smooth(0.225, 0.265, p[0]));
+    return [mix1(1, gold[0] * 2.3, nape), mix1(1, gold[1] * 2.3, nape), mix1(1, gold[2] * 2.0, nape), 1 - 0.8 * nape];
   };
   b.addTube({
     part: PART.HEAD, piv: neckPiv, sides: 10, paint: head,
@@ -55,10 +56,11 @@ export function buildEagle(): ModelDef {
   b.addPair({ part: PART.HEAD, piv: neckPiv, sides: 6, paint: [0.06, 0.04, 0.025, 0.4], rings: blobRings([0.255, 0.408, 0.04], 0.026, 0.008, 0.016, 4) });
 
   // a long, rounded tail, barred; the shader fans it wide in a soar
-  const tail: PaintFn = (p, n, t) => {
-    const band = smooth(0.34, 0.37, t) * (1 - smooth(0.42, 0.45, t)) + smooth(0.62, 0.65, t) * (1 - smooth(0.7, 0.73, t));
-    const k = 1 + 0.45 * band + (n[1] < -0.3 ? 0.2 : 0);
-    return [k, k * 0.97, k * 0.92, 1];
+  // (r-eagle-v1: a pale, cream-grey base of the tail ends in a broad dark band, like a young golden eagle's: the one mark that shows from below)
+  const tail: PaintFn = (_p, _n, t) => {
+    const pale = 1 - smooth(0.5, 0.62, t);
+    const k = 1 - 0.25 * smooth(0.62, 0.7, t);
+    return [mix1(k, 2.5, pale), mix1(k, 2.3, pale), mix1(k, 1.9, pale), 1 - 0.55 * pale];
   };
   b.addTube({
     part: PART.TAIL, piv: [-0.2, 0.3, 0], sides: 8, paint: tail,
@@ -81,25 +83,29 @@ export function buildEagle(): ModelDef {
   }
 
   // wings: the blade from the shoulder to the end of the hand (a golden bar across the upper coverts), then six primaries
+  // (r-eagle-v1: above, a broad tawny band of coverts across the arm; below, the pale patch at the base of the primaries that a young golden eagle shows)
   const wing: PaintFn = (p, n) => {
-    const top = n[1] > 0.25;
-    const bar = top ? smooth(0.1, 0.18, p[2]) * (1 - smooth(0.5, 0.6, p[2])) * smooth(-0.07, 0.0, p[0] + 0.02 * p[2]) : 0;
-    const under = n[1] < -0.25 ? 1 : 0;
+    const top = smooth(0.1, 0.4, n[1]);
+    const bar = top * smooth(0.1, 0.18, p[2]) * (1 - smooth(0.5, 0.6, p[2])) * smooth(-0.1, 0.0, p[0] + 0.02 * p[2]);
+    const under = smooth(0.1, 0.4, -n[1]);
+    const patch = under * smooth(0.46, 0.52, p[2]) * (1 - smooth(0.62, 0.7, p[2])) * smooth(-0.34, -0.24, p[0]);
     const k = 1 + 0.15 * under;
-    return [k * (1 + 0.95 * bar), k * (1 + 0.5 * bar), k * (1 - 0.1 * bar), 1];
+    const r = mix1(mix1(k, 2.3, bar), 2.4, patch), g = mix1(mix1(k, 1.6, bar), 2.2, patch), bl = mix1(mix1(k, 0.8, bar), 1.8, patch);
+    return [r, g, bl, 1 - 0.5 * bar - 0.6 * patch];
   };
   const prim: PaintFn = (_p, n, t) => {
     const base = 1 - smooth(0.0, 0.5, t);
-    const k = 0.78 + 0.35 * base + (n[1] < -0.25 ? 0.18 : 0);
-    return [k, k * 0.97, k * 0.94, 1];
+    const pale = base * smooth(0.1, 0.4, -n[1]);
+    const k = 0.78 + 0.3 * base;
+    return [mix1(k, 2.4, pale), mix1(k, 2.2, pale), mix1(k, 1.8, pale), 1 - 0.6 * pale];
   };
   addRaptorWings(b, {
     shoulder: [0.05, 0.335, 0.09], wrist: [0.1, 0.34, 0.42],
     path: [[0.0, 0.335, 0.07], [-0.02, 0.34, 0.25], [-0.01, 0.345, 0.42], [-0.07, 0.345, 0.55], [-0.13, 0.345, 0.66]],
-    rad: [[0.02, 0.19], [0.02, 0.215], [0.017, 0.19], [0.012, 0.14], [0.008, 0.09]],
+    rad: [[0.022, 0.215], [0.022, 0.25], [0.019, 0.225], [0.013, 0.17], [0.008, 0.105]], // (r-eagle-v1: a broader plank of a wing)
     bend: [0.34, 0.5],
     paint: wing,
-    fingers: fingerFan(0.6, 0.345, -0.02, 0.034, [0.3, 0.34, 0.36, 0.35, 0.31, 0.26], 0.034, 0.045),
+    fingers: fingerFan(0.6, 0.345, -0.02, 0.04, [0.34, 0.39, 0.41, 0.4, 0.35, 0.29], 0.04, 0.05),
     fingerPaint: prim,
   });
 
@@ -107,8 +113,8 @@ export function buildEagle(): ModelDef {
   return {
     geometry,
     triangles: b.triangleCount,
-    coatPale: lin(0x7d5732),
-    coatDark: lin(0x2d1f15),
+    coatPale: lin(0x92693c),
+    coatDark: lin(0x4a3322),
     bone: lin(0xd8d0bc),
     roughness: 0.55,
     fill: 1.5,
