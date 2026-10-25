@@ -99,6 +99,7 @@
 | 10-24 21:10 | Gemini `gemini-3.1-pro-preview` | blind video critique of reel.mp4 (59204 KB) | 1 call | ~$0.05 |
 | 10-24 22:18 | Gemini `gemini-3.1-pro-preview` | blind video critique of reel.mp4 (59401 KB) | 1 call | ~$0.05 |
 | 10-24 23:29 | Gemini `gemini-3.1-pro-preview` | blind video critique of reel.mp4 (45322 KB) | 1 call | ~$0.05 |
+| 10-25 03:03 | Gemini `gemini-3.1-pro-preview` | blind video critique of hero.mp4 (6046 KB) | 1 call | ~$0.05 |
 
 ## Downloaded third-party assets
 | Asset | Source | License | Used in |
