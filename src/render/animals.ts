@@ -2789,11 +2789,12 @@ export class AnimalLayer {
       // ravens dropping onto a kill come down in a loose kettle, not a stack: the sim brings every bird to the carcass point and lets it
       // sink there, which drew a tall column of birds over one spot (QA, round 35). Over a kill site a flying raven is set out on a ring
       // that widens with its height and turns slowly, and faces along it (display only; a bird on the ground is untouched).
-      if (flier && !raptor && !groundedBird && alt > 0.8) {
-        const kw = rvG * smoothstep(0.8, 4, alt);
+      // (the ring holds until the last metre and a half of the descent, so birds spiral in rather than stacking over the carcass: Gemini round 39)
+      if (flier && !raptor && !groundedBird && alt > 0.15) {
+        const kw = rvG * smoothstep(0.15, 1.5, alt);
         if (kw > 0.001) {
           const ph = hash01(id * 7 + 3) * Math.PI * 2 + this.clock * 0.45;
-          const rr = Math.min(7, 1.5 + alt * 0.45) * kw;
+          const rr = Math.min(7, 2.5 + alt * 0.45) * kw;
           x += Math.cos(ph) * rr;
           z += Math.sin(ph) * rr;
           h += wrapPi(ph + Math.PI / 2 - h) * kw;

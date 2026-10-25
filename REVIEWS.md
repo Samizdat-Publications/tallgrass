@@ -519,3 +519,12 @@ Scores: visual 7, readability 6, life 2, ecosystem 5, UI 3, keep watching 3. The
 4. Ravens popping in and out at a carcass: DEFER (worth a look: far thinning and the landing blend).
 5. "Interface hidden" note: FIX (3 s instead of 4.2 s).
 6. Hooves sinking: DEFER (tall grass and snow cover the feet).
+
+## Round 39 (Gemini video, the same 100 s documentary take with the sun-hold trial ?sunhold=1; 2026-10-24 22:18) -> `review/round-39-video/reel.gemini.md`
+Scores: visual 6, readability 3, life 3, ecosystem 2, UI 1, keep watching 4 (round 38 without the trial: 7, 6, 2, 5, 3, 3). Life moved 2 to 3, inside Gemini's run-to-run swing: the trial is inconclusive and stays off by default for the owner to judge by eye.
+1. "Time-accelerated sequences" with teleporting animals at 0:00, 0:14, 0:55: DEFER (the take is at 1x; the frames show cuts through the dip and a kill site, no fast-forward).
+2. No interface: REJECT (the take hides it on purpose).
+3. Animals sprinting in mixed mobs: DEFER.
+4. Ravens dropping in a vertical column onto a kill (0:14): FIX, the kettle ring now holds until the last 1.5 m of the descent with a 2.5 m minimum radius, so birds spiral in.
+5. Sliding feet: DEFER (as rounds 34 and 38).
+6. Autumn trees beside a bare winter-looking stretch across the creek: DEFER (dynamic tree groves and snow by landform).

@@ -211,6 +211,13 @@ export class Engine {
   private fastSm = 0;
   private dayDisp = NaN;
   /**
+   * Trial (off by default, `?sunhold=1`): while the documentary camera films at 1x, the sun is held for the length of a shot (creeping at
+   * a slow rate) and catches up at the cut, which the dip already hides. A valley day lasts about 80 s at 1x, so the light otherwise sweeps
+   * visibly while the animals walk at real speed (Gemini rounds 34 and 38 read that as sliding). The sim's own clock is unchanged.
+   */
+  sunHold = false;
+  private shotSun = NaN;
+  /**
    * Time-lapse daylight (r-breath): from about 30x the valley's days lap faster than the eye can follow (a day every 0.8 s at 100x), and
    * the day and night strobe drowns the slow breathing of the wet and dry years. Above that speed the light is eased to one steady
    * mid-morning (LAPSE_DAY) while the seasons carry on; holdSm is the eased 0..1 amount, so the change of light is never a pop.
@@ -920,6 +927,15 @@ export class Engine {
         atmoEnv = this.envDisp;
       }
     }
+    if (this.sunHold && fast === 0) {
+      const diff = Number.isNaN(this.shotSun) ? 0 : ((env.dayFrac - this.shotSun + 1.5) % 1) - 0.5;
+      // a new shot (the cut's dark), the first frame, or a jump (a skip to an event) takes the true clock; otherwise creep toward it
+      if (Number.isNaN(this.shotSun) || this.firstFrame || this.cutFx.dark || Math.abs(diff) > 0.35) this.shotSun = env.dayFrac;
+      else this.shotSun = (((this.shotSun + diff * (1 - Math.exp(-dt / 25))) % 1) + 1) % 1;
+      Object.assign(this.envDisp, env);
+      this.envDisp.dayFrac = this.shotSun;
+      atmoEnv = this.envDisp;
+    } else this.shotSun = NaN;
     computeAtmosphere(atmoEnv, sm, u, this.lighting);
     if (storm > 0.002) this.applyDustStorm(storm);
     const bzK = this.post.blizzard;
