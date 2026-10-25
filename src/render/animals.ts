@@ -347,6 +347,10 @@ const RAVEN_SITES_MAX = 96;
 const RAVEN_GATHER_RISE = 0.5;
 const RAVEN_GATHER_FALL = 1.8;
 const RAVEN_FADE_T = 0.9;
+/** Round 40: an airborne raven this close to the lens (m) is thinned away, all of them by RAVEN_NEAR0, none past RAVEN_NEAR1, so a kettle at a kill
+ *  does not fill the picture between the camera and the animal it is following (each bird in or out by its own threshold, through the eased fade). */
+const RAVEN_NEAR0 = 3;
+const RAVEN_NEAR1 = 10;
 const RAVEN_SOAR_D0 = 70;
 const RAVEN_SOAR_D1 = 140;
 /** r-ravens: a raven at a carcass keeps at least this far (m) outside the footprint ellipse of the body. */
@@ -3121,7 +3125,13 @@ export class AnimalLayer {
       if (RAVEN[sp]) {
         if (id === sel || id === fol) S.rvv[slot] = 1;
         else {
-          const vt = this.ravenShare(id, Math.hypot(x - camP.x, g0 + alt - camP.y, z - camP.z), rvG), vp = S.rvv[slot], st = dt / RAVEN_FADE_T;
+          const rcd = Math.hypot(x - camP.x, g0 + alt - camP.y, z - camP.z);
+          let vt = this.ravenShare(id, rcd, rvG);
+          if (alt > 0.5 && rcd < RAVEN_NEAR1) {
+            const u = hash01(id * 7 + 13);
+            vt = Math.min(vt, clamp((smoothstep(RAVEN_NEAR0, RAVEN_NEAR1, rcd) * (1 + RAVEN_FADE_BAND) - u) / RAVEN_FADE_BAND, 0, 1));
+          }
+          const vp = S.rvv[slot], st = dt / RAVEN_FADE_T;
           S.rvv[slot] = !this.ravenEase || dt < 1e-4 ? vt : vp + clamp(vt - vp, -st, st);
           fadeQ = Math.max(fadeQ, Math.round((1 - S.rvv[slot]) * 15));
         }
