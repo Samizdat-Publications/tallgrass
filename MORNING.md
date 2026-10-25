@@ -54,7 +54,7 @@
 
 ### Next 5
 1. Motion, the open question above: a slower-looking day at 1x (light only) or a steadier sun while the documentary camera films, then a Gemini video round to see whether "sliding" goes away.
-2. A pale soft smudge near the bottom centre of some dusk and blizzard frames (round 40 shots 05 and 11, scratch/KEEP_blizzard_patch.jpg; the critic saw it too). It is drawn in the 3D view, not the page, and did not reproduce on demand; suspects are hoof dust lit paler than the dark ground, a big snowflake near the lens, or a sun break in the cloud shadows. Catch it with a fixed-clock capture, then fix it.
+2. A pale soft smudge near the bottom centre of some dusk and blizzard frames (round 40 shots 05 and 11, scratch/KEEP_blizzard_patch.jpg; the critic saw it too). It is drawn in the 3D view, not the page, and did not reproduce on demand; the leading suspect now is something close to the lens (an animal, a carcass, a dust puff) blurred by the depth of field into a soft blob; a red patch on a creek bank in the round 41 video fits the same pattern. Catch it with a fixed-clock capture and the depth of field toggled, then fix it (likely: less blur on the near foreground, or keep the documentary camera from parking just behind an animal).
 3. 100x speed: it reaches about 45 to 60x here. A real speed-up must keep the golden hashes bit-identical, so it is a project of its own.
 4. Ages: card in species years, family tree in valley years (pick one wording).
 5. The sim items every critic repeats (flat long-run charts, mule deer and prairie dogs low, ravens swinging, bison calving outside spring): a planned sim pass with the stability suite, not a release-night change.
