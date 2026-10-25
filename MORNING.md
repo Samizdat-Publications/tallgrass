@@ -1,9 +1,9 @@
 # Good morning: Tallgrass overnight report
 
-*(Updated 16:30 Saturday 2026-10-24. This file is refreshed at every milestone.)*
+*(Updated 21:45 Saturday 2026-10-24. This file is refreshed at every milestone.)*
 
 ## 2026-10-24: Tallgrass 1.0 (the V1.0 polish run, live and public)
-**Release:** https://github.com/Samizdat-Publications/tallgrass/releases/tag/v1.0.0 (tagged at 3c50f63). **Play it:** https://tallgrass.stewartgregerson.workers.dev · **Landing page:** https://tallgrass.pages.dev · **Hub:** https://samizdat-e0x.pages.dev · **Source:** https://github.com/Samizdat-Publications/tallgrass (or `npm run dev`, then http://localhost:5199/).
+**Releases:** [v1.0.0](https://github.com/Samizdat-Publications/tallgrass/releases/tag/v1.0.0) (16:55), [v1.0.1](https://github.com/Samizdat-Publications/tallgrass/releases/tag/v1.0.1) (19:00), [v1.0.2](https://github.com/Samizdat-Publications/tallgrass/releases/tag/v1.0.2) (21:40, live now). **Play it:** https://tallgrass.stewartgregerson.workers.dev · **Landing page:** https://tallgrass.pages.dev · **Hub:** https://samizdat-e0x.pages.dev · **Source:** https://github.com/Samizdat-Publications/tallgrass (or `npm run dev`, then http://localhost:5199/).
 
 **What you asked for:** as polished as it can get for V1.0 by midnight, then public on the hub. The simulation was left alone (the default world is still v10b, golden hashes unchanged); everything went into what a stranger sees first.
 
@@ -17,12 +17,13 @@
 7. **Slow machines** step down from High to Medium picture quality once (saved, with a note), after the opening 40 s.
 8. **Wording:** distemper is no longer called plague, adding wolves to a valley that has them no longer says they "return", cougars that wander in and out no longer get "the last cougar is gone" cards, a prairie dog drop on bad ground says nothing settled.
 9. **Zoom** stops at 900 m instead of shrinking the valley to a square in the haze.
+10. **A full QA sweep** of the live build (both 1920x1080 and 1366x768, every menu, tool, overlay and key) found no errors and 25 rough edges; the fixes landed tonight: the challenge list scrolls (two challenges were unreachable), a tool takes the camera from the documentary director so you see your fire land, overlays rise to a map view, the graph and photo mode stop covering the animal card, New valley has its Start button always in view and hawks and eagles on by default, Esc from a title page returns to the title, and the narrator key says so.
 11. **The interface gives the valley room:** the population panel is a slim strip of species counts by default (hover or click for the full panel with sparklines; your choice is remembered) and stays a strip while you follow an animal or the documentary camera films; a field-note toast waits until the camera is on the place it happened.
 12. **Ravens over a kill** come down in a loose kettle instead of a tall column, and **the documentary camera at golden hour** frames lower for the long shadows.
 13. **After the release, the same evening:** winter from the drone (snow feathers into a dusting at range instead of camouflage blotches, the creek lifts to the sky with a pale ice rim), pronghorn gallop with the legs gathered under the body instead of a rocking-horse leap, ravens' and raptors' left wings bend at the elbow (a mirrored-weight bug drew a folded left wing as a long blade), and the field guide only counts animals that are actually in the picture.
 14. **Later still (release 1.0.1):** the land beyond the valley continues as prairie with groves instead of a square in haze; ravens on the ground fold their wings flat; packed bison near the camera no longer pass through each other (display only); spring greens up and rain reads as rain (streaks over the far ground, cooler air, wet sheen); a chapter card more than a year late is dropped. A quiet-GPU A/B shows the evening build equal or faster in every view.
 15. **After 1.0.1:** a map legend with distinct predator marks (wolves crimson, cougars vermilion, coyotes amber on the map; the population strip keeps its colours), tooltips and labels on the corner icons, the Overlays button no longer looks disabled when idle, the territory fill thins near the camera, a **Pair** view in the graph (two species on their own axes, bison against wolves by default), grizzled near wolves with tawny legs, and a selection ring that reads all the way round wolves, coyotes and cougars. Liam's Roblox session from about 19:15: no GPU work after that (no benchmarks, no captures).
-10. **A full QA sweep** of the live build (both 1920x1080 and 1366x768, every menu, tool, overlay and key) found no errors and 25 rough edges; the fixes landed tonight: the challenge list scrolls (two challenges were unreachable), a tool takes the camera from the documentary director so you see your fire land, overlays rise to a map view, the graph and photo mode stop covering the animal card, New valley has its Start button always in view and hawks and eagles on by default, Esc from a title page returns to the title, and the narrator key says so.
+16. **Release 1.0.2:** golden eagles read as eagles (warm brown, golden nape, pale wing and tail marks, larger than ravens); ravens at a kill no longer pop in and out (one-frame jumps measured down from about 160 to about 5); the map legend's predators sit on their own hues; field-note toasts wait for their place to be on screen with your own camera too; the yearly eagle and hawk arrivals are Chronicle lines instead of title cards.
 
 **Look at first:** the landing page hero, then Play in a fresh browser tab (the poster, the title, the tips), then the menu > About.
 
@@ -47,11 +48,11 @@
 - **100x** still reaches about 45 to 60x on this machine (the time bar says so honestly). A real speed-up has to keep the golden hashes bit-identical; the profile is flat (no line over 3%), so it is a project of its own.
 
 ### Next 5
-1. The interface at the overview: the compact population strip lands tonight; next, keep the followed animal or the filmed event in the clear centre.
-2. Snow edges and the river at drone range (round 33 and 35 item 7): softer snow by slope and a river with highlights.
-3. A night rule is in; next, the director should prefer sky and silhouettes at dusk too, and skip canopy shots.
-4. 100x reaches about 50x: a bit-identical speed-up of the herd scan is its own project (the profile is flat).
-5. The ages wording (card in species years, tree in valley years): pick one.
+1. Motion, the open question above: a slower-looking day at 1x (light only) or a steadier sun while the documentary camera films, then a Gemini video round to see whether "sliding" goes away.
+2. Species apart at the wide view in every season (round 37 item 1): a season-aware far tint, so bison stay darkest and pronghorn palest on snow and in rain too.
+3. Close-up ground at follow distance (round 37 item 7): grass blades around a followed animal instead of the smeared texture.
+4. Ages: card in species years, family tree in valley years (pick one wording).
+5. The sim items every critic repeats (flat long-run charts, mule deer and prairie dogs low, ravens swinging, bison calving outside spring): a planned sim pass with the stability suite, not a release-night change.
 
 ## 2026-10-09 to 10: the 24-hour day run (the plan is DAY-PLAN.md)
 **Play it:** https://tallgrass.stewartgregerson.workers.dev (or `npm run dev`, then http://localhost:5199/). Last deploy: 19:29 Saturday (D14, ravens), live check clean. The default world is still v10b. **This is the checkpoint to test: D14.** The run stopped at 01:15 Sunday with the weekly quota at 65%.
