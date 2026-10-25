@@ -467,10 +467,13 @@ void main() {
   // ridges and upper slopes: short, drier, russet, but still a continuous sward rather than sand
   float slopeM = length(st0.rg * 2.0 - 1.0);
   float ridge = max(1.0 - smoothstep(0.40, 0.66, moist), 0.8 * smoothstep(0.22, 0.5, slopeM));
-  // stubble floor: grass that is grazed, trampled or drought-cut is short, not gone. Within about 25 m a fifth of the blades stay on (they
-  // stand a few centimetres high, see hfrac below), fading out by about 85 m where the ground shader's own stubble carries the field.
+  // stubble floor: grass that is grazed, trampled or drought-cut is short, not gone. Within about 25 m most of the blades stay on (they
+  // stand a short 13 to 24 cm, see hfrac below), fading out by about 85 m where the ground shader's own stubble carries the field.
   float stubNear = (1.0 - smoothstep(24.0, 85.0, dist)) * uStubFloor;
-  float pres = max(smoothstep(0.015, 0.14, bioEff), 0.2 * stubNear) * (1.0 - 0.72 * cover) * (1.0 - smoothstep(0.3, 0.7, water)) * (1.0 - 0.5 * burn);
+  // (r-grassnear: the floor was a fifth with blades a few cm tall, which drew grazed and drought-cut ground as bare dirt with sparse dots at
+  // follow-camera range. It is now closer to half, with a short-sward height below; the cores of herd trails keep a thinner floor.)
+  float stubFloor = 0.8 * (1.0 - 0.45 * trodK);
+  float pres = max(smoothstep(0.015, 0.14, bioEff), stubFloor * stubNear) * (1.0 - 0.72 * cover) * (1.0 - smoothstep(0.3, 0.7, water)) * (1.0 - 0.5 * burn);
   pres *= mix(0.62, 1.0, smoothstep(0.28, 0.62, tusC)) * (1.0 - 0.18 * ridge);
   // the bare apron on the shaded side of a pond (common.ts): almost no blades, only a few sedge stalks
   if (st1.g > 0.5) pres *= 1.0 - 0.94 * tgPondApron(p, -16.0 * log(max(st1.g, 1e-3)));
@@ -480,6 +483,9 @@ void main() {
   // a wide, ragged margin (about 20 to 70 m) instead of a straight 25 m line, so the field never ends along a ruler edge
   edgeD += (texture(uBig, pn * 0.9 + 0.2).a - 0.5) * 36.0;
   float edgeK = smoothstep(4.0, 62.0, edgeD);
+  // (r-grassnear: within reach of the camera the margin is a narrow one, so a follow camera on the valley's edge sees blades, not bare dirt;
+  // the blend follows the camera distance smoothly, so there is no ring)
+  edgeK = mix(edgeK, smoothstep(-4.0, 24.0, edgeD), stubNear);
   pres *= max(edgeK * edgeK, 0.25 * stubNear);   // (the ragged margin of the field never leaves bare ground within reach of the camera)
   if (rThin >= keepD * pres) { cullBlade(); return; }
 
@@ -513,6 +519,7 @@ void main() {
   // ---- size
   float hfrac = 0.07 + 0.93 * smoothstep(0.0, 0.85, bioEff);
   hfrac = max(hfrac, 0.3 * smoothstep(0.02, 0.16, bioEff));
+  hfrac = max(hfrac, 0.17 * stubNear);   // a short sward (about 13 to 24 cm) near the camera, never a few cm of stubble
   hfrac *= (1.0 - 0.32 * ridge) * mix(0.3, 1.0, edgeK);
   float H = uMaxH * hfrac * (0.70 + 0.55 * rA) * (0.88 + 0.24 * patch1) * (0.85 + 0.3 * tusC) * (1.0 - 0.38 * cover);
   H = mix(H, 0.05 + 0.07 * rA, burn);
