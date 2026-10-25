@@ -25,7 +25,7 @@
 15. **After 1.0.1:** a map legend with distinct predator marks (wolves crimson, cougars vermilion, coyotes amber on the map; the population strip keeps its colours), tooltips and labels on the corner icons, the Overlays button no longer looks disabled when idle, the territory fill thins near the camera, a **Pair** view in the graph (two species on their own axes, bison against wolves by default), grizzled near wolves with tawny legs, and a selection ring that reads all the way round wolves, coyotes and cougars. Liam's Roblox session from about 19:15: no GPU work after that (no benchmarks, no captures).
 16. **Release 1.0.2:** golden eagles read as eagles (warm brown, golden nape, pale wing and tail marks, larger than ravens); ravens at a kill no longer pop in and out (one-frame jumps measured down from about 160 to about 5); the map legend's predators sit on their own hues; field-note toasts wait for their place to be on screen with your own camera too; the yearly eagle and hawk arrivals are Chronicle lines instead of title cards.
 17. **Release 1.0.3:** following an animal, the ground shows a short sward of real grass blades instead of a smeared texture; at the wide view the animals keep their value in rain, and pronghorn and mule deer read grey-brown on snow instead of orange. GPU: about +0.5 ms on the golden views, every view under the 16.7 ms budget.
-18. **Release 1.0.4 and after:** ravens spiral down onto a kill instead of dropping in a column; the `?sunhold=1` trial (below); a wolf-pack label on the territory map that would sit under the time bar is now left out (deployed 22:35, no new release).
+18. **Release 1.0.4 and after:** ravens spiral down onto a kill instead of dropping in a column; the `?sunhold=1` trial (below); a wolf-pack label on the territory map that would sit under the time bar is lifted just above it (deployed 23:10, no new release).
 
 **Look at first:** the landing page hero, then Play in a fresh browser tab (the poster, the title, the tips), then the menu > About.
 
@@ -42,6 +42,7 @@
 - **QA sweep:** 25 issues, triaged item by item in REVIEWS.md; no console or page errors.
 - **GPU:** the V1.0 build is the same or faster than the pre-V1 build in every view (A, B, B, A at 1440p); the weather changes are within noise.
 - **Later rounds:** blind round 36 (6, 5, 6, 6, 6, 6) and 37 (visual 7, the rest 5 to 6); Gemini round 38 on a smooth 30 fps take: visual 7, life 2 (see the motion question below).
+- **Round 40** (blind, 22:50, the live build): visual 7, readability 5, life 7, ecosystem 6, UI 7, keep watching 6; the same top themes (wide-view readability, flat long-run chart, graph lanes, winter ground).
 - Triage for everything is in REVIEWS.md (rounds 33 to 38 and the QA sweep).
 
 ### Decisions you might want to overrule
@@ -52,7 +53,7 @@
 
 ### Next 5
 1. Motion, the open question above: a slower-looking day at 1x (light only) or a steadier sun while the documentary camera films, then a Gemini video round to see whether "sliding" goes away.
-2. Cloud shadows before a blizzard: a sun break between the storm-cloud shadows can show a fairly straight edge on the ground (scratch/KEEP_blizzard_patch.jpg, bottom centre; it comes and goes within a second as the clouds close). Check the cloud-shadow resolution and soften its edge.
+2. A pale soft smudge near the bottom centre of some dusk and blizzard frames (round 40 shots 05 and 11, scratch/KEEP_blizzard_patch.jpg; the critic saw it too). It is drawn in the 3D view, not the page, and did not reproduce on demand; suspects are hoof dust lit paler than the dark ground, a big snowflake near the lens, or a sun break in the cloud shadows. Catch it with a fixed-clock capture, then fix it.
 3. 100x speed: it reaches about 45 to 60x here. A real speed-up must keep the golden hashes bit-identical, so it is a project of its own.
 4. Ages: card in species years, family tree in valley years (pick one wording).
 5. The sim items every critic repeats (flat long-run charts, mule deer and prairie dogs low, ravens swinging, bison calving outside spring): a planned sim pass with the stability suite, not a release-night change.

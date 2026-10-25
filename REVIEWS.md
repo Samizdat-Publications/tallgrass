@@ -528,3 +528,16 @@ Scores: visual 6, readability 3, life 3, ecosystem 2, UI 1, keep watching 4 (rou
 4. Ravens dropping in a vertical column onto a kill (0:14): FIX, the kettle ring now holds until the last 1.5 m of the descent with a 2.5 m minimum radius, so birds spiral in.
 5. Sliding feet: DEFER (as rounds 34 and 38).
 6. Autumn trees beside a bare winter-looking stretch across the creek: DEFER (dynamic tree groves and snow by landform).
+
+## Round 40 (fresh blind critic, stills of the live build 71c3df3; 2026-10-24 22:50) -> `review/round-40/critique.md`
+Scores: visual 7, readability 5, life 7, ecosystem 6, UI 7, keep watching 6 (round 37: visual 7, the rest 5 to 6). The same top themes as rounds 33 to 37.
+1. Animals unreadable at the wide view: DEFER (two passes tonight already: glyphs, far tint; the fog at dawn and the near-black bison at the opening are the next look).
+2. Flat long-run chart: DEFER (sim; a planned pass with the stability suite, MORNING Next 5 item 5).
+3. Graph lanes flatten crashes: DEFER (the Pair view is the first step; taller lanes for a chosen few next).
+4. Winter terrain like a heightmap, purple tint: DEFER (r-land-v1 and r-spring-v1 tonight; the territory fill is the purple in 11).
+5. Text against the picture: DEFER. Most of it is the stills' instant cuts (a field-guide toast from the last shot lingers 3 s into the next); "Year 8" at the top of the Chronicle at year 9 is right (no year-9 entry yet). The Megadrought label against "The drought breaks" needs a look.
+6. Ravens flat black, too close: DEFER (rebuilt tonight; a nearest-distance cap for birds is next).
+7. Bison pass through each other close up: DEFER (display separation landed tonight; it thins with distance).
+8. Water inconsistent: DEFER.
+9. Rocks, dithered canopies, a white smudge in 11: DEFER. The smudge (also in 05 at the same spot) is not a page element (no element covers it) and did not reproduce in three more captures; the likely sources are hoof dust lit paler than dark dusk ground or a big snowflake near the lens. A tried fade of near flakes was dropped unverified.
+10. HUD: FIX for the territory labels, 3357a32 (a den near the foot of the screen keeps its label, lifted above the time bar; the earlier hide left the third pack unnamed). DEFER the follow card covering the followed animal.
