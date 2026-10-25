@@ -194,7 +194,7 @@ export function buildWolf(): ModelDef {
     // R-readable: guild value separation and edge lift at the default distances (see ModelDef.read)
     read: { dark: [0.74, 0.78, 0.88], rim: [0.72, 0.84, 1.0, 0.7] },
     // r-read: from 50 m out (full by 220 m) a wolf is a clearly lighter, cooler grey than the dark brown bison beside it, with a silvery back
-    far: { gain: 0.8, rim: 0.05, hunt: 0.25, rimCol: [0.92, 0.93, 0.95], d0: 40, d1: 135, tint: [0.085, 0.09, 0.105], mix: 0.85, floor: 0.05, edge: 0.4, rimCut: 0.75, nightLift: 0.9,
+    far: { gain: 0.8, rim: 0.05, hunt: 0.25, rimCol: [0.92, 0.93, 0.95], d0: 40, d1: 135, tint: [0.085, 0.09, 0.105], mix: 0.85, floor: 0.05, edge: 0.4, rimCut: 0.75, nightLift: 0.9, fogDark: 0.45,
       // a slim cool-grey form with a paler back; the legs swing less so the outline is not a crumpled scrap
       top: [0.2, 0.21, 0.235], topMix: 0.65, side: 0.3, legs: 0.85, calm: 0.6, widen: 0.1 },
     params: {

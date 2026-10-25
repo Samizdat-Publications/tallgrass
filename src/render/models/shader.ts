@@ -2051,6 +2051,10 @@ export interface AnimalShared {
   uNightK?: { value: number };
   /** How bright the season's grass is, 0.6 (spring green, winter) .. 1 (summer gold): scales the predators' darkening (R-readable). Optional: defaults to 0.8. */
   uGrassB?: { value: number };
+  /** r-fartint-v1: how hard it is raining (0..1, the visible rain), set by `probe`. The far coat darkens with it (ModelDef.far.fogDark), so a herd keeps its value through the rain veil. Optional: defaults to 0. */
+  uFogK?: { value: number };
+  /** r-fartint-v1: how much snow lies on the ground (0..1), set by `probe`. Pale far coats darken at the edge and cool with it (ModelDef.far.snowDark). Optional: defaults to 0. */
+  uSnowK?: { value: number };
   /** Ambient light of the scene as an rgb (0 night .. about 0.7 day), set by `probe`. */
   uAmb: { value: THREE.Vector3 };
   /** Reads the lights of the scene being rendered into `uLow` (called once per draw of the main view). */
@@ -2066,6 +2070,8 @@ export function makeAnimalMaterials(sp: number, def: ModelDef, shared: AnimalSha
   shared.uTL ??= { value: 0 };
   shared.uNightK ??= { value: 1 };
   shared.uGrassB ??= { value: 0.8 };
+  shared.uFogK ??= { value: 0 };
+  shared.uSnowK ??= { value: 0 };
   // (worked out when the program is compiled, so the R8 switch below can take effect on a recompile)
   const defsOf = (): string => defines(def.params, def.far, def.geometry, def, variant) + '\n' + seasonDefines(def);
   const defsDepthOf = (): string => defines(def.params, def.far, def.geometry) + '\n' + seasonDefines(def);
@@ -2134,6 +2140,10 @@ export function makeAnimalMaterials(sp: number, def: ModelDef, shared: AnimalSha
     shader.uniforms.uRimCut = { value: far.rimCut ?? 0 };
     shader.uniforms.uEdgeDark = { value: far.edge ?? 0 };
     shader.uniforms.uNightLift = { value: far.nightLift ?? 0 };
+    shader.uniforms.uFogK = shared.uFogK!;
+    shader.uniforms.uSnowK = shared.uSnowK!;
+    shader.uniforms.uFogDark = { value: far.fogDark ?? 0 };
+    shader.uniforms.uSnowDark = { value: far.snowDark ?? 0 };
     shader.uniforms.uMuteCol = { value: new THREE.Vector3(...(far.mute?.col ?? [1, 1, 1])) };
     shader.uniforms.uMute = { value: new THREE.Vector2(far.mute?.k ?? 0, far.mute?.keepX ?? 0) };
     material.userData.shader = shader; // exposed for live tuning from the console
@@ -2151,7 +2161,11 @@ export function makeAnimalMaterials(sp: number, def: ModelDef, shared: AnimalSha
       .replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>\n if (tgFadeDiscard(vTgFade)) discard;${lodOn ? '\n if (tgLodDiscard()) discard;' : ''}${hasShell ? '\n if (tgShellDiscard()) discard;' : ''}`)
       .replace('#include <common>', `#include <common>\n${lodDefs}\n${FADE_FRAG_DECL}\nvarying vec3 vTgColor;\nvarying float vTgSel;\nvarying float vTgFar;\nvarying float vTgMid;\nuniform vec3 uReadDark;\nuniform float uReadPale;\nuniform vec4 uReadRim;\nuniform float uRimCut;\nuniform float uGrassB;\nvarying float vTgHunt;\nuniform float uFill;\nuniform vec3 uWarm;\nuniform float uNeutral;\nuniform float uFarGain;\nuniform vec3 uRimCol;\nuniform float uRimK;\nuniform float uHuntK;\nuniform float uLow;\nuniform vec3 uAmb;\nuniform vec3 uFarTint;\nuniform float uFarMix;\nuniform float uFloor;\nuniform float uLowFill;\nvarying float vTgUp;\nuniform vec3 uTopCol;\nuniform float uTopMix;\nuniform float uSideDark;\nuniform float uNightK;
 uniform float uEdgeDark;
-uniform float uNightLift;${hasFur && def.far?.mute ? MUTE_DECL : ''}${mangeDecl}`)
+uniform float uNightLift;
+uniform float uFogK;
+uniform float uFogDark;
+uniform float uSnowK;
+uniform float uSnowDark;${hasFur && def.far?.mute ? MUTE_DECL : ''}${mangeDecl}`)
       // Bright parts of the coat (the white bands and rump) are pulled toward a mid value as the light drops, so they
       // darken with the scene instead of glowing against the dark herds at dusk and night.
       .replace('#include <color_fragment>', `${a3matte ? `{
@@ -2176,6 +2190,11 @@ uniform float uNightLift;${hasFur && def.far?.mute ? MUTE_DECL : ''}${mangeDecl}
         tgC *= 1.0 - uSideDark * vTgFar * (1.0 - smoothstep(0.1, 0.6, vTgUp));${hasFur && def.far?.mute ? MUTE_FRAG : ''}
         float tgL = dot(tgC, vec3(0.2126, 0.7152, 0.0722));
         tgC = mix(tgC, vec3(tgL), 0.3 * uLow * vTgFar);
+        // r-fartint-v1: in a downpour the veil lifts everything toward grey, so the far coat is pre-darkened by the rain (fogDark) and keeps its value after it.
+        // Over snow a pale coat (pronghorn, mule deer) loses its warmth and darkens a little (snowDark), so it stays a mark on the white; both ride the far ramp.
+        float tgSnK = uSnowDark * uSnowK * vTgFar;
+        tgC *= (1.0 - uFogDark * uFogK * vTgFar) * (1.0 - 0.3 * tgSnK);
+        tgC = mix(tgC, vec3(tgL) * 0.9, 0.45 * tgSnK);
         tgC *= 1.0 - 0.8 * uLow * max(tgL - 0.16, 0.0) / max(tgL, 1e-3);
         diffuseColor.rgb *= tgC;
         // R-readable: value separation by guild at the default distances. A predator is darker and cooler (most against bright grass), a
@@ -2202,7 +2221,7 @@ uniform float uNightLift;${hasFur && def.far?.mute ? MUTE_DECL : ''}${mangeDecl}
         float tgEdge = pow(1.0 - clamp(dot(normalize(vViewPosition), normal), 0.0, 1.0), 1.6);
         // r-farread-v1: a darker coat along the silhouette at range (ModelDef.far.edge), so a lone animal pops from grass of the same value.
         // It rides the far ramp (zero below the species' d0, 40 m and up), so a close animal keeps its own shading.
-        diffuseColor.rgb *= 1.0 - uEdgeDark * vTgFar * tgEdge * (1.0 - uLow);
+        diffuseColor.rgb *= 1.0 - (uEdgeDark + 0.6 * uSnowDark * uSnowK) * vTgFar * tgEdge * (1.0 - uLow);
         // R-readable edge lift: a faint sky-coloured light along the silhouette (scales with the scene's ambient, so it never glows)
         float tgRd = pow(1.0 - clamp(dot(normalize(vViewPosition), normal), 0.0, 1.0), 2.4);
         // (it eases in with distance, about 15 percent at 20 m, half at 30 m, in full from 40 m: the default views keep the lift, a close follow does not frost the back)

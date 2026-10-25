@@ -393,6 +393,10 @@ export interface ModelDef {
     edge?: number;
     /** r-farread-v1: the far tint and top colours are scaled by 1 + nightLift at night (uLow 1), so a coat darkened for the day does not vanish in the moonlight. Default 0. */
     nightLift?: number;
+    /** r-fartint-v1: how much the far coat is darkened in rain, 0..1 at a downpour (rides the far ramp, so zero up close). The rain veil lifts everything toward grey; a darker coat keeps its value. Default 0. */
+    fogDark?: number;
+    /** r-fartint-v1: for a pale coat over snow: the coat cools and darkens a little and the silhouette edge darkens more, scaled by the ground's snow (rides the far ramp). Default 0. */
+    snowDark?: number;
   };
   /**
    * R-readable: value separation at the default distances (about 6 m and out, full by 40 m), by guild, against the season's grass. A

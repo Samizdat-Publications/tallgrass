@@ -199,7 +199,7 @@ export function buildCoyote(): ModelDef {
     // R-readable: guild value separation and edge lift at the default distances (see ModelDef.read)
     read: { dark: [0.8, 0.78, 0.8], rim: [0.78, 0.86, 1.0, 0.6] },
     // r-read: the far coat comes in from 50 m (full by 220 m), and the coyote's minimum size is smaller than the wolf's, so the two canids differ in size too
-    far: { gain: 0.85, rim: 0.045, hunt: 0.22, rimCol: [0.95, 0.92, 0.86], d0: 40, d1: 135, tint: [0.17, 0.15, 0.125], mix: 0.7, floor: 0.1, lowFill: 0.5, edge: 0.35, rimCut: 0.6,
+    far: { gain: 0.85, rim: 0.045, hunt: 0.22, rimCol: [0.95, 0.92, 0.86], d0: 40, d1: 135, tint: [0.17, 0.15, 0.125], mix: 0.7, floor: 0.1, lowFill: 0.5, edge: 0.35, rimCut: 0.6, fogDark: 0.45,
       // (a darker tawny-grey than the gold grass: at the old tan a coyote vanished into it from 140 m)
       top: [0.3, 0.25, 0.19], topMix: 0.55, side: 0.3, legs: 0.9, calm: 0.6, widen: 0.1 },
     params: {
