@@ -74,7 +74,7 @@ const FLASH_PACK_TICKS = 300;
 /** Events older than this many ticks when they arrive (a backgrounded tab, a bulk fill) never earn a card. */
 const STALE_TICKS = 240;
 /** How long the "interface hidden" note stays up after entering ambient view. */
-const AMBIENT_NOTE_MS = 4200;
+const AMBIENT_NOTE_MS = 3000;
 
 interface QueuedCard {
   title: string;

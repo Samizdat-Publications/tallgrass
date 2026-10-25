@@ -497,3 +497,25 @@ Scores: visual 6, readability 5, life 6, ecosystem 6, UI 6, keep watching 6 (rou
 8. Map glyph colours too close, no legend: DEFER.
 9. Wolf close-up: low-res ground, stretched head, half-drawn selection ring: DEFER.
 10. Small UI items (Overlays button greyed, unlabelled icons, dust spiral, territory fill strength): DEFER.
+
+## Round 37 (fresh blind critic, stills of the live build 71eb560; 2026-10-24 21:05) -> `review/round-37/`
+Scores: visual 7, readability 5, life 6, ecosystem 6, UI 6, keep watching 6 (round 36: 6, 5, 6, 6, 6, 6).
+1. Species apart at the wide view in every season: DEFER (r-farread-v1 and the map marks are what tonight allows; the next step is a season-aware far tint).
+2. Charts: REJECT for V1.0 (sim).
+3. Titles over shots that do not show them: FIX, eb1e1d2 (field-note toasts wait for their place in the picture with the player's camera too; the yearly eagle and hawk arrivals are Chronicle lines, not title cards).
+4. Map legend: bison and cougar both orange: FIX, eb1e1d2 (cougar magenta, coyote lemon, eagle white).
+5. Winter wide view salmon ground: partly fixed tonight (r-land-v1, r-spring-v1); DEFER the rest.
+6. Birds as cut-outs, eagles like ravens, bison close-up: DEFER (ravens rebuilt tonight; eagles next).
+7. Ground without blades at follow distance: DEFER.
+8. Graph strips: the Pair view landed tonight; DEFER the rest.
+9. Bison calve in autumn and winter: REJECT (sim; founder desync).
+10. HUD clutter: mostly addressed tonight (strip, toast gate); DEFER the pack label under the time bar.
+
+## Round 38 (Gemini video, a 100 s documentary take at 30 fps from the live build, interface hidden; 2026-10-24 21:10) -> `review/round-38-video/reel.gemini.md`
+Scores: visual 7, readability 6, life 2, ecosystem 5, UI 3, keep watching 3. The reel is the smooth showcase capture (57 to 60 fps captured), so the low life score is not a capture artifact.
+1. The sun and shadows sweep in time-lapse while the animals walk in real time: DEFER, owner decision. At 1x a valley day is 80 s and a year 2 to 4 min, so light moves visibly while gaits run at real speed; slowing the day or the light's apparent motion at 1x is a design call (MORNING).
+2. Sliding feet: DEFER (measured slip under 1.4%; the impression persists across every video round, so the next look should be the ground-speed against stride match on slopes and the rotation of the body over planted feet, not slip).
+3. Rigid paths (hawk on a wire, single-file pack): DEFER.
+4. Ravens popping in and out at a carcass: DEFER (worth a look: far thinning and the landing blend).
+5. "Interface hidden" note: FIX (3 s instead of 4.2 s).
+6. Hooves sinking: DEFER (tall grass and snow cover the feet).
