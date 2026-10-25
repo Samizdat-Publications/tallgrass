@@ -26,6 +26,30 @@ export interface RowsData {
    */
   climate?: number[];
   mega?: number[];
+  /** A species id whose lane is enlarged to about half the column (the others squeeze); -1 or absent for equal lanes. */
+  focus?: number;
+  /** When given, drawRows fills it with each species lane's vertical extent, so the caller can hit test clicks. */
+  lanesOut?: { sp: number; top: number; bottom: number }[];
+}
+
+/** A crash needs at least this fall from its peak, and a peak of at least this many animals, to be labelled in its lane. */
+const CRASH_MIN_FRAC = 0.45; // (0.35 also labelled the seasonal swings of ravens and cougars, which are not crashes)
+const CRASH_MIN_PEAK = 5;
+
+/** The largest peak-to-trough fall in a series (peak first, then trough), or null when none clears the thresholds. */
+export function biggestCrash(vals: number[], skip?: (k: number) => boolean): { peak: number; trough: number; frac: number } | null {
+  let peakK = -1;
+  let best: { peak: number; trough: number; frac: number } | null = null;
+  for (let k = 0; k < vals.length; k++) {
+    if (skip?.(k)) continue;
+    const v = vals[k];
+    if (peakK < 0 || v > vals[peakK]) { peakK = k; continue; }
+    const pv = vals[peakK];
+    if (pv < CRASH_MIN_PEAK) continue;
+    const frac = (pv - v) / pv;
+    if (frac >= CRASH_MIN_FRAC && (!best || frac > best.frac)) best = { peak: peakK, trough: k, frac };
+  }
+  return best;
 }
 
 /** Band colours (rgb) and the strongest alpha each reaches behind the rows. */
@@ -106,18 +130,28 @@ export function drawRows(g: CanvasRenderingContext2D, w: number, h: number, u: n
   const gap = 5 * u;
   // species rows share the height equally; the grass row is a little slimmer
   const GRASS_W = 0.86;
-  const unitH = (P.b - P.t - gap * (rows.length - 1)) / (d.species.length + (withGrass ? GRASS_W : 0));
+  const avail = P.b - P.t - gap * (rows.length - 1);
+  const unitH = avail / (d.species.length + (withGrass ? GRASS_W : 0));
+  // a focused lane takes about half the column, but the others never squeeze below a readable floor
+  const focusAt = d.focus !== undefined && d.focus >= 0 ? rows.findIndex((r) => r.kind === 'sp' && r.sp === d.focus) : -1;
+  const weightOf = (r: (typeof rows)[number]) => (r.kind === 'grass' ? GRASS_W : 1);
+  let focusH = unitH;
+  let otherUnit = unitH;
+  if (focusAt >= 0 && rows.length > 1) {
+    const others = rows.reduce((a, r, i) => (i === focusAt ? a : a + weightOf(r)), 0);
+    focusH = Math.max(unitH, Math.min(0.5 * avail, avail - others * 20 * u));
+    otherUnit = (avail - focusH) / others;
+  }
   const rowTop: number[] = [];
   const rowHs: number[] = [];
   let yy = P.t;
-  for (const r of rows) {
-    const hh = Math.max(16 * u, unitH * (r.kind === 'grass' ? GRASS_W : 1));
+  rows.forEach((r, i) => {
+    const hh = i === focusAt ? focusH : Math.max(16 * u, otherUnit * weightOf(r));
     rowTop.push(yy);
     rowHs.push(hh);
     yy += hh + gap;
-  }
-  const small = unitH < 40 * u;
-  const axisFont = `500 ${(small ? 11 : 12) * u}px ${SANS}`;
+    if (d.lanesOut && r.kind === 'sp') d.lanesOut.push({ sp: r.sp, top: rowTop[i], bottom: rowTop[i] + hh });
+  });
 
   // year hairlines through every row, labelled once under the last row
   const spanYears = (t1 - t0) / YEAR_TICKS;
@@ -163,6 +197,9 @@ export function drawRows(g: CanvasRenderingContext2D, w: number, h: number, u: n
     const bottom = top + rowHs[i];
     const py0 = top + 6 * u, py1 = bottom - 4 * u;
     const isGrass = row.kind === 'grass';
+    // the size class follows the lane's own height (a lane at its equal share keeps the class the whole chart had)
+    const small = rowHs[i] / weightOf(row) < 40 * u;
+    const axisFont = `500 ${(small ? 11 : 12) * u}px ${SANS}`;
     const color = isGrass ? GRASS_COLOR : SPECIES_COLORS[row.sp];
     // A visitor (eagle, hawk) at zero in its off season is away, not gone: that stretch is held level (drawn faint and dashed) so it never
     // reads as a crash, and it does not set the row's range.
@@ -250,6 +287,53 @@ export function drawRows(g: CanvasRenderingContext2D, w: number, h: number, u: n
     } else {
       g.fillStyle = color;
       g.fill();
+    }
+
+    // the worst crash in view: a ring on the trough and its size in the lane's colour, set where no line runs and clear of the end value
+    // (not for a visitor: an eagle's or a hawk's count rises and falls with its own comings and goings)
+    if (!isGrass && !away) {
+      const crash = biggestCrash(vals, isAway);
+      if (crash) {
+        const cx = X(d.ticks[crash.trough]), cy = Y(vals[crash.trough]);
+        const txt = `-${Math.round(crash.frac * 100)}%`;
+        const fs = (small ? 10.5 : 11.5) * u;
+        g.save();
+        g.font = `700 ${fs}px ${SANS}`;
+        g.textAlign = 'left';
+        g.textBaseline = 'middle';
+        const tw = g.measureText(txt).width, th = fs * 1.05;
+        const gx = 3 * u, gy = 3.5 * u;
+        const lx0 = P.l + 2 * u, lx1 = P.r - 9 * u - tw;
+        const cands: [number, number][] = [
+          [cx - tw / 2, cy + gy + 1 * u], [cx - tw / 2, cy - gy - th - 1 * u],
+          [cx + gx, cy + gy], [cx - gx - tw, cy + gy], [cx + gx, cy - gy - th], [cx - gx - tw, cy - gy - th],
+          [cx + gx + 2 * u, cy - th / 2], [cx - gx - 2 * u - tw, cy - th / 2],
+        ];
+        let pick: [number, number] | null = null;
+        let pickHits = Infinity;
+        for (const [rx0, ry0] of cands) {
+          const rx = Math.max(lx0, Math.min(lx1, rx0));
+          if (ry0 < top + 1 || ry0 + th > bottom - 1) continue;
+          let hits = 0;
+          for (let k = 0; k < xs.length; k++) if (xs[k] >= rx - 1 && xs[k] <= rx + tw + 1 && ys[k] >= ry0 - 1 && ys[k] <= ry0 + th + 1) hits++;
+          if (hits < pickHits) { pickHits = hits; pick = [rx, ry0]; if (!hits) break; }
+        }
+        if (!pick) pick = [Math.max(lx0, Math.min(lx1, cands[0][0])), Math.max(top + 1, Math.min(bottom - 1 - th, cands[0][1]))];
+        g.lineJoin = 'round';
+        g.lineWidth = 3 * u;
+        g.strokeStyle = 'rgba(20,16,10,0.85)';
+        g.strokeText(txt, pick[0], pick[1] + th / 2);
+        g.fillStyle = color;
+        g.fillText(txt, pick[0], pick[1] + th / 2);
+        g.beginPath();
+        g.arc(cx, cy, 2.8 * u, 0, Math.PI * 2);
+        g.fillStyle = 'rgba(20,16,10,0.85)';
+        g.fill();
+        g.lineWidth = 1.4 * u;
+        g.strokeStyle = color;
+        g.stroke();
+        g.restore();
+      }
     }
 
     // the row's name sits in the left gutter and its current value in the right one, so no line ever runs through a word
