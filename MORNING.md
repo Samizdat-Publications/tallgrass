@@ -1,9 +1,9 @@
 # Good morning: Tallgrass overnight report
 
-*(Updated 21:45 Saturday 2026-10-24. This file is refreshed at every milestone.)*
+*(Updated 22:15 Saturday 2026-10-24. This file is refreshed at every milestone.)*
 
 ## 2026-10-24: Tallgrass 1.0 (the V1.0 polish run, live and public)
-**Releases:** [v1.0.0](https://github.com/Samizdat-Publications/tallgrass/releases/tag/v1.0.0) (16:55), [v1.0.1](https://github.com/Samizdat-Publications/tallgrass/releases/tag/v1.0.1) (19:00), [v1.0.2](https://github.com/Samizdat-Publications/tallgrass/releases/tag/v1.0.2) (21:40, live now). **Play it:** https://tallgrass.stewartgregerson.workers.dev · **Landing page:** https://tallgrass.pages.dev · **Hub:** https://samizdat-e0x.pages.dev · **Source:** https://github.com/Samizdat-Publications/tallgrass (or `npm run dev`, then http://localhost:5199/).
+**Releases:** [v1.0.0](https://github.com/Samizdat-Publications/tallgrass/releases/tag/v1.0.0) (16:55), [v1.0.1](https://github.com/Samizdat-Publications/tallgrass/releases/tag/v1.0.1) (19:00), [v1.0.2](https://github.com/Samizdat-Publications/tallgrass/releases/tag/v1.0.2) (21:40), [v1.0.3](https://github.com/Samizdat-Publications/tallgrass/releases/tag/v1.0.3) (22:10, live now). **Play it:** https://tallgrass.stewartgregerson.workers.dev · **Landing page:** https://tallgrass.pages.dev · **Hub:** https://samizdat-e0x.pages.dev · **Source:** https://github.com/Samizdat-Publications/tallgrass (or `npm run dev`, then http://localhost:5199/).
 
 **What you asked for:** as polished as it can get for V1.0 by midnight, then public on the hub. The simulation was left alone (the default world is still v10b, golden hashes unchanged); everything went into what a stranger sees first.
 
@@ -24,6 +24,7 @@
 14. **Later still (release 1.0.1):** the land beyond the valley continues as prairie with groves instead of a square in haze; ravens on the ground fold their wings flat; packed bison near the camera no longer pass through each other (display only); spring greens up and rain reads as rain (streaks over the far ground, cooler air, wet sheen); a chapter card more than a year late is dropped. A quiet-GPU A/B shows the evening build equal or faster in every view.
 15. **After 1.0.1:** a map legend with distinct predator marks (wolves crimson, cougars vermilion, coyotes amber on the map; the population strip keeps its colours), tooltips and labels on the corner icons, the Overlays button no longer looks disabled when idle, the territory fill thins near the camera, a **Pair** view in the graph (two species on their own axes, bison against wolves by default), grizzled near wolves with tawny legs, and a selection ring that reads all the way round wolves, coyotes and cougars. Liam's Roblox session from about 19:15: no GPU work after that (no benchmarks, no captures).
 16. **Release 1.0.2:** golden eagles read as eagles (warm brown, golden nape, pale wing and tail marks, larger than ravens); ravens at a kill no longer pop in and out (one-frame jumps measured down from about 160 to about 5); the map legend's predators sit on their own hues; field-note toasts wait for their place to be on screen with your own camera too; the yearly eagle and hawk arrivals are Chronicle lines instead of title cards.
+17. **Release 1.0.3:** following an animal, the ground shows a short sward of real grass blades instead of a smeared texture; at the wide view the animals keep their value in rain, and pronghorn and mule deer read grey-brown on snow instead of orange. GPU: about +0.5 ms on the golden views, every view under the 16.7 ms budget.
 
 **Look at first:** the landing page hero, then Play in a fresh browser tab (the poster, the title, the tips), then the menu > About.
 
@@ -39,7 +40,8 @@
 - **Gemini video:** round 34 (108 s reel) life 3, keep watching 4, the same sliding-feet note as every video round (measured slip is under 1.4%); its one concrete item, a Chronicle repeating the same blizzard line, is fixed. The new landing hero was checked by Gemini too; its one fair point (bedded bison overlapping into a dark blob in a snow shot) dropped that shot from the cut.
 - **QA sweep:** 25 issues, triaged item by item in REVIEWS.md; no console or page errors.
 - **GPU:** the V1.0 build is the same or faster than the pre-V1 build in every view (A, B, B, A at 1440p); the weather changes are within noise.
-- Triage for everything is in REVIEWS.md (rounds 33, 34, QA, 35).
+- **Later rounds:** blind round 36 (6, 5, 6, 6, 6, 6) and 37 (visual 7, the rest 5 to 6); Gemini round 38 on a smooth 30 fps take: visual 7, life 2 (see the motion question below).
+- Triage for everything is in REVIEWS.md (rounds 33 to 38 and the QA sweep).
 
 ### Decisions you might want to overrule
 - **Ages:** an animal's card gives its age in that species' own years (a bison's life mapped onto a real bison's), while the family tree dates births in valley years, so a 10-year-old bull can be born in year 2 of a year-6 valley. Left as is; the fix is a wording choice (say "bison years", or show valley years on the card).
