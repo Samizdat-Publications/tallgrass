@@ -1281,7 +1281,8 @@ export class GameUI {
     } else if (this.hidden) {
       this.setHidden(false);
     } else if (this.pop.isExpanded) {
-      this.pop.toggleExpanded();
+      // a focused lane in the graph comes back to equal lanes first; the next Esc shrinks the graph
+      if (!this.pop.clearFocus()) this.pop.toggleExpanded();
     }
   }
 }

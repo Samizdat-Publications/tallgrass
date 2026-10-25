@@ -132,7 +132,12 @@ export class PopGraph {
   private pace: Pace = 'live';
   private numAt = 0;
   private hoverX = -1;
+  private hoverY = -1;
   private hoverRaf = 0;
+  /** The species whose lane is enlarged in the Population view (null: equal lanes). Not remembered across sessions. */
+  private focusSp: number | null = null;
+  /** Each lane's box in chart pixels from the last Population draw, for clicks. */
+  private lanes: { sp: number; top: number; bottom: number; x0: number; x1: number; plotL: number }[] = [];
 
   // dom
   private cellsEl: HTMLElement;
@@ -258,6 +263,7 @@ export class PopGraph {
     this.chartWrap = h('div', { class: 'tg-chart-wrap' }, this.chart, this.tip);
     this.chart.addEventListener('pointermove', (e) => this.onHover(e));
     this.chart.addEventListener('pointerleave', () => this.onHover(null));
+    this.chart.addEventListener('click', (e) => this.onChartClick(e));
 
     this.el = h('section', { class: 'tg-pop tg-glass tg-leaf', 'aria-label': 'Population', 'data-rows': '1', 'data-view': 'pop' }, head, this.chipsEl, this.cellsEl, this.chartWrap, this.stripEl);
     // resting a mouse on the strip opens the full panel in place; leaving closes it (a touch tap is a click, which pins)
@@ -443,6 +449,32 @@ export class PopGraph {
 
   get isExpanded(): boolean {
     return this.expanded;
+  }
+
+  /** Put a focused lane back to equal lanes. Returns true when there was one (so Esc spends itself on this before closing the graph). */
+  clearFocus(): boolean {
+    if (this.focusSp === null) return false;
+    this.focusSp = null;
+    this.dirty = true;
+    this.lastDraw = 0;
+    if (this.expanded) this.drawExpanded();
+    return true;
+  }
+
+  /** A click on a species lane (its name at the left, or the lane itself) gives it about half the column; a second click puts it back. */
+  private onChartClick(e: MouseEvent): void {
+    if (!this.expanded || this.view !== 'pop') return;
+    const r = this.chart.getBoundingClientRect();
+    const lane = this.laneAt(e.clientX - r.left, e.clientY - r.top);
+    if (!lane) return;
+    this.focusSp = this.focusSp === lane.sp ? null : lane.sp;
+    this.dirty = true;
+    this.lastDraw = 0;
+    this.drawExpanded();
+  }
+
+  private laneAt(x: number, y: number) {
+    return this.lanes.find((l) => x >= l.x0 && x <= l.x1 && y >= l.top && y <= l.bottom) ?? null;
   }
 
   get isEvolution(): boolean {
@@ -954,6 +986,7 @@ export class PopGraph {
       });
     }
     let idx = -1;
+    const lanes: typeof this.lanes = [];
     groups.forEach((group, c) => {
       g.save();
       g.translate(c * (cw + gapX), 0);
@@ -961,16 +994,21 @@ export class PopGraph {
       g.rect(0, 0, cw, ht);
       g.clip();
       const lx = c === hc ? localX : frac >= 0 ? P.l + frac * (P.r - P.l) : -1;
+      const laneBox: { sp: number; top: number; bottom: number }[] = [];
       const got = drawRows(
         g, cw, ht, u,
-        { ticks: this.ticks, pops: this.pops, species: group, grass: this.grass, grassMax: this.grassMax, markers: this.markers, log: this.log, grassRow: twoCols ? c === 1 : true, climate: this.climateAny ? this.climate : undefined, mega: this.climateAny ? this.mega : undefined },
+        { ticks: this.ticks, pops: this.pops, species: group, grass: this.grass, grassMax: this.grassMax, markers: this.markers, log: this.log, grassRow: twoCols ? c === 1 : true, climate: this.climateAny ? this.climate : undefined, mega: this.climateAny ? this.mega : undefined, focus: this.focusSp ?? -1, lanesOut: laneBox },
         lx,
         c === hc ? hit : -1,
       );
+      for (const l of laneBox) lanes.push({ ...l, x0: c * (cw + gapX), x1: c * (cw + gapX) + cw, plotL: c * (cw + gapX) + P.l });
       if (c === hc) idx = got;
       g.restore();
     });
-    this.chart.style.cursor = hit >= 0 ? 'pointer' : 'crosshair';
+    this.lanes = lanes;
+    // a lane name at the left is a button: the hand over the gutter
+    const overName = hit < 0 && hoverX >= 0 && lanes.some((l) => hoverX >= l.x0 && hoverX < l.plotL && this.hoverY >= l.top && this.hoverY <= l.bottom);
+    this.chart.style.cursor = hit >= 0 || overName ? 'pointer' : 'crosshair';
     if (idx >= 0) {
       this.showTip(idx, hc * (cw + gapX) + P.l + ((this.ticks[idx] - t0) / (t1 - t0)) * (P.r - P.l), w, hit >= 0 ? this.markers[hit] : null);
     } else {
@@ -1024,6 +1062,7 @@ export class PopGraph {
     }
     const r = this.chart.getBoundingClientRect();
     this.hoverX = e.clientX - r.left;
+    this.hoverY = e.clientY - r.top;
     this.scheduleHoverDraw();
   }
 
