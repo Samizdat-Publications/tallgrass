@@ -541,3 +541,14 @@ Scores: visual 7, readability 5, life 7, ecosystem 6, UI 7, keep watching 6 (rou
 8. Water inconsistent: DEFER.
 9. Rocks, dithered canopies, a white smudge in 11: DEFER. The smudge (also in 05 at the same spot) is not a page element (no element covers it) and did not reproduce in three more captures; the likely sources are hoof dust lit paler than dark dusk ground or a big snowflake near the lens. A tried fade of near flakes was dropped unverified.
 10. HUD: FIX for the territory labels, 3357a32 (a den near the foot of the screen keeps its label, lifted above the time bar; the earlier hide left the third pack unnamed). The follow card covering the followed animal: FIX, 600d89d (while the card is open the framed follow eases the subject into the open part of the frame, and a hunt framed with its prey keeps the hunter clear of the card).
+
+## Round 41 (Gemini video, a 100 s documentary take of the live v1.0.6, interface hidden; 2026-10-24 23:29) -> `review/round-41-video/reel.gemini.md`
+Scores: visual 7, readability 4, life 2, ecosystem 3, UI n/a, keep watching 3 (round 38: 7, 6, 2, 5, 3, 3; round 39 with ?sunhold=1: 6, 3, 3, 2, 1, 4). The same top themes as every video round.
+1. Sliding feet: DEFER (as rounds 34, 38, 39: measured slip under 1.4%; the owner's motion question, the 80 s day at 1x, is the open lead).
+2. Hunts read as colliding pinballs: DEFER (sim and animation: stalk, sprint and takedown phases are a work package of their own).
+3. Ravens "flap without moving" and "fall in a column" (0:25 to 0:34, 1:11): DEFER; the kettle spiral (1.0.4) and the near-lens thinning (1.0.6) are live in this take, so the column at 1:11 needs a frame-by-frame look.
+4. Cuts through black between shots: REJECT for now (the documentary cut is the design; a time-lapse sweep is a bigger idea for MAYBE-WANTS).
+5. Heavy depth of field (1:15): REJECT; the frame is a low close shot of a pronghorn with soft foreground grass, normal focus for that shot.
+6. Dead bison look like rigid statues (1:26 to 1:34): DEFER (carcass pose and settling).
+7. A bright red stain by the creek (0:17 to 0:25): DEFER, not a kill stain (those multiply the ground darker; this patch is lighter and redder than the bank, (82, 33, 18) against (56, 49, 41)). Find what draws it on the creek bank.
+8. Night too dark (0:40): DEFER (the night director rule frames low against the sky; the herd in the dark foreground still needs more moonlight on the animals).

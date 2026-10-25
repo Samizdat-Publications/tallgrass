@@ -42,6 +42,7 @@
 - **QA sweep:** 25 issues, triaged item by item in REVIEWS.md; no console or page errors.
 - **GPU:** the V1.0 build is the same or faster than the pre-V1 build in every view (A, B, B, A at 1440p); the weather changes are within noise.
 - **Later rounds:** blind round 36 (6, 5, 6, 6, 6, 6) and 37 (visual 7, the rest 5 to 6); Gemini round 38 on a smooth 30 fps take: visual 7, life 2 (see the motion question below).
+- **Round 41** (Gemini video of v1.0.6, 23:29): visual 7, readability 4, life 2, ecosystem 3, keep watching 3; the same sliding-feet and hunt notes as every video round, plus a red patch on a creek bank that is not a kill stain (REVIEWS.md).
 - **Round 40** (blind, 22:50, the live build): visual 7, readability 5, life 7, ecosystem 6, UI 7, keep watching 6; the same top themes (wide-view readability, flat long-run chart, graph lanes, winter ground).
 - Triage for everything is in REVIEWS.md (rounds 33 to 38 and the QA sweep).
 
