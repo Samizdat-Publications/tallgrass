@@ -343,6 +343,10 @@ const RAVEN_SITE_REM = 0.08;
 const RAVEN_SITE_R = 7;
 const RAVEN_SITE_MIN = 2;
 const RAVEN_SITES_MAX = 96;
+/** r-rvpop: a raven's share of a gathering eases in over about this many seconds and out over RAVEN_GATHER_FALL (a kill site that flickers out of the list must not jump the kettle), and the thinning and a new bird's arrival take at least RAVEN_FADE_T s for a full fade. */
+const RAVEN_GATHER_RISE = 0.5;
+const RAVEN_GATHER_FALL = 1.8;
+const RAVEN_FADE_T = 0.9;
 const RAVEN_SOAR_D0 = 70;
 const RAVEN_SOAR_D1 = 140;
 /** r-ravens: a raven at a carcass keeps at least this far (m) outside the footprint ellipse of the body. */
@@ -683,6 +687,9 @@ class Slots {
   rph = new Float32Array(this.cap);
   mv = new Float32Array(this.cap);
   rtk = new Float32Array(this.cap).fill(-1);
+  /** r-rvpop: a raven's eased share of a kill gathering (0..1, -1 = not set yet) and its eased visibility (0 gone .. 1 drawn): the kettle ring and the thinning go through these, not straight off the kill-site list and the camera distance, so nothing pops. */
+  rgk = new Float32Array(this.cap).fill(-1);
+  rvv = new Float32Array(this.cap).fill(1);
   wasG = new Uint8Array(this.cap);
   /** Raptors (R5): the eased stoop and upright-perch weights, the state last frame (255 = none yet), and the clock time of the next call. */
   stoop = new Float32Array(this.cap);
@@ -789,6 +796,8 @@ class Slots {
     this.rph = g(this.rph, Float32Array);
     this.mv = g(this.mv, Float32Array);
     { const b = new Float32Array(n).fill(-1); b.set(this.rtk); this.rtk = b; }
+    { const b = new Float32Array(n).fill(-1); b.set(this.rgk); this.rgk = b; }
+    { const b = new Float32Array(n).fill(1); b.set(this.rvv); this.rvv = b; }
     this.wasG = g(this.wasG, Uint8Array);
     this.stoop = g(this.stoop, Float32Array);
     this.perch = g(this.perch, Float32Array);
@@ -910,6 +919,10 @@ export class AnimalLayer {
   private pn = { x: 0, z: 0, d: 0 };
 
   private world: World;
+  /** r-rvpop: the ravens' kettle and thinning go through per-bird eased weights (false: straight off the site list and the camera distance, as before; an A/B and debugging hook). */
+  ravenEase = true;
+  /** r-rvpop: when an array, each frame's update appends (id, x, y, z, fadeQ) of every raven drawn (a debugging hook for tools/raven_pop_probe.mjs). */
+  dbgRavens: number[] | null = null;
   /** R7: draw the near LOD of the species that have one (false: the far mesh draws everything; an A/B and debugging hook). */
   nearLod = true;
   /** Draw batch by species id; null for a species with no model (it is simply not drawn). */
@@ -1261,6 +1274,9 @@ export class AnimalLayer {
         S.rph[slot] = 0;
         S.mv[slot] = 0;
         S.rtk[slot] = -1;
+        S.rgk[slot] = -1;
+        // (a raven that appears after the world has settled fades in rather than popping)
+        S.rvv[slot] = this.gen > 3 && RAVEN[ag[i * AGENT_STRIDE] | 0] ? 0 : 1;
         S.wset[slot] = 0;
         S.acc[slot] = 0;
         S.lean[slot] = 0;
@@ -1770,13 +1786,12 @@ export class AnimalLayer {
     return 1 - smoothstep(RAVEN_GATHER_R0, RAVEN_GATHER_R1, Math.sqrt(best));
   }
 
-  /** r-ravens: the border-fade level (0 fully drawn .. 15 gone) a raven at camera distance camD is drawn at: see RAVEN_FADE_D0. */
-  private ravenRecede(id: number, x: number, z: number, camD: number): number {
-    if (camD <= RAVEN_FADE_D0) return 0;
+  /** r-ravens: the share (1 drawn .. 0 thinned away) a raven at camera distance camD is drawn at, before it is eased: see RAVEN_FADE_D0. `gather` is its eased share of a kill gathering. */
+  private ravenShare(id: number, camD: number, gather: number): number {
+    if (camD <= RAVEN_FADE_D0) return 1;
     const keep = 1 - (1 - RAVEN_KEEP_FAR) * smoothstep(RAVEN_FADE_D0, RAVEN_FADE_D1, camD);
     const u = hash01(id * 7 + 13);
-    const v = Math.max(clamp((keep * (1 + RAVEN_FADE_BAND) - u) / RAVEN_FADE_BAND, 0, 1), this.ravenGather(x, z));
-    return Math.round((1 - v) * 15);
+    return Math.max(clamp((keep * (1 + RAVEN_FADE_BAND) - u) / RAVEN_FADE_BAND, 0, 1), gather);
   }
 
   private carcassNear(x: number, z: number, r: number): number {
@@ -2741,6 +2756,14 @@ export class AnimalLayer {
         this.hotCur[this.hotN * 2 + 1] = z;
         this.hotN++;
       }
+      // r-rvpop: how far this raven is in a kill gathering, eased per bird: a kill site that drops out of (or joins) the list for a snapshot, or a bird
+      // crossing the edge of the gathering, no longer jumps the kettle ring (up to 7 m) or the thinning in a single frame.
+      let rvG = 0;
+      if (RAVEN[sp]) {
+        const gt = this.ravenGather(x, z), gp0 = S.rgk[slot];
+        S.rgk[slot] = !this.ravenEase || gp0 < 0 || dt < 1e-4 ? gt : gp0 + (gt - gp0) * (1 - Math.exp(-dt / (gt > gp0 ? RAVEN_GATHER_RISE : RAVEN_GATHER_FALL)));
+        rvG = S.rgk[slot];
+      }
       // r-ravens2: a predator feeding keeps its body clear of the ravens; a raven (flying or standing) is moved out of any such body (last frame's)
       if (hunter && state === St.Eat && this.bodyN < 63) {
         const bl = (this.batches[sp]?.def.params.length ?? 1.5) * this.speciesScale[sp] * sc, bq = this.bodyN * 6;
@@ -2763,7 +2786,7 @@ export class AnimalLayer {
       // sink there, which drew a tall column of birds over one spot (QA, round 35). Over a kill site a flying raven is set out on a ring
       // that widens with its height and turns slowly, and faces along it (display only; a bird on the ground is untouched).
       if (flier && !raptor && !groundedBird && alt > 0.8) {
-        const kw = this.ravenGather(x, z) * smoothstep(0.8, 4, alt);
+        const kw = rvG * smoothstep(0.8, 4, alt);
         if (kw > 0.001) {
           const ph = hash01(id * 7 + 3) * Math.PI * 2 + this.clock * 0.45;
           const rr = Math.min(7, 1.5 + alt * 0.45) * kw;
@@ -3089,7 +3112,15 @@ export class AnimalLayer {
         fadeQ = Math.round((1 - smoothstep(FADE_GONE, FADE_FULL, edge)) * 15);
       }
       // r-ravens: the ones not at a carcass thin out with distance (a selected or followed bird never does)
-      if (RAVEN[sp] && id !== sel && id !== fol) fadeQ = Math.max(fadeQ, this.ravenRecede(id, x, z, Math.hypot(x - camP.x, g0 + alt - camP.y, z - camP.z)));
+      // (r-rvpop: through an eased visibility, at most 1 / RAVEN_FADE_T per second, so a bird crossing the thinning distance or arriving fades, never pops)
+      if (RAVEN[sp]) {
+        if (id === sel || id === fol) S.rvv[slot] = 1;
+        else {
+          const vt = this.ravenShare(id, Math.hypot(x - camP.x, g0 + alt - camP.y, z - camP.z), rvG), vp = S.rvv[slot], st = dt / RAVEN_FADE_T;
+          S.rvv[slot] = !this.ravenEase || dt < 1e-4 ? vt : vp + clamp(vt - vp, -st, st);
+          fadeQ = Math.max(fadeQ, Math.round((1 - S.rvv[slot]) * 15));
+        }
+      }
       // Contact shadow: a soft blob at knee height under every ground animal (models/contact.ts). It is as long as the body, a
       // little wider, and grows with the distance readability boost so a herd seen from afar keeps its grounding.
       if (pr.kind <= 1 && camD < 150 && fadeQ < 8 && !swimming) {
@@ -3215,6 +3246,7 @@ export class AnimalLayer {
       b.centers[c + 1] = cy;
       b.centers[c + 2] = z;
       b.centers[c + 3] = Math.max(0.3, pr.length * 0.42 * vs);
+      if (this.dbgRavens !== null && RAVEN[sp]) this.dbgRavens.push(id, x, cy, z, fadeQ);
       b.alive = b.count;
       if (id === sel || id === fol) {
         this.selInfo.found = true;
