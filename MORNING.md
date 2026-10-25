@@ -52,7 +52,7 @@
 
 ### Next 5
 1. Motion, the open question above: a slower-looking day at 1x (light only) or a steadier sun while the documentary camera films, then a Gemini video round to see whether "sliding" goes away.
-2. A pale soft rectangle near the bottom of the territory-map still while a blizzard is building (scratch capture, review set shot 11, late autumn evening): not the pack label (it stays with the label hidden), most likely the blizzard ground haze or a weather sprite. Find it and fix it.
+2. Cloud shadows before a blizzard: a sun break between the storm-cloud shadows can show a fairly straight edge on the ground (scratch/KEEP_blizzard_patch.jpg, bottom centre; it comes and goes within a second as the clouds close). Check the cloud-shadow resolution and soften its edge.
 3. 100x speed: it reaches about 45 to 60x here. A real speed-up must keep the golden hashes bit-identical, so it is a project of its own.
 4. Ages: card in species years, family tree in valley years (pick one wording).
 5. The sim items every critic repeats (flat long-run charts, mule deer and prairie dogs low, ravens swinging, bison calving outside spring): a planned sim pass with the stability suite, not a release-night change.
