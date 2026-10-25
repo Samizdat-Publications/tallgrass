@@ -29,7 +29,8 @@ const ALPHA: Record<string, number> = { raven: 0.7, hawk: 0.85, eagle: 0.9, beav
  * on the wolf's, goes pale gold. The population strip and the rest of the panel keep the registry colours; the map legend reads these.
  */
 export const GLYPH_COLOR: Record<string, string> = {
-  wolf: '#E8322B', cougar: '#FF6A2A', coyote: '#FFB43A', eagle: '#F3E3A4',
+  // (round 37: vermilion cougars and amber coyotes read as the amber bison on the map; the predators now sit on hues no other mark uses)
+  wolf: '#E8322B', cougar: '#E84BC8', coyote: '#F2EE3A', eagle: '#F7F7F2',
 };
 /** The mark's colour for a species: its glyph override, or its registry (panel) colour. */
 export function glyphColor(sp: { key: string; color: string }): string {

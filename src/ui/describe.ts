@@ -745,7 +745,7 @@ function describeCore(e: SimEvent, ctx?: DescribeContext): EventText {
             `${cap(countWord(n))} golden eagles take up their winter perches along the ridges.`,
             `Winter sends the valley ${countWord(n)} golden eagles, wide-winged and patient.`,
           ]),
-        card: n >= 3 ? { title: 'Eagles for the winter', subtitle: when } : undefined,
+        // (no chapter card: a yearly arrival with no place, so the card always sat over some other shot, rounds 33 to 37)
       };
     }
     case 'hawksReturn': {
@@ -761,7 +761,7 @@ function describeCore(e: SimEvent, ctx?: DescribeContext): EventText {
             `Spring brings the red-tails back to the cottonwoods: ${countWord(n)} pairs.`,
             `A high thin cry over the creek: ${countWord(n)} pairs of red-tailed hawks are home.`,
           ]),
-        card: n >= 3 ? { title: 'The hawks return', subtitle: when } : undefined,
+        // (no chapter card: a yearly arrival with no place, so the card always sat over some other shot, rounds 33 to 37)
       };
     }
     case 'storm':

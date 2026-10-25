@@ -593,7 +593,9 @@ engine.cam.onUserInput = takeCamera;
 // A chapter card tied to a place waits until the documentary camera is on that place (and goes if it never gets there); a player who has
 // the camera sees the cards as plain news. The narrator's lines (and so the captions) follow the same rule, below.
 const filmingNow = (): boolean => autoCam || cinematicOn;
-ui.cardGate = (x, y) => !filmingNow() || director.eventInView(x, y);
+// (with the player's own camera a field-note toast also waits for its place to be in the picture, round 37: "The first kill" over empty grass;
+// the note itself is recorded at once either way)
+ui.cardGate = (x, y, kind) => (filmingNow() ? director.eventInView(x, y) : kind !== 'note' || guideInView(x, y));
 type SimEv = typeof pendingEvents[number];
 const heldNarration: Array<{ ev: SimEv; at: number }> = [];
 /** Events for the narrator: a located event is held while the director films something else, and said once the camera is on it (12 s at most). */

@@ -42,9 +42,12 @@ ok(glyphColor(SPECIES[idx('bison')]) === SPECIES[idx('bison')].color, 'a herbivo
 const hunters = ['wolf', 'cougar', 'coyote'].map((k) => glyphColor(SPECIES[idx(k)]));
 ok(new Set(hunters).size === 3, 'wolf, cougar and coyote marks are three different colours');
 const rgb = (hex: string) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+// every predator mark is bright and sits well away from the bison's amber on the map (round 37: an orange cougar read as a bison)
+const dist = (a: number[], c: number[]) => Math.hypot(a[0] - c[0], a[1] - c[1], a[2] - c[2]);
+const bisonRgb = rgb(glyphColor(SPECIES[idx('bison')]));
 for (const k of ['wolf', 'cougar', 'coyote']) {
-  const [r, g, b] = rgb(glyphColor(SPECIES[idx(k)]));
-  ok(r > b + 60 && r > 200, `${k} mark is warm (red-orange family): ${glyphColor(SPECIES[idx(k)])}`);
+  const c = rgb(glyphColor(SPECIES[idx(k)]));
+  ok(Math.max(...c) > 200 && dist(c, bisonRgb) > 90, `${k} mark is bright and far from the bison's: ${glyphColor(SPECIES[idx(k)])}`);
 }
 
 if (failures) {
