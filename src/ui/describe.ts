@@ -261,9 +261,18 @@ export function yearsText(y: number): string {
   return `${Math.round(y)} years`;
 }
 
-/** Age in ticks to a biological age string for the species. */
+/** The word an age is counted in, per species id: "bison" in "10 bison years". */
+const YEAR_WORD = ['bison', 'wolf', 'raven', 'pronghorn', 'rabbit', 'cougar', 'coyote', 'prairie dog', 'eagle', 'hawk', 'mule deer', 'beaver'];
+
+/**
+ * Age in ticks to a biological age string for the species, named as that species' years: "10 bison years", "1 wolf year", "1.4 pronghorn
+ * years". (Owner ruling 2026-10-25: an animal's age runs on its own species' lifespan while the family tree and the Chronicle count valley
+ * years, so a plain "10 years" for a bull born in year 2 of a year-6 valley read as a mistake.)
+ */
 export function ageText(ageTicks: number, sp: number, maxAgeTicks?: number): string {
-  return yearsText(bioYears(ageTicks, sp, maxAgeTicks));
+  const t = yearsText(bioYears(ageTicks, sp, maxAgeTicks));
+  const w = YEAR_WORD[sp];
+  return w ? t.replace(/ (years?)$/, ` ${w} $1`) : t;
 }
 
 /** Documentary caption: "Bison cow, 6 years". */

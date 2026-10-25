@@ -178,7 +178,7 @@ export function causePhrase(code: number, who: StorySubject, entries: StoryEntry
   }
 }
 
-/** "Killed by wolves in late autumn, year 9, at 11 years old. Mother of four calves." */
+/** "Killed by wolves in late autumn, year 9, aged 11 bison years. Mother of four calves." */
 export function memorialText(
   who: StorySubject,
   entries: StoryEntry[],
@@ -189,7 +189,7 @@ export function memorialText(
 ): string {
   const cause = causePhrase(died.a, who, entries, died.tick);
   const when = `${seasonPhraseAt(died.tick)}, year ${yearOfTick(died.tick)}`;
-  let s = `${cause} in ${when}, at ${ageText(ageTicks, who.sp, maxAge)} old.`;
+  let s = `${cause} in ${when}, aged ${ageText(ageTicks, who.sp, maxAge)}.`;
   if (children > 0) s += ` ${who.male ? 'Father' : 'Mother'} of ${countWord(children)} ${youngOf(who.sp, children)}.`;
   return s;
 }

@@ -1,6 +1,6 @@
 // Event text checks: every event kind, including the v2 kinds, gives a clean sentence. Run: npx tsx src/ui/describe.test.ts
 import type { SimEvent, SimEventKind } from '../sim/sim';
-import { ChronicleVoice, climateWord, describeEvent, describeFolded, eventWeight, foldKey, skyWord, yearOfTick, type SkyView } from './describe';
+import { ageText, animalCaption, ChronicleVoice, climateWord, describeEvent, describeFolded, eventWeight, foldKey, MAX_AGE_TICKS, skyWord, yearOfTick, type SkyView } from './describe';
 
 let failures = 0;
 let checks = 0;
@@ -130,6 +130,13 @@ ok(describeEvent({ tick: 10, kind: 'nope' as SimEventKind, sp: 0, x: 0, y: 0, a:
   ok(eventWeight({ tick: 0, kind: 'megadrought', sp: -1, x: 0, y: 0, a: -78, b: 4 }) === 4, 'megadrought is heavy');
   ok(eventWeight({ tick: 0, kind: 'climateWet', sp: -1, x: 0, y: 0, a: 60, b: 0 }) === 3 && eventWeight({ tick: 0, kind: 'climateDry', sp: -1, x: 0, y: 0, a: -60, b: 0 }) === 3, 'wet and dry runs are medium');
   ok(eventWeight({ tick: 0, kind: 'climateMild', sp: -1, x: 0, y: 0, a: 5, b: 1 }) === 1, 'the return to ordinary years is light');
+}
+
+{
+  // ages are named in the species' own years (owner ruling 2026-10-25), so the card cannot be read as valley years
+  const m = MAX_AGE_TICKS;
+  ok(animalCaption(0, true, m[0] * 0.5, 100, false, m[0]) === 'Bison bull, 10 bison years', 'a bull of half the bison lifespan is 10 bison years');
+  ok(/^1 pronghorn year$/.test(ageText(m[3] / 12, 3, m[3])) && /^1\.4 mule deer years$/.test(ageText(m[10] * 1.4 / 12, 10, m[10])), 'singular and decimal ages keep the species word');
 }
 
 console.log(`${checks - failures}/${checks} checks passed`);
