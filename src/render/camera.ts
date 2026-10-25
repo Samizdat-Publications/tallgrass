@@ -98,6 +98,9 @@ export interface FollowFrame {
   side?: number;
   /** Where the subject stands in the frame (normalised device y, default -0.26, the lower middle third): a tracking shot at a rider's eye height wants it nearer the middle. */
   ndcY?: number;
+  /** Where the subject stands across the frame (normalised device x, default 0, the middle; negative = left), eased in over about a second: the
+   *  animal card on the right sets it so the followed animal stands in the open part of the screen (round 40). */
+  ndcX?: number;
   /** How far (rad) the wanted heading may drift from the held one before the camera swings to a new one (default 0.9), and how fast it swings (rad/s of the spring, default 0.55): a tracking shot keeps a tighter, quicker hold. */
   yawBand?: number;
   yawRate?: number;
@@ -166,6 +169,8 @@ export class DroneCamera {
   private frame: FollowFrame | null = null;
   private frameAuto = { dist: true, yaw: true, pitch: true };
   private frameInit = false;
+  /** The eased ndcX of the framed follow (see FollowFrame.ndcX). */
+  private fNdcX = 0;
   private fPrev = { x: 0, z: 0, ok: false };
   /** The subject's velocity (m/s, world xz), smoothed over ~0.45 s (look-ahead and lag feed-forward) and over ~1 s (the heading the shot is built on). */
   private fv = { x: 0, z: 0 };
@@ -597,6 +602,12 @@ export class DroneCamera {
       const stretch = 1 + 1.6 * (1 - smoothstep(0, 3.5, this.moveT));
       const ff = FRAME_SMOOTH * stretch * (4 / 3) * on;
       ox += fv.x * ff; oz += fv.z * ff;
+    }
+    // across the frame: the focus slides to the camera's right by the share of the half-width asked for, so the subject stands left of the middle
+    this.fNdcX += ((F.ndcX ?? 0) - this.fNdcX) * (1 - Math.exp(-dt / 0.6));
+    if (Math.abs(this.fNdcX) > 1e-3) {
+      const b = -this.fNdcX * Math.tan((this.camera.fov * DEG) / 2) * this.camera.aspect * D;
+      ox += Math.cos(yaw) * b; oz -= Math.sin(yaw) * b;
     }
     const ol = Math.hypot(ox, oz), cap = 0.8 * D * Math.max(1, F.timeScale ?? 1);
     if (ol > cap) { ox *= cap / ol; oz *= cap / ol; }

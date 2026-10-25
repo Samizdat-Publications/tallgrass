@@ -658,10 +658,20 @@ function startFollow(id: number | null): void {
   const ndcV = new THREE.Vector3();
   const lp = { x: 0, z: 0 };
   const hunter = isLandHunter(sp);
+  // round 40: the animal card on the right covered the followed animal; while it is open the subject stands in the open part of the frame
+  // (`cardX`: the card's left edge in normalised device x, 1 with no card; read twice a second, not every frame)
+  let cardX = 1, cardT = 0;
   engine.cam.follow(() => {
     if (!animals.getPosition(id, v)) return null;
     const now = performance.now(), dt = Math.min(0.25, (now - pt) / 1000);
     pt = now;
+    if (now - cardT > 500) {
+      cardT = now;
+      const card = selectedAnimal === id ? document.querySelector<HTMLElement>('.tg-insp') : null;
+      const r = card && !card.hidden ? card.getBoundingClientRect() : null;
+      cardX = r && r.width > 0 && window.innerWidth > 0 ? Math.min(1, (2 * r.left) / window.innerWidth - 1) : 1;
+    }
+    frame.ndcX = cardX < 0.9 ? Math.max(-0.35, (cardX - 1) / 2) : 0;
     if (hunter) {
       prey = animals.chasePrey(id, prey);
       const ok = prey !== null && animals.getPosition(prey, pv);
@@ -681,8 +691,9 @@ function startFollow(id: number | null): void {
       // the followed hunter must stay in the picture: a low shot puts a hunter far ahead in depth at the top edge whatever the width, so
       // when it nears the frame edge (or is behind the lens) the aim eases back onto it, and returns to the pair once it is well inside
       ndcV.copy(v).project(engine.camera);
-      const edge = ndcV.z > 1 || Math.abs(ndcV.x) > 0.8 || ndcV.y > 0.7 || ndcV.y < -0.85;
-      const inside = ndcV.z <= 1 && Math.abs(ndcV.x) < 0.6 && ndcV.y < 0.45 && ndcV.y > -0.7;
+      const right = Math.min(0.8, cardX - 0.12);
+      const edge = ndcV.z > 1 || ndcV.x < -0.8 || ndcV.x > right || ndcV.y > 0.7 || ndcV.y < -0.85;
+      const inside = ndcV.z <= 1 && ndcV.x > -0.6 && ndcV.x < right - 0.2 && ndcV.y < 0.45 && ndcV.y > -0.7;
       const holdT = edge ? 1 : inside ? 0 : hold;
       hold += (holdT - hold) * (1 - Math.exp(-dt / (holdT > hold ? 0.25 : 1.0)));
       frame.dist = base.dist + Math.max(0, need - base.dist) * pw;
