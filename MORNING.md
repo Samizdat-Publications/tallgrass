@@ -3,7 +3,7 @@
 *(Updated 00:05 Sunday 2026-10-24. This file is refreshed at every milestone.)*
 
 ## 2026-10-24: Tallgrass 1.0 (the V1.0 polish run, live and public)
-**Releases:** [v1.0.0](https://github.com/Samizdat-Publications/tallgrass/releases/tag/v1.0.0) (16:55), [v1.0.1](https://github.com/Samizdat-Publications/tallgrass/releases/tag/v1.0.1) (19:00), [v1.0.2](https://github.com/Samizdat-Publications/tallgrass/releases/tag/v1.0.2) (21:40), [v1.0.3](https://github.com/Samizdat-Publications/tallgrass/releases/tag/v1.0.3) (22:10), [v1.0.4](https://github.com/Samizdat-Publications/tallgrass/releases/tag/v1.0.4) (22:30: ravens spiral onto a kill, the ?sunhold=1 trial), [v1.0.5](https://github.com/Samizdat-Publications/tallgrass/releases/tag/v1.0.5) (23:08: the round 40 fixes), [v1.0.6](https://github.com/Samizdat-Publications/tallgrass/releases/tag/v1.0.6) (23:21: ravens near the lens); 1.0.7 is live (00:01, the graph shows its crashes) but its GitHub release is not published yet: the release step was refused by the permission check, see "Blocked" below. **Play it:** https://tallgrass.stewartgregerson.workers.dev · **Landing page:** https://tallgrass.pages.dev · **Hub:** https://samizdat-e0x.pages.dev · **Source:** https://github.com/Samizdat-Publications/tallgrass (or `npm run dev`, then http://localhost:5199/).
+**Releases:** [v1.0.0](https://github.com/Samizdat-Publications/tallgrass/releases/tag/v1.0.0) (16:55), [v1.0.1](https://github.com/Samizdat-Publications/tallgrass/releases/tag/v1.0.1) (19:00), [v1.0.2](https://github.com/Samizdat-Publications/tallgrass/releases/tag/v1.0.2) (21:40), [v1.0.3](https://github.com/Samizdat-Publications/tallgrass/releases/tag/v1.0.3) (22:10), [v1.0.4](https://github.com/Samizdat-Publications/tallgrass/releases/tag/v1.0.4) (22:30: ravens spiral onto a kill, the ?sunhold=1 trial), [v1.0.5](https://github.com/Samizdat-Publications/tallgrass/releases/tag/v1.0.5) (23:08: the round 40 fixes), [v1.0.6](https://github.com/Samizdat-Publications/tallgrass/releases/tag/v1.0.6) (23:21: ravens near the lens); [v1.0.7](https://github.com/Samizdat-Publications/tallgrass/releases/tag/v1.0.7) (00:01 deploy, the graph shows its crashes; release published by you at 02:26), live now. **Play it:** https://tallgrass.stewartgregerson.workers.dev · **Landing page:** https://tallgrass.pages.dev · **Hub:** https://samizdat-e0x.pages.dev · **Source:** https://github.com/Samizdat-Publications/tallgrass (or `npm run dev`, then http://localhost:5199/).
 
 **What you asked for:** as polished as it can get for V1.0 by midnight, then public on the hub. The simulation was left alone (the default world is still v10b, golden hashes unchanged); everything went into what a stranger sees first.
 
@@ -54,12 +54,6 @@
 - **100x** still reaches about 45 to 60x on this machine (the time bar says so honestly). A real speed-up has to keep the golden hashes bit-identical; the profile is flat (no line over 3%), so it is a project of its own.
 
 ### Blocked
-- **GitHub release v1.0.7** was refused by the permission check at 00:02 (the game itself is deployed as 1.0.7 and the commit is pushed). To publish it, run this in a fresh Windows PowerShell 5.1 window:
-
-```powershell
-cd "C:\Users\stewa\Documents\Claude\ecosystem-sim"; gh release create v1.0.7 --target 4f3860e6f4a8e11768b5e8ce0a3e459ff6e8034e --title "Tallgrass 1.0.7" --notes-file "C:\Users\stewa\Documents\Claude\ecosystem-sim\scratch\KEEP_release_notes_1.0.7.md"
-```
-
 - **Night readability (branch r-night-v1, not merged):** the animals gain a moonlit fill and rim at night (clearly better at the low night framing, the same dark mood, day untouched), but the GPU A/B ran while something else used the GPU and its two paired runs disagreed by up to 6 ms, so it waits for a quiet-GPU A/B. Worktree C:\Users\stewa\Documents\Claude\ecosystem-sim\scratch\wt-night, stills in its scratch\night-before and scratch\night-after folders.
 
 ### Next 5

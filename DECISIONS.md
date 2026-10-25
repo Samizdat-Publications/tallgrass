@@ -304,3 +304,4 @@ One line each: decision | why | alternative rejected.
 - 2026-10-24 23:30 Owner ruling (in chat, 23:28): "IF you need a little extra time no worries". Used only to finish the round 41 video review and its notes; no new code after v1.0.6.
 - 2026-10-25 00:00 Merged r-graph-v1 (UI only) and released the game as 1.0.7; held r-night-v1 (an animal shader change, clearly better in stills) because its GPU A/B was too noisy to read (paired runs disagreed by up to 6 ms with another load on the GPU). | Render changes ship only after a clean A/B. | Rejected: merging on the argument that the added shader work is small.
 - 2026-10-25 00:02 The GitHub release step for v1.0.7 was refused by the permission check (Create Public Surface). Not retried; the command for the owner is in MORNING.md under Blocked.
+- 2026-10-25 02:26 The owner published the v1.0.7 GitHub release himself (tag at 4f3860e, the deployed build).
