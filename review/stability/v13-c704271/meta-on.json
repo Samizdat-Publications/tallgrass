@@ -1,0 +1,75 @@
+{
+ "args": {
+  "seeds": 20,
+  "seedBase": 1,
+  "ticks": 1440000,
+  "generations": 1000,
+  "sampleEvery": 2000,
+  "threads": 7,
+  "scenarios": [
+   "baseline"
+  ],
+  "params": {
+   "feedBout": 1
+  },
+  "mock": false,
+  "maxMinutes": 0,
+  "progressSec": 600,
+  "out": "C:\\Users\\stewa\\Documents\\Claude\\ecosystem-sim\\scratch\\fb\\on",
+  "argv": [
+   "--seeds",
+   "20",
+   "--generations",
+   "1000",
+   "--ticks",
+   "1440000",
+   "--sample",
+   "2000",
+   "--threads",
+   "7",
+   "--scenario",
+   "baseline",
+   "--progress-sec",
+   "600",
+   "--params",
+   "{\"feedBout\":1}",
+   "--out",
+   "scratch/fb/on"
+  ]
+ },
+ "commit": "20997a6",
+ "node": "v24.19.0",
+ "platform": "win32 x64",
+ "startedAt": "2026-10-26T00:52:33.400Z",
+ "finishedAt": "2026-10-26T03:56:02.356Z",
+ "wallSeconds": 11008.95,
+ "stopReason": null,
+ "tasks": {
+  "total": 20,
+  "completed": 20,
+  "errors": 0,
+  "aborted": 0,
+  "skipped": 0
+ },
+ "msPerTick": 2.405251,
+ "ticksRun": 28800000,
+ "ticksPerSecWall": 2616,
+ "scenarios": {
+  "baseline": {
+   "seeds": 20,
+   "completed": 20,
+   "persistencePct": {
+    "bison": 95,
+    "wolf": 95,
+    "raven": 100,
+    "pronghorn": 100,
+    "rabbit": 100,
+    "cougar": 90,
+    "coyote": 100,
+    "prairiedog": 95,
+    "muledeer": 100
+   },
+   "maxGen": 559.4941860465116
+  }
+ }
+}
