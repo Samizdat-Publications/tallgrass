@@ -1937,12 +1937,29 @@ export class Sim implements SimLike {
     }
 
     // feeding at a fresh carcass
-    if (a.energy[i] < 0.93 && !chasing) {
-      const k = this.nearestCarcass(x, y, 45, 500, true);
+    // (feedBout: one that is eating keeps on until it is full, and one lying up by the kill comes back to it at 0.85, see the param)
+    const bout = p.feedBout > 0;
+    const feedLine = bout ? (a.state[i] === St.Eat ? 0.995 : 0.85) : 0.93;
+    if (a.energy[i] < feedLine && !chasing) {
+      const k = this.nearestCarcass(x, y, 45, bout ? p.feedBoutAge : 500, true);
       if (k >= 0) {
         const dx = this.cX[k] - x, dy = this.cY[k] - y, d = Math.sqrt(dx * dx + dy * dy);
         if (d < 2.2) { state = St.Eat; a.timer[i] = k; }
         else { const v = Math.min(run, trot * 1.5, 0.6 + d * 0.5); dvx = (dx / d) * v; dvy = (dy / d) * v; state = St.Walk; }
+        a.dvx[i] = dvx; a.dvy[i] = dvy; a.state[i] = state;
+        return;
+      }
+    }
+    // feedBout: fed, with a kill near that still has meat on it, a pack wolf lies up beside it instead of going back to patrol or hunting
+    if (bout && !chasing && pk >= 0) {
+      const k = this.nearestCarcass(x, y, 45, p.feedBoutAge, true);
+      if (k >= 0 && this.cMeat[k] > 0.3) {
+        const h = Math.imul(a.id[i] | 0, 0x9e3779b1) >>> 0;
+        const ang = (h / 4294967296) * Math.PI * 2, r = 5 + 4 * (((h >>> 11) & 1023) / 1023);
+        const lx = this.cX[k] + Math.cos(ang) * r, ly = this.cY[k] + Math.sin(ang) * r;
+        const dx = lx - x, dy = ly - y, d = Math.sqrt(dx * dx + dy * dy);
+        if (d > 1.5) { const v = Math.min(P.walkSpeed, 0.4 + d * 0.4); dvx = (dx / d) * v; dvy = (dy / d) * v; state = St.Walk; }
+        else state = St.Rest;
         a.dvx[i] = dvx; a.dvy[i] = dvy; a.state[i] = state;
         return;
       }
@@ -2148,7 +2165,7 @@ export class Sim implements SimLike {
     if (st === St.Eat) {
       const k = a.timer[i];
       if (k >= 0 && k < this.cN && this.cMeat[k] > 0.02 && Math.abs(this.cX[k] - a.x[i]) < 3 && Math.abs(this.cY[k] - a.y[i]) < 3) {
-        const take = Math.min(p.wolfEatRate, this.cMeat[k]);
+        const take = Math.min(p.feedBout > 0 ? p.wolfEatRate * p.feedBoutRate : p.wolfEatRate, this.cMeat[k]);
         this.cMeat[k] -= take;
         a.energy[i] = Math.min(1, a.energy[i] + take);
         if (this.dis.cdvOn) this.dis.onFeed(i);

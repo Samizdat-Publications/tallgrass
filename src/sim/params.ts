@@ -460,6 +460,17 @@ export interface Params {
   wolfKillChance: number;
   wolfEatRate: number;
   wolfPackStoreShare: number;
+  /** If > 0 (feeding bout, 2026-10-25): a kill is a place the pack holds until it is eaten. A wolf that is feeding keeps on until it is
+   *  full (0.995, not the usual 0.93); a fed wolf near a fresh kill with meat on it lies up beside it (its own spot 5 to 9 m out, from
+   *  a hash of its id, no random draws) instead of going back to patrol, and returns to feed when its energy falls under 0.85, so it is
+   *  never hungry enough to start a new hunt while the kill lasts. The pack moves on once the meat is down to scraps (0.3) or the kill
+   *  is older than feedBoutAge. 0 = off (wolves stop at 0.93 and leave). */
+  feedBout: number;
+  /** With feedBout on: the share of wolfEatRate a wolf takes per tick (smaller bites, a longer feed: at 0.4 four hungry wolves take about 80
+   *  ticks over a pronghorn instead of 35; much lower and a feeding wolf barely out-eats its own metabolism, 1 / 950 a tick). */
+  feedBoutRate: number;
+  /** With feedBout on: how long (ticks) a kill keeps the pack: it feeds on and lies up by a kill up to this age (the usual window is 500). */
+  feedBoutAge: number;
   wolfPackMax: number;
   wolfDenMinDist: number;
   wolfTerritory: number;
@@ -821,6 +832,9 @@ export function defaultParams(): Params {
     wolfKillChance: 0.3,
     wolfEatRate: 0.012,
     wolfPackStoreShare: 0.45,
+    feedBout: 0,
+    feedBoutRate: 0.4,
+    feedBoutAge: 1600,
     wolfPackMax: 7,
     wolfDenMinDist: 280, // v10 (was 200)
     wolfTerritory: 130, // v10 (was 100)
