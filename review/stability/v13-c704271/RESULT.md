@@ -64,3 +64,19 @@ Closest so far: the short holds pass every gate but pronghorn starvation (51 to 
 The cut in kills (about -64%) comes from the core of the bout, not from the bite size, the hold length or feedSettle: a pack that stays by its kill keeps topping up from it, so it rarely gets hungry enough to hunt; in v10b the wolves wandered off, got hungry and killed again, leaving 60 to 80% of each carcass. The v10b balance rests on wasteful wolves, and the bout moves the valley to a new level (more bison and mule deer, a little more pronghorn starvation).
 
 Best candidate: feedBoutAge 300 (round 3, A3): every gate but pronghorn starvation (51% against 50%), no extinctions in 20 seeds over 400 years. On screen (tools/killwatch.ts, seed 3, 6 years) the killers stay with a bison kill a median 323 ticks (about 32 s at 1x) and a pronghorn 188 (about 19 s), against 91 in v10b; with the 1,600-tick hold a third of bison kills held their pack past a minute. Its 600-year confirm and shock suite are running (scratch/fbs/A3full, A3shocks).
+
+## A3 confirm and shocks (2026-10-26)
+
+600 years, 20 seeds: bison persist 20/20, presence 20/20, pronghorn starvation 52% (fails by 2 points), wolf CV 0.32, wolf-bison corr 0.68.
+Shocks (20 seeds, 300 years; v10b ran 12 seeds, 250 years, so seeds 1 to 12 at year 250 compare like for like): after the **drought**, 4 of those 12 valleys lost their bison (seeds 1, 4, 9, 10; v10b none) and the wolves fell with them; after **wolfwipe** 1 (seed 3; v10b none); **cull70** none. Too many bison meet a drought and crash. **A3 is not adoptable.**
+
+## The lie-up is the conflict (2026-10-26, 8 seeds, 150 years)
+
+| | kills a year | wolves | bison | mule deer | killers gone from a bison kill (median ticks) | meat left when they go |
+|---|---|---|---|---|---|---|
+| v10b + feedSettle | 216 | 30 | 575 | 133 | 90 | 81% |
+| bout without the lie-up, 40% bites | 198 | 31 | 623 | 93 | 79 | 86% |
+| bout without the lie-up, 20% bites | 146 | 30 | 777 | 225 | | |
+| full bout (lie-up) | 79 | 42 | 864 | 301 | 289 to 323 (a third never left with the long hold) | 40 to 51% |
+
+Without the lie-up the balance comes back (kills -8%, bison +8%) but so does the walk-off; with it, the kills fall by two thirds and the bison overshoot. The bout alone cannot have both: keeping the scene and the stability needs the bison held down from below (calf survival, fecundity or grazing) once the wolves are efficient, a planned rebalancing with its own screens.
