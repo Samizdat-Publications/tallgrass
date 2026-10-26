@@ -475,6 +475,11 @@ export interface Params {
    *  rest), and a hungry wolf no longer comes back to a kill below that share; 0 = it stays until the kill is down to scraps (0.3 meat).
    *  (Stability 2026-10-25: eating every kill to the bone cut the kills by more than half, and the bison overshot and could crash.) */
   feedBoutLeave: number;
+  /** If > 0 (takedown spin fix, 2026-10-26): a wolf that starts to eat stops where it is (its speed falls to 40% each tick instead of
+   *  easing off at 15%), and one already eating keeps eating within 3.2 m of the carcass instead of 2.2. Without it a wolf running
+   *  at 9 m/s when the prey drops coasts about 9 m past the body, turns back at its limited turn rate, and loops round the kill
+   *  between eating and walking for several seconds, which the renderer draws as the pack spinning round the carcass. 0 = off. */
+  feedSettle: number;
   wolfPackMax: number;
   wolfDenMinDist: number;
   wolfTerritory: number;
@@ -840,6 +845,7 @@ export function defaultParams(): Params {
     feedBoutRate: 0.4,
     feedBoutAge: 1600,
     feedBoutLeave: 0,
+    feedSettle: 1, // checkpoint v13b (2026-10-26, the takedown spin fix that came with the owner-approved feeding bout: was 0)
     wolfPackMax: 7,
     wolfDenMinDist: 280, // v10 (was 200)
     wolfTerritory: 130, // v10 (was 100)

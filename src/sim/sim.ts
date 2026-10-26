@@ -1333,6 +1333,7 @@ export class Sim implements SimLike {
     const dsp = Math.sqrt(dvx * dvx + dvy * dvy);
     let sp = Math.sqrt(a.vx[i] * a.vx[i] + a.vy[i] * a.vy[i]);
     sp += (dsp - sp) * accel;
+    if (st === St.Eat && this.p.feedSettle > 0) sp *= 0.4; // feedSettle: a wolf that starts to eat stops where it is, it does not coast past the carcass
     // per-slot memo of the last atan2 (desired direction) and the last cos/sin (heading): pure functions of their inputs, and the
     // inputs repeat for several ticks between thinks, so a hit returns exactly what the call would. Zero inputs are never matched
     // (their sign could differ under ===).
@@ -1945,7 +1946,7 @@ export class Sim implements SimLike {
       if (k >= 0 && bout && p.feedBoutLeave > 0 && this.cMeat[k] <= p.feedBoutLeave * this.cMeat0[k]) k = -1; // eaten down to the pack's share: left to the scavengers
       if (k >= 0) {
         const dx = this.cX[k] - x, dy = this.cY[k] - y, d = Math.sqrt(dx * dx + dy * dy);
-        if (d < 2.2) { state = St.Eat; a.timer[i] = k; }
+        if (d < (p.feedSettle > 0 && a.state[i] === St.Eat ? 3.2 : 2.2)) { state = St.Eat; a.timer[i] = k; }
         else { const v = Math.min(run, trot * 1.5, 0.6 + d * 0.5); dvx = (dx / d) * v; dvy = (dy / d) * v; state = St.Walk; }
         a.dvx[i] = dvx; a.dvy[i] = dvy; a.state[i] = state;
         return;

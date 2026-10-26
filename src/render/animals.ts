@@ -927,6 +927,8 @@ export class AnimalLayer {
   ravenEase = true;
   /** r-rvpop: when an array, each frame's update appends (id, x, y, z, fadeQ) of every raven drawn (a debugging hook for tools/raven_pop_probe.mjs). */
   dbgRavens: number[] | null = null;
+  /** Debug: when an array, each frame appends (time s, id, x, z, drawn heading, sim state, lunge envelope, hold envelope) of every wolf drawn (takedown spin probe). */
+  dbgWolves: number[] | null = null;
   /** R7: draw the near LOD of the species that have one (false: the far mesh draws everything; an A/B and debugging hook). */
   nearLod = true;
   /** Draw batch by species id; null for a species with no model (it is simply not drawn). */
@@ -3262,6 +3264,7 @@ export class AnimalLayer {
       b.centers[c + 2] = z;
       b.centers[c + 3] = Math.max(0.3, pr.length * 0.42 * vs);
       if (this.dbgRavens !== null && RAVEN[sp]) this.dbgRavens.push(id, x, cy, z, fadeQ);
+      if (this.dbgWolves !== null && sp === Sp.Wolf) this.dbgWolves.push(this.timeSec, id, x, z, hd, state, pounceE, holdE);
       b.alive = b.count;
       if (id === sel || id === fol) {
         this.selInfo.found = true;

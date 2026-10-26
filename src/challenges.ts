@@ -77,8 +77,8 @@ export const CHALLENGE_PIN: Record<string, number> = {
   evolution2: 0, climate2: 0, wolfDenMinDist: 200, wolfTerritory: 100,
   // checkpoint v10b: pronghorn twins cap and the raven start (the wolf sprint cost is inside evolution2; coyotes are already pinned to 0 above)
   'deer.maxLitter': 99, 'raven.initial': 30,
-  // checkpoint v13: the wolves' feeding bout (the challenges keep the kill rates they were tuned on)
-  feedBout: 0,
+  // checkpoint v13: the wolves' feeding bout (the challenges keep the kill rates they were tuned on), and v13b: wolves that stop at a kill
+  feedBout: 0, feedSettle: 0,
 };
 /** The calendar the challenges were tuned on, with every v2 mechanism pinned off. */
 const CLASSIC = { calendarScale: 1, ...CHALLENGE_PIN };
