@@ -19,7 +19,9 @@ function scene(params: Record<string, number>, prey: number, pups = 2): { sim: S
     seed: 9,
     params: {
       calendarScale: 2, plagueRate: 0, 'bison.initial': 0, 'deer.initial': 0, 'wolf.initial': 0, 'raven.initial': 0, 'coyote.initial': 0,
-      'cougar.initial': 0, 'muledeer.initial': 0, 'eagle.initial': 0, 'hawk.initial': 0, 'beaver.initial': 0, wolfImmigration: 0, ...params,
+      'cougar.initial': 0, 'muledeer.initial': 0, 'eagle.initial': 0, 'hawk.initial': 0, 'beaver.initial': 0, wolfImmigration: 0,
+      feedBoutAge: 1600, // (the long hold these checks were written for; the default is 300 since checkpoint v13c, checked at the end)
+      ...params,
     },
   });
   const S = sim as Any;
@@ -86,6 +88,18 @@ const show = (n: string, r: Run): void => console.log(`  ${n}: near ${(r.near * 
   ok(on.restRing > 5 * off.restRing + 50, `with the bout the fed wolves lie up round the kill (${on.restRing} rest ticks in the ring against ${off.restRing})`);
   ok(on.rest > 100 && on.restRing / on.rest > 0.8, `fed wolves lie up round the kill at their own spots (${on.rest} rest ticks, ${(100 * on.restRing / Math.max(1, on.rest)).toFixed(0)}% 3.5 to 11 m out)`);
   ok(on.chase === 0, `no hunt starts while the bison lasts (${on.chase} chase ticks)`);
+}
+
+// ---- the default hold (feedBoutAge 300): the pack stays on the bison kill for the hold, then goes back to hunting
+{
+  const { sim, wolves } = scene({ feedBout: 1, feedBoutAge: 300 }, Sp.Bison);
+  const a = sim.a;
+  let nearIn = 0, totIn = 0, chaseIn = 0;
+  for (let t = 0; t < 280; t++) {
+    sim.step(1);
+    for (const i of wolves) { if (!a.alive[i]) continue; totIn++; if (Math.hypot(a.x[i] - CX, a.y[i] - CY) < 12) nearIn++; if ((a.state[i] === St.Chase || a.state[i] === St.Stalk) && a.target[i] >= 0) chaseIn++; }
+  }
+  ok(nearIn / Math.max(1, totIn) > 0.85 && chaseIn === 0, `with the default 300-tick hold the pack stays on the kill and does not hunt for the hold (${(100 * nearIn / Math.max(1, totIn)).toFixed(0)}% near, ${chaseIn} chase ticks)`);
 }
 
 console.log(`${checks - failures}/${checks} checks passed`);

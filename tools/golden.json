@@ -1,9 +1,9 @@
 {
- "note": "Golden hashes (V2-PLAN.md S0): default params, src/headless/hash.ts. Checkpoint v13b (2026-10-26): v13 + feedSettle 1 (wolves stop at a kill instead of coasting past and looping round it). v13 hashes were 6f49268b, 445b2ef3, b5030b1a (reproduced by pinning feedSettle 0). Checkpoint v13 (2026-10-25, owner ruling): v10b + feedBout 1 (a wolf pack feeds on its kill until it is eaten and lies up beside it). v10b hashes were 77fd982c, 2fc8dc7c, 37517a14 (reproduced by pinning feedBout 0). Checkpoint v10b: v10 + pronghorn maxLitter 2, wolf sprint cost 0.3 under evolution2, raven.initial 250, coyote.initial 30. v10 hashes were 29b70982, 00c0d105, b5760934 (reproduced by pinning those back). Checkpoint v10 (2026-10-09): v9 + evolution2 1, climate2 0.3, wolfDenMinDist 280, wolfTerritory 130. v9 hashes were 55737903, 465f73d6, 27e42109 (reproduced by pinning those four back); v8b 2b8abd08, 810eb241, b162b93a; v7c 2cabdb62, 5ad21d26, 904ebf61; v6b 340c052c, 714770ae, 617dea6c; v6 79f7ab0f, ef09535f, 032d866a; v5 e6b99005, 19759373, 7bc34541. Update only when a WP's adoption rule changes the default world.",
+ "note": "Golden hashes (V2-PLAN.md S0): default params, src/headless/hash.ts. Checkpoint v13c (2026-10-26, owner ruling): v13b + feedBoutAge 300 (a kill holds the pack 300 ticks, not 1,600). v13b hashes were e738c9d9, eeb7c45f, 2ad2d525 (reproduced by pinning feedBoutAge 1600). Checkpoint v13b (2026-10-26): v13 + feedSettle 1 (wolves stop at a kill instead of coasting past and looping round it). v13 hashes were 6f49268b, 445b2ef3, b5030b1a (reproduced by pinning feedSettle 0). Checkpoint v13 (2026-10-25, owner ruling): v10b + feedBout 1 (a wolf pack feeds on its kill until it is eaten and lies up beside it). v10b hashes were 77fd982c, 2fc8dc7c, 37517a14 (reproduced by pinning feedBout 0). Checkpoint v10b: v10 + pronghorn maxLitter 2, wolf sprint cost 0.3 under evolution2, raven.initial 250, coyote.initial 30. v10 hashes were 29b70982, 00c0d105, b5760934 (reproduced by pinning those back). Checkpoint v10 (2026-10-09): v9 + evolution2 1, climate2 0.3, wolfDenMinDist 280, wolfTerritory 130. v9 hashes were 55737903, 465f73d6, 27e42109 (reproduced by pinning those four back); v8b 2b8abd08, 810eb241, b162b93a; v7c 2cabdb62, 5ad21d26, 904ebf61; v6b 340c052c, 714770ae, 617dea6c; v6 79f7ab0f, ef09535f, 032d866a; v5 e6b99005, 19759373, 7bc34541. Update only when a WP's adoption rule changes the default world.",
  "ticks": 24000,
  "seeds": {
-  "3": "e738c9d9",
-  "7": "eeb7c45f",
-  "11": "2ad2d525"
+  "3": "ace1994f",
+  "7": "077119f5",
+  "11": "7568a0af"
  }
 }

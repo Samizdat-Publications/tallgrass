@@ -846,7 +846,7 @@ export function defaultParams(): Params {
     wolfPackStoreShare: 0.45,
     feedBout: 1, // checkpoint v13 (owner ruling 2026-10-25: was 0)
     feedBoutRate: 0.4,
-    feedBoutAge: 1600,
+    feedBoutAge: 300, // checkpoint v13c (owner ruling 2026-10-26: the best current trade while the rebalancing runs; was 1600)
     feedBoutLeave: 0,
     feedBoutLie: 1,
     feedSettle: 1, // checkpoint v13b (2026-10-26, the takedown spin fix that came with the owner-approved feeding bout: was 0)
