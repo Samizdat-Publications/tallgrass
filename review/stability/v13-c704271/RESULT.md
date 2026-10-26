@@ -31,3 +31,13 @@ The dynamics are livelier (wolf CV and the wolf-bison lag correlation both up), 
 | leave at 55%, hold 800 ticks | 20/20 | 11/20 | 51% | 0.53 | 0.28 | 754 | 32 | 229 | none |
 
 None passes. Every variant keeps the bison about 40% up: what holds them down in v10b is how many kills a wolf needs, and eating kills properly cuts that need whatever share the pack leaves; the wolf population cannot grow enough to make it up (territory and pack size cap it), and leaving more meat starves the wolves instead (presence 8 to 11 of 20). Round 2 raises wolf energy use with the pack leaving 40% (wolf.metabolism x1.3 and x1.6) and with the full bout (x1.6): scratch/fbs/M13, M16, Z16, on the v13b defaults.
+
+## Balancing round 2 (2026-10-26, 400 years, 20 seeds, v13b defaults): wolf energy use
+
+| | presence >= 90% | pronghorn starvation | wolf CV | bison | wolves | wolves extinct by year 400 |
+|---|---|---|---|---|---|---|
+| leave 40%, wolf metabolism x1.3 | 5/20 | 53% | 0.79 | 800 | 22 | 7 seeds |
+| leave 40%, x1.6 | 0/20 | 54% | 2.42 | 883 | 3 | 12 seeds |
+| full bout, x1.6 | 0/20 | 53% | 1.59 | 888 | 4 | 13 seeds |
+
+Wrong lever: a hungrier wolf does not kill more, it starves (the wolves are limited by how hard a kill is, not by appetite). Round 3 shortens how long a kill holds the pack (feedBoutAge 300 and 500, the v10b return window was 500), so the feed and the lie-up still show and the wolves get their hunting rhythm back: scratch/fbs/A3, A5, A3L.
