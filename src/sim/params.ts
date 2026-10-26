@@ -471,6 +471,10 @@ export interface Params {
   feedBoutRate: number;
   /** With feedBout on: how long (ticks) a kill keeps the pack: it feeds on and lies up by a kill up to this age (the usual window is 500). */
   feedBoutAge: number;
+  /** With feedBout on: if > 0, the pack moves on once its kill is down to this share of the meat it started with (the scavengers get the
+   *  rest), and a hungry wolf no longer comes back to a kill below that share; 0 = it stays until the kill is down to scraps (0.3 meat).
+   *  (Stability 2026-10-25: eating every kill to the bone cut the kills by more than half, and the bison overshot and could crash.) */
+  feedBoutLeave: number;
   wolfPackMax: number;
   wolfDenMinDist: number;
   wolfTerritory: number;
@@ -835,6 +839,7 @@ export function defaultParams(): Params {
     feedBout: 1, // checkpoint v13 (owner ruling 2026-10-25: was 0)
     feedBoutRate: 0.4,
     feedBoutAge: 1600,
+    feedBoutLeave: 0,
     wolfPackMax: 7,
     wolfDenMinDist: 280, // v10 (was 200)
     wolfTerritory: 130, // v10 (was 100)
