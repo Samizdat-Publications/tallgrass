@@ -480,6 +480,9 @@ export interface Params {
    *  at 9 m/s when the prey drops coasts about 9 m past the body, turns back at its limited turn rate, and loops round the kill
    *  between eating and walking for several seconds, which the renderer draws as the pack spinning round the carcass. 0 = off. */
   feedSettle: number;
+  /** With feedBout on: 1 = a fed wolf lies up beside a kill that still has meat on it (and comes back to feed at 0.85); 0 = it feeds to full
+   *  and then goes about its day as without the bout (the lie-up is what cuts the kills, see review/stability/v13-c704271/RESULT.md). */
+  feedBoutLie: number;
   wolfPackMax: number;
   wolfDenMinDist: number;
   wolfTerritory: number;
@@ -845,6 +848,7 @@ export function defaultParams(): Params {
     feedBoutRate: 0.4,
     feedBoutAge: 1600,
     feedBoutLeave: 0,
+    feedBoutLie: 1,
     feedSettle: 1, // checkpoint v13b (2026-10-26, the takedown spin fix that came with the owner-approved feeding bout: was 0)
     wolfPackMax: 7,
     wolfDenMinDist: 280, // v10 (was 200)

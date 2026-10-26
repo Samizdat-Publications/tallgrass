@@ -1940,7 +1940,7 @@ export class Sim implements SimLike {
     // feeding at a fresh carcass
     // (feedBout: one that is eating keeps on until it is full, and one lying up by the kill comes back to it at 0.85, see the param)
     const bout = p.feedBout > 0;
-    const feedLine = bout ? (a.state[i] === St.Eat ? 0.995 : 0.85) : 0.93;
+    const feedLine = bout ? (a.state[i] === St.Eat ? 0.995 : p.feedBoutLie > 0 ? 0.85 : 0.93) : 0.93;
     if (a.energy[i] < feedLine && !chasing) {
       let k = this.nearestCarcass(x, y, 45, bout ? p.feedBoutAge : 500, true);
       if (k >= 0 && bout && p.feedBoutLeave > 0 && this.cMeat[k] <= p.feedBoutLeave * this.cMeat0[k]) k = -1; // eaten down to the pack's share: left to the scavengers
@@ -1953,7 +1953,7 @@ export class Sim implements SimLike {
       }
     }
     // feedBout: fed, with a kill near that still has meat on it, a pack wolf lies up beside it instead of going back to patrol or hunting
-    if (bout && !chasing && pk >= 0) {
+    if (bout && p.feedBoutLie > 0 && !chasing && pk >= 0) {
       const k = this.nearestCarcass(x, y, 45, p.feedBoutAge, true);
       if (k >= 0 && this.cMeat[k] > (p.feedBoutLeave > 0 ? Math.max(0.3, p.feedBoutLeave * this.cMeat0[k]) : 0.3)) {
         const h = Math.imul(a.id[i] | 0, 0x9e3779b1) >>> 0;
