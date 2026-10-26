@@ -41,3 +41,13 @@ None passes. Every variant keeps the bison about 40% up: what holds them down in
 | full bout, x1.6 | 0/20 | 53% | 1.59 | 888 | 4 | 13 seeds |
 
 Wrong lever: a hungrier wolf does not kill more, it starves (the wolves are limited by how hard a kill is, not by appetite). Round 3 shortens how long a kill holds the pack (feedBoutAge 300 and 500, the v10b return window was 500), so the feed and the lie-up still show and the wolves get their hunting rhythm back: scratch/fbs/A3, A5, A3L.
+
+## Balancing round 3 (2026-10-26, 400 years, 20 seeds, v13b defaults): how long a kill holds the pack
+
+| | bison persist | presence >= 90% | pronghorn starvation | wolf CV | wolf-bison corr | bison | wolves | mule deer | extinct by year 400 |
+|---|---|---|---|---|---|---|---|---|---|
+| hold 300 ticks | 20/20 | 20/20 | 51% | 0.31 | 0.67 | 794 | 41 | 286 | none |
+| hold 500 ticks | 20/20 | 20/20 | 53% | 0.30 | 0.71 | 795 | 44 | 314 | none |
+| hold 300, leave 40% | 19/20 | 19/20 | 50% | 0.33 | 0.66 | 747 | 41 | 230 | seed 3 (bison, wolves) |
+
+Closest so far: the short holds pass every gate but pronghorn starvation (51 to 53%, the bar is 50%). But the bison stay about 45% up even with a 300-tick hold, so the hold is not what releases them. A factor screen (8 seeds, 150 years: v10b, feedSettle alone, the bout with full and with 40% bites at a 500-tick hold) is running to find the part that does.
