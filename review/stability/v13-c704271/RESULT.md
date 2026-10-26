@@ -51,3 +51,16 @@ Wrong lever: a hungrier wolf does not kill more, it starves (the wolves are limi
 | hold 300, leave 40% | 19/20 | 19/20 | 50% | 0.33 | 0.66 | 747 | 41 | 230 | seed 3 (bison, wolves) |
 
 Closest so far: the short holds pass every gate but pronghorn starvation (51 to 53%, the bar is 50%). But the bison stay about 45% up even with a 300-tick hold, so the hold is not what releases them. A factor screen (8 seeds, 150 years: v10b, feedSettle alone, the bout with full and with 40% bites at a 500-tick hold) is running to find the part that does.
+
+## Factor screen (2026-10-26, 8 seeds, 150 years, means from year 50): what releases the bison
+
+| | kills a year | wolves | bison | mule deer |
+|---|---|---|---|---|
+| v10b | 223 | 30 | 592 | 141 |
+| feedSettle only | 216 | 30 | 575 | 133 |
+| bout, full bites, 500-tick hold | 80 | 40 | 823 | 284 |
+| bout, 40% bites, 500-tick hold | 79 | 42 | 864 | 301 |
+
+The cut in kills (about -64%) comes from the core of the bout, not from the bite size, the hold length or feedSettle: a pack that stays by its kill keeps topping up from it, so it rarely gets hungry enough to hunt; in v10b the wolves wandered off, got hungry and killed again, leaving 60 to 80% of each carcass. The v10b balance rests on wasteful wolves, and the bout moves the valley to a new level (more bison and mule deer, a little more pronghorn starvation).
+
+Best candidate: feedBoutAge 300 (round 3, A3): every gate but pronghorn starvation (51% against 50%), no extinctions in 20 seeds over 400 years. On screen (tools/killwatch.ts, seed 3, 6 years) the killers stay with a bison kill a median 323 ticks (about 32 s at 1x) and a pronghorn 188 (about 19 s), against 91 in v10b; with the 1,600-tick hold a third of bison kills held their pack past a minute. Its 600-year confirm and shock suite are running (scratch/fbs/A3full, A3shocks).

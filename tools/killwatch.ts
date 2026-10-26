@@ -1,12 +1,13 @@
 // Headless: in the default valley, follow every wolf kill for 600 ticks and measure whether the killers stay with it.
-// Usage: npx tsx tools/killwatch.ts <feedBout 0|1> [seed] [years] [feedBoutLeave]
+// Usage: npx tsx tools/killwatch.ts <feedBout 0|1> [seed] [years] [feedBoutLeave] [feedBoutAge]
 import { createSim } from '../src/sim/sim';
 import { Sp, St, STATE_NAMES, YEAR_TICKS } from '../src/sim/types';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 const bout = Number(process.argv[2] ?? 0), seed = Number(process.argv[3] ?? 3), years = Number(process.argv[4] ?? 8);
 const leave = Number(process.argv[5] ?? 0);
-const sim = createSim({ seed, params: { feedBout: bout, feedBoutLeave: leave } });
+const age = Number(process.argv[6] ?? 1600);
+const sim = createSim({ seed, params: { feedBout: bout, feedBoutLeave: leave, feedBoutAge: age } });
 const S = sim as any, a = sim.a;
 interface Watch { x: number; y: number; t0: number; prey: number; meat0: number; wolves: number[]; nearTicks: number; total: number; leftAt: number; meatAtLeave: number; away: Record<string, number> }
 const watches: Watch[] = [];
