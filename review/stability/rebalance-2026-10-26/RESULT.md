@@ -38,3 +38,13 @@ Why (scratch/rb/drought2.py, ceiling.py): with the feeding bout the wolves cause
 ## Round 3: a crowded herd raises fewer calves (new param, off by default)
 
 bisonCrowdCalf / bisonCrowdRef: each newborn bison is lost with a chance of bisonCrowdCalf x (bison - ref) / ref, whatever the mother's condition. It holds the herd below the food ceiling, and a crashed herd rebounds at full rate. Off reproduces the golden hash. Screens: 20 seeds x 400 years baseline, plus the drought on 12 seeds x 250 years, like for like with v10b (scratch/rb/run3.sh).
+
+| (all with the brake at strength 1) | bison persist | presence | pronghorn starvation | wolf CV | wolf-bison corr | bison | bison peak median | wolves | grass | starved share | drought: valleys losing bison (of 12) | eligible |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| v10b | 20/20 | 20/20 | 39% | 0.26 | 0.54 | 546 | 1,236 | 32 | 0.43 | 31% | 0 | yes |
+| conceive 0.7, ref 400 | 20/20 | 20/20 | 47% | 0.28 | 0.18 | 532 | 614 | 23 | 0.41 | 16% | 0 | no (corr) |
+| conceive 0.7, ref 450 | 20/20 | 19/20 | 47% | 0.24 | 0.22 | 583 | 684 | 25 | 0.40 | 19% | 0 | no (corr) |
+| conceive 0.7, ref 500 | 20/20 | 20/20 | 47% | 0.25 | 0.25 | 618 | 750 | 27 | 0.38 | 24% | 0 | no (corr) |
+| ref 450, conceive rule off | 20/20 | 20/20 | 51% | 0.26 | 0.20 | 584 | 683 | 26 | 0.39 | 21% | 0 | no (corr, starvation) |
+
+The brake fixes the drought (no valley loses its bison, none in the baseline either) and brings the grass back, but holds the herd so flat (peaks 614 to 750 against 1,236) that the wolves no longer follow the bison: the coupling falls from 0.54 to about 0.2 (gate 0.4). Wolves settle at 23 to 27 and ravens fall by a quarter (fewer starved carcasses). Round 4 softens it so the peaks are capped but the swings stay: strength 0.5 at ref 450 and 600, 0.3 at ref 400, strength 1 at ref 650 (scratch/rb/run4.sh).
