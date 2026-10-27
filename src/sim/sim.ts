@@ -1887,6 +1887,14 @@ export class Sim implements SimLike {
         for (let k = 0; k < litter; k++) if (this.rng.next() >= lose) kept++;
         litter = kept;
       }
+      if (this.p.bisonCrowdCalf > 0 && a.sp[i] === Sp.Bison) {
+        // a crowded herd loses calves whatever the mother's condition, so it stops short of the food ceiling
+        const ref = this.p.bisonCrowdRef;
+        const lose = Math.min(this.p.bisonCrowdCalf, Math.max(0, this.p.bisonCrowdCalf * (this.pop[Sp.Bison] - ref) / ref));
+        let kept = 0;
+        for (let k = 0; k < litter; k++) if (this.rng.next() >= lose) kept++;
+        litter = kept;
+      }
       for (let k = 0; k < litter; k++) this.birth(i, -1, a.sp[i], a.x[i] + this.rng.range(-1, 1), a.y[i] + this.rng.range(-1, 1));
       if (litter > 0) this.logStory(i, 'birth', litter);
       a.energy[i] -= 0.12 * litter;

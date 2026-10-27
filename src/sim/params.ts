@@ -187,6 +187,11 @@ export interface Params {
   /** Lean-times births (0 = off): each newborn grazer is lost with a chance of leanLitter x (1 - mother's condition), where
    *  condition runs from 0 at energy 0.3 to 1 at 0.8, so a crowded, hungry herd raises fewer young before it starves. */
   leanLitter: number;
+  /** Crowded-herd calf loss (0 = off): each newborn bison is lost with a chance of bisonCrowdCalf x (bison - bisonCrowdRef) / bisonCrowdRef,
+   *  clamped to 0..bisonCrowdCalf, whatever the mother's condition, so a big herd raises fewer calves before it eats the range bare
+   *  (juvenile survival is the first rate a crowded ungulate herd gives up) and a crashed herd rebounds at full rate. */
+  bisonCrowdCalf: number;
+  bisonCrowdRef: number;
   /** Rate per year at which a pair of cougars wanders in while fewer than two live in the valley (0 = closed valley). */
   cougarImmigration: number;
   /** When an already-fleeing grazer is scared again, how much of its current flight line it keeps (0 = turn straight away from the new threat). */
@@ -687,6 +692,8 @@ export function defaultParams(): Params {
     coatSearchBoost: 1.3,
     coatSearchWindow: 0.1,
     leanLitter: 0.8, // v6 (was 0)
+    bisonCrowdCalf: 0,
+    bisonCrowdRef: 450,
     cougarImmigration: 0,
     fleeMomentum: 0,
     openPrairie: 1, // v6 (was 0)
