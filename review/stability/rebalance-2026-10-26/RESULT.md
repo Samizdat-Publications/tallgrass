@@ -16,3 +16,14 @@ All screens: 20 seeds, 400 years, baseline, on the v13c defaults; gates by tools
 | bison.foodValue 0.45 | 19/20 | 19/20 | 52% | 0.38 | 0.61 | 617 | 31 | 278 | seed 3 (bison, wolves) | no |
 
 The condition-to-conceive rule (all grazers) fixes the starvation gate; the bison-only levers bring the bison down. Neither touches the mule deer, which the wolves' lower kill rate releases. Round 2 combines conceiveEnergy 0.7 with each bison lever.
+
+## Round 2: the conceive rule plus one bison lever
+
+| | bison persist | presence | pronghorn starvation | wolf CV | wolf-bison corr | bison | wolves | mule deer | extinct by year 400 | eligible |
+|---|---|---|---|---|---|---|---|---|---|---|
+| conceive 0.7 + bison food 0.45 | 20/20 | 19/20 | 48% | 0.38 | 0.60 | 620 | 31 | 285 | none | yes |
+| conceive 0.7 + bison food 0.48 | 19/20 | 19/20 | 48% | 0.35 | 0.65 | 646 | 32 | 277 | seed 3 (bison, wolves) | yes |
+| conceive 0.7 + bison cooldown 1700 | 19/20 | 18/20 | 47% | 0.39 | 0.64 | 671 | 31 | 270 | seed 3 (bison, wolves) | no |
+| conceive 0.7 + cooldown 1500 + food 0.50 | 18/20 | 18/20 | 47% | 0.37 | 0.59 | 616 | 30 | 273 | seeds 3, 19 (bison, wolves), 5 (wolves) | no |
+
+Best: **conceiveEnergy 0.7 with bison.foodValue 0.45** (C7F45). Every gate passes, no extinctions in 20 seeds, bison 620 (v10b 546, v13c 794), bison peak median 1,563 (v13c 1,850), wolves back to 31. The bison-lever-alone version of food 0.45 lost seed 3; with the conceive rule it holds. Wolf CV rises to 0.38 (v10b 0.26), still inside the gate. Mule deer stay near 285 (v10b 85): nothing here touches them, so they remain a separate question. Its 600-year confirm and the drought, cull70 and wolfwipe shocks are running (scratch/rb/C7F45full, C7F45shocks).
