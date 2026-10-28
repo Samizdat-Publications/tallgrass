@@ -15,8 +15,8 @@
   },
   "hero": {
     "gif": "docs/media/hero.gif",
-    "poster": "site/media/hero-v2.jpg",
-    "clip": "site/media/hero-v2.mp4"
+    "poster": "site/media/hero-v3.jpg",
+    "clip": "site/media/hero-v3.mp4"
   },
   "credits": [
     { "what": "Bison, coyote and cougar models", "who": "Brian Trepanier; Raven-Woods; 1225659838@qq.com (Sketchfab)", "licence": "CC BY 4.0" },
