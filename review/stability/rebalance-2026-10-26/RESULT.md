@@ -61,3 +61,9 @@ The brake fixes the drought (no valley loses its bison, none in the baseline eit
 | strength 0.5, ref 450 (18 seeds) | 18/18 | 18/18 | 48% | 0.27 | 0.35 | 647 | 855 | 29 | 451 | 0.37 | 27% | 1 (seed 2) | no (corr) |
 
 There is a trade between the drought and the coupling: a firmer brake leaves more grass but flattens the herd until the wolves stop following it. Every eligible setting loses one drought valley (seed 2, a herd of 906 going in). Owner ruling 2026-10-28: 1 in 12 is acceptable if everything else improves. **Adopted as checkpoint v14: strength 0.5 from 600 bison**, the strongest coupling (0.58, above v10b) with wolves and ravens back near v10b and no extinctions. Its cull70, wolfwipe and 20-seed drought shocks and 600-year confirm are running (scratch/rb/CH5R60shocks, CH5R60full); it goes live once those are no worse than v13c.
+
+## v14 confirm and shocks (2026-10-28)
+
+600 years, 20 seeds: every gate passes (bison persist 20/20, presence 20/20, pronghorn starvation 48%, wolf CV 0.25, wolf-bison corr 0.58), no species lost in any valley at year 600 (v13c: same gates but starvation 52%).
+Shocks, 12 seeds x 250 years like for like with v10b: **cull70** none lost; **wolfwipe** seed 2 ends without wolves, but the reintroduced pack had recovered to about 40 wolves within 15 years and held for a century before an ordinary crash took them at year 233 (bison 519 to 350); **drought** seed 2 loses its bison (owner ruling: 1 in 12 acceptable). v13c on the same tests: drought 4 to 5, wolfwipe 1 (bison), cull70 none.
+**Live as 1.0.12 since 2026-10-28.**
