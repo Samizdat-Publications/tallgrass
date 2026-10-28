@@ -643,7 +643,7 @@ export function defaultParams(): Params {
     trampleRun: 0.0015,
     trampleWalk: 0.0002,
     grazeMin: 0.12,
-    conceiveEnergy: 0.6,
+    conceiveEnergy: 0.7, // checkpoint v14 (2026-10-28 rebalancing, owner-approved: was 0.6)
     migrateBelow: 0.2,
     herdSpacing: 2.7,
     herdSepRange: Math.sqrt(7),
@@ -692,8 +692,8 @@ export function defaultParams(): Params {
     coatSearchBoost: 1.3,
     coatSearchWindow: 0.1,
     leanLitter: 0.8, // v6 (was 0)
-    bisonCrowdCalf: 0,
-    bisonCrowdRef: 450,
+    bisonCrowdCalf: 0.5, // checkpoint v14 (2026-10-28 rebalancing, owner-approved: was 0)
+    bisonCrowdRef: 600,
     cougarImmigration: 0,
     fleeMomentum: 0,
     openPrairie: 1, // v6 (was 0)

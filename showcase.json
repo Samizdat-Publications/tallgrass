@@ -3,10 +3,10 @@
   "repo": "tallgrass",
   "pitch": "A living prairie in the browser: bison, pronghorn, wolves and ravens in a valley that finds its own balance.",
   "status": "v1",
-  "version": "1.0.11",
+  "version": "1.0.12",
   "kind": "game",
   "started": "2026-10-03",
-  "updated": "2026-10-25",
+  "updated": "2026-10-28",
   "tech": ["TypeScript", "Vite", "Three.js", "Playwright", "Blender", "ElevenLabs", "Gemini"],
   "links": {
     "landing": "https://tallgrass.pages.dev",

@@ -79,6 +79,8 @@ export const CHALLENGE_PIN: Record<string, number> = {
   'deer.maxLitter': 99, 'raven.initial': 30,
   // checkpoint v13: the wolves' feeding bout (the challenges keep the kill rates they were tuned on), and v13b: wolves that stop at a kill
   feedBout: 0, feedSettle: 0,
+  // checkpoint v14: the rebalancing that came with the bout (conceive in better condition, crowded-herd calf loss)
+  conceiveEnergy: 0.6, bisonCrowdCalf: 0,
 };
 /** The calendar the challenges were tuned on, with every v2 mechanism pinned off. */
 const CLASSIC = { calendarScale: 1, ...CHALLENGE_PIN };

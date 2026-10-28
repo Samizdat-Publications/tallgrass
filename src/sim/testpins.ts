@@ -15,6 +15,8 @@ export const V7C_OFF: Record<string, number> = {
   'deer.maxLitter': 99, 'raven.initial': 30, 'coyote.initial': 12,
   // checkpoint v13: the wolves' feeding bout, and v13b: wolves that stop at a kill
   feedBout: 0, feedSettle: 0,
+  // checkpoint v14: grazers conceive in better condition, and a crowded bison herd raises fewer calves
+  conceiveEnergy: 0.6, bisonCrowdCalf: 0,
 };
 
 export function createSim(opts: { seed: number; params?: Record<string, number> }): Sim {

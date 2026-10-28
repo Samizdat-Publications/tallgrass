@@ -1,6 +1,6 @@
 {
   "name": "tallgrass",
-  "version": "1.0.11",
+  "version": "1.0.12",
   "description": "Tallgrass: a living-ecosystem simulation game",
   "scripts": {
     "dev": "vite",
