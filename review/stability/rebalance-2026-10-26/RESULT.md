@@ -48,3 +48,16 @@ bisonCrowdCalf / bisonCrowdRef: each newborn bison is lost with a chance of biso
 | ref 450, conceive rule off | 20/20 | 20/20 | 51% | 0.26 | 0.20 | 584 | 683 | 26 | 0.39 | 21% | 0 | no (corr, starvation) |
 
 The brake fixes the drought (no valley loses its bison, none in the baseline either) and brings the grass back, but holds the herd so flat (peaks 614 to 750 against 1,236) that the wolves no longer follow the bison: the coupling falls from 0.54 to about 0.2 (gate 0.4). Wolves settle at 23 to 27 and ravens fall by a quarter (fewer starved carcasses). Round 4 softens it so the peaks are capped but the swings stay: strength 0.5 at ref 450 and 600, 0.3 at ref 400, strength 1 at ref 650 (scratch/rb/run4.sh).
+
+## Round 4: a softer brake (2026-10-28; 20 seeds, finished after a restart)
+
+| (all with conceive 0.7) | bison persist | presence | pronghorn starvation | wolf CV | wolf-bison corr | bison | bison peak median | wolves | ravens | grass | starved share | drought: valleys losing bison (of 12) | eligible |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| v10b | 20/20 | 20/20 | 39% | 0.26 | 0.54 | 546 | 1,236 | 32 | 515 | 0.43 | 31% | 0 | yes |
+| v13c (live 1.0.11) | 20/20 | 20/20 | 51% | 0.31 | 0.67 | 794 | 1,850 | 41 | 596 | 0.32 | 50% | 4 to 5 | no |
+| strength 0.5, ref 600 | 20/20 | 20/20 | 47% | 0.25 | 0.58 | 704 | 1,057 | 34 | 507 | 0.35 | 36% | 1 (seed 2) | yes |
+| strength 0.3, ref 400 | 20/20 | 20/20 | 47% | 0.27 | 0.49 | 670 | 1,132 | 30 | 469 | 0.36 | 31% | 1 (seed 2) | yes |
+| strength 1, ref 650 | 20/20 | 20/20 | 46% | 0.24 | 0.51 | 691 | 950 | 33 | 491 | 0.36 | 34% | 1 (seed 2) | yes |
+| strength 0.5, ref 450 (18 seeds) | 18/18 | 18/18 | 48% | 0.27 | 0.35 | 647 | 855 | 29 | 451 | 0.37 | 27% | 1 (seed 2) | no (corr) |
+
+There is a trade between the drought and the coupling: a firmer brake leaves more grass but flattens the herd until the wolves stop following it. Every eligible setting loses one drought valley (seed 2, a herd of 906 going in). Owner ruling 2026-10-28: 1 in 12 is acceptable if everything else improves. **Adopted as checkpoint v14: strength 0.5 from 600 bison**, the strongest coupling (0.58, above v10b) with wolves and ravens back near v10b and no extinctions. Its cull70, wolfwipe and 20-seed drought shocks and 600-year confirm are running (scratch/rb/CH5R60shocks, CH5R60full); it goes live once those are no worse than v13c.
