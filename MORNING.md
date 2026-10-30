@@ -60,7 +60,7 @@
 - **100x** still reaches about 45 to 60x on this machine (the time bar says so honestly). A real speed-up has to keep the golden hashes bit-identical; the profile is flat (no line over 3%), so it is a project of its own.
 
 ### Blocked
-- **Night readability (branch r-night-v1, not merged):** the animals gain a moonlit fill and rim at night (clearly better at the low night framing, the same dark mood, day untouched), but the GPU A/B ran while something else used the GPU and its two paired runs disagreed by up to 6 ms, so it waits for a quiet-GPU A/B. Worktree C:\Users\stewa\Documents\Claude\ecosystem-sim\scratch\wt-night, stills in its scratch\night-before and scratch\night-after folders.
+- **Night readability (branch r-night-v1, not merged):** the animals gain a moonlit fill and rim at night (clearly better at the low night framing, the same dark mood, day untouched), but the GPU A/B ran while something else used the GPU and its two paired runs disagreed by up to 6 ms, so it waits for a quiet-GPU A/B. The worktree was removed on 2026-10-30 to free disk space; the branch keeps the work (recreate the worktree to run the A/B).
 
 ### Next 5
 1. Motion, the open question above: a slower-looking day at 1x (light only) or a steadier sun while the documentary camera films, then a Gemini video round to see whether "sliding" goes away.
