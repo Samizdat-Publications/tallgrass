@@ -3,6 +3,7 @@
 //   npx tsx src/headless/batch.ts --seeds 20 [--seed-base 1] [--ticks 1000000 | --generations 1000] --sample 500
 //       --threads 15 --out review/stability/<name> [--scenario baseline|cull70|drought|wolfwipe|all]
 //       [--params '{"k": 1.2}'] [--mock] [--max-minutes 60]
+//       [--seed-list 3,2,1,4] [--abort-extinct bison:0,wolf:0@36000] [--abort-until-tick 600000]
 //
 // Output layout (see also tools/charts.py):
 //   <out>/meta.json                    run arguments, git commit, wall time, ms per tick
@@ -15,11 +16,11 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { Worker } from 'node:worker_threads';
-import { setCalendarScale, YEAR_TICKS } from '../sim/types';
+import { SPECIES_KEYS, setCalendarScale, YEAR_TICKS } from '../sim/types';
 import { applyOverrides, defaultParams } from '../sim/params';
 import { aggregate, renderMarkdown, verdict, type SeedMetrics } from './metrics';
 import { SCENARIOS, argNum, argStr, parseCliArgs, parseParams, resolveScenarios } from './scenarios';
-import type { DoneMsg, ProgressMsg, TaskMsg, WorkerInit } from './batchWorker';
+import type { DoneMsg, ProgressMsg, TaskMsg, WorkerInit, ZeroMsg } from './batchWorker';
 
 const USAGE = `usage: npx tsx src/headless/batch.ts --seeds 20 [--seed-base 1] [--ticks 1000000 | --generations 1000]
          --sample 500 --threads 15 --out review/stability/<name>
@@ -30,7 +31,40 @@ const USAGE = `usage: npx tsx src/headless/batch.ts --seeds 20 [--seed-base 1] [
   --params          JSON object, relaxed JSON ({k:1.2}) or @file.json passed to createSim
   --max-minutes M   stop cleanly after M minutes and write partial results
   --progress-sec S  progress line interval (default 15)
-  --mock            use src/headless/mocksim.ts instead of src/sim/sim.ts`;
+  --mock            use src/headless/mocksim.ts instead of src/sim/sim.ts
+  --seed-list L     comma list of seeds, run in that order (replaces --seeds and --seed-base)
+  --abort-extinct S species:maxSeeds[@graceTicks], repeatable or a comma list. A seed counts as lost for a species
+                    once that species has been at zero for graceTicks (default 0: the first sample at zero); it stops
+                    counting if the species comes back. When more than maxSeeds seeds of one scenario count as lost,
+                    the batch stops cleanly, writes partial results and exits with code 3
+  --abort-until-tick T  only zeros that start at or before tick T count for --abort-extinct (default: any tick)`;
+
+/** Exit code of a batch stopped by --abort-extinct (1 stays "errors", 130 "interrupted"). */
+const ABORT_EXIT_CODE = 3;
+
+interface AbortSpec {
+  species: string;
+  maxSeeds: number;
+  graceTicks: number;
+}
+
+/** Every --abort-extinct value in argv (the flag may repeat, and each value may be a comma list). */
+function parseAbortSpecs(argv: readonly string[]): AbortSpec[] {
+  const raw: string[] = [];
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === '--abort-extinct' && argv[i + 1] !== undefined && !argv[i + 1].startsWith('--')) raw.push(argv[++i]);
+    else if (a.startsWith('--abort-extinct=')) raw.push(a.slice('--abort-extinct='.length));
+  }
+  const out: AbortSpec[] = [];
+  for (const part of raw.flatMap((r) => r.split(',')).map((x) => x.trim()).filter(Boolean)) {
+    const m = /^([a-z]+):(\d+)(?:@(\d+))?$/.exec(part);
+    if (!m) throw new Error(`--abort-extinct expects species:maxSeeds[@graceTicks], got "${part}"`);
+    if (!(SPECIES_KEYS as readonly string[]).includes(m[1])) throw new Error(`--abort-extinct: unknown species "${m[1]}" (known: ${SPECIES_KEYS.join(', ')})`);
+    out.push({ species: m[1], maxSeeds: Number(m[2]), graceTicks: m[3] ? Number(m[3]) : 0 });
+  }
+  return out;
+}
 
 function hms(sec: number): string {
   if (!Number.isFinite(sec)) return '--:--:--';
@@ -70,8 +104,21 @@ async function main(): Promise<void> {
   }
   const startedAt = new Date();
   const wall0 = performance.now();
-  const seedsN = Math.max(1, Math.floor(argNum(args, 'seeds', 20)));
-  const seedBase = Math.floor(argNum(args, 'seed-base', 1));
+  const seedList = argStr(args, 'seed-list')
+    ?.split(',')
+    .map((x) => x.trim())
+    .filter(Boolean)
+    .map((x) => {
+      const n = Number(x);
+      if (!Number.isInteger(n)) throw new Error(`--seed-list expects integers, got "${x}"`);
+      return n;
+    });
+  if (seedList && (!seedList.length || new Set(seedList).size !== seedList.length)) throw new Error('--seed-list must be a non-empty list of distinct seeds');
+  const seedsN = seedList ? seedList.length : Math.max(1, Math.floor(argNum(args, 'seeds', 20)));
+  const seedBase = seedList ? Math.min(...seedList) : Math.floor(argNum(args, 'seed-base', 1));
+  const seedRange = seedList ? seedList.join(',') : `${seedBase}..${seedBase + seedsN - 1}`;
+  const abortSpecs = parseAbortSpecs(process.argv.slice(2));
+  const abortUntil = args['abort-until-tick'] !== undefined ? Math.floor(argNum(args, 'abort-until-tick', 0)) : Infinity;
   const generations = args.generations !== undefined ? argNum(args, 'generations', 1000) : null;
   const ticks = Math.floor(args.ticks !== undefined ? argNum(args, 'ticks', 1_000_000) : generations !== null ? 20_000_000 : 1_000_000);
   const sampleEvery = Math.max(1, Math.floor(argNum(args, 'sample', 500)));
@@ -90,19 +137,27 @@ async function main(): Promise<void> {
 
   mkdirSync(outRoot, { recursive: true });
   console.log(
-    `batch: ${scenarios.join(',')} x ${seedsN} seeds (${seedBase}..${seedBase + seedsN - 1}), ` +
+    `batch: ${scenarios.join(',')} x ${seedsN} seeds (${seedRange}), ` +
       (generations !== null ? `until gen_bison >= ${generations} (cap ${ticks} ticks)` : `${ticks} ticks`) +
       `, sample every ${sampleEvery}, ${threads} threads${mock ? ', MOCK sim' : ''}\nout: ${outRoot}`,
   );
+  if (abortSpecs.length) {
+    console.log(
+      `early stop: ${abortSpecs.map((a) => `more than ${a.maxSeeds} seed(s) with ${a.species} at zero${a.graceTicks ? ` for ${a.graceTicks} ticks` : ''}`).join('; ')}` +
+        (Number.isFinite(abortUntil) ? ` (zeros that start after tick ${abortUntil} are ignored)` : ''),
+    );
+  }
 
   // tasks, seed-major so a --max-minutes cut leaves every scenario with the same seeds
   const tasks: Task[] = [];
   let id = 0;
   for (let i = 0; i < seedsN; i++) {
     for (const scenario of scenarios) {
-      const seed = seedBase + i;
+      const seed = seedList ? seedList[i] : seedBase + i;
+      const msg: TaskMsg = { type: 'task', id: id++, scenario, seed, params, ticks, generations, sampleEvery, outDir: path.join(outRoot, scenario), progressMs: 1500 };
+      if (abortSpecs.length) msg.watch = abortSpecs.map((a) => ({ species: a.species, graceTicks: a.graceTicks }));
       tasks.push({
-        msg: { type: 'task', id: id++, scenario, seed, params, ticks, generations, sampleEvery, outDir: path.join(outRoot, scenario), progressMs: 1500 },
+        msg,
         scenario,
         seed,
         fraction: 0,
@@ -121,6 +176,30 @@ async function main(): Promise<void> {
     stopReason = why;
     Atomics.store(stopFlag, 0, 1);
     console.log(`\nstopping cleanly (${why}): finishing in-flight seeds and writing partial results...`);
+  };
+  // --abort-extinct: per scenario and species, the seeds that currently count as lost (seed -> tick the zero began)
+  const lost = new Map<string, Map<number, number>>();
+  let abortHit: { scenario: string; species: string; maxSeeds: number; seeds: { seed: number; zeroTick: number }[] } | null = null;
+  const onZero = (m: ZeroMsg) => {
+    const t = tasks[m.id];
+    const key = `${t.scenario}/${m.species}`;
+    let set = lost.get(key);
+    if (!set) lost.set(key, (set = new Map()));
+    const counts = m.zero && m.sinceTick <= abortUntil;
+    if (counts) set.set(t.seed, m.sinceTick);
+    else set.delete(t.seed);
+    const spec = abortSpecs.find((a) => a.species === m.species);
+    if (!spec) return;
+    if (counts) {
+      console.log(
+        `  ${t.scenario} seed ${t.seed}: ${m.species} at zero since tick ${m.sinceTick} (year ${(m.sinceTick / YEAR_TICKS).toFixed(1)}); ` +
+          `${set.size} seed(s) lost, limit ${spec.maxSeeds}`,
+      );
+    }
+    if (set.size > spec.maxSeeds && !abortHit) {
+      abortHit = { scenario: t.scenario, species: m.species, maxSeeds: spec.maxSeeds, seeds: [...set].map(([seed, zeroTick]) => ({ seed, zeroTick })) };
+      requestStop(`--abort-extinct ${m.species}:${spec.maxSeeds}: ${m.species} at zero in ${set.size} ${t.scenario} seeds (${[...set.keys()].join(', ')})`);
+    }
   };
   process.on('SIGINT', () => {
     if (stopReason) process.exit(130);
@@ -164,9 +243,11 @@ async function main(): Promise<void> {
     for (let i = 0; i < threads; i++) {
       const w = new Worker(new URL('./batchWorkerBoot.mjs', import.meta.url), { workerData: workerInit });
       workers.push(w);
-      w.on('message', (m: ProgressMsg | DoneMsg | { type: 'ready' }) => {
+      w.on('message', (m: ProgressMsg | DoneMsg | ZeroMsg | { type: 'ready' }) => {
         if (m.type === 'ready') {
           dispatch(w);
+        } else if (m.type === 'zero') {
+          onZero(m);
         } else if (m.type === 'progress') {
           const t = tasks[m.id];
           t.tick = m.tick;
@@ -287,7 +368,7 @@ async function main(): Promise<void> {
     })();
     const lines = [
       `${def.description}`,
-      `Seeds: ${seedMetrics.length} (${seedBase}..${seedBase + seedsN - 1})${skip.length ? `, ${skip.length} not started (${stopReason || 'stopped'})` : ''}`,
+      `Seeds: ${seedMetrics.length} (${seedRange})${skip.length ? `, ${skip.length} not started (${stopReason || 'stopped'})` : ''}`,
       generations !== null ? `Run length: until gen_bison >= ${generations} (cap ${ticks} ticks)` : `Run length: ${ticks} ticks (${(ticks / YEAR_TICKS).toFixed(0)} years)`,
       `Sampled every ${sampleEvery} ticks; commit ${commit}; ${mock ? 'MOCK sim (not the real game)' : 'real sim'}`,
       ...(Object.keys(params).length ? [`Params: ${JSON.stringify(params)}`] : []),
@@ -337,6 +418,16 @@ async function main(): Promise<void> {
     ticksPerSecWall: wallSec > 0 ? Math.round(totalTicksRun / wallSec) : null,
     scenarios: scenarioStats,
   };
+  const metaExtra = meta as Record<string, unknown>;
+  if (seedList) (meta.args as Record<string, unknown>).seedList = seedList;
+  if (abortSpecs.length) {
+    metaExtra.abortExtinct = {
+      specs: abortSpecs,
+      untilTick: Number.isFinite(abortUntil) ? abortUntil : null,
+      triggered: abortHit,
+      exitCode: abortHit ? ABORT_EXIT_CODE : null,
+    };
+  }
   writeFileSync(path.join(outRoot, 'meta.json'), JSON.stringify(meta, null, 1));
 
   console.log(
@@ -345,6 +436,14 @@ async function main(): Promise<void> {
   );
   console.log(`wrote ${written.join(', ')} and ${path.join(outRoot, 'meta.json')}`);
   if (errors || fatalError) process.exitCode = 1;
+  else if (abortHit) {
+    const hit = abortHit as { scenario: string; species: string; maxSeeds: number; seeds: { seed: number; zeroTick: number }[] };
+    console.log(
+      `\nEARLY STOP (exit ${ABORT_EXIT_CODE}): ${hit.species} at zero in ${hit.seeds.length} ${hit.scenario} seed(s), limit ${hit.maxSeeds}: ` +
+        hit.seeds.map((s) => `seed ${s.seed} from year ${(s.zeroTick / YEAR_TICKS).toFixed(1)}`).join(', '),
+    );
+    process.exitCode = ABORT_EXIT_CODE;
+  }
 }
 
 main().catch((e) => {

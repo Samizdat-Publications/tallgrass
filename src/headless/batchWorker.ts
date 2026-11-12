@@ -27,6 +27,19 @@ export interface TaskMsg {
   /** absolute path of the scenario output directory */
   outDir: string;
   progressMs: number;
+  /** --abort-extinct: species to watch; the worker posts a ZeroMsg when one has been at zero for graceTicks, and again if it comes back */
+  watch?: { species: string; graceTicks: number }[];
+}
+
+/** A watched species of one task has been at zero for its grace period (zero: true), or has come back after that (zero: false). */
+export interface ZeroMsg {
+  type: 'zero';
+  id: number;
+  species: string;
+  zero: boolean;
+  /** first sample tick of the current run of zeros */
+  sinceTick: number;
+  tick: number;
 }
 
 export interface EventRecord {
@@ -168,6 +181,26 @@ async function runTask(t: TaskMsg): Promise<DoneMsg> {
     return s;
   };
 
+  // --abort-extinct watch: per species, the tick its current run of zeros began (-1 = present) and whether it was reported
+  const watch = (t.watch ?? []).map((w) => ({ ...w, col: `pop_${w.species}`, since: -1, reported: false }));
+  const checkWatch = (row: Record<string, number>) => {
+    for (const w of watch) {
+      const v = row[w.col];
+      if (v === undefined) continue;
+      if (v <= 0) {
+        if (w.since < 0) w.since = sim.tick;
+        if (!w.reported && sim.tick - w.since >= w.graceTicks) {
+          w.reported = true;
+          parentPort!.postMessage({ type: 'zero', id: t.id, species: w.species, zero: true, sinceTick: w.since, tick: sim.tick } satisfies ZeroMsg);
+        }
+      } else {
+        if (w.reported) parentPort!.postMessage({ type: 'zero', id: t.id, species: w.species, zero: false, sinceTick: w.since, tick: sim.tick } satisfies ZeroMsg);
+        w.since = -1;
+        w.reported = false;
+      }
+    }
+  };
+
   let lastProgress = performance.now();
   const post = () => {
     const gen = lastRow.gen_bison ?? null;
@@ -215,6 +248,7 @@ async function runTask(t: TaskMsg): Promise<DoneMsg> {
         sampled = true;
       }
       if (sampled) {
+        if (watch.length) checkWatch(lastRow);
         if (popSum(lastRow) === 0) {
           endReason = 'all_extinct';
           break;

@@ -1,5 +1,38 @@
 # Good morning: Tallgrass overnight report
 
+## 2026-11-12 overnight (01:35 to 13:00): the Fable harness, finished and in use
+
+Run it: `npm run dev` (unchanged; the live game is still 1.0.12, nothing was deployed tonight). Check it: `npm run check` (the new one-step gate). Lead on Opus 5.5 tonight (the Fable weekly limit was used up until 13:00).
+
+**For the 13:00 Fable review, read in this order:** this section, `docs/FABLE-REVIEW.md` (the audit), the top of `_PLAN.md` (the change order, with tonight's L2a worklist), `NEXT-SESSION.md`.
+
+### What is done (committed and pushed: d8217b9, 2ceabcb, 5edf245)
+- **Fixed shots (H1).** `npm run shots` renders 14 fixed views of the real game (`tools/shots.json`) as lossless PNGs, each in its own page load with the sim stopped on a fixed tick and all render randomness seeded. Two runs now differ by a mean of 0.02 to 0.17 colour levels, with at most 0.10% of pixels off by more than 8 levels. The old capture differed in 7 to 95% of pixels, which is why 41 review rounds kept repeating the same complaints. Not yet byte-identical: a small GPU-side difference between page loads remains, cause not found (notes in `NEXT-SESSION.md`).
+- **Scorecard and contact sheet (H2).** `npm run score <run>` scores each shot against the concept art and checks drift against the accepted baseline. The first baselines were accepted tonight (H8); the first contact sheet is `review/fable-audit-2026-11-11/first_contact_sheet_2026-11-12.jpg`. Concept score for the golden-hour shot: **53.6 of 100** (worst term: the far band is washed out by haze).
+- **Lint and gate (H6, H7).** `npm run check`: typecheck, lint, tests, the three gate shots and a drift check, in about 6 to 11 minutes on tonight's loaded machine. Every commit tonight passed it.
+- **One light (L2a), no visual change.** Shared lighting code, grass uniforms tied to the engine's, and a warning whenever a three.js shader patch stops matching. It also listed every lighting copy that is NOT the same; that list is the worklist for the real lighting change (L2b) in `_PLAN.md`.
+- **Animal renderer split (first half of L4), no visual change.** The 1,307-line per-frame animal method is now 18 named steps, so the grounding work (planted hooves, matching near and far animals) can be done safely.
+- **Fixed in passing:** bison sparring pairs depended on page timing in captures.
+
+### Balancing loop (S1): built, being proven
+- `tools/screen.mjs` runs a setting through cheap-to-dear stages (8 canary seeds x 150 years, then 20 x 400, then the shocks) and stops early when a species is lost; `tools/gates.py` judges it the same way the old one-off scripts did, in one place.
+- Known-bad check: the v13 settings were **rejected** by the first stage (pronghorn starvation 54%, limit 50%). It also shows the core finding again: wolves cause **4%** of adult bison deaths. It took about an hour, not the 30-minute target, because the laptop was saturated by other projects' overnight jobs.
+- v14 control (the live checkpoint): **passes** the first stage, 8 seeds x 150 years, in 38 minutes, with its recorded numbers (pronghorn starvation 46%, wolf-bison coupling 0.51, wolves 6% of adult bison deaths, no species lost). Both runs are rows in `review/stability/sensitivity.jsonl`. S1 is accepted except the time target, which needs a quiet machine.
+
+### Things to know
+- Other projects (ranch-twin, one-field-film, stand-in-the-door, Blender jobs) ran overnight on this laptop at full CPU, so sim screens ran 6 to 15 times slower than measured. The GPU budget (`tools/perf-budget.json`) was NOT set: it needs a quiet GPU.
+- Baselines are machine-specific: the lossless copies live in `reference/baseline/local/` (not in git).
+- The `wolves_close` shot frames the wolf smaller than intended; worth a tweak before it is used as a target.
+
+### Next 5 (for Fable to confirm or reorder)
+1. L2b, one sun: work through the L2a list of lighting copies, then sky-derived ambient and haze from the same sun (aimed at the far-band wash, the worst scorecard term).
+2. L1, ground and grass as one surface (the far ground carries the grass look).
+3. S2 truth table and S3/S4 (one recruitment rule, one hunter intake index) toward checkpoint v15, where wolves matter again.
+4. L4 second half: planted hooves and matching near and far animals, on the now-split renderer.
+5. Find the last GPU-side capture difference so shots are byte-identical, then set the GPU budget on a quiet machine.
+
+*(Earlier reports follow.)*
+
 *(Updated 00:05 Sunday 2026-10-24. This file is refreshed at every milestone.)*
 
 ## 2026-10-24: Tallgrass 1.0 (the V1.0 polish run, live and public)
