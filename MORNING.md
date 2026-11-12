@@ -17,10 +17,11 @@ Run it: `npm run dev` (unchanged; the live game is still 1.0.12, nothing was dep
 - **A question for v15 from the sources.** The first opened sources say real wolves kill mostly bison calves, rarely adults (Wood Buffalo field work: 25 calves, 2 adult cows; Yellowstone: bison 1.6% of winter wolf kills). So the planned v15 target "wolves cause 15 to 30% of adult bison deaths" may be the wrong measure; details at the end of `docs/ECOLOGY-TRUTH-draft.md`.
 - **Fixed in passing:** bison sparring pairs depended on page timing in captures.
 
-### Balancing loop (S1): built, being proven
+### Balancing loop (S1): built and proven
 - `tools/screen.mjs` runs a setting through cheap-to-dear stages (8 canary seeds x 150 years, then 20 x 400, then the shocks) and stops early when a species is lost; `tools/gates.py` judges it the same way the old one-off scripts did, in one place.
 - Known-bad check: the v13 settings were **rejected** by the first stage (pronghorn starvation 54%, limit 50%). It also shows the core finding again: wolves cause **4%** of adult bison deaths. It took about an hour, not the 30-minute target, because the laptop was saturated by other projects' overnight jobs.
 - v14 control (the live checkpoint): **passes** the first stage, 8 seeds x 150 years, in 38 minutes, with its recorded numbers (pronghorn starvation 46%, wolf-bison coupling 0.51, wolves 6% of adult bison deaths, no species lost). Both runs are rows in `review/stability/sensitivity.jsonl`. S1 is accepted except the time target, which needs a quiet machine.
+- v14 full stage (20 valleys x 400 years, the control for v15): **passes** and reproduces the numbers recorded when v14 was adopted: bison 704, wolves 34, ravens 507, wolf-bison coupling 0.58, pronghorn starvation 47%, no species lost; wolves 6% of adult bison deaths. 222 minutes on the loaded laptop. Results in `review/stability/v14-control-2026-11-12/`.
 
 ### Things to know
 - Other projects (ranch-twin, one-field-film, stand-in-the-door, Blender jobs) ran overnight on this laptop at full CPU, so sim screens ran 6 to 15 times slower than measured. The GPU budget (`tools/perf-budget.json`) was NOT set: it needs a quiet GPU.

@@ -12,7 +12,7 @@
 - Live: v1.0.12, checkpoint v14. Nothing deployed overnight; no sim default changed.
 - Harness done and in use: fixed shots (`npm run shots`), scorecard and contact sheet (`npm run score`), lint, the gate (`npm run check`), the long guard (`npm run test:long`), the balancing loop (`tools/screen.mjs`, `tools/gates.py`). First baselines accepted 11/12 (`reference/baseline/`, lossless copies in `reference/baseline/local/`, not in git).
 - Refactors done with no visual change: L2a (one light: shared lighting chunks, aliased grass uniforms, checked shader patches), L4 first half (animal `update()` split into named steps), calendar per sim (S6a).
-- Running at the end of the night (check before starting a screen: `artifacts/screen.lock`): `v14-full`, the 20 x 400-year control for v15 (`artifacts/screens/v14-full/`), and possibly a grunt archiving one-off tools (H9).
+- The v14 control for v15 is done: `review/stability/v14-control-2026-11-12/` (20 x 400 years, passes, same numbers as at adoption).
 
 ## Next three steps
 1. Fable review at 13:00: confirm or reorder the "Next 5" in MORNING.md; show the owner the first contact sheet (`review/fable-audit-2026-11-11/first_contact_sheet_2026-11-12.jpg`) and the six questions at the end of `docs/FABLE-REVIEW.md`.
