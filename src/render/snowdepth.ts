@@ -57,6 +57,14 @@ export class SnowDepth {
     } else this.settled = false;
   }
 
+  /** Show the latest frame at once, without the ease (the shot capture, ?capture=1). */
+  snap(): void {
+    if (!this.on) return;
+    this.field.set(this.target);
+    this.settled = true;
+    this.dirty = true;
+  }
+
   /** Ease the displayed field toward the latest frame; call once per render frame with the real dt in seconds. */
   update(dt: number): void {
     if (this.on && !this.settled) {

@@ -1,0 +1,13 @@
+[
+  {
+    "stamp": "20261112-040333",
+    "commit": "b30f53c",
+    "total": 34.2,
+    "shots": {
+      "concept_golden": 53.6,
+      "concept_night": 10.1,
+      "concept_summer": 38.9
+    },
+    "drifted": []
+  }
+]

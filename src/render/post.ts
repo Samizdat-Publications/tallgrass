@@ -15,6 +15,7 @@ import type { EnvState } from '../sim/types';
 import { Snow, SnowPass, blizzardAmount } from './snow';
 import { Rain, RainPass } from './rain';
 import { STORM_SKY_GLSL, type StormUniforms } from './storms';
+import { fxNow } from './fxrng';
 
 export type Quality = 'high' | 'medium';
 
@@ -1365,7 +1366,7 @@ export class PostFX {
     u.uGrain.value = Math.max(0, grain);
     u.uCA.value = Math.max(0, fringePx);
     // film re-rolls its grain 24 times a second
-    u.uSeed.value = grain > 0 ? Math.floor(performance.now() / 41.667) % 4096 : 0;
+    u.uSeed.value = grain > 0 ? Math.floor(fxNow() / 41.667) % 4096 : 0; // (capture mode: the fixed frame clock, so the grain is seeded from the frame count)
   }
 
   /** The dip at an edit (render/cutfx.ts): 0 is the plain picture, 1 a soft dark. Applied last, over grain and all. */

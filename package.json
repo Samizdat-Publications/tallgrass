@@ -12,6 +12,12 @@
     "capture": "node tools/capture.mjs",
     "deploy": "vite build && wrangler deploy --name tallgrass --assets ./dist --compatibility-date 2026-10-01",
     "test": "tsx tools/run-tests.ts",
+    "test:fast": "tsx tools/run-tests.ts --no-golden",
+    "shots": "node tools/shots.mjs",
+    "score": ".venv/Scripts/python tools/scorecard.py",
+    "lint": "node tools/lint.mjs",
+    "check": "node tools/check.mjs",
+    "check:full": "node tools/check.mjs --full",
     "clean": "node tools/cleanup.mjs",
     "site:build": "node -e \"const fs=require('fs');fs.rmSync('site-dist',{recursive:true,force:true});fs.cpSync('site','site-dist',{recursive:true})\" && node tools/finish-site.mjs site-dist",
     "site:deploy": "npm run site:build && npx --yes wrangler@4 pages deploy site-dist --project-name tallgrass --branch main"
@@ -40,5 +46,8 @@
     "@fontsource/alegreya-sans": "^5.3.0",
     "three": "^0.186.1"
   },
-  "private": true
+  "private": true,
+  "engines": {
+    "node": ">=24 <25"
+  }
 }

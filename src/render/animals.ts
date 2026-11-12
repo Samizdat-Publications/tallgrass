@@ -37,6 +37,7 @@ import { sunHeight } from '../audio/mix';
 import { injectTerrainShadow } from './common';
 import type { SharedUniforms } from './common';
 import type { SnowDepth } from './snowdepth';
+import { fxRandom } from './fxrng';
 
 // Per-species render tables are authored by registry key and expanded to arrays indexed by species id, so a species added
 // to SPECIES (src/sim/species.ts) gets a sane default here until it earns its own entry.
@@ -1440,12 +1441,12 @@ export class AnimalLayer {
     const dryK = this.dust.dryness * this.groundDry(x, z);
     const n = Math.round(5 * dryK);
     for (let i = 0; i < n; i++) {
-      const a = Math.random() * Math.PI * 2, r = Math.random() * 0.4 * vs;
+      const a = fxRandom() * Math.PI * 2, r = fxRandom() * 0.4 * vs;
       const px = x + Math.cos(a) * r, pz = z + Math.sin(a) * r;
       this.dust.emit(
         px, sampleHeight(this.gh, w.hn, w.cell, px, pz) + 0.1, pz,
-        Math.cos(a) * 0.9, 0.3 + Math.random() * 0.4, Math.sin(a) * 0.9,
-        (0.35 + Math.random() * 0.3) * vs, 0.6 + Math.random() * 0.5, 0.25 + Math.random() * 0.15, Math.random(), dryK,
+        Math.cos(a) * 0.9, 0.3 + fxRandom() * 0.4, Math.sin(a) * 0.9,
+        (0.35 + fxRandom() * 0.3) * vs, 0.6 + fxRandom() * 0.5, 0.25 + fxRandom() * 0.15, fxRandom(), dryK,
       );
     }
   }
@@ -1480,7 +1481,7 @@ export class AnimalLayer {
       near.push(i);
     }
     if (near.length === 0) return null;
-    const i = near[Math.floor(Math.random() * near.length)];
+    const i = near[Math.floor(fxRandom() * near.length)];
     return { x: A[i * AGENT_STRIDE + 1], z: A[i * AGENT_STRIDE + 2] };
   }
 
@@ -1511,7 +1512,7 @@ export class AnimalLayer {
       near.push(i);
     }
     if (near.length === 0) return null;
-    const i = near[Math.floor(Math.random() * near.length)];
+    const i = near[Math.floor(fxRandom() * near.length)];
     return { x: A[i * AGENT_STRIDE + 1], z: A[i * AGENT_STRIDE + 2] };
   }
 
@@ -1579,13 +1580,13 @@ export class AnimalLayer {
       this.splash.spray(cx, gy + 0.15, cz, big * 0.8, sp === Sp.Bison ? 22 : 14);
     }
     for (let i = 0; i < n; i++) {
-      const a = Math.random() * Math.PI * 2, r = Math.random() * 1.2 * big;
+      const a = fxRandom() * Math.PI * 2, r = fxRandom() * 1.2 * big;
       const px = cx + Math.cos(a) * r, pz = cz + Math.sin(a) * r;
-      const sp2 = (1.4 + Math.random() * 2.2) * big;
+      const sp2 = (1.4 + fxRandom() * 2.2) * big;
       this.dust.emit(
         px, sampleHeight(this.gh, w.hn, w.cell, px, pz) + 0.2, pz,
-        Math.cos(a) * sp2 + Math.cos(fi.h) * fi.v * 0.12, 0.4 + Math.random() * 0.9, Math.sin(a) * sp2 + Math.sin(fi.h) * fi.v * 0.12,
-        (1.2 + Math.random() * 1.0) * big, 0.9 + Math.random() * 0.9, 0.4 + Math.random() * 0.25, Math.random(), dryK,
+        Math.cos(a) * sp2 + Math.cos(fi.h) * fi.v * 0.12, 0.4 + fxRandom() * 0.9, Math.sin(a) * sp2 + Math.sin(fi.h) * fi.v * 0.12,
+        (1.2 + fxRandom() * 1.0) * big, 0.9 + fxRandom() * 0.9, 0.4 + fxRandom() * 0.25, fxRandom(), dryK,
       );
     }
     // Every hunter close by lunges, the nearest first (it takes the throat, the next the flank, the next the hindquarter, ...).
@@ -2459,12 +2460,12 @@ export class AnimalLayer {
           let guard = 3;
           while (S.dust[slot] >= 1 && guard-- > 0) {
             S.dust[slot] -= 1;
-            const a = Math.random() * Math.PI * 2, rr = (0.3 + Math.random() * 1.0) * bi.vs;
+            const a = fxRandom() * Math.PI * 2, rr = (0.3 + fxRandom() * 1.0) * bi.vs;
             const px = x + Math.cos(a) * rr, pz = z + Math.sin(a) * rr;
             this.dust.emit(
               px, sampleHeight(H, hn, cell, px, pz) + 0.15, pz,
-              Math.cos(a) * 0.7 + (Math.random() - 0.5) * 0.4, 0.4 + Math.random() * 0.6, Math.sin(a) * 0.7 + (Math.random() - 0.5) * 0.4,
-              (1.1 + Math.random() * 0.9) * bi.vs, 1.3 + Math.random() * 1.1, 0.3 + Math.random() * 0.15, Math.random(), bi.dry,
+              Math.cos(a) * 0.7 + (fxRandom() - 0.5) * 0.4, 0.4 + fxRandom() * 0.6, Math.sin(a) * 0.7 + (fxRandom() - 0.5) * 0.4,
+              (1.1 + fxRandom() * 0.9) * bi.vs, 1.3 + fxRandom() * 1.1, 0.3 + fxRandom() * 0.15, fxRandom(), bi.dry,
             );
           }
         }
@@ -3190,13 +3191,13 @@ export class AnimalLayer {
           S.dust[slot] -= 1;
           const ci = Math.min(world.n - 1, Math.max(0, Math.floor(x / cell))), cj = Math.min(world.n - 1, Math.max(0, Math.floor(z / cell)));
           if (world.water[cj * world.n + ci]) continue;
-          const back = -0.3 * pr.length * vs * (1 + 0.6 * (dsK - 1)), side = (Math.random() - 0.5) * 0.35 * pr.length * vs;
+          const back = -0.3 * pr.length * vs * (1 + 0.6 * (dsK - 1)), side = (fxRandom() - 0.5) * 0.35 * pr.length * vs;
           const px = x + ch * back - sh * side, pz = z + sh * back + ch * side;
           const drift = -0.1 * spdS;
           this.dust.emit(
             px, sampleHeight(H, hn, cell, px, pz) + 0.15, pz,
-            ch * drift * 0.6 + (Math.random() - 0.5) * 0.6, 0.15 + Math.random() * 0.3, sh * drift * 0.6 + (Math.random() - 0.5) * 0.6,
-            dp[2] * vs * (0.8 + 0.4 * Math.random()) * Math.pow(dsK, 0.6), (dp[4] + Math.random() * (dp[5] - dp[4])) * (1 + 0.3 * (dsK - 1)), Math.min(0.4, dp[3] * (0.75 + 0.5 * Math.random()) * (1 + 0.1 * (dsK - 1))), Math.random(), gd,
+            ch * drift * 0.6 + (fxRandom() - 0.5) * 0.6, 0.15 + fxRandom() * 0.3, sh * drift * 0.6 + (fxRandom() - 0.5) * 0.6,
+            dp[2] * vs * (0.8 + 0.4 * fxRandom()) * Math.pow(dsK, 0.6), (dp[4] + fxRandom() * (dp[5] - dp[4])) * (1 + 0.3 * (dsK - 1)), Math.min(0.4, dp[3] * (0.75 + 0.5 * fxRandom()) * (1 + 0.1 * (dsK - 1))), fxRandom(), gd,
           );
         }
         if (S.dust[slot] > 1) S.dust[slot] = 1;
@@ -3213,10 +3214,10 @@ export class AnimalLayer {
           if (gd <= 0.03) continue;
           const wci = Math.min(world.n - 1, Math.max(0, Math.floor(x / cell))), wcj = Math.min(world.n - 1, Math.max(0, Math.floor(z / cell)));
           if (world.water[wcj * world.n + wci]) continue;
-          const back = -Math.random() * Math.max(ds, 0.5 * vs), side = (Math.random() - 0.5) * 0.4 * pr.length * vs;
+          const back = -fxRandom() * Math.max(ds, 0.5 * vs), side = (fxRandom() - 0.5) * 0.4 * pr.length * vs;
           const px = x + ch * back - sh * side, pz = z + sh * back + ch * side;
-          const sz = 0.5 * vs * Math.sqrt(pr.length) * (0.8 + 0.4 * Math.random());
-          this.dust.emit(px, sampleHeight(H, hn, cell, px, pz) + 0.12, pz, (Math.random() - 0.5) * 0.5, 0.1 + Math.random() * 0.2, (Math.random() - 0.5) * 0.5, sz, 0.7 + Math.random() * 0.5, 0.17 * Math.min(1, tlK * 1.3), Math.random(), gd);
+          const sz = 0.5 * vs * Math.sqrt(pr.length) * (0.8 + 0.4 * fxRandom());
+          this.dust.emit(px, sampleHeight(H, hn, cell, px, pz) + 0.12, pz, (fxRandom() - 0.5) * 0.5, 0.1 + fxRandom() * 0.2, (fxRandom() - 0.5) * 0.5, sz, 0.7 + fxRandom() * 0.5, 0.17 * Math.min(1, tlK * 1.3), fxRandom(), gd);
           tlBudget--;
         }
         if (S.tdust[slot] > 2) S.tdust[slot] = 0;
@@ -3306,23 +3307,23 @@ export class AnimalLayer {
         const dryL = this.dust.dryness * this.groundDry(x, z);
         if (dryL > 0.08) {
           for (let q = 0; q < 5; q++) {
-            const a = Math.random() * Math.PI * 2, v = 0.6 + Math.random() * 0.9;
-            this.dust.emit(x + Math.cos(a) * 0.3, sampleHeight(H, hn, cell, x, z) + 0.15, z + Math.sin(a) * 0.3, Math.cos(a) * v, 0.3 + Math.random() * 0.5, Math.sin(a) * v, 0.5 + Math.random() * 0.4, 0.6 + Math.random() * 0.5, 0.35, Math.random(), dryL);
+            const a = fxRandom() * Math.PI * 2, v = 0.6 + fxRandom() * 0.9;
+            this.dust.emit(x + Math.cos(a) * 0.3, sampleHeight(H, hn, cell, x, z) + 0.15, z + Math.sin(a) * 0.3, Math.cos(a) * v, 0.3 + fxRandom() * 0.5, Math.sin(a) * v, 0.5 + fxRandom() * 0.4, 0.6 + fxRandom() * 0.5, 0.35, fxRandom(), dryL);
           }
         }
       }
       // the struggle: earth and dust kicked up round the animal while it fights the takedown (about the first 0.7 s)
-      if (fi && fi.t > 0.05 && fi.t < 1.3 && running > 0 && Math.random() < 0.55) {
+      if (fi && fi.t > 0.05 && fi.t < 1.3 && running > 0 && fxRandom() < 0.55) {
         const dryS = this.dust.dryness * this.groundDry(x, z);
         if (dryS > 0.08) {
           const bigS = sp === Sp.Bison ? 1.5 : 0.85;
-          const a = Math.random() * Math.PI * 2, rr = (0.3 + Math.random() * 0.9) * bigS;
+          const a = fxRandom() * Math.PI * 2, rr = (0.3 + fxRandom() * 0.9) * bigS;
           const px = x + Math.cos(a) * rr, pz = z + Math.sin(a) * rr;
-          const v = (1.0 + Math.random() * 1.6) * bigS;
+          const v = (1.0 + fxRandom() * 1.6) * bigS;
           this.dust.emit(
             px, sampleHeight(H, hn, cell, px, pz) + 0.25, pz,
-            Math.cos(a) * v * 0.5, 0.9 + Math.random() * 1.3, Math.sin(a) * v * 0.5,
-            (0.55 + Math.random() * 0.6) * bigS, 0.6 + Math.random() * 0.6, 0.3 + Math.random() * 0.15, Math.random(), dryS,
+            Math.cos(a) * v * 0.5, 0.9 + fxRandom() * 1.3, Math.sin(a) * v * 0.5,
+            (0.55 + fxRandom() * 0.6) * bigS, 0.6 + fxRandom() * 0.6, 0.3 + fxRandom() * 0.15, fxRandom(), dryS,
           );
         }
       }
@@ -3604,7 +3605,7 @@ export class AnimalLayer {
 
   private updateRing(): void {
     const si = this.selInfo;
-    if ((this.selectedId === null && this._followedId === null) || !si.found) {
+    if (this.hideMarks || (this.selectedId === null && this._followedId === null) || !si.found) {
       this.ring.visible = false;
       this.ringSolid.visible = false;
       this.halo.visible = false;
@@ -3684,6 +3685,47 @@ export class AnimalLayer {
       }
     }
     return bestId;
+  }
+
+  /** Never draw the selection ring or the follow halo (the shot capture, ?capture=1, frames only the 3D view). */
+  hideMarks = false;
+
+  /**
+   * Shot capture (?capture=1): forget the eased per-animal display state (pose weights, drawn position, heading, display offsets), so the
+   * next frame starts every animal from its snapshot target, the way a freshly seen animal starts. A shot then does not depend on the
+   * shots before it. The sim is paused in a capture, so nothing here changes what the sim says; only how the frame is eased into.
+   */
+  captureReset(): void {
+    // Everything that carries over from earlier frames starts again, as on a fresh page that has just received this snapshot: the
+    // per-animal state (gait phase, eased poses, raven fade, wing beat), the wolf and bison behaviour state (pairs, sessions), the herd
+    // spacing, the falls, and the dust and splash particles. (Resetting a few fields was not enough: the gait phase and the sparring
+    // pairs still differed between page loads, measured 2026-11-12.)
+    const snap = this.curr;
+    this.slots = new Slots();
+    this.cn = new CanidState();
+    this.beh = new BisonBehaviour();
+    this.hsep = new HerdSep(384);
+    this.falls.clear();
+    this.activeFalls.length = 0;
+    this.dust.clear();
+    this.splash.clear();
+    this.curr = null;
+    this.prev = null;
+    this.currMap.clear();
+    this.prevMap.clear();
+    this.lastSnapT = -1;
+    this.snapDt = 0.1;
+    this.lastAlpha = 1;
+    this.gen = 0;
+    this.sepFrame = 0;
+    this.ws = { x: 0, z: 0, vx: 0, vz: 0, tx: 0, tz: 0 };
+    if (snap) {
+      // (a carcass is drawn lying where it fell, as at a time-lapse speed, not frozen at the first instant of its fall)
+      const ss = this.simSpeed;
+      this.simSpeed = 1e6;
+      this.setSnapshot(snap);
+      this.simSpeed = ss;
+    }
   }
 
   /** r-idle: the pointer is over (or the user just acted on) the marked animal: the marker comes back and its 5 s start again. */

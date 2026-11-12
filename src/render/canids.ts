@@ -12,6 +12,7 @@
 // animal slot (the animal layer's Slots index), reset when a slot is handed to a new animal.
 import { AGENT_STRIDE, F_JUVENILE, F_MANGE, F_MIGRANT, Sp, St } from '../sim/types';
 import { sessionAt } from './behaviours';
+import { fxRandom } from './fxrng';
 
 const clamp = (x: number, a: number, b: number): number => (x < a ? a : x > b ? b : x);
 const smoothstep = (a: number, b: number, x: number): number => {
@@ -254,9 +255,9 @@ export class CanidState {
     if (!dusk || !(timeScale > 0) || timeScale > 10 || clock < c.nextSelf || this.choirOn(clock, wolf)) return false;
     if (clock - c.lastAudio < AUDIO_QUIET) return false;
     const site = pick();
-    c.nextSelf = clock + (wolf ? 40 + 50 * Math.random() : 30 + 40 * Math.random());
+    c.nextSelf = clock + (wolf ? 40 + 50 * fxRandom() : 30 + 40 * fxRandom());
     if (!site) return false;
-    this.startChorus(site.x, site.z, (wolf ? 5 : 6) + 3 * Math.random(), clock, false, wolf);
+    this.startChorus(site.x, site.z, (wolf ? 5 : 6) + 3 * fxRandom(), clock, false, wolf);
     return true;
   }
 

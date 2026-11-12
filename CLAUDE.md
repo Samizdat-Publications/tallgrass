@@ -1,6 +1,7 @@
 # Operating Contract (read every session, survives compaction)
 
-> **v2 phase (since 2026-10-04): after this file, read `V2-PLAN.md` (sections 0 to 6), then `NEXT-SESSION.md`.** The game exists (Tallgrass v1 is live). Phase 0 below is done: don't repeat it. Work through the v2 work packages in V2-PLAN.md section 6.
+> **Fable phase (since 2026-11-11): after this file, read `docs/FABLE-REVIEW.md`, then the "Fable change order" at the top of `_PLAN.md`, then `NEXT-SESSION.md`. Routing is in `docs/ROUTING.md`. `npm run check` must pass before every commit to main; looks are judged on `npm run shots` and `npm run score`, never on `tools/stills.mjs` frames (they are not repeatable). `V2-PLAN.md` is finished and kept as history.**
+> **v2 phase (2026-10-04 to 2026-10-30, history):** the v2 work packages were in `V2-PLAN.md` (sections 0 to 6). The game exists (Tallgrass v1 is live). Phase 0 below is done: don't repeat it. Work through the v2 work packages in V2-PLAN.md section 6.
 > - Modes: one local session, or two tracks. In two-track mode, Track S (sim and ecology) runs in a cloud session on branch `v2-sim`, and Track R (render, audio, UI, reviews, merges, deploys) runs locally on `main`. File ownership is in V2-PLAN.md section 4.3.
 > - Quota guard (owner ruling 2026-10-04), local sessions: start no new work package at 85% of the weekly limit and stop at 90%, never in paid extra usage. To stop, write the current local time to `.claude/hooks/run_until.local.txt`.
 > - Each session's deadline lives in `.claude/hooks/run_until.local.txt` (gitignored). The Stop hook reads it before `run_until.txt`.
@@ -19,8 +20,8 @@ You are building a new game from scratch, unattended, overnight. The creative br
 
 ## 2. Model and agent usage
 
-- You (the lead, Opus) own architecture, simulation design and balancing, integration, art direction, and triaging reviews. These calls take judgment, so keep them.
-- Send well-scoped implementation work to the `builder` subagent (Sonnet). Examples: a specific system, a shader, a UI panel, an asset pipeline script, tests. Each brief needs a clear spec, the files involved, and acceptance criteria. When tasks don't depend on each other, run several builders in parallel. Review what comes back before you merge it.
+- You (the lead; Fable 5.2 since 2026-11-11, see `docs/ROUTING.md`) own architecture, simulation design and balancing, integration, art direction, and triaging reviews. These calls take judgment, so keep them. Look at every capture and contact sheet yourself.
+- Send well-scoped implementation work to the `builder` subagent (Opus). Mechanical, token-heavy work goes to `grunt` (Sonnet), lookups to `scout` (Haiku), checkpoint checks to `verifier`. Examples: a specific system, a shader, a UI panel, an asset pipeline script, tests. Each brief needs a clear spec, the files involved, and acceptance criteria. When tasks don't depend on each other, run several builders in parallel. Review what comes back before you merge it.
 - Use the `blind-critic` subagent for visual and dynamics critique (see section 6). It must only ever receive the image or chart paths. Never give it notes about the implementation.
 
 ## 3. State lives in files, not in your context

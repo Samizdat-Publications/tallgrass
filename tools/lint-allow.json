@@ -1,0 +1,9 @@
+{
+  "bigfile": [
+    "docs/media/hero.gif",
+    "site/media/hero-v1.mp4",
+    "site/media/hero-v2.mp4",
+    "site/media/hero-v3.mp4",
+    "site/media/watch-v1.mp4"
+  ]
+}

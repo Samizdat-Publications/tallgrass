@@ -1,5 +1,54 @@
 # Tallgrass plan
 
+## Fable change order (from 11/11/2026): the current plan
+
+Why and evidence: `docs/FABLE-REVIEW.md`. Who does what: `docs/ROUTING.md`. Everything below this section is history.
+
+Rules for every package:
+- A look change is judged on the fixed shots (`npm run shots`, then `npm run score`): the contact sheet goes to Fable, then to the owner, before it goes live.
+- A refactor that should not change the picture must leave every shot byte-identical (`npm run check`).
+- A sim change is a param that is off by default, and off reproduces the golden hash. A new default is a checkpoint, judged by the gates tool and the shock suite, and the owner sees the charts first.
+- `npm run check` passes before every commit to main.
+
+### Harness (first)
+| ID | Package | Who | Acceptance (the measurement) | Status |
+|---|---|---|---|---|
+| H1 | Deterministic capture: `?capture=1` mode, `tools/shots.json` (14 fixed shots), `tools/shots.mjs` | builder | `node tools/shots.mjs --shots all --verify` exits 0: two page loads give byte-identical PNGs, also under CPU load | see NEXT-SESSION.md |
+| H2 | Reference set, scorecard, contact sheet: `reference/`, `tools/scorecard.py` | builder | `--selftest` passes; a run writes `summary.md`, `sheet.jpg` and a history row; an unchanged build reports every shot `identical` | see NEXT-SESSION.md |
+| H6 | Lints: `tools/lint.mjs` | builder | exits 0 on the tree, exits 1 on a new em dash, a tracked secret or a new file over 5 MB | see NEXT-SESSION.md |
+| H7 | Gate: `tools/check.mjs` (preflight, typecheck, lint, tests, gate shots with drift check); `--full` adds every shot twice and the GPU budget | builder | `npm run check` exits 0 on a clean tree in under 5 minutes and exits 1 when a gate shot drifts from its baseline | see NEXT-SESSION.md |
+| H8 | Accept the first baselines and set the GPU budget from a quiet-GPU `gpubench` run | fable | `reference/baseline.json` and `tools/perf-budget.json` committed; the first contact sheet shown to the owner | open |
+| H9 | Archive the one-off shot scripts in `tools/` that `shots.mjs` replaces (move to `tools/archive/`, fix the docs that name them) | grunt | `tools/` holds only tools a current doc names; `npm run check` passes | open |
+
+### Sim harness
+| ID | Package | Who | Acceptance | Status |
+|---|---|---|---|---|
+| S1 | Balancing loop: one versioned gates tool (adoption, shocks, drought, ceiling, means, promoted from `scratch/rb` and `tools/adoption.py`); a staged screen runner (8 seeds x 150 years, then 20 x 400, then shocks), canary seeds first (3, then 2, 1, 4, 9, 10), stop when a gate is lost, one screen at a time on all cores; each config appends a row to `review/stability/sensitivity.jsonl` | builder | Re-judging the stored v14 summary reproduces its recorded verdicts; a known-bad config (v13 defaults) is rejected by the filter stage in under 30 minutes | open |
+| S6a | Guard hash and pins: a slow test with 3 seeds x 240,000 ticks and every optional system on (`npm run test:long`); Node pinned (`.nvmrc`, `engines`); `setCalendarScale` no longer a module global | builder | `npm run test:long` passes twice with the same hashes; two sims with different calendars in one process do not disturb each other (new test) | open |
+| S2 | Dynamics truth table: `ECOLOGY-TRUTH.md` with sourced real ranges (share of adult bison deaths from wolves, herd change when wolves are removed, calving rate, wolves per 1,000 prey, others the scout finds), and `gates` reports sim value against range for each | scout for sources, fable picks the targets, builder wires it | Every row has a source link; the tool prints the table for a screen; v14 is scored (expected to miss the predation rows) | open |
+
+### Looks (after H8; each ends with a contact sheet for the owner)
+| ID | Package | Who | Acceptance | Status |
+|---|---|---|---|---|
+| L2a | One light: the three uniform sets and four lighting copies become one shared chunk and one uniform block; a warning on every missed shader-chunk replace | builder | **Zero drift**: every shot byte-identical to the baseline; GPU time within noise | open |
+| L1 | Ground and grass as one surface (far ground carries the grass look; taller, denser near blades with a dark base) | fable designs and tunes, builder implements | `concept_golden`, `golden_wide` and `midday_mid`: far and mid band detail and contrast move toward the concept and the concept score rises; frame cost at most 0.6 ms at 1440p; Fable and owner approve the sheet | open |
+| L2b | One sun: sky-derived ambient, stronger low-sun hill shading, haze as distance and height fog from the same sun, tone curve settled by A/B (ACES or AgX) with metered exposure | fable designs and tunes, builder implements | `golden_wide`: the 5th percentile of L* in the far band falls toward the concept's (less wash) and lit against shaded slope contrast rises; no shot's score falls by more than 2; at most 0.4 ms | open |
+| L3 | Water that mirrors the sky; a wider, uneven creek | fable, builder | `creek_golden` and `concept_golden`: water pixels brighter than the bank at grazing angles (today darker); sheet approved | open |
+| L4 | Grounding: far meshes match near meshes, screen-space contact shadows, near meshes cast shadows. First split `animals.ts` `update()` (zero drift) | builder, fable reviews | `bison_close` and `herd_mid`: no visible material seam inside one herd; hooves read as planted; at most 0.8 ms | open |
+| L5 | Trees: canopy outline, leaf colour variation, far hand-over, midday palette (owner's MAYBE-WANTS item) | fable, builder | `midday_mid`, `golden_wide`: sheet approved; no GPU cost | open |
+
+### Logic (CPU work, runs beside the looks)
+| ID | Package | Who | Acceptance | Status |
+|---|---|---|---|---|
+| S6b | Retire about 16 dead params behind a "retired keys" list (old share codes still load); split `sim.ts` along the `sp/` seams; rewrite `ECOLOGY.md` | builder; fable writes ECOLOGY.md | Golden and long guard hashes unchanged; an old share code with a retired key loads | open |
+| S3 | One recruitment rule: young raised follows forage per head, for every grazer (param, off by default) | fable designs, builder implements | Off: golden unchanged. On: passes the S1 filter stage | open |
+| S4 | One intake index for hunters; wolves count mule deer (param, off by default) | fable designs, builder implements | Off: golden unchanged. On: passes the S1 filter stage | open |
+| S5 | Checkpoint v15: predation matters again, lie-up kept. S3 and S4 on, old patches off | fable; grunt runs the screens | Every v14 gate passes at 600 years; wolves cause 15 to 30% of adult bison deaths; removing wolves changes the bison mean by at least 20%; drought losses no worse than v14 (1 of 12); owner approves the charts | open |
+| S7 | Perf checkpoint: 100x that reaches 100x. Optimise freely, validate statistically against the live checkpoint, re-record the golden | builder; grunt runs the comparison | Headless ticks per second at least doubled; the gates tool finds no difference from the live checkpoint at 20 x 400 | open |
+
+Carried over from the old Next 5 (small, fit in between): the rust-red creek bank colour (folds into L3), the pale smudge at dusk (catch it with a fixed-clock capture, now possible with H1), night readability branch `r-night-v1` (re-judge on the `night_mid` and `concept_night` shots, then merge or drop).
+
+
 ## Day run (2026-10-09 ~15:30 to 2026-10-10 ~15:30): DAY-PLAN.md
 Focus: close-range visuals (golden-hour look toward the concept, real ground, authored animals on our rig, animals that notice, snow, trees spike), a motion critic that can see motion (Gemini frame-rate sampling), and v11 (bison bands that move on and keep the herd) on the CPU overnight. Status: planned, not started.
 

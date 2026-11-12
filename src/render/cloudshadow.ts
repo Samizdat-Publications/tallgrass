@@ -79,6 +79,12 @@ export class CloudShadow {
     this.quad = new FullScreenQuad(this.mat);
   }
 
+  /** Shot capture (?capture=1): the pattern starts from its origin again and the next update redraws it. */
+  resetDrift(): void {
+    this.offset.set(0, 0);
+    this.frame = 0;
+  }
+
   /** Redraw the mask now and then and set the strength. Call once per frame after the atmosphere uniforms are up to date. */
   update(renderer: THREE.WebGLRenderer, dt: number, force = false): void {
     const u = this.shared;

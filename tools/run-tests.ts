@@ -2,12 +2,17 @@
 // Exits non-zero on any failure. Pass --no-golden to skip the (slow) golden check while iterating.
 
 import { spawn } from 'node:child_process';
+import { availableParallelism } from 'node:os';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = join(fileURLToPath(import.meta.url), '..', '..');
 const skipGolden = process.argv.includes('--no-golden');
+// Test files are separate processes, so several run at a time (--jobs N; default: cores minus 2, between 2 and 8) and the
+// results print in file order. One at a time the suite took over 10 minutes (measured 2026-11-11).
+const jobsArg = process.argv.indexOf('--jobs');
+const JOBS = Math.max(1, jobsArg >= 0 ? Number(process.argv[jobsArg + 1]) || 1 : Math.min(8, Math.max(2, availableParallelism() - 2)));
 
 function findTests(dir: string, out: string[] = []): string[] {
   for (const name of readdirSync(dir).sort()) {
@@ -35,12 +40,25 @@ function report(name: string, ok: boolean, detail = ''): void {
 }
 
 async function main(): Promise<void> {
-  for (const file of findTests(join(ROOT, 'src'))) {
-    const rel = relative(ROOT, file).replace(/\\/g, '/');
-    const r = await run([rel]);
-    report(rel, r.code === 0);
-    if (r.code !== 0) console.log(r.out.trim().split('\n').slice(-20).join('\n'));
-  }
+  // a small pool: JOBS files at a time, reported in file order as soon as each one's turn comes
+  const files = findTests(join(ROOT, 'src')).map((file) => relative(ROOT, file).replace(/\\/g, '/'));
+  const done: ({ code: number; out: string } | undefined)[] = new Array(files.length);
+  let next = 0, shown = 0;
+  const flush = (): void => {
+    for (; shown < files.length && done[shown]; shown++) {
+      const r = done[shown]!;
+      report(files[shown], r.code === 0);
+      if (r.code !== 0) console.log(r.out.trim().split('\n').slice(-20).join('\n'));
+    }
+  };
+  const worker = async (): Promise<void> => {
+    while (next < files.length) {
+      const k = next++;
+      done[k] = await run([files[k]]);
+      flush();
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(JOBS, files.length) }, worker));
 
   const m = await run(['src/headless/metrics.ts', '--selftest']);
   report('metrics --selftest', m.code === 0);

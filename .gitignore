@@ -25,3 +25,8 @@ src/render/_trees_v1.ts
 
 # landing page build output (site/ is the source)
 /site-dist/
+
+# harness output (shots, scores, perf, gate results); baselines live in reference/
+/artifacts/
+# lossless baseline copies written by tools/scorecard.py --accept: GPU-specific, so they stay on the machine that accepted them
+/reference/baseline/local/

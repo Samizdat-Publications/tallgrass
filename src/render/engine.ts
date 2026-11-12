@@ -526,6 +526,38 @@ export class Engine {
   }
 
   /**
+   * Shot capture (?capture=1, tools/shots.mjs): put back what carries history from earlier frames before a shot is rendered. The clock
+   * goes to `timeSec` (wind, clouds, water and gaits read it), the eye adaptation and the cloud-shadow drift start over, the snow depth
+   * shows its latest frame at once, and the current env is applied without easing. Normal play never calls this.
+   */
+  captureReset(timeSec: number): void {
+    this.time = timeSec;
+    this.uniforms.time.value = timeSec;
+    this.snowDepth.snap();
+    this.cloudShadow.resetDrift();
+    this.post.grade.resetAdapt();
+    this.applyEnvNow();
+  }
+
+  /**
+   * Shot capture: the sim was restarted from tick 0, so forget the grazing-trail memory and the far ring's running average, as on a
+   * fresh page. A frame at a given tick then looks the same whichever ticks were shown before it.
+   */
+  resetVegHistory(): void {
+    const w = this.world, n = w.n;
+    let sm = 0, sb = 0, cnt = 0;
+    for (let k = 0; k < n * n; k++) {
+      const b = Math.round(clamp(w.capacity[k] * 0.9, 0, 1) * 255);
+      this.prevBio[k] = b;
+      if (!w.water[k]) { sm += w.moisture[k]; sb += b; cnt++; }
+    }
+    this.uniforms.farStats.value.set(sb / Math.max(1, cnt) / 255, sm / Math.max(1, cnt));
+    this.trail.fill(0);
+    this.trailTexture.needsUpdate = true;
+    this.blizzardUntil = -1;
+  }
+
+  /**
    * A blizzard event from the sim (kind 'blizzard': its tick plus its duration `a` is `untilTick`). The sim raises the event for a natural
    * blizzard without raising the weather's wind value past its usual mild one, so the renderer lays a gale over the snowfall itself while
    * the event runs (eased in real time, so it builds and clears smoothly at any speed).

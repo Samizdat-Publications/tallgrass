@@ -12,6 +12,7 @@
 //  - The cranes are drawn larger than life at long range (wingspan grows with distance, clamped), or they would be a dozen pixels.
 import * as THREE from 'three';
 import type { SharedUniforms } from './common';
+import { fxRandom } from './fxrng';
 
 export interface CraneFlightSpec {
   /** Seconds from now until the flock is at `panFrom` (the audio's `startAt - audio.now`). */
@@ -343,7 +344,7 @@ export class Cranes {
       ndcY = 0.4;
       dist = 260;
     }
-    const seed = (Math.random() * 1e9) | 0;
+    const seed = (fxRandom() * 1e9) | 0;
     const rnd = rng32(seed);
     const n = Math.max(2, Math.min(24, Math.round(spec.birds)));
     // the V: the leader at the apex, the rest alternating left and right, each rank a step further back and out; a loose skein jitters it

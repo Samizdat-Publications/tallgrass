@@ -34,11 +34,19 @@ import { applyOverrides, defaultParams } from './sim/params';
 import { isPredator } from './sim/species';
 import type { FromWorker, ToWorker } from './sim/worker';
 import { mark } from './startmarks';
+import { fxCaptureMode, fxHash, fxNow, fxSeed, fxSetClock } from './render/fxrng';
 
 /** The widest a followed chase is framed to (orbit distance, m): past it the pair is allowed to leave the picture rather than the shot becoming a vista. */
 const PAIR_MAX_DIST = 56;
 
 const q = new URLSearchParams(location.search);
+/**
+ * Deterministic shot capture (?capture=1, driven by tools/shots.mjs through window.__capture, set up at the end of this file): no frame
+ * runs on its own, the sim is paused and stepped to a tick, the render clock and render-side randomness are fixed (render/fxrng.ts), and
+ * nothing but the 3D view is drawn. Without the flag the game is unchanged.
+ */
+const CAPTURE = q.get('capture') === '1';
+if (CAPTURE) fxCaptureMode(true);
 // a shared valley (?w=): the whole world, interventions included. A code that cannot be read starts the usual valley
 let shared: DecodedShare | null = null;
 let shareError = false;
@@ -57,7 +65,7 @@ const scenario = scenarioById(shared ? shared.state.scenario : challenge?.scenar
 
 // picture quality: ?q= wins (captures pin it), else the player's saved preset, else High (today's look)
 const savedSettings = loadSettings();
-const startPreset: QualityPreset = q.has('q') ? (q.get('q') === 'medium' ? 'medium' : 'high') : savedSettings.quality;
+const startPreset: QualityPreset = q.has('q') ? (q.get('q') === 'medium' ? 'medium' : 'high') : CAPTURE ? 'high' : savedSettings.quality;
 const qualityTier = (p: QualityPreset): 'medium' | 'high' => (p === 'low' || p === 'medium' ? 'medium' : 'high');
 
 mark('main_start');
@@ -80,6 +88,9 @@ mark('grass');
 await preloadA3(); // (?a3=1: the authored near-LOD meshes load first, so the model builders stay synchronous)
 mark('a3_loaded');
 const animals = new AnimalLayer(renderWorld);
+// (shot capture: animal time stands still from the first snapshot on, so nothing is planned from it before the first frame sets it; it
+// used to start at 1, and bison sparring pairs were then planned or not depending on when the first snapshots arrived)
+if (CAPTURE) animals.timeScale = 0;
 mark('animals');
 engine.scene.add(animals.object3D);
 animals.snowField = engine.snowDepth;
@@ -94,7 +105,7 @@ if (q.get('cull') !== '0') {
 animals.swimLevelAt = (x, z) => { const l = engine.water.levelAt(x, z); return l === l ? l : engine.beaverWorks.surfaceAt(x, z); }; // (the drawn surface first)
 engine.cam.preset((q.get('cam') as 'wide' | 'low' | 'top' | null) ?? 'wide', true);
 // captures pin full resolution; players get an automatic render scale that holds 60 fps
-engine.autoScale = q.get('autoscale') !== '0';
+engine.autoScale = !CAPTURE && q.get('autoscale') !== '0';
 /**
  * Picture quality presets. Low and Medium use the engine's lighter tier (Low also draws at three quarters size), High is
  * the default look, Ultra pins full sharpness and supersamples ordinary screens. Low and Ultra switch the automatic
@@ -114,7 +125,7 @@ function applyQuality(p: QualityPreset): void {
     engine.renderer.setPixelRatio(Math.min(Math.max(dpr, 1.5), 2));
     engine.resize();
   } else {
-    engine.autoScale = q.get('autoscale') !== '0';
+    engine.autoScale = !CAPTURE && q.get('autoscale') !== '0';
   }
 }
 if (startPreset === 'low' || startPreset === 'ultra') applyQuality(startPreset);
@@ -126,7 +137,7 @@ const director = new Director(engine.cam, (id, out) => animals.getPosition(id, o
 director.cutFx = engine.cutFx; // a hard cut of the documentary camera goes through a soft dark (render/cutfx.ts)
 // sound starts itself on the first click or key press (browser autoplay rules)
 const audio = new AudioDirector();
-void audio.load();
+if (!CAPTURE) void audio.load(); // (a capture is silent: no sound, so no crane flyovers or calls staged from it)
 // sandhill crane flyovers: the audio schedules the calls, this draws the flock crossing the sky for the same seconds
 const cranes = new Cranes(engine.uniforms, engine.camera, (x, z) => engine.groundHeight(x, z));
 engine.scene.add(cranes.object3D);
@@ -150,7 +161,7 @@ engine.storms.onThunder = (distance, delay) => { audio.onThunder(distance, delay
 (window as unknown as Record<string, unknown>).__cranes = cranes;
 // the documentary narrator: speaks on big events while the documentary camera or cinematic mode is filming
 const narrator = new Narrator(audio);
-void narrator.load();
+if (!CAPTURE) void narrator.load();
 window.addEventListener('keydown', (e) => { if (e.key === 'm' || e.key === 'M') audio.setMuted(!audio.muted); });
 
 // Photo mode (R15 Lens): P opens the panel (exposure, aperture and focus, grain, freeze time, hide the interface, Save). Save writes
@@ -183,7 +194,8 @@ window.addEventListener('keydown', (e) => {
 // ------------------------------------------------------------------ worker
 
 mark('pre_worker');
-const worker = new Worker(new URL('./sim/worker.ts', import.meta.url), { type: 'module' });
+// (a let only for the shot capture, which restarts the sim from tick 0 when a shot asks for another tick)
+let worker = new Worker(new URL('./sim/worker.ts', import.meta.url), { type: 'module' });
 const send = (m: ToWorker) => worker.postMessage(m);
 
 const skyView: SkyView = { snow: 0, blizzard: 0, rain: 0, drought: 0, dustStorm: 0, flood: 0, overcast: 0 };
@@ -196,7 +208,7 @@ const climOverride: { c: number; mega: boolean } | null = (() => {
   const n = Number(v);
   return v !== '' && Number.isFinite(n) ? { c: Math.max(-1, Math.min(1, n)), mega: false } : null;
 })();
-let speed = Number(q.get('speed') ?? 1);
+let speed = CAPTURE ? 0 : Number(q.get('speed') ?? 1);
 let following: number | null = null;
 let armed: ToolId | null = null;
 let lastTickChange = performance.now();
@@ -212,7 +224,7 @@ let pendingHistory: Extract<FromWorker, { type: 'snap' }>['history'] = [];
 let skipping = false;
 let skipEvents: Extract<FromWorker, { type: 'snap' }>['events'] = [];
 
-worker.onmessage = (e: MessageEvent<FromWorker>) => {
+const onWorkerMessage = (e: MessageEvent<FromWorker>): void => {
   const m = e.data;
   if (m.type === 'log') {
     finishShare(m.log);
@@ -221,6 +233,9 @@ worker.onmessage = (e: MessageEvent<FromWorker>) => {
   if (m.type === 'lineage') { ui.setLineage(m.id, m.tree); return; }
   if (m.type === 'dynasty') { ui.setDynasty(m.pack, m.list); return; }
   if (m.type !== 'snap') return;
+  // shot capture: only a snapshot with a new tick is taken. The paused worker repeats the last one every 16 ms of wall time, and each
+  // would be applied again (the grazing-trail memory ages with every vegetation frame), so how long a capture waited would show.
+  if (CAPTURE && ready && m.tick === lastTick) return;
   // "Next event": collect what happened during the skip, then cut the camera to it
   if (m.speed === -1) { skipping = true; skipEvents = skipEvents.concat(m.events); }
   else if (skipping) {
@@ -276,7 +291,11 @@ worker.onmessage = (e: MessageEvent<FromWorker>) => {
       tick: m.tick, env: m.env, count: m.count, ids: m.ids, agents: m.agents,
       carcassCount: m.carcassCount, carcasses: m.carcasses, pop: Int32Array.from(m.pop),
     };
+    // (shot capture: the sim jumps straight to the shot's tick, so a carcass is drawn lying where it fell, as at a time-lapse speed,
+    // instead of frozen at the first instant of its fall)
+    if (CAPTURE) animals.simSpeed = 1e6;
     animals.setSnapshot(snap);
+    if (CAPTURE) animals.simSpeed = 0;
     smallprey.setAgents(m.agents, m.count);
   }
   pending = m;
@@ -286,7 +305,9 @@ worker.onmessage = (e: MessageEvent<FromWorker>) => {
     engine.applyEnvNow();
     if (!q.has('cam')) focusHerd(m.agents, m.count, true);
   }
+  if (CAPTURE) captureSnap(m.tick);
 };
+worker.onmessage = onWorkerMessage;
 // dev: ?p=key:value,key:value overrides sim parameters on top of the scenario (for previewing experiments in the real game)
 const devParams: Record<string, number> = {};
 for (const kv of (q.get('p') ?? '').split(',')) {
@@ -568,7 +589,7 @@ engine.excludeFromAO(overlay.object3D);
 // long exposure at speed (render/trails.ts): ?trails=0 never draws it, ?trails=1 draws it at any speed (captures)
 const trails = new Trails(world.size, (x, z) => engine.groundHeight(x, z), engine.uniforms);
 trails.enabled = savedSettings.longExposure;
-trails.mode = q.get('trails') === '0' ? 'off' : q.get('trails') === '1' ? 'on' : 'auto';
+trails.mode = q.get('trails') === '0' || CAPTURE ? 'off' : q.get('trails') === '1' ? 'on' : 'auto';
 const trailFrame: TrailFrame = { speed: 1, tick: 0, count: 0, ids: new Uint32Array(0), agents: new Float32Array(0) };
 engine.scene.add(trails.object3D);
 engine.excludeFromAO(trails.object3D);
@@ -579,7 +600,7 @@ engine.excludeFromAO(smallOverlay.object3D);
 
 // Documentary camera by default: when nobody has touched the camera for a while, the director films hunts, kills,
 // herds and vistas with the UI still up. Any camera input, fly-to, selection or follow hands control straight back.
-const autoCamAllowed = q.get('autocam') !== '0';
+const autoCamAllowed = !CAPTURE && q.get('autocam') !== '0';
 let autoCam = false;
 let cinematicOn = false;
 let lastCamInput = performance.now();
@@ -627,11 +648,11 @@ function narrationEvents(evs: SimEv[]): SimEv[] {
   } else {
     ui.setBusesAvailable(false);
   }
-  ui.setGuideToasts(!navigator.webdriver || q.get('title') === '1');
+  ui.setGuideToasts(!CAPTURE && (!navigator.webdriver || q.get('title') === '1'));
   // said once the valley is on screen (a toast shown while the page is still building would be gone before anyone saw it)
   if (shareError) startNotice = { text: 'That valley code could not be read. Starting the usual valley.', label: 'Share', ms: 6000 };
   else if (shared?.warning) startNotice = { text: shared.warning, label: 'Share', ms: 7000 };
-  if (titleWanted(location.search, !!navigator.webdriver)) {
+  if (!CAPTURE && titleWanted(location.search, !!navigator.webdriver)) {
     ui.showTitle();
     // the valley is alive behind the card: the documentary camera drifts over it until somebody takes over
     if (autoCamAllowed && autoCamEnabled) { autoCam = true; director.setEnabled(true); }
@@ -642,7 +663,7 @@ function narrationEvents(evs: SimEv[]): SimEv[] {
  * Follow an animal with the framed follow camera (render/followframes.ts: a distance by species, a raised three-quarter view, the animal in
  * the lower middle third, a look-ahead along its travel), and mark it (the ring that fades in for a few seconds). null stops following.
  */
-function startFollow(id: number | null): void {
+function startFollow(id: number | null, cut = false, framing?: { dist?: number; pitchDeg?: number }): void {
   following = id;
   animals.setFollowed(id);
   if (id === null) { engine.cam.follow(null); return; }
@@ -650,11 +671,14 @@ function startFollow(id: number | null): void {
   const sp = animals.getSpecies(id);
   const air = isAirborneSpecies(sp);
   const frame = followFrameFor(sp);
+  // (the shot capture asks for its own distance and pitch, so the cut and the framed follow both use them)
+  if (framing?.dist !== undefined) frame.dist = framing.dist;
+  if (framing?.pitchDeg !== undefined) frame.pitchDeg = framing.pitchDeg;
   // r-polish28: a followed hunter in a chase is framed with the animal it is running at (the point between them, the shot widened for the pair),
   // the way the director films a hunt, so the camera never shows only the prey at the edge of the picture. `pw` eases the pair in and out.
   const pv = new THREE.Vector3();
   const base = { dist: frame.dist, distRate: frame.distRate };
-  let prey: number | null = null, pw = 0, need = 0, mix = 0.5, hold = 0, pt = performance.now();
+  let prey: number | null = null, pw = 0, need = 0, mix = 0.5, hold = 0, pt = fxNow(); // (fxNow: the wall clock, or the capture's frame clock)
   const ndcV = new THREE.Vector3();
   const lp = { x: 0, z: 0 };
   const hunter = isLandHunter(sp);
@@ -663,7 +687,7 @@ function startFollow(id: number | null): void {
   let cardX = 1, cardT = 0;
   engine.cam.follow(() => {
     if (!animals.getPosition(id, v)) return null;
-    const now = performance.now(), dt = Math.min(0.25, (now - pt) / 1000);
+    const now = fxNow(), dt = Math.min(0.25, (now - pt) / 1000);
     pt = now;
     if (now - cardT > 500) {
       cardT = now;
@@ -702,7 +726,7 @@ function startFollow(id: number | null): void {
       if (k > 0) return { x: v.x + (lp.x - v.x) * k, y: v.z + (lp.z - v.z) * k };
     }
     return { x: v.x, y: v.z, h: air && v.y - engine.groundHeight(v.x, v.z) > 2 ? v.y : undefined };
-  }, frame);
+  }, frame, cut);
 }
 
 function select(id: number | null): void {
@@ -881,11 +905,12 @@ engine.onFrame((dt, t) => {
   // for a second each while the last textures upload, and a fade through those reads as a stutter; a slow frame starts the count again)
   // (a machine that never manages a frame under 100 ms still loses the poster at the ready mark, a second and a half of frames in)
   if (splashFrames >= 0 && ready) splashFrames = dt < 0.1 ? splashFrames + 1 : 0;
-  if (splashFrames >= 3 || (splashFrames >= 0 && ready && t > 1.5)) {
+  if (!CAPTURE && (splashFrames >= 3 || (splashFrames >= 0 && ready && t > 1.5))) {
     splashFrames = -1;
     requestAnimationFrame(() => { mark('splash_done'); (window as unknown as { __tgSplash?: { done(): void } }).__tgSplash?.done(); });
   }
-  const alpha = Math.min(1, (performance.now() - lastTickChange) / Math.max(16, tickInterval));
+  // (shot capture: the sim is paused on the shot's tick, so the animals stand where that snapshot has them, not partway from the last one)
+  const alpha = CAPTURE ? 1 : Math.min(1, (performance.now() - lastTickChange) / Math.max(16, tickInterval));
   // legs keep pace with how fast the sim actually moves animals (capped where gaits would alias)
   animals.timeScale = speed > 0 ? Math.min(speed, 12) : 0;
   animals.simSpeed = speed > 0 ? speed : 0;
@@ -903,7 +928,7 @@ engine.onFrame((dt, t) => {
     director.setEnabled(true);
   }
   // (photo mode holds the camera where the photographer put it, so the director stands down while the panel is open)
-  if (!ui.photo.isOpen) director.update(dt, pending ? { count: pending.count, ids: pending.ids, agents: pending.agents, carcassCount: pending.carcassCount, carcasses: pending.carcasses, dayFrac: pending.env.dayFrac, small: lastSmall, events: pendingEvents, speed: pending.speed, weather: pending.env.weather } : null);
+  if (!CAPTURE && !ui.photo.isOpen) director.update(dt, pending ? { count: pending.count, ids: pending.ids, agents: pending.agents, carcassCount: pending.carcassCount, carcasses: pending.carcasses, dayFrac: pending.env.dayFrac, small: lastSmall, events: pendingEvents, speed: pending.speed, weather: pending.env.weather } : null);
   grass.viewportHeight = engine.renderer.domElement.height;
   overlay.update(dt, engine.camera, engine.renderer.domElement);
   if (pending) {
@@ -913,7 +938,12 @@ engine.onFrame((dt, t) => {
   grass.update(engine.camera, t, engine.env, sun);
   lens.update(dt);
   if (ui.photo.isOpen && selectionRing) selectionRing.visible = false; // a photograph never carries the selection ring
-  if (pending) {
+  if (pending && CAPTURE) {
+    // shot capture: no interface, sound, narration, field guide or rare sightings (they read the wall clock, and the comet and aurora
+    // would draw into the sky)
+    pendingEvents = [];
+    pendingHistory = [];
+  } else if (pending) {
     ui.update({
       tick: pending.tick, env: pending.env, pop: pending.pop, history: pendingHistory, events: pendingEvents,
       // the detail of the animal that is selected now (a snapshot from before the click may still carry the last one's), and, while the
@@ -966,7 +996,7 @@ engine.onFrame((dt, t) => {
   }
   fpsAcc += dt; fpsN++;
   if (fpsAcc > 1) { w.__fps = Math.round(fpsN / fpsAcc); fpsAcc = 0; fpsN = 0; }
-  if (ready && t > 1.5) {
+  if (ready && t > 1.5 && !CAPTURE) {
     w.__ready = true;
     mark('ready');
     if (startNotice) {
@@ -979,7 +1009,9 @@ let frameMarks = 0;
 let splashFrames = 0;
 mark('pre_start');
 // the shader programs are built in parallel first (engine.prime), then the frames run; ?prime=0 starts at once, the way it used to
-if (q.get('prime') === '0') engine.start();
+// (the shot capture never starts the frame loop: it renders each frame itself, see captureInit below)
+if (CAPTURE) engine.prime().catch((e) => console.warn('prime failed', e)).then(() => { mark('primed'); void captureInit(); });
+else if (q.get('prime') === '0') engine.start();
 else engine.prime().catch((e) => console.warn('prime failed', e)).then(() => { mark('primed'); engine.start(); });
 
 // hooks for capture scripts
@@ -995,7 +1027,9 @@ w.__focusHerd = () => { if (pending) focusHerd(pending.agents, pending.count, tr
  */
 let conceptHoldOn = false;
 let conceptEnv: Partial<typeof engine.env> = {};
-w.__concept = (o: { dist?: number; pitch?: number; sunOff?: number; shift?: number; side?: number; day?: number; season?: number } = {}) => {
+type ConceptOpts = { dist?: number; pitch?: number; sunOff?: number; shift?: number; side?: number; day?: number; season?: number };
+/** The concept framing under the light that is set now (window.__concept and the shot capture's 'concept' camera share it). */
+function conceptView(o: ConceptOpts) {
   const cr = world.creek, tr = world.trees, S = world.size;
   let best = -1, bx = S / 2, bz = S / 2, bdx = 1, bdz = 0;
   for (let k = 5; k < cr.length / 2 - 5; k++) {
@@ -1008,6 +1042,17 @@ w.__concept = (o: { dist?: number; pitch?: number; sunOff?: number; shift?: numb
     const score = turn * n;
     if (score > best) { best = score; bx = x; bz = z; bdx = ax + cx; bdz = az + cz; }
   }
+  const e = engine;
+  // sun to the left of the view direction (same convention as the 'wide' preset): camera sits behind the target, looking along fwd
+  const sunAz = Math.atan2(e.uniforms.lightDir.value.x, e.uniforms.lightDir.value.z);
+  const fwd = sunAz - (o.sunOff ?? 35) * Math.PI / 180;
+  const dist = o.dist ?? 200, pitch = o.pitch ?? 19;
+  const sh = (o.shift ?? 0) * dist; // slide the target along the view direction (negative = toward the camera)
+  const sd = o.side ?? -40; // sideways slide of the target (m): negative puts the bend mid-left of the frame, positive mid-right
+  e.cam.setView({ x: bx + Math.sin(fwd) * sh + Math.cos(fwd) * sd, y: bz + Math.cos(fwd) * sh - Math.sin(fwd) * sd, yawDeg: (fwd + Math.PI) * 180 / Math.PI, pitchDeg: pitch, distance: dist }, true);
+  return { bend: [Math.round(bx), Math.round(bz)], creekDir: [Math.round(bdx), Math.round(bdz)], sunAzDeg: Math.round(sunAz * 180 / Math.PI), yawDeg: e.cam.yawDeg, pitch, dist };
+}
+w.__concept = (o: ConceptOpts = {}) => {
   const day = o.day ?? 0.28, season = o.season ?? 1.8;
   const hold: Partial<typeof engine.env> = { dayFrac: day, season, weather: 0, rain: 0, warmth: 0.7 };
   speed = 0; send({ type: 'speed', speed: 0 });
@@ -1016,14 +1061,7 @@ w.__concept = (o: { dist?: number; pitch?: number; sunOff?: number; shift?: numb
   if (!conceptHoldOn) { conceptHoldOn = true; e.onFrame(() => e.setEnv(conceptEnv)); }
   conceptEnv = hold;
   e.setEnv(hold); e.applyEnvNow();
-  // sun to the left of the view direction (same convention as the 'wide' preset): camera sits behind the target, looking along fwd
-  const sunAz = Math.atan2(e.uniforms.lightDir.value.x, e.uniforms.lightDir.value.z);
-  const fwd = sunAz - (o.sunOff ?? 35) * Math.PI / 180;
-  const dist = o.dist ?? 200, pitch = o.pitch ?? 19;
-  const sh = (o.shift ?? 0) * dist; // slide the target along the view direction (negative = toward the camera)
-  const sd = o.side ?? -40; // sideways slide of the target (m): negative puts the bend mid-left of the frame, positive mid-right
-  e.cam.setView({ x: bx + Math.sin(fwd) * sh + Math.cos(fwd) * sd, y: bz + Math.cos(fwd) * sh - Math.sin(fwd) * sd, yawDeg: (fwd + Math.PI) * 180 / Math.PI, pitchDeg: pitch, distance: dist }, true);
-  return { bend: [Math.round(bx), Math.round(bz)], creekDir: [Math.round(bdx), Math.round(bdz)], day, season, sunAzDeg: Math.round(sunAz * 180 / Math.PI), yawDeg: e.cam.yawDeg, pitch, dist };
+  return { ...conceptView(o), day, season };
 };
 w.__select = select;
 w.__animals = animals;
@@ -1065,3 +1103,170 @@ w.__find = (sp: number, state?: number) => {
   }
   return out;
 };
+
+// ------------------------------------------------------------------ shot capture (?capture=1, tools/shots.mjs)
+// The tool calls window.__capture.shot(spec) once per shot of tools/shots.json. Each shot: the sim is put on the shot's tick (restarted from
+// tick 0 when it was already stepped elsewhere, so the history behind a frame is always the same), the env is held, everything that
+// eases over frames is reset, the camera is placed, `frames` frames of exactly 1/60 s are rendered, and the last one is read back from the
+// canvas in the same task as its render. Nothing reads the wall clock, so the same shot gives the same pixels on any load and in any order.
+
+/** A camera of tools/shots.json (see that file and tools/shots.mjs for the forms). */
+interface CaptureCamera {
+  preset?: 'wide' | 'low' | 'top' | 'concept';
+  focus?: 'herd';
+  follow?: { species: number; state?: number };
+  x?: number;
+  y?: number;
+  distance?: number;
+  pitchDeg?: number;
+  yawDeg?: number;
+}
+interface CaptureShot { id: string; tick: number; env: Partial<typeof engine.env>; camera: CaptureCamera; frames: number }
+
+/** Seconds on the render clock at the start of every shot (wind, clouds, water and gaits read it), and the fixed frame step. */
+const CAPTURE_T0 = 600;
+const CAPTURE_DT = 1 / 60;
+let captureEnv: Partial<typeof engine.env> = {};
+/** True while the worker has stepped nothing since its init (it is on tick 0 with a fresh sim). */
+let captureFreshSim = true;
+const captureWaiters: Array<{ tick: number; done: () => void }> = [];
+
+/** Called by the worker handler after it has applied a snapshot (capture mode only). */
+function captureSnap(tick: number): void {
+  for (let i = captureWaiters.length - 1; i >= 0; i--) {
+    if (captureWaiters[i].tick !== tick) continue;
+    captureWaiters[i].done();
+    captureWaiters.splice(i, 1);
+  }
+}
+/** Resolves when the next snapshot with this tick has been applied. */
+function captureNextSnap(tick: number): Promise<void> {
+  return new Promise((done) => captureWaiters.push({ tick, done }));
+}
+
+/** Put the sim on an absolute tick: always the history [fresh sim at tick 0, one step of `tick`], whatever was shown before. */
+async function captureGoToTick(tick: number): Promise<void> {
+  if (!ready) await captureNextSnap(0);
+  if (lastTick === tick) return;
+  if (!captureFreshSim) {
+    worker.terminate();
+    worker = new Worker(new URL('./sim/worker.ts', import.meta.url), { type: 'module' });
+    worker.onmessage = onWorkerMessage;
+    engine.resetVegHistory();
+    const p = captureNextSnap(0);
+    send({ type: 'init', seed, params: simParams, schedule: scenario.schedule, replay: shared?.state.log });
+    send({ type: 'speed', speed: 0 });
+    await p;
+    captureFreshSim = true;
+  }
+  if (tick > 0) {
+    const p = captureNextSnap(tick);
+    captureFreshSim = false;
+    send({ type: 'step', ticks: tick });
+    await p;
+  }
+}
+
+/** The yaw (degrees) of the 'wide' preset under the light that is set now: the default heading of a shot that gives none. */
+function captureDefaultYaw(): number {
+  const L = engine.uniforms.lightDir.value;
+  return (Math.atan2(L.x, L.z) - (38 * Math.PI) / 180 + Math.PI) * (180 / Math.PI);
+}
+
+/** Lowest id of a species (and state, when given) in the snapshot; falls back to the species alone when no animal is in that state. */
+function capturePick(sp: number, state?: number): { id: number; stateMatched: boolean } | null {
+  if (!pending) return null;
+  let best = -1, bestAny = -1;
+  for (let k = 0; k < pending.count; k++) {
+    const o = k * 12;
+    if (pending.agents[o] !== sp) continue;
+    const id = pending.ids[k];
+    if (bestAny < 0 || id < bestAny) bestAny = id;
+    if (state !== undefined && pending.agents[o + 7] === state && (best < 0 || id < best)) best = id;
+  }
+  if (best >= 0) return { id: best, stateMatched: true };
+  return bestAny >= 0 ? { id: bestAny, stateMatched: state === undefined } : null;
+}
+
+const r3 = (v: number): number => Math.round(v * 1000) / 1000;
+
+async function captureShot(s: CaptureShot): Promise<Record<string, unknown>> {
+  fxSeed(fxHash(s.id));
+  fxSetClock(CAPTURE_T0 * 1000);
+  await captureGoToTick(s.tick);
+  startFollow(null);
+  // the sim's own env at this tick first (so a key an earlier shot held does not linger), then the shot's held keys over it
+  if (pending) engine.setEnv(pending.env);
+  captureEnv = { ...s.env };
+  engine.setEnv(captureEnv);
+  engine.captureReset(CAPTURE_T0);
+  grass.resetClock();
+  animals.captureReset();
+  const c = s.camera;
+  const view = { distance: c.distance, pitchDeg: c.pitchDeg };
+  let follow: { id: number; species: number; state: number; stateMatched: boolean } | null = null;
+  if (c.follow) {
+    const pick = capturePick(c.follow.species, c.follow.state);
+    if (!pick) throw new Error(`shot ${s.id}: no animal of species ${c.follow.species} at tick ${s.tick}`);
+    engine.cam.setView({ yawDeg: c.yawDeg ?? captureDefaultYaw() }, true);
+    startFollow(pick.id, true, { dist: c.distance, pitchDeg: c.pitchDeg });
+    const k = pending ? Array.from(pending.ids).indexOf(pick.id) : -1;
+    follow = { id: pick.id, species: c.follow.species, state: k >= 0 && pending ? pending.agents[k * 12 + 7] : -1, stateMatched: pick.stateMatched };
+  } else if (c.focus === 'herd') {
+    if (pending) focusHerd(pending.agents, pending.count, true);
+    engine.cam.setView({ ...view, yawDeg: c.yawDeg ?? captureDefaultYaw() }, true);
+  } else if (c.preset === 'concept') {
+    conceptView({ dist: c.distance, pitch: c.pitchDeg });
+  } else if (c.preset) {
+    engine.cam.preset(c.preset, true);
+    if (c.distance !== undefined || c.pitchDeg !== undefined || c.yawDeg !== undefined) engine.cam.setView({ ...view, yawDeg: c.yawDeg }, true);
+  } else if (c.x !== undefined && c.y !== undefined) {
+    engine.cam.setView({ x: c.x, y: c.y, ...view, yawDeg: c.yawDeg ?? captureDefaultYaw() }, true);
+  } else throw new Error(`shot ${s.id}: camera has no preset, focus, follow or x and y`);
+  const gl = engine.renderer.getContext();
+  for (let i = 0; i < s.frames; i++) {
+    fxSetClock((CAPTURE_T0 + (i + 1) * CAPTURE_DT) * 1000);
+    engine.renderOnce(CAPTURE_DT);
+  }
+  // (read back in the same task as the last render: the drawing buffer is not kept past it)
+  const W = gl.drawingBufferWidth, H = gl.drawingBufferHeight;
+  const px = new Uint8Array(W * H * 4);
+  gl.readPixels(0, 0, W, H, gl.RGBA, gl.UNSIGNED_BYTE, px);
+  const f = engine.cam.getFocus(new THREE.Vector3());
+  const p = engine.camera.position;
+  const camera = {
+    focus: [r3(f.x), r3(f.y), r3(f.z)], position: [r3(p.x), r3(p.y), r3(p.z)],
+    distance: r3(engine.cam.distance), pitchDeg: r3(engine.cam.pitchDeg), yawDeg: r3(engine.cam.yawDeg), follow,
+  };
+  const b64 = await new Promise<string>((resolve, reject) => {
+    const fr = new FileReader();
+    fr.onload = () => { const u = String(fr.result); resolve(u.slice(u.indexOf(',') + 1)); };
+    fr.onerror = () => reject(fr.error);
+    fr.readAsDataURL(new Blob([px]));
+  });
+  return { id: s.id, width: W, height: H, rgbaBottomUp: b64, camera, tick: lastTick };
+}
+
+async function captureInit(): Promise<void> {
+  (window as unknown as { __tgSplash?: { done(): void } }).__tgSplash?.done();
+  const uiEl = document.getElementById('ui');
+  if (uiEl) uiEl.style.display = 'none';
+  animals.hideMarks = true;
+  engine.onFrame(() => engine.setEnv(captureEnv));
+  await engine.terrain.groundTex.ready;
+  if (!ready) await captureNextSnap(0);
+  const gl = engine.renderer.getContext();
+  const dbg = gl.getExtension('WEBGL_debug_renderer_info');
+  const renderer = dbg ? String(gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL)) : 'unknown';
+  let busy: Promise<unknown> = Promise.resolve();
+  w.__capture = {
+    renderer,
+    /** Render one shot (they run one after another even if called together). */
+    shot: (s: CaptureShot) => {
+      const run = busy.then(() => captureShot(s));
+      busy = run.catch(() => undefined);
+      return run;
+    },
+  };
+  w.__captureReady = true;
+}

@@ -1,0 +1,81 @@
+{
+  "version": 1,
+  "size": [1600, 900],
+  "seed": "tallgrass",
+  "notes": "Fixed shots for tools/shots.mjs (?capture=1). Each shot: the sim stepped from tick 0 to `tick`, `env` held over the sim's env, the camera placed, `frames` frames of 1/60 s. Species ids: 0 bison, 1 wolf, 3 pronghorn. Tags: gate = rendered by npm run check. A reference is a repo path; references other than concept_golden are provisional (reference/SOURCES.md).",
+  "shots": [
+    {
+      "id": "concept_golden", "tick": 900, "frames": 30,
+      "env": { "dayFrac": 0.28, "season": 1.8, "weather": 0, "rain": 0, "warmth": 0.7 },
+      "camera": { "preset": "concept" },
+      "reference": "reference/shots/concept_golden.jpg", "tags": ["gate", "golden"]
+    },
+    {
+      "id": "golden_low", "tick": 900, "frames": 30,
+      "env": { "dayFrac": 0.7, "season": 1.8, "weather": 0, "rain": 0, "warmth": 0.7 },
+      "camera": { "preset": "low" }, "tags": ["golden"]
+    },
+    {
+      "id": "golden_wide", "tick": 900, "frames": 30,
+      "env": { "dayFrac": 0.7, "season": 1.8, "weather": 0, "rain": 0, "warmth": 0.7 },
+      "camera": { "preset": "wide" }, "tags": ["gate", "golden"]
+    },
+    {
+      "id": "herd_mid", "tick": 900, "frames": 30,
+      "env": { "dayFrac": 0.7, "season": 1.8, "weather": 0, "rain": 0, "warmth": 0.7 },
+      "camera": { "focus": "herd", "distance": 60, "pitchDeg": 16 }, "tags": ["golden", "animals"]
+    },
+    {
+      "id": "bison_close", "tick": 900, "frames": 30,
+      "env": { "dayFrac": 0.7, "season": 1.8, "weather": 0, "rain": 0, "warmth": 0.7 },
+      "camera": { "follow": { "species": 0, "state": 1 }, "distance": 11, "pitchDeg": 12 }, "tags": ["gate", "animals"]
+    },
+    {
+      "id": "wolves_close", "tick": 900, "frames": 30,
+      "env": { "dayFrac": 0.7, "season": 1.8, "weather": 0, "rain": 0, "warmth": 0.7 },
+      "camera": { "follow": { "species": 1 }, "distance": 13, "pitchDeg": 14 }, "tags": ["animals"]
+    },
+    {
+      "id": "pronghorn_close", "tick": 900, "frames": 30,
+      "env": { "dayFrac": 0.7, "season": 1.8, "weather": 0, "rain": 0, "warmth": 0.7 },
+      "camera": { "follow": { "species": 3 }, "distance": 12, "pitchDeg": 12 }, "tags": ["animals"]
+    },
+    {
+      "id": "midday_mid", "tick": 900, "frames": 30,
+      "env": { "dayFrac": 0.45, "season": 1.8, "weather": 0, "rain": 0, "warmth": 0.7 },
+      "camera": { "focus": "herd", "distance": 90, "pitchDeg": 24 }, "tags": ["day"]
+    },
+    {
+      "id": "night_mid", "tick": 900, "frames": 30,
+      "env": { "dayFrac": 0.95, "season": 1.8, "weather": 0, "rain": 0, "warmth": 0.7 },
+      "camera": { "focus": "herd", "distance": 70, "pitchDeg": 22 }, "tags": ["night"]
+    },
+    {
+      "id": "winter_mid", "tick": 900, "frames": 60,
+      "env": { "dayFrac": 0.42, "season": 3.4, "weather": 0, "rain": 0, "warmth": 0.1 },
+      "camera": { "focus": "herd", "distance": 90, "pitchDeg": 24 }, "tags": ["winter"]
+    },
+    {
+      "id": "creek_golden", "tick": 900, "frames": 30,
+      "env": { "dayFrac": 0.28, "season": 1.8, "weather": 0, "rain": 0, "warmth": 0.7 },
+      "camera": { "preset": "concept", "distance": 70, "pitchDeg": 12 }, "tags": ["golden", "water"]
+    },
+    {
+      "id": "concept_night", "tick": 900, "frames": 30,
+      "env": { "dayFrac": 0.93, "season": 1.8, "weather": 0, "rain": 0, "warmth": 0.6 },
+      "camera": { "preset": "concept" },
+      "reference": "reference/shots/concept_night.jpg", "tags": ["night"]
+    },
+    {
+      "id": "concept_summer", "tick": 900, "frames": 30,
+      "env": { "dayFrac": 0.62, "season": 1.2, "weather": 0, "rain": 0, "warmth": 0.8 },
+      "camera": { "preset": "concept" },
+      "reference": "reference/shots/concept_summer.jpg", "tags": ["day"]
+    },
+    {
+      "id": "storm_wide", "tick": 900, "frames": 60,
+      "env": { "dayFrac": 0.6, "season": 1.6, "weather": 3, "rain": 0.8, "warmth": 0.6 },
+      "camera": { "preset": "wide" }, "tags": ["weather"]
+    }
+  ]
+}

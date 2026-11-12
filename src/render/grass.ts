@@ -1469,6 +1469,11 @@ export class GrassField {
     return tx + ty <= 1 ? a + (b - a) * tx + (c - a) * ty : d + (c - d) * (1 - tx) + (b - d) * (1 - ty);
   }
 
+  /** Shot capture (?capture=1): the engine clock is set back at every shot, so forget when the cell data was last rebuilt. */
+  resetClock(): void {
+    this.lastVegRebuild = -1e9;
+  }
+
   // ---- per frame
   update(camera: THREE.Camera, timeSec: number, env: EnvState, sun: GrassSun): void {
     const u = this.uniforms;

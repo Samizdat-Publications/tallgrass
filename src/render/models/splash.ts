@@ -3,6 +3,7 @@
 // preallocated typed arrays), near the camera only (the animal layer checks the range), lit from the scene's lights like the dust (SceneLit).
 import * as THREE from 'three';
 import type { SceneLit } from './fx';
+import { fxRandom } from '../fxrng';
 
 const DROP_CAP = 384;
 const RING_CAP = 160;
@@ -192,14 +193,14 @@ export class Splash {
     for (let i = 0; i < n; i++) {
       const o = this.dHead * 4;
       this.dHead = (this.dHead + 1) % DROP_CAP;
-      const a = Math.random() * Math.PI * 2, r = (0.15 + 0.5 * Math.random()) * size;
-      const sp = (0.8 + 2.2 * Math.random()) * Math.sqrt(size);
-      const vy = (2.0 + 2.8 * Math.random()) * Math.sqrt(size);
+      const a = fxRandom() * Math.PI * 2, r = (0.15 + 0.5 * fxRandom()) * size;
+      const sp = (0.8 + 2.2 * fxRandom()) * Math.sqrt(size);
+      const vy = (2.0 + 2.8 * fxRandom()) * Math.sqrt(size);
       this.dP[o] = x + Math.cos(a) * r * 0.5; this.dP[o + 1] = y; this.dP[o + 2] = z + Math.sin(a) * r * 0.5; this.dP[o + 3] = t;
       this.dV[o] = Math.cos(a) * sp; this.dV[o + 1] = vy; this.dV[o + 2] = Math.sin(a) * sp;
-      this.dV[o + 3] = 0.03 + 0.03 * Math.random() * size;
+      this.dV[o + 3] = 0.03 + 0.03 * fxRandom() * size;
       const life = (2 * vy) / G;
-      this.dQ[o] = life; this.dQ[o + 1] = Math.random(); this.dQ[o + 2] = 0.7; this.dQ[o + 3] = 0;
+      this.dQ[o] = life; this.dQ[o + 1] = fxRandom(); this.dQ[o + 2] = 0.7; this.dQ[o + 3] = 0;
       this.busyUntil = Math.max(this.busyUntil, t + life);
     }
     this.dirtyD = true;
@@ -212,6 +213,17 @@ export class Splash {
     this.rP[o] = x; this.rP[o + 1] = y + 0.03; this.rP[o + 2] = z; this.rP[o + 3] = this.now;
     this.rQ[o] = life; this.rQ[o + 1] = r0; this.rQ[o + 2] = r1; this.rQ[o + 3] = alpha;
     this.busyUntil = Math.max(this.busyUntil, this.now + life);
+    this.dirtyR = true;
+  }
+
+  /** Drop every drop and ring and restart the clock (the shot capture, ?capture=1). */
+  clear(): void {
+    this.dP.fill(0); this.dV.fill(0); this.dQ.fill(0); this.rP.fill(0); this.rQ.fill(0);
+    this.dHead = 0; this.rHead = 0;
+    this.now = 0;
+    this.uNow.value = 0;
+    this.busyUntil = 0;
+    this.dirtyD = true;
     this.dirtyR = true;
   }
 

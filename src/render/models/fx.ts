@@ -7,6 +7,7 @@ import { SPECIES } from '../../sim/species';
 import type { Snapshot } from '../../sim/types';
 import { sampleHeight } from '../../sim/world';
 import type { World } from '../../sim/world';
+import { fxNow } from '../fxrng';
 
 /** Radius (m) of the trampled kill-site patch by species id: bison 3.8, pronghorn and cougar 2.0, wolf 1.8, everything else 1.0. */
 const KILL_R_BY_KEY: Record<string, number> = { bison: 3.8, pronghorn: 2.0, cougar: 2.0, wolf: 1.8 };
@@ -227,6 +228,15 @@ export class Dust {
     this.a[o] = x; this.a[o + 1] = y; this.a[o + 2] = z; this.a[o + 3] = this.now;
     this.v[o] = vx; this.v[o + 1] = vy; this.v[o + 2] = vz; this.v[o + 3] = size;
     this.q[o] = life; this.q[o + 1] = seed; this.q[o + 2] = alpha; this.q[o + 3] = dry;
+    this.dirty = true;
+  }
+
+  /** Drop every particle and restart the clock (the shot capture, ?capture=1: a shot never shows dust kicked up in an earlier one). */
+  clear(): void {
+    this.a.fill(0); this.v.fill(0); this.q.fill(0);
+    this.head = 0;
+    this.now = 0;
+    this.uNow.value = 0;
     this.dirty = true;
   }
 
@@ -587,7 +597,7 @@ export class Markers {
         this.pxK = 900 / (2 * Math.tan(((camera as THREE.PerspectiveCamera).fov * Math.PI) / 360));
         this.uPxK.value = this.pxK;
       }
-      this.uNow.value = (performance.now() / 1000) % 1000;
+      this.uNow.value = (fxNow() / 1000) % 1000;
       this.lit.probe(scene);
       const lv = this.lit.value;
       this.uBright.value = Math.min(1, Math.max(0.3, 0.3 + 0.7 * ((lv.x + lv.y + lv.z) / 3 / 0.7)));

@@ -1,0 +1,62 @@
+{
+  "commit": "b30f53c",
+  "date": "2026-11-12T04:03:51",
+  "shots": {
+    "concept_golden": {
+      "sha256": "5d5a3ae234d37f1e7557490e9ba46ccd8c84c2128676f4378d86f8bd22f4e3a3",
+      "pixels_sha256": "00ac58d74217a242de673172d90558e2757626cdd06b64e2c7b7bebe2a603bd2"
+    },
+    "golden_low": {
+      "sha256": "bbb3fed8e20abf67b30ea21c4bbfd32f6582132530681d978bfbd67bae6b45c0",
+      "pixels_sha256": "283a39eca3dbf4314c7eda6631cdfb355d2d1ea0f336d104b8076ecf82ab71fe"
+    },
+    "golden_wide": {
+      "sha256": "77d8186c8e553859092a64fc56b631e848aab0867334e196b2050b2e8ad51590",
+      "pixels_sha256": "8fd4fea6ee264eb72baa0c22f855323cdb6ce9c4d2634c307956656f94313239"
+    },
+    "herd_mid": {
+      "sha256": "43b5d100d657a4eee8add2a7d87b1843d7e9b46987f30b71285cf3fb8552d41c",
+      "pixels_sha256": "f4df3637806c4ff6ef475d1e9349371b602c009aa897ea0f08d812f082656f10"
+    },
+    "bison_close": {
+      "sha256": "d1a608a17c3e814154e379ec1138aef6ed62037806a21481898f6b141e9db18b",
+      "pixels_sha256": "5f012af49daf520cbd068a43889761450c1e5c566eb541fa0051d775adce6230"
+    },
+    "wolves_close": {
+      "sha256": "d1a585ac8431b84f3099ec6214b25ae8c1c390c7b9c2bd7ff0c93ef6e2110eca",
+      "pixels_sha256": "fffc72fe8b48e407d434ac73b6cd2162de8843dfc3136173ed1ea5bd9d6d8405"
+    },
+    "pronghorn_close": {
+      "sha256": "07509f9a629c1d7c1f3916b46fea51f0073cab7c490580079ef515399959a60d",
+      "pixels_sha256": "14552f5b2878f031f2c5c7a851665ac7510b9b56a8c37f5e79b90767f5a08594"
+    },
+    "midday_mid": {
+      "sha256": "f0d91bfbcd041dc3105cd811dd272793b3653b470a1d9d2479b25cd1e59b9321",
+      "pixels_sha256": "259ac38612015abbf125ffbb88dc54d7a8e67384be7714472ce99d347997e874"
+    },
+    "night_mid": {
+      "sha256": "22d84a835827f3a6965eb95e95375750de3fb84f727f2d07e5b57ba119f6225a",
+      "pixels_sha256": "a423b3221b59283f0ebfedf23c7da2624ff5013aaf02f22bd5b6cb9b2f12841a"
+    },
+    "winter_mid": {
+      "sha256": "acd0e16337b6a24f75fa1258393c0ecb2069b4a6be156ad6b888f0378cdaad57",
+      "pixels_sha256": "eb7d0d2ab25f882d0711448da18e1fafbfa57991855f04c3e59f06d47d943c8c"
+    },
+    "creek_golden": {
+      "sha256": "d09722d32ae029f49585b948c41c7f324016341de811c92c48d2e8e824838d5d",
+      "pixels_sha256": "fbc29f297bf4a6863cdbb4a887870b9c4bb4a9b5bfe20e8959df44ba9a86c921"
+    },
+    "concept_night": {
+      "sha256": "63a1ad1d39a38c2f93a1b2c8102a1cb26df56c09c8be21fecbde2410e322cee5",
+      "pixels_sha256": "dca9afef92ea9d75967924540351201c6b352ffe09730b62f081152289532502"
+    },
+    "concept_summer": {
+      "sha256": "713e3276b778fc650601064eeda91d0f678e7950d55138faa4a0c48613f8971d",
+      "pixels_sha256": "04082c9b40940f8ac1266d0089152b89f4c72c39d4ad2bc0f983db38ca345fe9"
+    },
+    "storm_wide": {
+      "sha256": "11d36ab94272450050f8af1b1deb067862fd4074dcd7f708e048c6ff677117aa",
+      "pixels_sha256": "15abf208012d5d005e4a878b02e5271d4b351d6c62d0e8ff6df4383644fa06d3"
+    }
+  }
+}
