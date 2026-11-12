@@ -29,7 +29,7 @@
 import * as THREE from 'three';
 import { ALERT_YAW_MAX, IK_CAP, footReach, plantedStride, stotStride } from './types';
 import type { AnimParams, ModelDef } from './types';
-import { HEIGHT_GLSL } from '../common';
+import { HEIGHT_GLSL, patchSrc } from '../common';
 import { IK_FAR, IK_NEAR, LEG_FLEX, LIFT_K, LNCOSH1, SPINE_K, SPINE_PHASE, SPINE_TROT, legLength, legRigOf } from './legmath';
 
 const f = (x: number): string => (Number.isInteger(x) ? x.toFixed(1) : String(+x.toFixed(6)));
@@ -2147,7 +2147,7 @@ export function makeAnimalMaterials(sp: number, def: ModelDef, shared: AnimalSha
     shader.uniforms.uMuteCol = { value: new THREE.Vector3(...(far.mute?.col ?? [1, 1, 1])) };
     shader.uniforms.uMute = { value: new THREE.Vector2(far.mute?.k ?? 0, far.mute?.keepX ?? 0) };
     material.userData.shader = shader; // exposed for live tuning from the console
-    shader.vertexShader = shader.vertexShader
+    shader.vertexShader = patchSrc(shader.vertexShader, 'animal material vert')
       .replace('#include <common>', `#include <common>\n${defs}\n${COMMON_DECL}\n${VERT_SHADE_DECL}`)
       .replace(
         '#include <beginnormal_vertex>',
@@ -2156,8 +2156,8 @@ export function makeAnimalMaterials(sp: number, def: ModelDef, shared: AnimalSha
           ? `#include <beginnormal_vertex>\n vec3 tgP = position;\n float tgLod = tgLodOf();\n vTgLod = tgLod;\n#if NEARLOD\n if (tgLod < 0.999) {\n#else\n if (tgLod > 0.001) {\n#endif\n tgAnimate(tgP, objectNormal);\n tgShade(objectNormal);\n#if SHELL\n if (aShade.y > 0.0 && distance(uCamPos, vec3(instanceMatrix[3])) > SHELL_D1) tgP = vec3(0.0);\n#endif\n } else { tgP = vec3(0.0); }`
           : `#include <beginnormal_vertex>\n vec3 tgP = position;\n tgAnimate(tgP, objectNormal);\n tgShade(objectNormal);`,
       )
-      .replace('#include <begin_vertex>', 'vec3 transformed = tgP;');
-    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <begin_vertex>', 'vec3 transformed = tgP;').s;
+    shader.fragmentShader = patchSrc(shader.fragmentShader, 'animal material frag')
       .replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>\n if (tgFadeDiscard(vTgFade)) discard;${lodOn ? '\n if (tgLodDiscard()) discard;' : ''}${hasShell ? '\n if (tgShellDiscard()) discard;' : ''}`)
       .replace('#include <common>', `#include <common>\n${lodDefs}\n${FADE_FRAG_DECL}\nvarying vec3 vTgColor;\nvarying float vTgSel;\nvarying float vTgFar;\nvarying float vTgMid;\nuniform vec3 uReadDark;\nuniform float uReadPale;\nuniform vec4 uReadRim;\nuniform float uRimCut;\nuniform float uGrassB;\nvarying float vTgHunt;\nuniform float uFill;\nuniform vec3 uWarm;\nuniform float uNeutral;\nuniform float uFarGain;\nuniform vec3 uRimCol;\nuniform float uRimK;\nuniform float uHuntK;\nuniform float uLow;\nuniform vec3 uAmb;\nuniform vec3 uFarTint;\nuniform float uFarMix;\nuniform float uFloor;\nuniform float uLowFill;\nvarying float vTgUp;\nuniform vec3 uTopCol;\nuniform float uTopMix;\nuniform float uSideDark;\nuniform float uNightK;
 uniform float uEdgeDark;
@@ -2239,7 +2239,7 @@ uniform float uSnowDark;${hasFur && def.far?.mute ? MUTE_DECL : ''}${mangeDecl}`
         float tgNK = smoothstep(0.35, 0.88, uLow) * uNightK;
         totalEmissiveRadiance += ${a3matte ? 'vec3(0.46, 0.46, 0.47) * 0.32' : isRaven ? 'vec3(0.3, 0.33, 0.4) * 0.1' : 'vec3(0.5, 0.62, 0.9) * 0.4'} * tgNR * (0.3 + 0.7 * vTgUp) * tgNK * (0.65 + 0.75 * vTgMid) * (1.0 - 0.8 * vTgFar) * tgNL;
         totalEmissiveRadiance += diffuseColor.rgb * ${a3matte ? 'vec3(0.15, 0.145, 0.14)' : 'vec3(0.085, 0.105, 0.17)'} * 0.25 * tgNK * (0.5 + 0.5 * vTgUp) * tgNL;`,
-      );
+      ).s;
   };
   material.customProgramCacheKey = () => `tg-animal-${sp}-${variant}-${R8_SHADER.on ? 1 : 0}${R8_SHADER.bison ? 1 : 0}${R8_SHADER.flare ? 1 : 0}`;
 
@@ -2253,15 +2253,15 @@ uniform float uSnowDark;${hasFur && def.far?.mute ? MUTE_DECL : ''}${mangeDecl}`
     shader.uniforms.uCell = shared.uCell;
     shader.uniforms.uHN = shared.uHN;
     shader.uniforms.uTL = shared.uTL!;
-    shader.vertexShader = shader.vertexShader
+    shader.vertexShader = patchSrc(shader.vertexShader, 'animal depth vert')
       .replace('#include <common>', `#include <common>\n${defsDepth}\n${COMMON_DECL}\nvarying float vTgFade;`)
       // a bird in flight casts no shadow (collapse it to a point): at the boost the wide view needs, it would sweep a huge
       // blocky smudge across the ground. A raptor below 40 m and within 170 m of the camera does cast one (R5)
-      .replace('#include <begin_vertex>', `vec3 tgP = position;\n vec3 tgN = vec3(0.0, 1.0, 0.0);\n tgAnimate(tgP, tgN);\n vTgFade = aGait.y < -0.5 ? 1.0 : tgFadeOf() * (1.0 - tgIsWake);\n#if KIND == 2\n#if RAPTOR\n if (aFx.y > 40.0 || distance(uCamPos, vec3(instanceMatrix[3])) > 170.0) tgP = vec3(0.0);\n#else\n if (aFx.y > 1.0) tgP = vec3(0.0);\n#endif\n#endif\n vec3 transformed = tgP;`);
+      .replace('#include <begin_vertex>', `vec3 tgP = position;\n vec3 tgN = vec3(0.0, 1.0, 0.0);\n tgAnimate(tgP, tgN);\n vTgFade = aGait.y < -0.5 ? 1.0 : tgFadeOf() * (1.0 - tgIsWake);\n#if KIND == 2\n#if RAPTOR\n if (aFx.y > 40.0 || distance(uCamPos, vec3(instanceMatrix[3])) > 170.0) tgP = vec3(0.0);\n#else\n if (aFx.y > 1.0) tgP = vec3(0.0);\n#endif\n#endif\n vec3 transformed = tgP;`).s;
     // the stippled border fade casts a stippled shadow too
-    shader.fragmentShader = shader.fragmentShader
+    shader.fragmentShader = patchSrc(shader.fragmentShader, 'animal depth frag')
       .replace('#include <clipping_planes_fragment>', '#include <clipping_planes_fragment>\n if (tgFadeDiscard(vTgFade)) discard;')
-      .replace('#include <common>', `#include <common>\n${FADE_FRAG_DECL}`);
+      .replace('#include <common>', `#include <common>\n${FADE_FRAG_DECL}`).s;
   };
   depth.customProgramCacheKey = () => `tg-animal-depth-${sp}-${R8_SHADER.on ? 1 : 0}${R8_SHADER.bison ? 1 : 0}${R8_SHADER.flare ? 1 : 0}`;
   return { material, depth };

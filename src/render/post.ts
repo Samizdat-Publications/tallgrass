@@ -9,7 +9,7 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { FXAAPass } from 'three/addons/postprocessing/FXAAPass.js';
 import { CopyShader } from 'three/addons/shaders/CopyShader.js';
-import { NOISE_GLSL, SKY_GLSL, SharedUniforms, clamp, smoothstep } from './common';
+import { NOISE_GLSL, SKY_GLSL, SharedUniforms, clamp, patchSrc, smoothstep } from './common';
 import type { Lighting } from './sky';
 import type { EnvState } from '../sim/types';
 import { Snow, SnowPass, blizzardAmount } from './snow';
@@ -48,7 +48,7 @@ class ScenePass extends Pass {
     this.copy = new THREE.ShaderMaterial({
       uniforms: { tDiffuse: { value: null } },
       vertexShader: CopyShader.vertexShader,
-      fragmentShader: CopyShader.fragmentShader.replace('gl_FragColor = opacity * texel;', 'gl_FragColor = vec4( min( max( texel.rgb, vec3( 0.0 ) ), vec3( 128.0 ) ), 1.0 );'),
+      fragmentShader: patchSrc(CopyShader.fragmentShader, 'post MSAA resolve copy frag').replace('gl_FragColor = opacity * texel;', 'gl_FragColor = vec4( min( max( texel.rgb, vec3( 0.0 ) ), vec3( 128.0 ) ), 1.0 );').s,
       depthTest: false, depthWrite: false,
     });
     this.quad = new FullScreenQuad(this.copy);

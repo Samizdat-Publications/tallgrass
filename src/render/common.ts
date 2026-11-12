@@ -341,6 +341,114 @@ float tgHeightAt(vec2 xz){
 }
 `;
 
+// ------------------------------------------------------------------ shared lighting chunks (L2a: one copy of each, every user includes it)
+
+/**
+ * The direct-light shadow of the hills and the clouds at a world point: the horizon map (near square blended into the far ring across
+ * the border), faded out under overcast, times the cloud shadow mask. 1 = full sun. Declares tTgShadow, tTgShadowFar, uTgFarRect,
+ * uTgWorld, uTgOver and the CLOUD_SHADOW_GLSL uniforms; bind them with terrainShadowUniforms(shared). Used per fragment by
+ * injectTerrainShadow (terrain, trees, animals) and per vertex by the leaf cards (trees3.ts).
+ */
+export const TERRAIN_SHADOW_GLSL = /* glsl */ `
+uniform sampler2D tTgShadow;
+uniform sampler2D tTgShadowFar;
+uniform vec3 uTgFarRect;
+uniform float uTgWorld;
+uniform float uTgOver;
+${CLOUD_SHADOW_GLSL}
+float tgTerrainShadowAt(vec2 xz){
+  vec2 uv = xz / uTgWorld;
+  vec2 qd = abs(xz - 0.5 * uTgWorld) - 0.5 * uTgWorld;
+  float sd = max(qd.x, qd.y);
+  // blend the two maps across the border so there is no seam at the edge of the playable square
+  float wIn = 1.0 - smoothstep(-20.0, 30.0, sd);
+  vec2 fuv = (xz - uTgFarRect.xy) / uTgFarRect.z;
+  float far = texture2D(tTgShadowFar, clamp(fuv, 0.0, 1.0)).r;
+  // an overcast sky has no hard hill shadows: the horizon map fades out as the cloud thickens
+  float hill = mix(mix(far, texture2D(tTgShadow, clamp(uv, 0.0, 1.0)).r, wIn), 1.0, 0.85 * uTgOver);
+  // drifting cloud shadows dim the direct sun on top of the hill shadows (ambient is untouched, so they never go black)
+  return hill * tgCloudShadowAt(xz);
+}
+`;
+
+/** The uniforms TERRAIN_SHADOW_GLSL reads, by reference from the shared set. */
+export function terrainShadowUniforms(shared: SharedUniforms): Record<string, U<any>> {
+  return {
+    tTgShadow: shared.terrainShadow,
+    tTgShadowFar: shared.terrainShadowFar,
+    uTgFarRect: shared.farRect,
+    uTgWorld: shared.worldSize,
+    uTgOver: shared.overcast,
+    ...cloudShadowUniforms(shared),
+  };
+}
+
+/**
+ * three's lights_fragment_begin with the key light (sun or directional) scaled by `gTgShadow`, which `init` (a GLSL statement run
+ * first) sets. The caller declares `float gTgShadow` before main.
+ */
+export function shadowedLightsBegin(init: string, label: string): string {
+  return patchSrc(THREE.ShaderChunk.lights_fragment_begin, label + ' lights_fragment_begin')
+    .replace(/getSunLightInfo\( sunLight, directLight \);/g, 'getSunLightInfo( sunLight, directLight ); directLight.color *= gTgShadow;')
+    .replace(/getDirectionalLightInfo\( directionalLight, directLight \);/g, 'getDirectionalLightInfo( directionalLight, directLight ); directLight.color *= gTgShadow;')
+    .replace(/^/, init + '\n').s;
+}
+
+/**
+ * Flat sky ambient of the water surfaces (pond, creek and flood water): the sky dome's mid and zenith colours, plus a share of the key
+ * light so moonlit nights stay readable. Needs uSkyMid, uSkyZenith (SKY_GLSL), uLightColor and uNight declared before it.
+ */
+export const SKY_AMBIENT_GLSL = /* glsl */ `
+vec3 tgSkyAmbient(){
+  return (uSkyMid * 0.6 + uSkyZenith * 0.4) * 1.3 + uLightColor * mix(0.03, 0.08, uNight);
+}
+`;
+
+/**
+ * The scene's hemisphere light at a world normal (first hemisphere light only, world up as its axis), or a flat grey when the scene
+ * has none. Needs three's lights_pars_begin in scope (any lit material's fragment shader, before main).
+ */
+export const HEMI_AMBIENT_GLSL = /* glsl */ `
+vec3 tgHemiAmbient(vec3 nrm){
+#if NUM_HEMI_LIGHTS > 0
+  return mix(hemisphereLights[0].groundColor, hemisphereLights[0].skyColor, 0.5 * nrm.y + 0.5);
+#else
+  return vec3(0.5);
+#endif
+}
+`;
+
+// ------------------------------------------------------------------ checked shader patches
+
+const patchMisses = new Set<string>();
+
+/** A shader source being patched: `replace` as on a string, but a search that is not found warns once (by label and search). */
+export class ShaderPatch {
+  constructor(public s: string, private readonly label: string) {}
+  replace(search: string | RegExp, repl: string): this {
+    let found: boolean;
+    if (typeof search === 'string') found = this.s.includes(search);
+    else { search.lastIndex = 0; found = search.test(this.s); search.lastIndex = 0; }
+    if (!found) {
+      const key = `${this.label}|${String(search)}`;
+      if (!patchMisses.has(key)) {
+        patchMisses.add(key);
+        console.warn(`tallgrass: shader patch missed in ${this.label}: ${String(search).slice(0, 60)} not found (three chunk layout changed?)`);
+      }
+    }
+    this.s = this.s.replace(search as string, repl);
+    return this;
+  }
+}
+
+/**
+ * Start a checked patch of a three.js shader source (inside onBeforeCompile). `label` names the material and the stage, e.g.
+ * 'terrain frag'. Chain `.replace(search, repl)` as on a string and read the result from `.s`.
+ */
+export function patchSrc(src: string, label: string): ShaderPatch {
+  return new ShaderPatch(src, label);
+}
+
 /**
  * Make a lit three material receive hill shadows from the horizon map (and be darkened where the active light
  * is blocked by terrain). Call inside onBeforeCompile. Works for MeshStandard/Lambert/Phong/Physical materials,
@@ -350,54 +458,26 @@ export function injectTerrainShadow(
   shader: { vertexShader: string; fragmentShader: string; uniforms: Record<string, any> },
   shared: SharedUniforms,
 ): void {
-  shader.uniforms.tTgShadow = shared.terrainShadow;
-  shader.uniforms.tTgShadowFar = shared.terrainShadowFar;
-  shader.uniforms.uTgFarRect = shared.farRect;
-  shader.uniforms.uTgWorld = shared.worldSize;
-  shader.uniforms.uTgOver = shared.overcast;
-  Object.assign(shader.uniforms, cloudShadowUniforms(shared));
+  Object.assign(shader.uniforms, terrainShadowUniforms(shared));
   if (!shader.vertexShader.includes('vTgShadowXZ')) {
-    shader.vertexShader = shader.vertexShader
+    shader.vertexShader = patchSrc(shader.vertexShader, 'injectTerrainShadow vert')
       .replace('void main() {', 'varying vec2 vTgShadowXZ;\nvoid main() {')
       .replace(
         '#include <fog_vertex>',
         `#include <fog_vertex>
         vTgShadowXZ = ( cameraPosition + transpose( mat3( viewMatrix ) ) * mvPosition.xyz ).xz;`,
-      );
+      ).s;
   }
-  shader.fragmentShader = shader.fragmentShader
+  shader.fragmentShader = patchSrc(shader.fragmentShader, 'injectTerrainShadow frag')
     .replace(
       'void main() {',
-      `uniform sampler2D tTgShadow;
-      uniform sampler2D tTgShadowFar;
-      uniform vec3 uTgFarRect;
-      uniform float uTgWorld;
-      uniform float uTgOver;
-      ${CLOUD_SHADOW_GLSL}
+      `${TERRAIN_SHADOW_GLSL}
       varying vec2 vTgShadowXZ;
       float gTgShadow = 1.0;
-      float tgSampleTerrainShadow(){
-        vec2 uv = vTgShadowXZ / uTgWorld;
-        vec2 qd = abs(vTgShadowXZ - 0.5 * uTgWorld) - 0.5 * uTgWorld;
-        float sd = max(qd.x, qd.y);
-        // blend the two maps across the border so there is no seam at the edge of the playable square
-        float wIn = 1.0 - smoothstep(-20.0, 30.0, sd);
-        vec2 fuv = (vTgShadowXZ - uTgFarRect.xy) / uTgFarRect.z;
-        float far = texture2D(tTgShadowFar, clamp(fuv, 0.0, 1.0)).r;
-        // an overcast sky has no hard hill shadows: the horizon map fades out as the cloud thickens
-        float hill = mix(mix(far, texture2D(tTgShadow, clamp(uv, 0.0, 1.0)).r, wIn), 1.0, 0.85 * uTgOver);
-        // drifting cloud shadows dim the direct sun on top of the hill shadows (ambient is untouched, so they never go black)
-        return hill * tgCloudShadowAt(vTgShadowXZ);
-      }
+      float tgSampleTerrainShadow(){ return tgTerrainShadowAt(vTgShadowXZ); }
       void main() {`,
     )
-    .replace(
-      '#include <lights_fragment_begin>',
-      THREE.ShaderChunk.lights_fragment_begin
-        .replace(/getSunLightInfo\( sunLight, directLight \);/g, 'getSunLightInfo( sunLight, directLight ); directLight.color *= gTgShadow;')
-        .replace(/getDirectionalLightInfo\( directionalLight, directLight \);/g, 'getDirectionalLightInfo( directionalLight, directLight ); directLight.color *= gTgShadow;')
-        .replace(/^/, 'gTgShadow = tgSampleTerrainShadow();\n'),
-    );
+    .replace('#include <lights_fragment_begin>', shadowedLightsBegin('gTgShadow = tgSampleTerrainShadow();', 'injectTerrainShadow')).s;
 }
 
 /**
@@ -405,14 +485,14 @@ export function injectTerrainShadow(
  * (varyings interpolated outside thin triangles under MSAA are the usual cause). Call on the fragment source in onBeforeCompile.
  */
 export function injectSafeOutput(fragmentShader: string): string {
-  return fragmentShader
+  return patchSrc(fragmentShader, 'injectSafeOutput frag')
     .replace('void main() {', `vec3 tgSafeOut( vec3 c ) {
   // min/max return the non-NaN operand on the GPU, so this also turns a stray NaN into 0 (isnan() is folded away by the compiler)
   return min( max( c, vec3( 0.0 ) ), vec3( 64.0 ) );
 }
 void main() {`)
     .replace('#include <opaque_fragment>', `outgoingLight = tgSafeOut( outgoingLight );
-#include <opaque_fragment>`);
+#include <opaque_fragment>`).s;
 }
 
 export function clamp(v: number, a: number, b: number): number { return v < a ? a : v > b ? b : v; }

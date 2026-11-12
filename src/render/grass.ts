@@ -36,6 +36,12 @@ export interface GrassOptions {
   terrainShadow?: { value: THREE.Texture | null };
   /** The engine's cloud-shadow uniforms (engine.uniforms): per-blade cloud shade on the direct sun. Omitted = no cloud shadows on the blades. */
   cloudShadow?: Pick<SharedUniforms, 'cloudShadow' | 'cloudRect' | 'cloudK'>;
+  /**
+   * The engine's shared uniforms (engine.uniforms). When given, the blades read the key light, wind, clock, snow, wetness and drought
+   * from the very same uniform objects as every other layer (one source of truth); omitted, the field keeps its own copies and fills
+   * them from update() (and finds the scene's shared set at runtime for the weather).
+   */
+  shared?: SharedUniforms;
 }
 
 export interface GrassSun {
@@ -297,8 +303,10 @@ uniform sampler2D uTgShadow;
 uniform sampler2D uTrail;
 uniform vec4 uWorld;   // size, n, cell, hn
 uniform float uTime;
-uniform vec2 uWindDir;
-uniform float uWindStr;
+// the shared wind (SharedUniforms.wind): xy = unit direction the wind blows toward on the ground, z = strength 0..1
+uniform vec3 uWindV;
+#define uWindDir (uWindV.xy)
+#define uWindStr (uWindV.z)
 uniform vec3 uCam;
 uniform float uCamDy;
 uniform vec4 uRing;
@@ -772,11 +780,15 @@ const FRAG = /* glsl */ `
 #include <shadowmask_pars_fragment>
 
 uniform vec3 uSunDir;
-uniform vec3 uSunColor;
+// the shared key light (SharedUniforms.lightColor) times the field's own lightScale tuning
+uniform vec3 uLightColor;
+uniform float uLightScale;
+#define uSunColor (uLightColor * uLightScale)
 uniform float uTrans;
 uniform float uSpec;
 uniform float uGustLight;
-uniform float uWindStr;
+uniform vec3 uWindV;
+#define uWindStr (uWindV.z)
 uniform float uAO;
 uniform float uDebug;
 uniform float uSat;
@@ -1162,6 +1174,8 @@ export class GrassField {
   private noiseTex: THREE.DataTexture;
   private bigNoiseTex: THREE.DataTexture;
   private terrainShadowU: { value: THREE.Texture | null } | null = null;
+  /** The engine's shared uniforms when given (GrassOptions.shared): the aliased uniforms are then never written here. */
+  private shared: SharedUniforms | null = null;
   private whiteTex: THREE.DataTexture;
   private blackTex: THREE.DataTexture;
   private frameNo = 0;
@@ -1197,6 +1211,13 @@ export class GrassField {
     this.blackTex = new THREE.DataTexture(new Uint8Array([0, 0, 0, 255]), 1, 1, THREE.RGBAFormat, THREE.UnsignedByteType);
     this.blackTex.needsUpdate = true;
     this.terrainShadowU = opts.terrainShadow ?? null;
+    const sh = opts.shared ?? null;
+    this.shared = sh;
+    if (sh) {
+      // the weather uniforms come straight from the shared set (the lazy scene lookup in update() is then never needed)
+      this.snowU = sh.snow; this.wetU = sh.wet; this.keepU = sh.seasonKeep; this.frostU = sh.frost; this.droughtU = sh.drought; this.trailU = sh.trailTex;
+      this.snowDepthU = { tex: sh.snowDepthTex, on: sh.snowDepthOn, fall: sh.snowDepthFall };
+    }
     this.cellData = new Float32Array(MAX_CELLS_PER_LEVEL * 4 * 4);
     this.cellTex = new THREE.DataTexture(this.cellData, MAX_CELLS_PER_LEVEL, 4, THREE.RGBAFormat, THREE.FloatType);
     this.cellTex.minFilter = this.cellTex.magFilter = THREE.NearestFilter;
@@ -1213,13 +1234,12 @@ export class GrassField {
       uBig: { value: this.bigNoiseTex },
       uFlower: { value: new THREE.Vector4(0, 0, 0, 0) },
       uTgShadow: { value: this.whiteTex },
-      ...cloudShadowUniforms(opts.cloudShadow ?? { cloudShadow: { value: null }, cloudRect: { value: new THREE.Vector3(0, 0, 1) }, cloudK: { value: 0 } }),
+      ...cloudShadowUniforms(opts.cloudShadow ?? sh ?? { cloudShadow: { value: null }, cloudRect: { value: new THREE.Vector3(0, 0, 1) }, cloudK: { value: 0 } }),
       uTrail: { value: this.blackTex },
       uPonds: makePondUniform(world.ponds),
       uWorld: { value: new THREE.Vector4(world.size, world.n, world.cell, world.hn) },
-      uTime: { value: 0 },
-      uWindDir: { value: new THREE.Vector2(1, 0) },
-      uWindStr: { value: 0.5 },
+      uTime: sh ? sh.time : { value: 0 },
+      uWindV: sh ? sh.wind : { value: new THREE.Vector3(1, 0, 0.5) },
       uCam: { value: new THREE.Vector3() },
       uCamDy: { value: 2 },
       uRing: { value: new THREE.Vector4(...RING_EDGE) },
@@ -1232,16 +1252,17 @@ export class GrassField {
       uBladeW: { value: 0.014 },
       uCure: { value: 0.5 },
       uWinterK: { value: 0 },
-      uDrought: { value: 0 },
+      uDrought: sh ? sh.drought : { value: 0 },
       uWetYr: { value: 0 },
-      uWetNow: { value: 0 },
+      uWetNow: sh ? sh.wet : { value: 0 },
       uSeedFrac: { value: 0.1 },
       uStubFloor: { value: 1 },
       uMoistK: { value: 1.1 },
       uWindGain: { value: 1 },
       uStorm: stormGustUniform,
-      uSunDir: { value: new THREE.Vector3(0.5, 0.5, 0.5).normalize() },
-      uSunColor: { value: new THREE.Color(1, 1, 1) },
+      uSunDir: sh ? sh.lightDir : { value: new THREE.Vector3(0.5, 0.5, 0.5).normalize() },
+      uLightColor: sh ? sh.lightColor : { value: new THREE.Color(1, 1, 1) },
+      uLightScale: { value: 1 },
       uTrans: { value: 1.2 },
       uSpec: { value: 1 },
       uGustLight: { value: 1.2 },
@@ -1249,10 +1270,10 @@ export class GrassField {
       uDebug: { value: 0 },
       uSat: { value: 1 },
       uBounce: { value: 0.07 },
-      uSnow: { value: 0 },
+      uSnow: sh ? sh.snow : { value: 0 },
       uSnowTex: { value: null as THREE.Texture | null },
-      uSnowOn: { value: 0 },
-      uSnowFall: { value: 0 },
+      uSnowOn: sh ? sh.snowDepthOn : { value: 0 },
+      uSnowFall: sh ? sh.snowDepthFall : { value: 0 },
       uFrostG: { value: 0 },
       uSpecK: { value: 1 },
       uMoon: { value: 0 },
@@ -1532,9 +1553,10 @@ export class GrassField {
     if (!this.terrainShadowU && (this.frameNo++ & 31) === 0) this.terrainShadowU = this.findTerrainShadow();
     u.uTgShadow.value = this.terrainShadowU?.value ?? this.whiteTex;
 
-    u.uTime.value = timeSec;
-    u.uWindDir.value.set(Math.cos(env.windDir), Math.sin(env.windDir));
-    u.uWindStr.value = env.windStrength;
+    if (!this.shared) {
+      u.uTime.value = timeSec;
+      u.uWindV.value.set(Math.cos(env.windDir), Math.sin(env.windDir), env.windStrength);
+    }
     u.uWindGain.value = P.windGain;
     u.uCam.value.copy(cam);
     u.uCamDy.value = camDy;
@@ -1561,23 +1583,30 @@ export class GrassField {
       if (tu?.trailTex) this.trailU = tu.trailTex;
     }
     u.uTrail.value = this.trailU?.value ?? this.blackTex;
-    u.uSnow.value = this.snowU?.value ?? 0;
     u.uSnowTex.value = this.snowDepthU?.tex.value ?? this.blackTex;
-    u.uSnowOn.value = this.snowDepthU?.on.value ?? 0;
-    u.uSnowFall.value = this.snowDepthU?.fall.value ?? 0;
+    if (!this.shared) {
+      u.uSnow.value = this.snowU?.value ?? 0;
+      u.uSnowOn.value = this.snowDepthU?.on.value ?? 0;
+      u.uSnowFall.value = this.snowDepthU?.fall.value ?? 0;
+    }
     // rime on the blades only at dawn (dayFrac below about 0.3): the engine's frost also lingers through the morning and returns at dusk,
     // which would read as a frosted field all day
     u.uFrostG.value = (this.frostU?.value ?? 0) * (1 - smooth01((env.dayFrac - 0.26) / 0.06));
-    u.uDrought.value = this.droughtU?.value ?? 0;
     u.uWetYr.value = CLIMATE_GRADE.wet;
-    u.uWetNow.value = this.wetU?.value ?? 0;
+    if (!this.shared) {
+      u.uDrought.value = this.droughtU?.value ?? 0;
+      u.uWetNow.value = this.wetU?.value ?? 0;
+    }
     // grass blades under moonlight (blue key light) must not sparkle like static: damp the specular sheen there
     const moon = Math.max(0, Math.min(1, (sun.color.b / Math.max(sun.color.r, 1e-3) - 0.95) * 3));
     u.uSpecK.value = 1 - 0.93 * moon;
     u.uMoon.value = moon;
 
-    u.uSunDir.value.copy(sun.dir).normalize();
-    u.uSunColor.value.copy(sun.color).multiplyScalar(P.lightScale);
+    u.uLightScale.value = P.lightScale;
+    if (!this.shared) {
+      u.uSunDir.value.copy(sun.dir).normalize();
+      u.uLightColor.value.copy(sun.color);
+    }
 
     // fallback ambient from sun elevation (only used if the scene has no hemisphere light)
     const el = Math.max(-0.2, Math.min(1, sun.dir.y));

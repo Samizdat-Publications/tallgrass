@@ -7,7 +7,7 @@
 //   leaf cards: x,z in crown-radius units (nominal 6 m), y in height units (nominal 14 m), exactly as the lump crowns;
 //   bark:       a uniform 1/14 scale (tree height is 1), like the old bark, so the furrow shader frequencies carry over.
 import * as THREE from 'three';
-import { CLOUD_SHADOW_GLSL, NOISE_GLSL, OCCLUDE_GLSL, SharedUniforms, clamp, cloudShadowUniforms, injectSafeOutput, smoothstep as smoothstepJs } from './common';
+import { NOISE_GLSL, OCCLUDE_GLSL, SharedUniforms, TERRAIN_SHADOW_GLSL, clamp, injectSafeOutput, patchSrc, shadowedLightsBegin, smoothstep as smoothstepJs, terrainShadowUniforms } from './common';
 import { cottonwoodParams, generateEzTree, willowParams, type EzTree } from './eztree';
 import { Pool, swayChunk, WORLDPOS_GLSL } from './trees';
 
@@ -291,42 +291,16 @@ float tgLeafVis( float keep, float rnd ) {
  * large share of its cost. Same maths, same result for the lighting (directLight.color is scaled by gTgShadow).
  */
 function injectTerrainShadowPerVertex(shader: { vertexShader: string; fragmentShader: string; uniforms: Record<string, any> }, shared: SharedUniforms): void {
-  shader.uniforms.tTgShadow = shared.terrainShadow;
-  shader.uniforms.tTgShadowFar = shared.terrainShadowFar;
-  shader.uniforms.uTgFarRect = shared.farRect;
-  shader.uniforms.uTgWorld = shared.worldSize;
-  shader.uniforms.uTgOver = shared.overcast;
-  Object.assign(shader.uniforms, cloudShadowUniforms(shared));
-  shader.vertexShader = shader.vertexShader
-    .replace('void main() {', `uniform sampler2D tTgShadow;
-      uniform sampler2D tTgShadowFar;
-      uniform vec3 uTgFarRect;
-      uniform float uTgWorld;
-      uniform float uTgOver;
-      ${CLOUD_SHADOW_GLSL}
+  Object.assign(shader.uniforms, terrainShadowUniforms(shared));
+  shader.vertexShader = patchSrc(shader.vertexShader, 'leaf cards vert (shadow)')
+    .replace('void main() {', `${TERRAIN_SHADOW_GLSL}
       varying float vTgShadowK;
-      float tgVsShadow( vec2 xz ) {
-        vec2 uv = xz / uTgWorld;
-        vec2 qd = abs( xz - 0.5 * uTgWorld ) - 0.5 * uTgWorld;
-        float sd = max( qd.x, qd.y );
-        float wIn = 1.0 - smoothstep( -20.0, 30.0, sd );
-        vec2 fuv = ( xz - uTgFarRect.xy ) / uTgFarRect.z;
-        float far = texture2D( tTgShadowFar, clamp( fuv, 0.0, 1.0 ) ).r;
-        float hill = mix( mix( far, texture2D( tTgShadow, clamp( uv, 0.0, 1.0 ) ).r, wIn ), 1.0, 0.85 * uTgOver );
-        return hill * tgCloudShadowAt( xz );
-      }
       void main() {`)
     .replace('#include <fog_vertex>', `#include <fog_vertex>
-      vTgShadowK = tgVsShadow( ( cameraPosition + transpose( mat3( viewMatrix ) ) * mvPosition.xyz ).xz );`);
-  shader.fragmentShader = shader.fragmentShader
+      vTgShadowK = tgTerrainShadowAt( ( cameraPosition + transpose( mat3( viewMatrix ) ) * mvPosition.xyz ).xz );`).s;
+  shader.fragmentShader = patchSrc(shader.fragmentShader, 'leaf cards frag (shadow)')
     .replace('void main() {', 'varying float vTgShadowK;\nfloat gTgShadow = 1.0;\nvoid main() {')
-    .replace(
-      '#include <lights_fragment_begin>',
-      THREE.ShaderChunk.lights_fragment_begin
-        .replace(/getSunLightInfo\( sunLight, directLight \);/g, 'getSunLightInfo( sunLight, directLight ); directLight.color *= gTgShadow;')
-        .replace(/getDirectionalLightInfo\( directionalLight, directLight \);/g, 'getDirectionalLightInfo( directionalLight, directLight ); directLight.color *= gTgShadow;')
-        .replace(/^/, 'gTgShadow = vTgShadowK;\n'),
-    );
+    .replace('#include <lights_fragment_begin>', shadowedLightsBegin('gTgShadow = vTgShadowK;', 'leaf cards')).s;
 }
 
 const LAMBERT = !(typeof location !== 'undefined' && /[?&]t3m=std(&|$)/.test(location.search));
@@ -348,13 +322,13 @@ function leafMaterial(shared: SharedUniforms, atlas: THREE.Texture, willow = fal
     u.uSnow = shared.snow;
     u.uOccCam = shared.occCam; u.uOccFocus = shared.occFocus; u.uOccParams = shared.occParams;
     u.tLeaf = { value: atlas };
-    shader.vertexShader = shader.vertexShader
+    shader.vertexShader = patchSrc(shader.vertexShader, 'trees3.leafMaterial vert')
       .replace('void main() {', `attribute vec2 aUv;\nattribute float aOcc;\nattribute float aRnd;\nattribute vec3 aCenter;\nvarying vec2 vLeafUv;\nvarying float vOcc;\nvarying float vRnd;\nuniform float uTime;\nuniform vec3 uWind;\nuniform float uLeaf;\n${KEEP_GLSL}\nvoid main() {`)
       .replace('#include <begin_vertex>', `#include <begin_vertex>
         vOcc = aOcc; vRnd = aRnd; vLeafUv = aUv;
         { float tgVis = tgLeafVis( tgLeafKeep( uLeaf, instanceColor.b ), aRnd ); transformed = mix( aCenter, transformed, tgVis ); }`)
-      .replace('#include <project_vertex>', swayChunk(true));
-    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <project_vertex>', swayChunk(true)).s;
+    shader.fragmentShader = patchSrc(shader.fragmentShader, 'trees3.leafMaterial frag')
       .replace('void main() {', `varying vec2 vLeafUv;
         varying float vOcc;
         varying float vRnd;
@@ -419,7 +393,7 @@ function leafMaterial(shared: SharedUniforms, atlas: THREE.Texture, willow = fal
           vec3 warm = diffuseColor.rgb * vec3( 1.1, 1.05, 0.7 );
           totalEmissiveRadiance += warm * uLightColor * ( back * ( 0.12 + 0.4 * rimT * rimT ) + 0.03 * wrapB ) * gTgShadow * ( 0.35 + 0.65 * clamp( vOcc, 0.0, 1.0 ) );
           totalEmissiveRadiance += diffuseColor.rgb * 0.045 * ( 1.0 - clamp( vOcc, 0.0, 1.0 ) );
-        }`);
+        }`).s;
     shader.fragmentShader = injectSafeOutput(shader.fragmentShader);
   };
   mat.customProgramCacheKey = () => `tg-leaf3-v3-${willow ? 'w' : 'c'}${far ? 'f' : 'n'}${LAMBERT ? 'l' : 's'}`;
@@ -432,14 +406,14 @@ function leafDepthMaterial(shared: SharedUniforms, atlas: THREE.Texture): THREE.
   mat.onBeforeCompile = (shader) => {
     shader.uniforms.uTime = shared.time; shader.uniforms.uWind = shared.wind; shader.uniforms.uLeaf = shared.leafAmount;
     shader.uniforms.tLeaf = { value: atlas };
-    shader.vertexShader = shader.vertexShader
+    shader.vertexShader = patchSrc(shader.vertexShader, 'trees3.leafDepthMaterial vert')
       .replace('void main() {', `attribute vec2 aUv;\nattribute float aRnd;\nattribute vec3 aCenter;\nvarying vec2 vLeafUv;\nuniform float uTime;\nuniform vec3 uWind;\nuniform float uLeaf;\n${KEEP_GLSL}\nvoid main() {`)
       .replace('#include <begin_vertex>', `#include <begin_vertex>
         vLeafUv = aUv;
         { float tgVis = tgLeafVis( tgLeafKeep( uLeaf, instanceColor.b ), aRnd ); transformed = mix( aCenter, transformed, tgVis ); }`)
-      .replace('#include <project_vertex>', swayChunk(false));
-    shader.fragmentShader = shader.fragmentShader
-      .replace('void main() {', 'varying vec2 vLeafUv;\nuniform sampler2D tLeaf;\nvoid main() {\n  if ( texture2D( tLeaf, vLeafUv ).a < 0.5 ) discard;');
+      .replace('#include <project_vertex>', swayChunk(false)).s;
+    shader.fragmentShader = patchSrc(shader.fragmentShader, 'trees3.leafDepthMaterial frag')
+      .replace('void main() {', 'varying vec2 vLeafUv;\nuniform sampler2D tLeaf;\nvoid main() {\n  if ( texture2D( tLeaf, vLeafUv ).a < 0.5 ) discard;').s;
   };
   mat.customProgramCacheKey = () => 'tg-leaf3-depth-v1';
   return mat;

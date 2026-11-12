@@ -19,7 +19,7 @@
 // Output is premultiplied: colour = reflected and scattered light, alpha = how much of the terrain behind is hidden.
 import * as THREE from 'three';
 import type { World } from '../sim/world';
-import { HEIGHT_GLSL, NOISE_GLSL, SKY_GLSL, SharedUniforms } from './common';
+import { HEIGHT_GLSL, NOISE_GLSL, SKY_AMBIENT_GLSL, SKY_GLSL, SharedUniforms } from './common';
 import { NIGHT } from './sky';
 
 /** Mean surface speed of the creek (m/s) at an average channel width; narrower stretches run faster. */
@@ -474,6 +474,7 @@ export class Water {
         uniform float uWorld;
         ${NOISE_GLSL}
         ${SKY_GLSL}
+        ${SKY_AMBIENT_GLSL}
         ${HEIGHT_GLSL}
 
         const float INV_PI = 0.3183099;
@@ -641,7 +642,7 @@ export class Water {
           float rain = clamp((uWet - 0.22) / 0.35, 0.0, 1.0) * smoothstep(0.25, 0.45, uOvercast) * (1.0 - uSnow);
           float farK = smoothstep(80.0, 320.0, dist);
           // ambient from the sky dome, plus a share of the key light so moonlit nights stay readable
-          vec3 ambC = (uSkyMid * 0.6 + uSkyZenith * 0.4) * 1.3 + uLightColor * mix(0.03, 0.08, uNight);
+          vec3 ambC = tgSkyAmbient();
           vec3 irr = ambC + uLightColor * max(uLightDir.y, 0.0) * shadow;
 
           // winter: still water freezes from the shore inward; the creek's current keeps its channel open longest

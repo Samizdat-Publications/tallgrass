@@ -4,7 +4,7 @@
 import * as THREE from 'three';
 import type { World } from '../sim/world';
 import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
-import { NOISE_GLSL, OCCLUDE_GLSL, SharedUniforms, clamp, fbm2, hash2, injectSafeOutput, injectTerrainShadow, smoothstep, vnoise2 } from './common';
+import { NOISE_GLSL, OCCLUDE_GLSL, SharedUniforms, clamp, fbm2, hash2, injectSafeOutput, injectTerrainShadow, patchSrc, smoothstep, vnoise2 } from './common';
 import { Trees3, TREES3_RANGE, TREES3_SWAP0 } from './trees3';
 
 /** 1 while trees3 draws the near range: the lump crowns fade in (screen-door through alpha-to-coverage) over TREES3_SWAP0 .. TREES3_RANGE as trees3 fades out. */
@@ -531,15 +531,15 @@ function foliageMaterial(shared: SharedUniforms, kind: FoliageKind): THREE.MeshS
     u.uSnow = shared.snow;
     u.uT3On = T3_SWAP;
     u.uOccCam = shared.occCam; u.uOccFocus = shared.occFocus; u.uOccParams = shared.occParams;
-    shader.vertexShader = shader.vertexShader
+    shader.vertexShader = patchSrc(shader.vertexShader, 'trees.foliageMaterial vert')
       .replace(
         'void main() {',
         `attribute float aOcc;\nattribute float aLump;\nvarying float vOcc;\nvarying float vLump;\nvarying vec3 vObj;\nuniform float uTime;\nuniform vec3 uWind;\n${tuft ? 'attribute float aTw;\nattribute vec3 aBase;\nuniform float uLeaf;\n' : ''}void main() {`,
       )
       .replace('#include <begin_vertex>', `#include <begin_vertex>\nvOcc = aOcc; vLump = aLump; vObj = position;${tuft ? '\ntransformed = mix( aBase, transformed, smoothstep( 0.82, 0.32, uLeaf ) );' : ''}`)
-      .replace('#include <project_vertex>', swayChunk(true));
+      .replace('#include <project_vertex>', swayChunk(true)).s;
     const cell = willow ? '0.5' : shrub ? '0.42' : evergreen ? '0.36' : '0.5';
-    shader.fragmentShader = shader.fragmentShader
+    shader.fragmentShader = patchSrc(shader.fragmentShader, 'trees.foliageMaterial frag')
       .replace(
         'void main() {',
         `varying float vOcc;
@@ -730,7 +730,7 @@ if ( !( dot( normal, normal ) > 0.25 ) ) normal = vec3( 0.0, 1.0, 0.0 );`)
           // and a little of the sky seeping through the dark underside so it never goes to flat black
           totalEmissiveRadiance += diffuseColor.rgb * 0.045 * ( 1.0 - clamp( vOcc, 0.0, 1.0 ) );
         }`,
-      );
+      ).s;
     shader.fragmentShader = injectSafeOutput( shader.fragmentShader );
   };
   mat.customProgramCacheKey = () => `tg-foliage-${kind}-v10`;
@@ -747,7 +747,7 @@ function barkMaterial(shared: SharedUniforms): THREE.MeshStandardMaterial {
     shader.uniforms.uTime = shared.time; shader.uniforms.uWind = shared.wind;
     shader.uniforms.uOccCam = shared.occCam; shader.uniforms.uOccFocus = shared.occFocus; shader.uniforms.uOccParams = shared.occParams;
     shader.uniforms.uLeaf = shared.leafAmount; shader.uniforms.uSnow = shared.snow;
-    shader.vertexShader = shader.vertexShader
+    shader.vertexShader = patchSrc(shader.vertexShader, 'trees.barkMaterial vert')
       .replace('void main() {', 'uniform float uTime;\nuniform vec3 uWind;\nuniform float uLeaf;\nattribute float aTw;\nattribute vec3 aBase;\nvarying vec3 vBarkPos;\nvoid main() {')
       .replace('#include <begin_vertex>', `#include <begin_vertex>
         // outer twigs grow out of their base as the leaves drop (hidden inside the foliage while it is thick)
@@ -756,8 +756,8 @@ function barkMaterial(shared: SharedUniforms): THREE.MeshStandardMaterial {
         float tgGrow = aTw > 0.5 ? max( smoothstep( 0.82, 0.32, uLeaf ), tgSnag ) : 1.0;
         transformed = mix( aBase, transformed, tgGrow );
         vBarkPos = transformed;`)
-      .replace('#include <project_vertex>', swayChunk(false));
-    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <project_vertex>', swayChunk(false)).s;
+    shader.fragmentShader = patchSrc(shader.fragmentShader, 'trees.barkMaterial frag')
       .replace('void main() {', `varying vec3 vBarkPos;\nuniform float uSnow;\nuniform float uLeaf;\nuniform vec3 uLightDir;\nuniform vec3 uLightColor;\nuniform vec3 uSkyMid;\nuniform vec3 uSkyHorizon;\n${NOISE_GLSL}\n${OCCLUDE_GLSL}\n${WORLDPOS_GLSL}\nvoid main() {`)
       .replace(
         '#include <color_fragment>',
@@ -796,7 +796,7 @@ function barkMaterial(shared: SharedUniforms): THREE.MeshStandardMaterial {
           float leafK = smoothstep( 0.35, 0.8, uLeaf );
           totalEmissiveRadiance += diffuseColor.rgb * ( ( uSkyMid * 0.42 + uSkyHorizon * 0.34 + uLightColor * 0.03 ) * mix( 1.0, 0.85, leafK ) + uLightColor * pow( backD, 2.0 ) * rimB * rimB * 0.35 * gTgShadow * ( 1.0 - leafK ) );
         }`,
-      );
+      ).s;
     shader.fragmentShader = injectSafeOutput( shader.fragmentShader );
   };
   mat.customProgramCacheKey = () => 'tg-bark-v10';
@@ -807,9 +807,9 @@ function swayDepthMaterial(shared: SharedUniforms): THREE.MeshDepthMaterial {
   const mat = new THREE.MeshDepthMaterial();
   mat.onBeforeCompile = (shader) => {
     shader.uniforms.uTime = shared.time; shader.uniforms.uWind = shared.wind;
-    shader.vertexShader = shader.vertexShader
+    shader.vertexShader = patchSrc(shader.vertexShader, 'trees.swayDepthMaterial vert')
       .replace('void main() {', 'uniform float uTime;\nuniform vec3 uWind;\nvoid main() {')
-      .replace('#include <project_vertex>', swayChunk(false));
+      .replace('#include <project_vertex>', swayChunk(false)).s;
   };
   mat.customProgramCacheKey = () => 'tg-sway-depth-v1';
   return mat;
@@ -1723,12 +1723,12 @@ export class Trees {
     mat.onBeforeCompile = (shader) => {
       injectTerrainShadow(shader, shared);
       shader.uniforms.uSoil = shared.soil; shader.uniforms.uGrassDry = shared.grassDry; shader.uniforms.uGrassGreen = shared.grassGreen; shader.uniforms.uSnow = shared.snow;
-      shader.vertexShader = shader.vertexShader
+      shader.vertexShader = patchSrc(shader.vertexShader, 'trees.buildOutcrops vert')
         .replace('void main() {', `varying vec3 vRockLocal;
 void main() {`)
         .replace('#include <begin_vertex>', `#include <begin_vertex>
-vRockLocal = position;`);
-      shader.fragmentShader = shader.fragmentShader
+vRockLocal = position;`).s;
+      shader.fragmentShader = patchSrc(shader.fragmentShader, 'trees.buildOutcrops frag')
         .replace('void main() {', `varying vec3 vRockLocal;
 uniform vec3 uSoil;
 uniform vec3 uGrassDry;
@@ -1759,7 +1759,7 @@ void main() {`)
             diffuseColor.rgb = mix( diffuseColor.rgb, vec3( 0.88, 0.9, 0.94 ), clamp( rsn * 0.62, 0.0, 0.9 ) );
             gTgShadow = tgSampleTerrainShadow();
           }`,
-        );
+        ).s;
       shader.fragmentShader = injectSafeOutput(shader.fragmentShader);
     };
     mat.customProgramCacheKey = () => 'tg-rock-v3';

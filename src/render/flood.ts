@@ -9,7 +9,7 @@
 // hidden (not drawn at all) when no flood and no wet ground is showing. Nothing is allocated per frame.
 import * as THREE from 'three';
 import type { World } from '../sim/world';
-import { HEIGHT_GLSL, NOISE_GLSL, SKY_GLSL, SharedUniforms } from './common';
+import { HEIGHT_GLSL, NOISE_GLSL, SKY_AMBIENT_GLSL, SKY_GLSL, SharedUniforms } from './common';
 
 /** Distances beyond this (m) are not stored: the widest band the sim uses is 12 + 38 = 50 m. */
 const WD_MAX = 63.75;
@@ -112,6 +112,7 @@ export class Flood {
         uniform vec3 uLightDir;
         uniform vec3 uLightColor;
         uniform float uNight;
+        ${SKY_AMBIENT_GLSL}
         uniform float uOvercast;
         uniform float uSnow;
         uniform sampler2D tShadow;
@@ -142,7 +143,7 @@ export class Flood {
           float dist = max(length(toCam), 1e-3);
           vec3 V = toCam / dist;
           float shadow = texture2D(tShadow, clamp(uv, 0.0, 1.0)).r;
-          vec3 ambC = (uSkyMid * 0.6 + uSkyZenith * 0.4) * 1.3 + uLightColor * mix(0.03, 0.08, uNight);
+          vec3 ambC = tgSkyAmbient();
           vec3 irr = ambC + uLightColor * max(uLightDir.y, 0.0) * shadow;
 
           // ---- wet ground: dark mud, a little glossy, rough with puddled patches

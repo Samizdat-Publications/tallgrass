@@ -10,7 +10,7 @@
 // Pond water itself is drawn by Water.setPonds, the drowned trees by Trees.setDrowned.
 import * as THREE from 'three';
 import type { World } from '../sim/world';
-import { NOISE_GLSL, SharedUniforms, hash2, injectSafeOutput, injectTerrainShadow, vnoise2 } from './common';
+import { NOISE_GLSL, SharedUniforms, hash2, injectSafeOutput, injectTerrainShadow, patchSrc, vnoise2 } from './common';
 
 const DAM_STRIDE = 8;
 const LODGE_STRIDE = 4;
@@ -88,7 +88,7 @@ export class BeaverWorks {
     const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, roughness: 0.96, metalness: 0 });
     mat.onBeforeCompile = (shader) => {
       injectTerrainShadow(shader, shared);
-      shader.fragmentShader = shader.fragmentShader
+      shader.fragmentShader = patchSrc(shader.fragmentShader, 'beaverworks.constructor frag')
         .replace('void main() {', `${NOISE_GLSL}
 vec3 tgFragWorldB(){ return cameraPosition + transpose( mat3( viewMatrix ) ) * ( -vViewPosition ); }
 void main() {`)
@@ -107,7 +107,7 @@ void main() {`)
             float weave = smoothstep( 0.66, 0.9, max( wA, wB ) );
             diffuseColor.rgb = mix( diffuseColor.rgb, vec3( 0.075, 0.052, 0.03 ) * ( 0.6 + 0.8 * g2 ), weave * 0.7 );
           }`,
-        );
+        ).s;
       shader.fragmentShader = injectSafeOutput(shader.fragmentShader);
     };
     mat.customProgramCacheKey = () => 'tg-beaverworks-v2';

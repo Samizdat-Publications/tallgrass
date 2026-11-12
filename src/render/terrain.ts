@@ -6,7 +6,7 @@ import { FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
 import type { World } from '../sim/world';
 import { sampleHeight } from '../sim/world';
 import {
-  HEIGHT_GLSL, NOISE_GLSL, POND_GLSL, SharedUniforms, clamp, fbm2, injectSafeOutput, injectTerrainShadow, makePondUniform, smoothstep, vnoise2,
+  HEIGHT_GLSL, HEMI_AMBIENT_GLSL, NOISE_GLSL, POND_GLSL, SharedUniforms, clamp, fbm2, injectSafeOutput, injectTerrainShadow, makePondUniform, patchSrc, smoothstep, vnoise2,
 } from './common';
 import { SEASON_GLSL, SNOW_GLSL } from './season';
 import { buildSnowLand } from './snowland';
@@ -848,11 +848,11 @@ export class Terrain {
       u.tMacro2 = { value: this.macroRT[1].texture };
       u.tMacro3 = { value: this.macroRT[2].texture };
       u.tDetail = { value: this.detailTex };
-      shader.vertexShader = shader.vertexShader
+      shader.vertexShader = patchSrc(shader.vertexShader, 'terrain.buildMesh vert')
         .replace('void main() {', `attribute float aCurv;\nvarying float vTgCurv;\nvarying vec3 vTgWorld;\nvarying vec3 vTgNormal;\nvarying vec4 vTgAsp;\nuniform vec3 uLightDir;\n${SEASON_GLSL}\nvoid main() {`)
         // the sun-aspect band depends only on the slope and the light, so it is a per-vertex varying (the pixel shader scales it by dryness)
-        .replace('#include <begin_vertex>', '#include <begin_vertex>\nvTgWorld = (modelMatrix * vec4(transformed, 1.0)).xyz;\nvTgNormal = normal;\nvTgCurv = aCurv;\nvTgAsp = tgAspectBand(normal, normalize(uLightDir));');
-      shader.fragmentShader = shader.fragmentShader
+        .replace('#include <begin_vertex>', '#include <begin_vertex>\nvTgWorld = (modelMatrix * vec4(transformed, 1.0)).xyz;\nvTgNormal = normal;\nvTgCurv = aCurv;\nvTgAsp = tgAspectBand(normal, normalize(uLightDir));').s;
+      shader.fragmentShader = patchSrc(shader.fragmentShader, 'terrain.buildMesh frag')
         .replace('void main() {', GROUND_PARS + '\nvoid main() {')
         .replace(
           '#include <color_fragment>',
@@ -881,7 +881,7 @@ export class Terrain {
             // the scanned ground's own relief (soil crumbs, stones, litter, hoof pits): a world-space tilt from the detail maps
             normal = normalize( normal + mat3( viewMatrix ) * gTgDN );
           }`,
-        );
+        ).s;
       shader.fragmentShader = injectSafeOutput( shader.fragmentShader );
     };
     mat.customProgramCacheKey = () => 'tallgrass-terrain-v7';
@@ -1024,6 +1024,7 @@ float tgCombN(vec2 q, vec4 ow, float across, float along, float seed){
   return n;
 }
 
+${HEMI_AMBIENT_GLSL}
 // Chromatic adaptation for the dim ends of the day: a low sun is orange and its sky a deep blue, so pale ground lit by both goes
 // salmon on the sunlit side and violet in the shade. The eye adapts; this returns the albedo factor that pulls the lit colour back
 // toward neutral (1 in daylight, at night and in summer where the caller does not ask for it), estimated from the hemisphere light
@@ -1032,11 +1033,7 @@ vec3 tgAdapt(vec3 nrm, float ts){
   float dimK = (1.0 - smoothstep(1.0, 2.6, dot(uLightColor, vec3(0.2126, 0.7152, 0.0722)))) * (1.0 - uNight);
   if (dimK < 0.01) return vec3(1.0);
   vec3 E = uLightColor * max(dot(nrm, uLightDir), 0.0) * ts;
-#if NUM_HEMI_LIGHTS > 0
-  E += mix(hemisphereLights[0].groundColor, hemisphereLights[0].skyColor, 0.5 * nrm.y + 0.5);
-#else
-  E += vec3(0.5);
-#endif
+  E += tgHemiAmbient(nrm);
   float l = dot(E, vec3(0.2126, 0.7152, 0.0722));
   return mix(vec3(1.0), clamp(l / max(E, vec3(0.02)), 0.5, 1.7), dimK);
 }
@@ -1050,11 +1047,7 @@ vec3 tgAdaptSnow(vec3 nrm, float ts){
   float dimK = max(1.0 - smoothstep(1.0, 2.6, dot(uLightColor, vec3(0.2126, 0.7152, 0.0722))), 1.0 - smoothstep(0.06, 0.34, uLightDir.y)) * (1.0 - uNight);
   if (dimK < 0.01) return vec3(1.0);
   vec3 K = uLightColor * max(dot(nrm, uLightDir), 0.0) * ts;
-#if NUM_HEMI_LIGHTS > 0
-  vec3 A = mix(hemisphereLights[0].groundColor, hemisphereLights[0].skyColor, 0.5 * nrm.y + 0.5);
-#else
-  vec3 A = vec3(0.5);
-#endif
+  vec3 A = tgHemiAmbient(nrm);
   float lk = dot(K, vec3(0.2126, 0.7152, 0.0722)), la = dot(A, vec3(0.2126, 0.7152, 0.0722));
   float sh = la / max(lk + la, 1e-3);
   vec3 hue = mix(vec3(1.02, 0.995, 0.96), vec3(0.85, 0.96, 1.11), sh);
