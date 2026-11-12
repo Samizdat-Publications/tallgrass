@@ -26,6 +26,9 @@ export class Environment {
   private storm = false;
   /** Slow climate swing in grass growth (0 = off): wet and dry runs of years from two incommensurate cycles. */
   climateAmp = 0;
+  /** This environment's calendar. A standalone Environment takes the global calendar at construction; the sim sets its own. */
+  seasonTicks = SEASON_TICKS;
+  yearTicks = YEAR_TICKS;
   private climatePhase = -1;
   /** Climate regimes (v10; null = off): the seeded wet and dry decades (climate.ts). */
   regime: ClimateRegime | null = null;
@@ -50,15 +53,15 @@ export class Environment {
 
   /** Absolute calendar position in ticks, offset so tick 0 is late summer. */
   yearTick(tick: number): number {
-    return (tick + Math.round(START_SEASON * SEASON_TICKS)) % YEAR_TICKS;
+    return (tick + Math.round(START_SEASON * this.seasonTicks)) % this.yearTicks;
   }
 
   update(tick: number): void {
     const s = this.state;
     s.tick = tick;
     const yt = this.yearTick(tick);
-    s.year = Math.floor((tick + Math.round(START_SEASON * SEASON_TICKS)) / YEAR_TICKS);
-    s.season = yt / SEASON_TICKS;
+    s.year = Math.floor((tick + Math.round(START_SEASON * this.seasonTicks)) / this.yearTicks);
+    s.season = yt / this.seasonTicks;
     s.dayFrac = ((tick + Math.round(START_DAY * DAY_TICKS)) % DAY_TICKS) / DAY_TICKS;
     // warmth: peak mid-summer, low mid-winter, plus a small day swing
     const seasonal = 0.5 + 0.5 * Math.cos(((s.season - 1.4) / 4) * Math.PI * 2);

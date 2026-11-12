@@ -15,7 +15,7 @@ import { Environment } from './env';
 import { Params } from './params';
 import { hashSeed, Rng } from './rng';
 import { SPECIES, SPECIES_BY_KEY } from './species';
-import { BASE_YEAR_TICKS, DAY_TICKS, SEASON_TICKS } from './types';
+import { BASE_YEAR_TICKS, DAY_TICKS, seasonTicks } from './types';
 
 /** Which registry species are canids. Wolves and coyotes share distemper and mange. */
 export const CANID_KEYS: string[] = ['wolf', 'coyote'];
@@ -121,8 +121,8 @@ export class Disease {
   step(wolves: number): void {
     const t = this.host.tick;
     const yt = this.env.yearTick(t);
-    if (this.cdvOn && yt === Math.round(CDV_SEASON * SEASON_TICKS)) this.maybeOutbreak(wolves);
-    if (this.mangeOn && yt === Math.round(MANGE_SEASON * SEASON_TICKS)) this.maybeIntroduceMange(wolves);
+    if (this.cdvOn && yt === Math.round(CDV_SEASON * seasonTicks(this.p))) this.maybeOutbreak(wolves);
+    if (this.mangeOn && yt === Math.round(MANGE_SEASON * seasonTicks(this.p))) this.maybeIntroduceMange(wolves);
     if (t % SCAN === 0) {
       if (this.mangeOn) this.mangeScan();
       if (this.cdvActive) this.cdvScan();

@@ -175,10 +175,23 @@ export let SEASON_TICKS = 600;
 export let YEAR_TICKS = 2400;
 /** The original year length, for timers that stay fixed in ticks whatever the calendar (carcass life, immunity...). */
 export const BASE_YEAR_TICKS = 2400;
-/** Set the valley calendar (call before anything reads YEAR_TICKS: the sim does it on construction, the game at startup). */
+/** Set the valley calendar (call before anything reads YEAR_TICKS: the sim does it on construction, the game at startup).
+ *  The globals are for the UI, the renderer and the headless reports. Sim code never reads them: it uses seasonTicks(p) and
+ *  yearTicks(p) from its own params (or env.seasonTicks / env.yearTicks), so two sims with different calendars can share a process. */
 export function setCalendarScale(k: number): void {
-  SEASON_TICKS = Math.round(600 / (k > 0 ? k : 1));
+  SEASON_TICKS = seasonTicksOf(k);
   YEAR_TICKS = SEASON_TICKS * 4;
+}
+/** Ticks per season for calendar scale k. */
+export function seasonTicksOf(k: number): number {
+  return Math.round(600 / (k > 0 ? k : 1));
+}
+/** A sim's own ticks per season and per valley year, from its params (calendarScale). */
+export function seasonTicks(p: { calendarScale: number }): number {
+  return seasonTicksOf(p.calendarScale);
+}
+export function yearTicks(p: { calendarScale: number }): number {
+  return seasonTicksOf(p.calendarScale) * 4;
 }
 
 /** Shocks and god tools. Applied through SimLike.apply. */

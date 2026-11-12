@@ -25,7 +25,7 @@ import type { Environment } from './env';
 import type { Params } from './params';
 import { hashSeed, Rng } from './rng';
 import type { SimEventKind } from './sim';
-import { BASE_YEAR_TICKS, SEASON_TICKS, Sp, YEAR_TICKS } from './types';
+import { BASE_YEAR_TICKS, seasonTicks, Sp, yearTicks } from './types';
 import { COARSE_N, type World } from './world';
 
 export const CELLS = COARSE_N * COARSE_N;
@@ -364,7 +364,7 @@ export class SmallPrey {
   private yearQuality(tick: number): number {
     const v = this.p.hareYearVar;
     if (v <= 0) return 1;
-    const y = Math.floor(tick / YEAR_TICKS);
+    const y = Math.floor(tick / yearTicks(this.p));
     if (y !== this.qualityYear) {
       this.qualityYear = y;
       this.quality = 1 + v * (2 * (hashSeed(`${this.seed >>> 0}:hareyear:${y}`) / 4294967296) - 1);
@@ -422,9 +422,9 @@ export class SmallPrey {
   private stepDogs(tick: number, yf: number): void {
     const p = this.p, dog = this.dog, kd = this.kd, town = this.town;
     const yt = this.env.yearTick(tick);
-    const pulseTick = Math.round(DOG_PULSE_SEASON * SEASON_TICKS);
-    const pulse = (((yt - pulseTick) % YEAR_TICKS) + YEAR_TICKS) % YEAR_TICKS < STEP_TICKS;
-    const yearScale = YEAR_TICKS / BASE_YEAR_TICKS;
+    const pulseTick = Math.round(DOG_PULSE_SEASON * seasonTicks(this.p));
+    const pulse = (((yt - pulseTick) % yearTicks(this.p)) + yearTicks(this.p)) % yearTicks(this.p) < STEP_TICKS;
+    const yearScale = yearTicks(this.p) / BASE_YEAR_TICKS;
     for (let c = 0; c < CELLS; c++) {
       const K = kd[c];
       if (K <= 0) continue;
@@ -662,9 +662,9 @@ export class SmallPrey {
   private trackHares(tick: number): void {
     const total = this.hareTotal();
     if (!this.emaReady) { this.ema = total; this.emaReady = true; return; }
-    this.ema += (total - this.ema) * (STEP_TICKS / (BOOM_WINDOW_YEARS * YEAR_TICKS));
-    if (tick < BOOM_WINDOW_YEARS * YEAR_TICKS) return;
-    const spacing = BOOM_SPACING_YEARS * YEAR_TICKS;
+    this.ema += (total - this.ema) * (STEP_TICKS / (BOOM_WINDOW_YEARS * yearTicks(this.p)));
+    if (tick < BOOM_WINDOW_YEARS * yearTicks(this.p)) return;
+    const spacing = BOOM_SPACING_YEARS * yearTicks(this.p);
     const boom = total > BOOM_RATIO * this.ema && tick - this.lastBoom >= spacing;
     const crash = total < CRASH_RATIO * this.ema && tick - this.lastCrash >= spacing;
     if (!boom && !crash) return;

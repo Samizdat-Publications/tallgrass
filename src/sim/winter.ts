@@ -14,7 +14,7 @@
 import { Environment } from './env';
 import { Params } from './params';
 import { hashSeed, Rng } from './rng';
-import { SEASON_TICKS, Weather } from './types';
+import { seasonTicks, Weather } from './types';
 import { COARSE_N, type World } from './world';
 
 export const SNOW_CELLS = COARSE_N * COARSE_N;
@@ -156,7 +156,7 @@ export class Winter {
     if (this.left <= 0) {
       const wgt = season >= WINTER_START ? 1 : season < 0.3 ? 0.5 : 0;
       if (wgt > 0 && env.snowTicks <= 0 && s.weather !== Weather.Snow) {
-        const per = (p.snowStorms * wgt * (this.hard ? HARD_STORMS : 1) * dt) / (1.1 * SEASON_TICKS);
+        const per = (p.snowStorms * wgt * (this.hard ? HARD_STORMS : 1) * dt) / (1.1 * seasonTicks(this.p));
         if (this.rng.next() < per) this.startFall();
       }
     }
@@ -170,17 +170,17 @@ export class Winter {
       if (this.left <= 0) this.blizzard = false;
     } else if (s.weather === Weather.Snow && env.snowTicks <= 0) {
       // a natural snow day (these last a day or more, up to a whole winter at the default calendar): flurries, half a storm's depth per season of them
-      fall = (0.5 * p.snowFall * p.snowDepth * dt) / SEASON_TICKS;
+      fall = (0.5 * p.snowFall * p.snowDepth * dt) / seasonTicks(this.p);
     }
     const d = this.depth;
     if (fall > 0) for (let k = 0; k < SNOW_CELLS; k++) d[k] = Math.min(1, d[k] + fall);
 
     // the wind drifts it downwind: hollows hold their snow, ridges give it up
     const wind = this.blizzard ? Math.max(s.windStrength, 0.85) : s.windStrength;
-    this.drift(wind, s.windDir, (p.snowDrift * wind * dt) / SEASON_TICKS);
+    this.drift(wind, s.windDir, (p.snowDrift * wind * dt) / seasonTicks(this.p));
 
     // warmth melts it (a hollow's drift lasts longer)
-    const melt = (p.snowMelt * Math.max(0, s.warmth - MELT_WARMTH) * dt) / SEASON_TICKS * (this.hard ? HARD_MELT : 1);
+    const melt = (p.snowMelt * Math.max(0, s.warmth - MELT_WARMTH) * dt) / seasonTicks(this.p) * (this.hard ? HARD_MELT : 1);
     if (melt > 0) {
       const h = this.hollow;
       for (let k = 0; k < SNOW_CELLS; k++) {
@@ -205,7 +205,7 @@ export class Winter {
   private startFall(): void {
     const rng = this.rng, p = this.p;
     const blizzard = rng.next() < p.blizzardP * (this.hard ? 1.5 : 1);
-    const dur = Math.max(WINTER_STEP, SEASON_TICKS * rng.range(0.04, 0.1) * (blizzard ? 0.7 : 1));
+    const dur = Math.max(WINTER_STEP, seasonTicks(this.p) * rng.range(0.04, 0.1) * (blizzard ? 0.7 : 1));
     this.intensity = rng.range(0.5, 1) * (blizzard ? 1.6 : 1) * (this.hard ? HARD_FALL : 1);
     this.total = dur;
     this.left = dur;

@@ -18,7 +18,7 @@ import { Coyotes } from './sp/coyote';
 import { MuleDeer } from './sp/muledeer';
 import { Beavers, emptyBeaverRow } from './sp/beaver';
 import { flightStep, Raptors } from './sp/raptor';
-import { AGENT_STRIDE, CARCASS_STRIDE, F_ALPHA, F_INFECTED, F_JUVENILE, F_MALE, F_MANGE, F_MIGRANT, F_PREGNANT, F_STOT, Intervention, SimLike, Snapshot, SPECIES_COUNT, SPECIES_KEYS, Sp, St, YEAR_TICKS, SEASON_TICKS, BASE_YEAR_TICKS, setCalendarScale } from './types';
+import { AGENT_STRIDE, CARCASS_STRIDE, F_ALPHA, F_INFECTED, F_JUVENILE, F_MALE, F_MANGE, F_MIGRANT, F_PREGNANT, F_STOT, Intervention, SimLike, Snapshot, SPECIES_COUNT, SPECIES_KEYS, Sp, St, yearTicks, seasonTicks, BASE_YEAR_TICKS, setCalendarScale } from './types';
 import { COAT_BASE, COAT_RANGE, DIET, FLIES, IS_PREY, isGrazer, REACT, SPECIES, THREAT } from './species';
 import { STRIDE, Vegetation } from './vegetation';
 import { Winter, WINTER_STEP } from './winter';
@@ -289,6 +289,8 @@ export class Sim implements SimLike {
     this.world = { ...(opts.world ?? generateWorld(this.seed)) };
     if (this.p.dynamicTrees > 0) this.copyCover();
     this.env = new Environment(this.rng.fork(11));
+    this.env.seasonTicks = seasonTicks(this.p);
+    this.env.yearTicks = yearTicks(this.p);
     this.env.climateAmp = this.p.climateAmp;
     this.env.greenUpShift = this.p.greenUpShift;
     this.env.droughtChance = this.p.summerDroughtP;
@@ -660,7 +662,7 @@ export class Sim implements SimLike {
     const s = this.env.state.season;
     const w = this.p.matingWindow;
     if (w <= 0) return s < 3;
-    const centre = (0.45 - P.gestation / SEASON_TICKS + 4) % 4;
+    const centre = (0.45 - P.gestation / seasonTicks(this.p) + 4) % 4;
     let d = Math.abs(s - centre);
     if (d > 2) d = 4 - d;
     return d < w / 2;
@@ -837,7 +839,7 @@ export class Sim implements SimLike {
     if (this.region !== null) this.openPrairieStep(t);
     if (this.p.ravenNestFood > 0 && t % 50 === 0) {
       const c = this.sumRemainingMeat();
-      this.carrionEma = this.carrionEma < 0 ? c : this.carrionEma + (c - this.carrionEma) * (50 / YEAR_TICKS);
+      this.carrionEma = this.carrionEma < 0 ? c : this.carrionEma + (c - this.carrionEma) * (50 / yearTicks(this.p));
     }
     if (this.dis.on) this.dis.step(this.pop[Sp.Wolf]);
 
@@ -2651,9 +2653,9 @@ export class Sim implements SimLike {
     }
     const mega = r.inMegadrought(t);
     if (mega && !this.wasMega) {
-      const y0 = Math.floor(t / YEAR_TICKS);
+      const y0 = Math.floor(t / yearTicks(this.p));
       let n = 0;
-      while (n < 12 && r.inMegadrought((y0 + n) * YEAR_TICKS)) n++;
+      while (n < 12 && r.inMegadrought((y0 + n) * yearTicks(this.p))) n++;
       this.event('megadrought', -1, 0, 0, Math.round(c * 100), n);
     }
     this.wasMega = mega;
@@ -3068,9 +3070,9 @@ export class Sim implements SimLike {
       if (p.cougarInRate > 0 && this.cougarSeen && this.pop[Sp.Cougar] < 2) this.cougarArrivals();
     }
     const yt = this.env.yearTick(t);
-    if (yt === Math.round(2.6 * SEASON_TICKS)) this.pronghornExodus();
-    else if (yt === Math.round(0.25 * SEASON_TICKS)) this.pronghornReturn();
-    else if (yt === Math.round(0.3 * SEASON_TICKS)) this.muleReturn();
+    if (yt === Math.round(2.6 * seasonTicks(this.p))) this.pronghornExodus();
+    else if (yt === Math.round(0.25 * seasonTicks(this.p))) this.pronghornReturn();
+    else if (yt === Math.round(0.3 * seasonTicks(this.p))) this.muleReturn();
   }
 
   /** Spring rescue (S8, season 0.3): a group of mule deer walks in to a habitat spot when too few remain (and some have lived here before). */
@@ -3431,7 +3433,7 @@ export class Sim implements SimLike {
   sample(): Record<string, number> {
     const a = this.a;
     const pops = this.populations();
-    const row: Record<string, number> = { tick: this.tick, year: this.tick / YEAR_TICKS };
+    const row: Record<string, number> = { tick: this.tick, year: this.tick / yearTicks(this.p) };
     for (let s = 0; s < SPECIES_COUNT; s++) row['pop_' + SPECIES_KEYS[s]] = pops[s];
     row.grass_mean = this.veg.meanGrass();
     row.browse_mean = this.veg.meanOf(this.veg.browse);

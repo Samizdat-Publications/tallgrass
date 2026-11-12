@@ -36,7 +36,7 @@ import type { Environment } from './env';
 import type { Params } from './params';
 import { hashSeed, Rng } from './rng';
 import type { SimEventKind } from './sim';
-import { Sp, BASE_YEAR_TICKS, YEAR_TICKS } from './types';
+import { Sp, BASE_YEAR_TICKS, yearTicks } from './types';
 import { COARSE_N, type World } from './world';
 import type { Vegetation } from './vegetation';
 
@@ -478,7 +478,7 @@ export class Trees {
 
   private recruitCottonwood(tick: number): void {
     const p = this.p, w = this.world, v = this.veg, rng = this.rng, cal = p.calendarScale > 0 ? p.calendarScale : 1;
-    const flooded = this.floodMask !== null && tick - this.floodEnd < 1.5 * YEAR_TICKS;
+    const flooded = this.floodMask !== null && tick - this.floodEnd < 1.5 * yearTicks(this.p);
     const fm = flooded ? this.floodMask! : null;
     let nFlood = 0, fx = 0, fy = 0;
     const pos: number[] = [];

@@ -24,7 +24,7 @@ import type { Environment } from './env';
 import type { Params } from './params';
 import { hashSeed, Rng } from './rng';
 import type { SimEventKind } from './sim';
-import { YEAR_TICKS } from './types';
+import { yearTicks } from './types';
 import { COARSE_N, type World } from './world';
 
 export const HOP_CELLS = COARSE_N * COARSE_N;
@@ -160,7 +160,7 @@ export class Hoppers {
    * weather alone cannot tell a surge year from an ordinary one.
    */
   private yearQuality(tick: number): number {
-    const y = Math.floor(tick / YEAR_TICKS);
+    const y = Math.floor(tick / yearTicks(this.p));
     if (y !== this.qualityYear) {
       this.qualityYear = y;
       this.quality = hashSeed(`${this.seed >>> 0}:hopyear:${y}`) / 4294967296;
@@ -173,7 +173,7 @@ export class Hoppers {
   /** One step. Call every HOP_STEP ticks, right after the sim refreshes the coarse grass map. */
   step(tick: number): void {
     const p = this.p, d = this.d;
-    const yv = HOP_STEP / YEAR_TICKS;
+    const yv = HOP_STEP / yearTicks(this.p);
     const season = this.env.state.season;
     const summer = season >= HOP_SUMMER_START && season < HOP_SUMMER_END;
     if (summer) {

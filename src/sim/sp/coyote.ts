@@ -49,7 +49,7 @@ import { hashSeed, Rng } from '../rng';
 import type { SimEventKind } from '../sim';
 import type { Hoppers } from '../hoppers';
 import { PREF, type SmallPrey } from '../smallprey';
-import { BASE_YEAR_TICKS, Sp, St, YEAR_TICKS } from '../types';
+import { BASE_YEAR_TICKS, Sp, St, yearTicks } from '../types';
 
 /** The food index is clamped to this range. */
 export const FOOD_MIN = 0.4;
@@ -485,7 +485,7 @@ export class Coyotes {
   trackRelease(t: number): void {
     const h = this.h;
     const coy = h.pop[this.sp], wolf = h.pop[Sp.Wolf];
-    const len = Math.max(1, Math.round((MESO_MEAN_YEARS * YEAR_TICKS) / 50));
+    const len = Math.max(1, Math.round((MESO_MEAN_YEARS * yearTicks(this.p)) / 50));
     if (this.histCoy.length !== len) {
       this.histCoy = new Float32Array(len);
       this.histWolf = new Float32Array(len);
@@ -505,7 +505,7 @@ export class Coyotes {
     this.histI = (this.histI + 1) % len;
     if (this.histN < len) this.histN++;
     if (mw > this.wolfPeak) this.wolfPeak = mw;
-    if (!full || t - this.lastRelease < MESO_SPACING_YEARS * YEAR_TICKS) return;
+    if (!full || t - this.lastRelease < MESO_SPACING_YEARS * yearTicks(this.p)) return;
     if (mc < 4 || this.wolfPeak < 1) return;
     if (coy >= MESO_COYOTE_RATIO * mc && wolf <= MESO_WOLF_RATIO * Math.max(mw, this.wolfPeak)) {
       this.lastRelease = t;
@@ -537,7 +537,7 @@ export class Coyotes {
     if (sm === null || t % 50 !== 0) return;
     const hares = sm.hareTotal();
     if (this.hareEma <= 0) this.hareEma = hares;
-    else this.hareEma += (hares - this.hareEma) * (50 / (MESO_MEAN_YEARS * YEAR_TICKS));
+    else this.hareEma += (hares - this.hareEma) * (50 / (MESO_MEAN_YEARS * yearTicks(this.p)));
   }
 
   /** A free spot for a pair walking in from the prairie, or null when the valley has no room (the den rules). */
@@ -685,7 +685,7 @@ export class Coyotes {
     }
 
     // dispersal at one valley year, and the adults' search for a mate and a den
-    if (!this.dispersed[i] && a.age[i] >= YEAR_TICKS) {
+    if (!this.dispersed[i] && a.age[i] >= yearTicks(this.p)) {
       this.disperse(i);
       if (a.state[i] === St.Migrate) return;
     }
@@ -943,7 +943,7 @@ export class Coyotes {
       }
     }
     if (!h.vitals(i)) return;
-    this.intake[i] += (gain - this.intake[i]) / YEAR_TICKS;
+    this.intake[i] += (gain - this.intake[i]) / yearTicks(this.p);
   }
 
   // ------------------------------------------------------------------ founders and the sample

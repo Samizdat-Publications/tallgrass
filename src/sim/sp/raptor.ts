@@ -66,7 +66,7 @@ import { hashSeed, Rng } from '../rng';
 import type { SimEventKind } from '../sim';
 import type { Hoppers } from '../hoppers';
 import { PREF, type SmallPrey } from '../smallprey';
-import { SEASON_TICKS, Sp, St, YEAR_TICKS } from '../types';
+import { seasonTicks, Sp, St, yearTicks } from '../types';
 import { COARSE_N, type World } from '../world';
 
 /** Seconds of motion per tick (the sim's DT). */
@@ -315,7 +315,7 @@ export class Raptors {
     if (sm !== null && t % 50 === 0) {
       const hares = sm.hareTotal();
       if (this.hareEma <= 0) this.hareEma = hares;
-      else this.hareEma += (hares - this.hareEma) * (50 / (5 * YEAR_TICKS));
+      else this.hareEma += (hares - this.hareEma) * (50 / (5 * yearTicks(this.p)));
     }
     // the eagles alive now (the ravens ask about the ones feeding)
     this.eagleN = 0;
@@ -329,7 +329,7 @@ export class Raptors {
       this.eagleSlots[this.eagleN++] = i;
     }
     if (p.raptors <= 0) return;
-    const S = SEASON_TICKS;
+    const S = seasonTicks(this.p);
     const yt = this.env.yearTick(t);
     if (t === 0) this.seedStart(yt);
     if (yt === Math.round(EAGLE_LEAVE * S)) this.sendAway(Sp.Eagle);
@@ -343,7 +343,7 @@ export class Raptors {
 
   /** At tick 0, a start inside the hawk season finds the pairs already on their nests (and the young, if the hatching is past). */
   private seedStart(yt: number): void {
-    const S = SEASON_TICKS;
+    const S = seasonTicks(this.p);
     if (yt < Math.round(HAWK_RETURN * S) || yt >= Math.round(HAWK_LEAVE * S)) return;
     this.hawksReturn(true);
     const hatch = Math.round(HAWK_HATCH * S);

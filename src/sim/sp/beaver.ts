@@ -57,7 +57,7 @@ import type { Params } from '../params';
 import { DamState, Ponds, type Dam, type PondHost } from '../ponds';
 import { hashSeed, Rng } from '../rng';
 import type { SimEventKind } from '../sim';
-import { BASE_YEAR_TICKS, SEASON_TICKS, Sp, St, YEAR_TICKS } from '../types';
+import { BASE_YEAR_TICKS, seasonTicks, Sp, St, yearTicks } from '../types';
 import type { Vegetation } from '../vegetation';
 import type { World } from '../world';
 
@@ -382,8 +382,8 @@ export class Beavers {
     this.ponds.stepMeadow(t);
     this.census();
     const yt = this.env.yearTick(t);
-    const yr = Math.floor(t / YEAR_TICKS);
-    if (yr !== this.lastYear && yt >= Math.round(0.5 * SEASON_TICKS) && yt < Math.round(1.5 * SEASON_TICKS)) {
+    const yr = Math.floor(t / yearTicks(this.p));
+    if (yr !== this.lastYear && yt >= Math.round(0.5 * seasonTicks(this.p)) && yt < Math.round(1.5 * seasonTicks(this.p))) {
       this.lastYear = yr;
       this.yearly();
     }
@@ -418,7 +418,7 @@ export class Beavers {
       const s = this.sites[c.site];
       if (c.members === 0 && t - c.born > BEAVER_STEP * 2) { this.abandon(c, 1); continue; }
       if (s.food < p.beaverFoodLeave) c.hungry += BEAVER_STEP; else c.hungry = Math.max(0, c.hungry - BEAVER_STEP);
-      if (c.hungry >= SEASON_TICKS) this.abandon(c, 0);
+      if (c.hungry >= seasonTicks(this.p)) this.abandon(c, 0);
     }
   }
 
@@ -433,7 +433,7 @@ export class Beavers {
     const d = c.dam;
     if (d.state !== DamState.Abandoned) {
       po.setState(d, DamState.Abandoned);
-      d.fall = Math.max(d.crest, 0.2) / (YEAR_TICKS * (this.p.beaverDecayMin + this.rng.next() * (this.p.beaverDecayMax - this.p.beaverDecayMin)));
+      d.fall = Math.max(d.crest, 0.2) / (yearTicks(this.p) * (this.p.beaverDecayMin + this.rng.next() * (this.p.beaverDecayMax - this.p.beaverDecayMin)));
     }
     if (why === 1) return;
     for (let i = 0; i < a.hi; i++) {
@@ -556,7 +556,7 @@ export class Beavers {
   /** The dams: crests rise and fall, the pond is redrawn when it moved enough, and the events are told. */
   private damStep(): void {
     const p = this.p, po = this.ponds;
-    const rise = (p.beaverCrestRate / SEASON_TICKS) * BEAVER_STEP;
+    const rise = (p.beaverCrestRate / seasonTicks(this.p)) * BEAVER_STEP;
     const rain = this.env.state.rain;
     const todo: Dam[] = [];
     for (const d of po.dams.slice()) {
@@ -564,7 +564,7 @@ export class Beavers {
       const alive = c !== null && c.state === 0;
       if (d.state === DamState.Building || d.state === DamState.Holding) {
         // a dam can fail on its own, more often in heavy rain
-        if (d.crest >= 0.4 && p.beaverBreachYear > 0 && this.rng.next() < ((p.beaverBreachYear * (1 + 3 * rain)) * BEAVER_STEP) / YEAR_TICKS) { this.breach(d, 1); continue; }
+        if (d.crest >= 0.4 && p.beaverBreachYear > 0 && this.rng.next() < ((p.beaverBreachYear * (1 + 3 * rain)) * BEAVER_STEP) / yearTicks(this.p)) { this.breach(d, 1); continue; }
         if (d.state === DamState.Building && alive) {
           po.setCrest(d, Math.min(d.maxCrest, d.crest + rise * Math.min(1, c!.adults / 2)));
           if (!d.built && d.crest >= 0.3) { d.built = true; this.cBuilt++; this.h.event('damBuilt', Sp.Beaver, d.x, d.y, d.id, c!.id); }
@@ -574,7 +574,7 @@ export class Beavers {
         po.setCrest(d, Math.max(0, d.crest - d.fall * BEAVER_STEP));
         if (d.crest <= 0.12) {
           if (alive && this.sites[c!.site].food >= p.beaverFoodLeave) { po.setState(d, DamState.Building); d.filled = false; }
-          else { po.setState(d, DamState.Abandoned); d.fall = Math.max(0.2, d.maxCrest) / (YEAR_TICKS * (p.beaverDecayMin + this.rng.next() * (p.beaverDecayMax - p.beaverDecayMin))); }
+          else { po.setState(d, DamState.Abandoned); d.fall = Math.max(0.2, d.maxCrest) / (yearTicks(this.p) * (p.beaverDecayMin + this.rng.next() * (p.beaverDecayMax - p.beaverDecayMin))); }
         }
       } else {
         po.setCrest(d, Math.max(0, d.crest - d.fall * BEAVER_STEP));
@@ -610,7 +610,7 @@ export class Beavers {
   private breach(d: Dam, cause: number): void {
     const po = this.ponds;
     po.setState(d, DamState.Breached);
-    d.fall = d.crest / (SEASON_TICKS / 3);
+    d.fall = d.crest / (seasonTicks(this.p) / 3);
     d.meadowTold = false;
     this.cBreached++;
     this.h.event('damBreached', Sp.Beaver, d.x, d.y, Math.round(d.crest * 100) / 100, cause);

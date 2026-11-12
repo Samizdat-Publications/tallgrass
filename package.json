@@ -13,6 +13,7 @@
     "deploy": "vite build && wrangler deploy --name tallgrass --assets ./dist --compatibility-date 2026-10-01",
     "test": "tsx tools/run-tests.ts",
     "test:fast": "tsx tools/run-tests.ts --no-golden",
+    "test:long": "tsx tools/run-longguard.ts",
     "shots": "node tools/shots.mjs",
     "score": ".venv/Scripts/python tools/scorecard.py",
     "lint": "node tools/lint.mjs",

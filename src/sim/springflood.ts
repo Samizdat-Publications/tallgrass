@@ -15,7 +15,7 @@
 import type { Environment } from './env';
 import type { Params } from './params';
 import { hashSeed, Rng } from './rng';
-import { SEASON_TICKS, Weather } from './types';
+import { seasonTicks, Weather } from './types';
 
 /** The sim steps the module every this many ticks. */
 export const FLOOD_STEP = 25;
@@ -59,7 +59,7 @@ export class SpringFloods {
     // the winter's snow weather, counted from the autumn
     if (this.prevSeason >= 0 && this.prevSeason < WINTER_FROM && season >= WINTER_FROM) this.snowSeasons = 0;
     this.prevSeason = season;
-    if ((season >= WINTER_FROM || season < 0.5) && s.weather === Weather.Snow) this.snowSeasons += dt / SEASON_TICKS;
+    if ((season >= WINTER_FROM || season < 0.5) && s.weather === Weather.Snow) this.snowSeasons += dt / seasonTicks(this.p);
     // the snow the valley lost since the last check (a rise, a new snowfall, counts for nothing)
     let melt = 0;
     if (this.snowMean !== null) {
@@ -67,17 +67,17 @@ export class SpringFloods {
       if (this.prevMean >= 0 && m < this.prevMean) melt = this.prevMean - m;
       this.prevMean = m;
     }
-    this.wet *= Math.exp(-dt / (0.5 * SEASON_TICKS));
+    this.wet *= Math.exp(-dt / (0.5 * seasonTicks(this.p)));
     if (!inWin) return null;
-    const perSeason = dt / SEASON_TICKS;
+    const perSeason = dt / seasonTicks(this.p);
     if (this.snowMean !== null) this.wet += melt * p.floodMelt;
     else this.wet += Math.max(0, s.warmth - 0.25) * Math.min(1, this.snowSeasons / 0.4) * p.floodMelt * 0.5 * perSeason;
     this.wet += s.rain * p.floodRain * perSeason;
-    if (busy || this.wet < p.floodThresh || s.tick - this.lastTick < 2 * SEASON_TICKS) return null;
+    if (busy || this.wet < p.floodThresh || s.tick - this.lastTick < 2 * seasonTicks(this.p)) return null;
     this.lastTick = s.tick;
     const over = this.wet / p.floodThresh - 1;
     const severity = Math.max(0.25, Math.min(0.9, (0.25 + 0.5 * over) * this.rng.range(0.85, 1.15)));
-    const ticks = Math.max(30, Math.round(SEASON_TICKS * p.floodSeasons * this.rng.range(0.6, 1.4)));
+    const ticks = Math.max(30, Math.round(seasonTicks(this.p) * p.floodSeasons * this.rng.range(0.6, 1.4)));
     this.wet *= 0.3;
     return { ticks, severity };
   }

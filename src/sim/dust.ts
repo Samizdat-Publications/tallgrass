@@ -20,7 +20,7 @@ import type { Environment } from './env';
 import type { Params } from './params';
 import { hashSeed, Rng } from './rng';
 import type { SimEventKind } from './sim';
-import { YEAR_TICKS } from './types';
+import { yearTicks } from './types';
 
 /** The sim steps the module every this many ticks. */
 export const DUST_STEP = 10;
@@ -102,7 +102,7 @@ export class DustStorms {
       return;
     }
     if (env.droughtTicks <= 0 || s.windStrength <= p.dustWind) return;
-    if (tick - this.endedAt < p.dustCooldown * YEAR_TICKS) return;
+    if (tick - this.endedAt < p.dustCooldown * yearTicks(this.p)) return;
     const bare = this.bareShare();
     this.lastBare = bare;
     if (bare < p.dustBare) return;

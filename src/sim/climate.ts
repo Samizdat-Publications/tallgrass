@@ -8,13 +8,15 @@
 //
 // It owns its random stream (seeded from the world seed), so it never draws from the sim's main generator.
 import { Rng, hashSeed } from './rng';
-import { YEAR_TICKS } from './types';
+import { YEAR_TICKS, yearTicks } from './types';
 
 export interface ClimateParams {
   /** Typical length of one wet-and-dry swell, in valley years. */
   climatePeriod: number;
   /** Chance per valley year, while the swell is on its dry side, that a megadrought begins. */
   climateMegaP: number;
+  /** Calendar scale (params.calendarScale). Optional for callers outside a sim, which get the global calendar at construction. */
+  calendarScale?: number;
 }
 
 export class ClimateRegime {
@@ -28,9 +30,12 @@ export class ClimateRegime {
   readonly megaYears: number[] = [];
   private red = 0;
   private megaLeft = 0;
+  /** Ticks per valley year: the sim's own calendar, fixed at construction. */
+  private readonly yearT: number;
 
   constructor(seed: number, private readonly p: ClimateParams) {
     this.rng = new Rng(hashSeed(seed + ':climate'));
+    this.yearT = p.calendarScale !== undefined ? yearTicks({ calendarScale: p.calendarScale }) : YEAR_TICKS;
     const P = Math.max(4, p.climatePeriod);
     const spans: [number, number][] = [[0.55, 0.8], [0.95, 1.25], [1.8, 2.6]];
     for (const [lo, hi] of spans) {
@@ -72,7 +77,7 @@ export class ClimateRegime {
 
   /** The index at a tick: eased between this valley year's value and the next, so growth never jumps at new year. */
   value(tick: number): number {
-    const yf = tick / YEAR_TICKS;
+    const yf = tick / this.yearT;
     const y = Math.floor(yf);
     const f = yf - y;
     const a = this.yearValue(y);
@@ -83,7 +88,7 @@ export class ClimateRegime {
 
   /** True while a megadrought holds (by valley year). */
   inMegadrought(tick: number): boolean {
-    const y = Math.floor(tick / YEAR_TICKS);
+    const y = Math.floor(tick / this.yearT);
     this.fill(y);
     return this.megaYears[y] === 1;
   }

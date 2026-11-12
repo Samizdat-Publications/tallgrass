@@ -33,7 +33,7 @@
 // ---- Determinism ------------------------------------------------------------------------------------------------------------------
 // Nothing in here draws a random number: the fills, the ribbon and the meadow are functions of the dams' crests.
 import type { Params } from './params';
-import { SEASON_TICKS, YEAR_TICKS } from './types';
+import { seasonTicks, yearTicks } from './types';
 import type { Vegetation } from './vegetation';
 import { distanceTransform, sampleHeight, type World } from './world';
 
@@ -456,10 +456,10 @@ export class Ponds {
 
   /** The meadow fades (called every tick by the colony step; acts once a season). */
   stepMeadow(tick: number): void {
-    if (this.meadowCount <= 0 || tick - this.lastMeadowTick < SEASON_TICKS) return;
+    if (this.meadowCount <= 0 || tick - this.lastMeadowTick < seasonTicks(this.p)) return;
     const dt = tick - this.lastMeadowTick;
     this.lastMeadowTick = tick;
-    const dec = dt / (this.p.beaverMeadowYears * YEAR_TICKS), cap = this.p.beaverMeadowCap;
+    const dec = dt / (this.p.beaverMeadowYears * yearTicks(this.p)), cap = this.p.beaverMeadowCap;
     const N2 = this.n * this.n;
     for (let c = 0; c < N2; c++) {
       const m = this.meadow[c];
