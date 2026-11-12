@@ -2,7 +2,7 @@
 // the species' defines) on the foot vertex of every leg through WebGL2 transform feedback, over a sweep of species, gaits, phases,
 // slopes and camera distances, and compares the vertex it writes with legmath.ts (footModel) for the same inputs.
 // If this passes, the table printed by the foot-slip rig (which runs the mirror) describes what the shader draws.
-// Page: dev/footslip-gpu.html. Runner: node tools/footslip_gpucheck.mjs
+// Page: dev/footslip-gpu.html. Runner: node tools/archive/footslip_gpucheck.mjs
 import { getModel } from '../src/render/models';
 import { animationShaderParts } from '../src/render/models/shader';
 import {

@@ -6,12 +6,14 @@ Run it: `npm run dev` (unchanged; the live game is still 1.0.12, nothing was dep
 
 **For the 13:00 Fable review, read in this order:** this section, `docs/FABLE-REVIEW.md` (the audit), the top of `_PLAN.md` (the change order, with tonight's L2a worklist), `NEXT-SESSION.md`.
 
-### What is done (committed and pushed: d8217b9, 2ceabcb, 5edf245)
+### What is done (committed and pushed: d8217b9, 2ceabcb, 5edf245, 76ef639, b8e29ad)
 - **Fixed shots (H1).** `npm run shots` renders 14 fixed views of the real game (`tools/shots.json`) as lossless PNGs, each in its own page load with the sim stopped on a fixed tick and all render randomness seeded. Two runs now differ by a mean of 0.02 to 0.17 colour levels, with at most 0.10% of pixels off by more than 8 levels. The old capture differed in 7 to 95% of pixels, which is why 41 review rounds kept repeating the same complaints. Not yet byte-identical: a small GPU-side difference between page loads remains, cause not found (notes in `NEXT-SESSION.md`).
 - **Scorecard and contact sheet (H2).** `npm run score <run>` scores each shot against the concept art and checks drift against the accepted baseline. The first baselines were accepted tonight (H8); the first contact sheet is `review/fable-audit-2026-11-11/first_contact_sheet_2026-11-12.jpg`. Concept score for the golden-hour shot: **53.6 of 100** (worst term: the far band is washed out by haze).
 - **Lint and gate (H6, H7).** `npm run check`: typecheck, lint, tests, the three gate shots and a drift check, in about 6 to 11 minutes on tonight's loaded machine. Every commit tonight passed it.
 - **One light (L2a), no visual change.** Shared lighting code, grass uniforms tied to the engine's, and a warning whenever a three.js shader patch stops matching. It also listed every lighting copy that is NOT the same; that list is the worklist for the real lighting change (L2b) in `_PLAN.md`.
 - **Animal renderer split (first half of L4), no visual change.** The 1,307-line per-frame animal method is now 18 named steps, so the grounding work (planted hooves, matching near and far animals) can be done safely.
+- **Long guard hash and a per-sim calendar (S6a).** `npm run test:long` runs 3 valleys for 100 years with 25 optional mechanisms switched on and checks their hashes (passed twice, about 6 to 8 minutes). The sim calendar was a process-wide setting, so two valleys with different calendars in one process disturbed each other; it is now per valley, with every golden hash unchanged.
+- **Truth table, first draft (S2).** `docs/ECOLOGY-TRUTH-draft.md`: real-world ranges from a quick web pass, NOT verified against the papers. The two numbers v15 most needs (wolves' share of adult bison deaths; bison with vs without wolves) were not found yet. Best-supported row: Yellowstone bison calves, about 44 per 100 cows.
 - **Fixed in passing:** bison sparring pairs depended on page timing in captures.
 
 ### Balancing loop (S1): built, being proven

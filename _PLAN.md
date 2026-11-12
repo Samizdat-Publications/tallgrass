@@ -18,7 +18,7 @@ Rules for every package:
 | H6 | Lints: `tools/lint.mjs` | builder | exits 0 on the tree, exits 1 on a new em dash, a tracked secret or a new file over 5 MB | DONE |
 | H7 | Gate: `tools/check.mjs` (preflight, typecheck, lint, tests, gate shots with drift check); `--full` adds every shot twice and the GPU budget | builder | `npm run check` exits 0 on a clean tree in under 5 minutes and exits 1 when a gate shot drifts from its baseline | DONE (fast mode; --full untested) |
 | H8 | Accept the first baselines and set the GPU budget from a quiet-GPU `gpubench` run | fable | `reference/baseline.json` and `tools/perf-budget.json` committed; the first contact sheet shown to the owner | baselines DONE 11/12; GPU budget waits for a quiet GPU |
-| H9 | Archive the one-off shot scripts in `tools/` that `shots.mjs` replaces (move to `tools/archive/`, fix the docs that name them) | grunt | `tools/` holds only tools a current doc names; `npm run check` passes | open |
+| H9 | Archive the one-off shot scripts in `tools/` that `shots.mjs` replaces (move to `tools/archive/`, fix the docs that name them) | grunt | `tools/` holds only tools a current doc names; `npm run check` passes | DONE 11/12 (138 moved, table in tools/archive/README.md) |
 
 ### Sim harness
 | ID | Package | Who | Acceptance | Status |

@@ -3,7 +3,7 @@
 // `?a3=0`), over the same walk / trot / gallop runs, and tracks a contact point per leg: the centroid of the sole (the vertices within 2 cm of the
 // lowest point of the leg in the rest pose). Slip is what dev/footslip-core.ts calls it: the distance that contact point moves in the world during
 // stance frames, over the distance the body moves in the same frames (3D, so a paw that rolls or lifts counts too; the horizontal share is reported too).
-// Page: dev/footslip-a3.html[?a3=0&slope=0]. Runner: node tools/footslip_a3.mjs
+// Page: dev/footslip-a3.html[?a3=0&slope=0]. Runner: node tools/archive/footslip_a3.mjs
 import { preloadA3 } from '../src/render/models/a3';
 import { getModel } from '../src/render/models';
 import { animationShaderParts } from '../src/render/models/shader';
