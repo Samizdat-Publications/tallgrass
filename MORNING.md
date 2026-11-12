@@ -14,6 +14,7 @@ Run it: `npm run dev` (unchanged; the live game is still 1.0.12, nothing was dep
 - **Animal renderer split (first half of L4), no visual change.** The 1,307-line per-frame animal method is now 18 named steps, so the grounding work (planted hooves, matching near and far animals) can be done safely.
 - **Long guard hash and a per-sim calendar (S6a).** `npm run test:long` runs 3 valleys for 100 years with 25 optional mechanisms switched on and checks their hashes (passed twice, about 6 to 8 minutes). The sim calendar was a process-wide setting, so two valleys with different calendars in one process disturbed each other; it is now per valley, with every golden hash unchanged.
 - **Truth table, first draft (S2).** `docs/ECOLOGY-TRUTH-draft.md`: real-world ranges from a quick web pass, NOT verified against the papers. The two numbers v15 most needs (wolves' share of adult bison deaths; bison with vs without wolves) were not found yet. Best-supported row: Yellowstone bison calves, about 44 per 100 cows.
+- **A question for v15 from the sources.** The first opened sources say real wolves kill mostly bison calves, rarely adults (Wood Buffalo field work: 25 calves, 2 adult cows; Yellowstone: bison 1.6% of winter wolf kills). So the planned v15 target "wolves cause 15 to 30% of adult bison deaths" may be the wrong measure; details at the end of `docs/ECOLOGY-TRUTH-draft.md`.
 - **Fixed in passing:** bison sparring pairs depended on page timing in captures.
 
 ### Balancing loop (S1): built, being proven
